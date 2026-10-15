@@ -31,6 +31,7 @@ func run(main_node: Node, dir: String) -> void:
 	await _shot("02_board")
 	# I-02: hover actions on a hand card and on a field card (hover API; no mouse needed).
 	var hs: GameScreen = main.screen
+	await _real_mouse_hover_shot(hs)
 	hs.debug_hover_hand(0)
 	await _frames(25)
 	await _shot("02b_hover_hand_card")
@@ -72,8 +73,6 @@ func run(main_node: Node, dir: String) -> void:
 		if o["v"] == m.players[1 - attacker_side]["units"][0]:
 			target_opt = m.pending["options"].find(o)
 	host.handle(attacker_side, {"t": "choose", "id": m.pending["id"], "indices": [maxi(target_opt, 0)]})
-	await get_tree().create_timer(0.17).timeout
-	await _shot("05b_attack_animation_in_progress")
 	await get_tree().create_timer(1.2).timeout
 	await _frames(3)
 	if not m.pending.is_empty() and m.pending["kind"] == "trap_response":
@@ -84,7 +83,12 @@ func run(main_node: Node, dir: String) -> void:
 		await _frames(3)
 		await _shot("06b_attacker_waiting_on_trap")
 		host.handle(1 - attacker_side, {"t": "choose", "id": m.pending["id"], "indices": [1]})
-		await _frames(3)
+		# Battle resolves on the attacker's screen: capture the animation mid-flight.
+		await get_tree().create_timer(0.25).timeout
+		await _shot("05b_attack_animation_in_progress")
+		await get_tree().create_timer(0.35).timeout
+		await _shot("05c_attack_animation_impact")
+		await get_tree().create_timer(1.5).timeout
 	_view_seat(attacker_side)
 	await _frames(3)
 	await _shot("07_after_battle_log")
@@ -179,3 +183,23 @@ func _shot(name: String) -> void:
 	var path := out_dir.path_join(name + ".png")
 	img.save_png(path)
 	print("saved ", path)
+
+
+
+## Moves the real mouse pointer onto the first hand card and onto its first action
+## button, so hover logic is exercised by genuine pointer events (not debug hooks).
+func _real_mouse_hover_shot(hs) -> void:
+	if hs._hand_order.is_empty():
+		return
+	var it: Dictionary = hs._hand_items[hs._hand_order[0]]
+	var r: Rect2 = it["holder"].get_global_rect()
+	get_viewport().warp_mouse(r.get_center())
+	await get_tree().create_timer(0.5).timeout
+	await _shot("02a_real_mouse_hover_hand")
+	# Slide down onto the hover buttons area slowly; controls must stay open.
+	for i in 6:
+		get_viewport().warp_mouse(r.get_center() + Vector2(0, -r.size.y * 0.1 * i))
+		await get_tree().create_timer(0.05).timeout
+	await _shot("02a2_real_mouse_moving_onto_buttons")
+	get_viewport().warp_mouse(Vector2(5, 5))
+	await get_tree().create_timer(0.4).timeout

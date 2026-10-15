@@ -199,7 +199,9 @@ func join_enet(host: String, port: int) -> String:
 	_enet_port = port
 	is_host = false
 	local_seat.seat = CLIENT_SEAT
-	_session_key = "enet:%s:%d" % [host, port]
+	# One LAN identity per install: a resumed series must recognise the player even if
+	# they type the host address differently (localhost vs 127.0.0.1, new port).
+	_session_key = "enet"
 	_token = _load_or_make_token()
 	return _connect_enet()
 
@@ -410,6 +412,7 @@ func _c2s_hello(token: String, player_name: String, have_log_seq: int) -> void:
 		steam_id = (api.multiplayer_peer as SteamMultiplayerPeer).get_steam_id_for_peer_id(sender)
 	if token.length() < 16:
 		_s2c_error.rpc_id(sender, "Invalid session token.")
+		_kick_later(sender)
 		return
 	var same_player := token == client_token or (steam_id != 0 and steam_id == client_steam_id)
 	if client_token == "":
@@ -423,6 +426,7 @@ func _c2s_hello(token: String, player_name: String, have_log_seq: int) -> void:
 			same_player = true
 	if not same_player:
 		_s2c_error.rpc_id(sender, "This seat belongs to another player.")
+		_kick_later(sender)
 		return
 	if remote_peer != 0 and remote_peer != sender:
 		# The rightful player reconnected while the host still holds their old link.
@@ -462,7 +466,44 @@ func _c2s_command(seq: int, cmd: Dictionary) -> void:
 		# Remote clients answer choices by option index only; raw uids could be probed.
 		_s2c_error.rpc_id(remote_peer, "Invalid choice format.")
 		return
+	var bad := sanitize_command(cmd)
+	if bad != "":
+		_s2c_error.rpc_id(remote_peer, bad)
+		return
 	_apply(CLIENT_SEAT, seq, cmd)
+
+
+const _INT_FIELDS := ["uid", "idx", "id", "index", "who", "card_id", "from_id"]
+const _STR_FIELDS := ["t", "to_type", "name"]
+
+
+## Rejects remote commands whose fields have the wrong types (never trust a client).
+## Numbers are normalised to int in place. Returns "" when the command is well formed.
+static func sanitize_command(cmd: Dictionary) -> String:
+	if not (cmd.get("t") is String):
+		return "Malformed command."
+	for k in cmd.keys():
+		var v = cmd[k]
+		if k in _STR_FIELDS:
+			if not (v is String) or (v as String).length() > 64:
+				return "Malformed command."
+		elif k in _INT_FIELDS:
+			if not (v is int or v is float):
+				return "Malformed command."
+			cmd[k] = int(v)
+		elif k == "indices":
+			if not (v is Array) or v.size() > 64:
+				return "Malformed command."
+			for x in v:
+				if not (x is int or x is float):
+					return "Malformed command."
+			cmd[k] = v.map(func(x): return int(x))
+		elif k == "cards":
+			if not (v is Array):
+				return "Malformed command."
+		else:
+			return "Unknown command field."
+	return ""
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -475,6 +516,13 @@ func _s2c_view(data: PackedByteArray, raw_size: int) -> void:
 	_awaiting_view = false
 	_status("")
 	local_seat.deliver(v)
+
+
+## Disconnects a refused peer after its error message has been sent.
+func _kick_later(peer_id: int) -> void:
+	get_tree().create_timer(0.5).timeout.connect(func():
+		if api.multiplayer_peer != null and peer_id != remote_peer:
+			api.multiplayer_peer.disconnect_peer(peer_id))
 
 
 ## Tells a (re)connecting client the last command sequence the host applied, so a

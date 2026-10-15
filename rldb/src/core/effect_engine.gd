@@ -16,6 +16,15 @@ var pending: Dictionary = {}    # current choice, empty when none
 var _next_choice_id: int = 1
 
 
+## A finished game (lethal damage, concession, host claim) drops any open prompt and
+## pending resolution so no stale choice survives into views.
+func _on_game_over() -> void:
+	pending = {}
+	stack.clear()
+	trigger_queue.clear()
+	window_queue.clear()
+
+
 # ---------------------------------------------------------------- frames
 
 func make_frame(src: int, ctl: int, ops: Array, label: String, event: Dictionary = {}) -> Dictionary:
