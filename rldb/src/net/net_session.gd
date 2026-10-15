@@ -52,8 +52,18 @@ var _steam_host_id := 0
 var lobby_id := 0
 var _reconnect_timer: Timer
 var _watchdog: Timer
+var _claim_tick: Timer
 var _cfg: Dictionary = {}
 var raw_received: Array = []    # client: decoded payloads, kept for redaction tests
+var _disconnected_at := 0       # host: when the client dropped (msec)
+var claim_wait_seconds := 60    # P-02: host may claim the current game after this wait
+
+
+## Seconds until the host may claim the current game (0 = available now).
+func claim_seconds_left() -> int:
+	if not paused:
+		return claim_wait_seconds
+	return maxi(0, claim_wait_seconds - (Time.get_ticks_msec() - _disconnected_at) / 1000)
 
 
 func _enter_tree() -> void:
@@ -79,6 +89,17 @@ func _enter_tree() -> void:
 	_watchdog.one_shot = true
 	_watchdog.timeout.connect(_on_watchdog)
 	add_child(_watchdog)
+	# Refreshes the host's claim countdown once a second while the opponent is away.
+	_claim_tick = Timer.new()
+	_claim_tick.wait_time = 1.0
+	_claim_tick.timeout.connect(func():
+		if not paused:
+			_claim_tick.stop()
+			return
+		_send_view(HOST_SEAT)
+		if claim_seconds_left() == 0:
+			_claim_tick.stop())
+	add_child(_claim_tick)
 
 
 func _exit_tree() -> void:
@@ -101,10 +122,18 @@ func _start_series(cfg: Dictionary) -> void:
 	_cfg = cfg
 	is_host = true
 	local_seat.seat = HOST_SEAT
-	series = Series.new()
-	var c := cfg.duplicate(true)
-	c["names"] = [cfg.get("host_name", "Host"), "Waiting for opponent"]
-	series.setup(c)
+	if cfg.has("resume"):
+		# Resuming a saved series: the original opponent rejoins (any token on first bind;
+		# on Steam the saved SteamID must match).
+		series = cfg["resume"]
+		client_steam_id = series.seat_ids[CLIENT_SEAT]
+		opponent_ever_joined = false
+	else:
+		series = Series.new()
+		var c := cfg.duplicate(true)
+		c["names"] = [cfg.get("host_name", "Host"), "Waiting for opponent"]
+		series.setup(c)
+	series.checkpoint.connect(func(): SeriesStore.save(series))
 
 
 func host_enet(port: int, cfg: Dictionary) -> String:
@@ -286,6 +315,8 @@ func _on_peer_disconnected(id: int) -> void:
 	if is_host and id == remote_peer:
 		remote_peer = 0
 		paused = true
+		_disconnected_at = Time.get_ticks_msec()
+		_claim_tick.start()
 		_status("Opponent disconnected. The match is paused until they reconnect.")
 		if series.game != null:
 			series.game.add_log("Connection: %s disconnected; match paused." % series.names[CLIENT_SEAT])
@@ -374,7 +405,10 @@ func _c2s_hello(token: String, player_name: String, have_log_seq: int) -> void:
 	var steam_id := 0
 	if transport == "steam" and api.multiplayer_peer is SteamMultiplayerPeer:
 		steam_id = (api.multiplayer_peer as SteamMultiplayerPeer).get_steam_id_for_peer_id(sender)
-	var same_player := client_token == "" or token == client_token or (steam_id != 0 and steam_id == client_steam_id)
+	var same_player := token == client_token or (steam_id != 0 and steam_id == client_steam_id)
+	if client_token == "":
+		# First bind: anyone for a new series; for a resumed Steam series, the saved player only.
+		same_player = client_steam_id == 0 or steam_id == client_steam_id
 	if not same_player:
 		_s2c_error.rpc_id(sender, "This seat belongs to another player.")
 		return
@@ -387,10 +421,11 @@ func _c2s_hello(token: String, player_name: String, have_log_seq: int) -> void:
 	client_token = token
 	if steam_id != 0:
 		client_steam_id = steam_id
+		series.seat_ids[CLIENT_SEAT] = steam_id
 	remote_peer = sender
 	paused = false
 	opponent_ever_joined = true
-	if not rejoin:
+	if not rejoin and series.game_no == 0:
 		series.names[CLIENT_SEAT] = player_name.substr(0, 24)
 		if series.game != null:
 			series.game.players[CLIENT_SEAT]["name"] = series.names[CLIENT_SEAT]
@@ -460,13 +495,18 @@ func _merge_client_log(v: Dictionary) -> void:
 # ---------------------------------------------------------------- host command handling
 
 func _apply(seat: int, seq: int, cmd: Dictionary) -> void:
-	if seat == HOST_SEAT and cmd.get("t", "") == "end_absent":
-		# The host stops waiting for a disconnected opponent, who forfeits (P-02/P-06).
+	if seat == HOST_SEAT and cmd.get("t", "") == "claim_game":
+		# P-02/P-06 (user): after the wait the host may claim the current game only.
 		if not paused:
 			_error(seat, "Your opponent is connected.")
 			return
+		if claim_seconds_left() > 0:
+			_error(seat, "You can claim the game in %d s." % claim_seconds_left())
+			return
 		last_seq[seat] = seq
-		series.forfeit(CLIENT_SEAT, "did not reconnect")
+		var e := series.award_game(HOST_SEAT, "%s did not reconnect" % series.names[CLIENT_SEAT])
+		if e != "":
+			_error(seat, e)
 		_broadcast()
 		return
 	if seq <= last_seq[seat]:
@@ -503,7 +543,8 @@ func _net_info(seat: int) -> Dictionary:
 	if not connected:
 		msg = "Opponent disconnected — match paused, waiting for them to reconnect." if opponent_ever_joined else "Waiting for an opponent to join…"
 	return {"paused": not connected and opponent_ever_joined, "opponent_connected": connected, "message": msg if seat == HOST_SEAT else "",
-		"transport": transport, "is_host": seat == HOST_SEAT, "lobby": lobby_id}
+		"transport": transport, "is_host": seat == HOST_SEAT, "lobby": lobby_id,
+		"claim_in": claim_seconds_left() if seat == HOST_SEAT and paused else -1}
 
 
 func _send_view(seat: int) -> void:

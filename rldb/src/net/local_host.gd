@@ -11,8 +11,11 @@ var seats: Array = []
 
 func start(overrides: Dictionary) -> void:
 	series = Series.new()
-	var cfg := overrides.duplicate()
-	series.setup(cfg)
+	if overrides.has("resume"):
+		series = overrides["resume"]
+	else:
+		series.setup(overrides.duplicate())
+	series.checkpoint.connect(func(): SeriesStore.save(series))
 	for p in 2:
 		var s := LocalSeat.new()
 		s.seat = p

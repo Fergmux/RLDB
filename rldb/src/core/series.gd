@@ -7,6 +7,8 @@ extends RefCounted
 ## the deck lists and the score carry forward.
 
 signal changed
+## Emitted at between-game checkpoints (P-02: series can be saved/resumed between games).
+signal checkpoint
 
 const STAGE_DECKS := "decks"
 const STAGE_GAME := "game"
@@ -31,6 +33,8 @@ var draft: Array = [{}, {}]          # per-player draft state
 var rewards: Array = [{}, {}]        # per-player reward state
 var series_log: Array = []
 var forfeit_by: int = -1             # player who abandoned the series, if any
+var save_id: String = ""             # identifies this series' save file
+var seat_ids: Array = [0, 0]         # optional platform ids (e.g. SteamIDs) bound to seats
 var starters: Array = []
 var _seed: int = 0
 
@@ -58,6 +62,7 @@ func setup(overrides: Dictionary = {}) -> void:
 	if cfg.has("names"):
 		names = cfg["names"]
 	starters = load_starters()
+	save_id = "%d_%04d" % [int(Time.get_unix_time_from_system()), rng.randi_range(0, 9999)]
 	stage = STAGE_DECKS
 	if cfg["deck_mode"] == "draft":
 		for p in 2:
@@ -100,6 +105,67 @@ func submit(p: int, cmd: Dictionary) -> String:
 	return err
 
 
+## P-02/P-06 (user): after the reconnection wait the host may claim the CURRENT GAME
+## only; the series continues with normal win thresholds.
+func award_game(p: int, reason: String) -> String:
+	if stage != STAGE_GAME or game == null or game.winner != -1:
+		return "There is no game in progress."
+	game.end_game(p, reason)
+	_on_game_over()
+	changed.emit()
+	return ""
+
+
+## Serializable between-game checkpoint (not mid-game state, per the user's answer).
+func to_save() -> Dictionary:
+	return {"version": 1, "save_id": save_id, "cfg": cfg, "names": names, "stage": stage,
+		"decks": decks, "deck_names": deck_names, "scores": scores, "game_no": game_no,
+		"last_loser": last_loser, "first_player": first_player, "history": history,
+		"rewards": rewards, "series_log": series_log, "forfeit_by": forfeit_by,
+		"rng_state": str(rng.state), "seat_ids": seat_ids.map(func(x): return str(x)),
+		"saved_at": Time.get_datetime_string_from_system()}
+
+
+## True when the series sits at a between-game checkpoint that can be saved.
+func at_checkpoint() -> bool:
+	return stage in [STAGE_REWARDS, STAGE_FIRST, STAGE_OVER]
+
+
+## Restores a series saved with to_save(). JSON numbers come back as floats.
+static func from_save(d: Dictionary) -> Series:
+	var s := Series.new()
+	CardDB.ensure_loaded()
+	s.cfg = d["cfg"]
+	s.names = d["names"]
+	s.stage = d["stage"]
+	s.decks = d["decks"].map(func(dk): return dk.map(func(i): return int(i)))
+	s.deck_names = d["deck_names"]
+	s.scores = d["scores"].map(func(x): return int(x))
+	s.game_no = int(d["game_no"])
+	s.last_loser = int(d["last_loser"])
+	s.first_player = int(d["first_player"])
+	s.history = d["history"]
+	for h in s.history:
+		h["winner"] = int(h["winner"])
+		h["game"] = int(h["game"])
+		h["turns"] = int(h["turns"])
+		h["hp"] = h["hp"].map(func(x): return int(x))
+	s.rewards = d["rewards"]
+	for r in s.rewards:
+		if not r.is_empty():
+			r["left"] = int(r["left"])
+			r["offer"] = r["offer"].map(func(i): return int(i))
+	s.series_log = d["series_log"]
+	s.forfeit_by = int(d.get("forfeit_by", -1))
+	s.save_id = d["save_id"]
+	s.seat_ids = d.get("seat_ids", ["0", "0"]).map(func(x): return int(x))
+	s.rng.state = int(d["rng_state"])
+	s.starters = load_starters()
+	s.deck_ready = [true, true]
+	s._log("Series resumed from save (%s)." % d.get("saved_at", "?"))
+	return s
+
+
 ## Ends the whole series because player p abandoned it (P-02: the host may stop
 ## waiting for a disconnected player, who then forfeits).
 func forfeit(p: int, reason: String) -> void:
@@ -136,6 +202,21 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 			deck_names[p] = starters[i]["name"]
 			deck_ready[p] = true
 			_log("%s locks in a deck." % names[p])
+		"custom_deck":
+			if cfg["deck_mode"] == "draft":
+				return "This series uses drafting."
+			var ids := []
+			for raw in cmd.get("cards", []):
+				var id := int(raw)
+				if not CardDB.has(id):
+					return "Unknown card id %d." % id
+				ids.append(id)
+			if ids.is_empty():
+				return "A deck needs at least one card."
+			decks[p] = ids        # Main/Extra placement follows each card's category at game start
+			deck_names[p] = String(cmd.get("name", "Custom deck")).substr(0, 40)
+			deck_ready[p] = true
+			_log("%s locks in a custom deck." % names[p])
 		"draft_pick":
 			if cfg["deck_mode"] != "draft":
 				return "This series uses starter decks."
@@ -232,11 +313,13 @@ func _on_game_over() -> void:
 	if scores[w] >= wins_needed():
 		stage = STAGE_OVER
 		_log("%s wins the series %d-%d." % [names[w], scores[0], scores[1]])
+		checkpoint.emit()
 		return
 	stage = STAGE_REWARDS
 	for p in 2:
 		rewards[p] = {"left": int(cfg["rewards_per_game"]), "offer": [], "done": false, "taken": []}
 		_new_add_offer(p)
+	checkpoint.emit()
 
 
 ## Leaves the finished game visible until rewards complete; then the next game replaces it.
@@ -302,6 +385,7 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 		_log("%s finishes choosing rewards." % names[p])
 	if rewards[0]["done"] and rewards[1]["done"]:
 		stage = STAGE_FIRST
+	checkpoint.emit()
 	return ""
 
 
@@ -334,7 +418,8 @@ func view_for(p: int) -> Dictionary:
 	var v := {"you": p, "stage": stage, "scores": scores.duplicate(), "game_no": game_no,
 		"best_of": cfg["best_of"], "names": names.duplicate(), "series_log": series_log.duplicate(),
 		"history": history.duplicate(true), "last_loser": last_loser, "deck_mode": cfg["deck_mode"],
-		"deck_ready": deck_ready.duplicate(), "deck_name": deck_names[p], "forfeit_by": forfeit_by}
+		"deck_ready": deck_ready.duplicate(), "deck_name": deck_names[p], "forfeit_by": forfeit_by,
+		"save_id": save_id, "at_checkpoint": at_checkpoint()}
 	if game != null:
 		v["match"] = MatchView.build(game, p)
 	match stage:

@@ -213,13 +213,16 @@ func test_drop_during_host_trap_prompt_blocks_host_until_client_returns(timeout 
 	assert_bool(await _wait(func(): return m.players[1]["hp"] == 50)).is_true()
 
 
-func test_host_can_end_series_when_opponent_does_not_return(timeout := 30000) -> void:
+func test_host_can_claim_current_game_only_after_wait(timeout := 30000) -> void:
 	await _setup_battle()
 	client._reconnect_timer.stop()
 	client.host_gone = true                              # the client will not come back
 	client.simulate_drop()
 	assert_bool(await _wait(func(): return host.paused)).is_true()
-	host.local_seat.send({"t": "end_absent"})
-	assert_str(host.series.stage).is_equal(Series.STAGE_OVER)
-	assert_int(host.series.forfeit_by).is_equal(1)
-	assert_int(host.local_seat.last_view["forfeit_by"]).is_equal(1)
+	host.local_seat.send({"t": "claim_game"})
+	assert_str(host_errors[-1]).contains("claim the game in")   # 60 s wait not over
+	assert_int(host.series.game.winner).is_equal(-1)
+	host.claim_wait_seconds = 0
+	host.local_seat.send({"t": "claim_game"})
+	assert_int(host.series.scores[0]).is_equal(1)
+	assert_str(host.series.stage).is_equal(Series.STAGE_REWARDS)   # current game only; series continues

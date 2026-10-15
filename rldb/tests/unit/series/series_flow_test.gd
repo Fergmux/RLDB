@@ -132,3 +132,48 @@ func test_opponent_reward_choices_are_private() -> void:
 	var v := s.view_for(1)
 	assert_bool(v.has("deck")).is_true()
 	assert_bool(JSON.stringify(v["rewards"]).contains("Added")).is_false()
+
+
+func test_custom_deck_is_unrestricted_and_routes_extra_cards() -> void:
+	var s := Series.new()
+	s.setup({"seed": 3})
+	assert_str(s.submit(0, {"t": "custom_deck", "cards": [21, 21, 21, 21, 93, 96], "name": "Gods"})).is_empty()
+	s.submit(1, {"t": "pick_starter", "index": 0})
+	assert_str(s.stage).is_equal(Series.STAGE_GAME)
+	assert_int(s.game.players[0]["extra"].size()).is_equal(2)
+	assert_str(s.deck_names[0]).is_equal("Gods")
+
+
+func test_custom_deck_rejects_unknown_card() -> void:
+	var s := Series.new()
+	s.setup({"seed": 3})
+	assert_str(s.submit(0, {"t": "custom_deck", "cards": [99999]})).contains("Unknown")
+
+
+func test_award_game_counts_one_game_win_only() -> void:
+	var s := _series(5)
+	assert_str(s.award_game(0, "opponent did not reconnect")).is_empty()
+	assert_int(s.scores[0]).is_equal(1)
+	assert_str(s.stage).is_equal(Series.STAGE_REWARDS)
+
+
+func test_series_saves_and_resumes_between_games() -> void:
+	var s := _series(3)
+	s.submit(s.game.active, {"t": "concede"})
+	s.submit(0, {"t": "reward_add", "index": 0})
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(s.to_save()))
+	var r := Series.from_save(saved)
+	assert_str(r.stage).is_equal(Series.STAGE_REWARDS)
+	assert_array(r.scores).is_equal(s.scores)
+	assert_array(r.decks[0]).is_equal(s.decks[0])
+	assert_int(r.rewards[0]["left"]).is_equal(3)
+	for p in 2:
+		r.submit(p, {"t": "reward_finish"})
+	assert_str(r.submit(r.last_loser, {"t": "first_player", "who": 0})).is_empty()
+	assert_str(r.stage).is_equal(Series.STAGE_GAME)
+	assert_int(r.game_no).is_equal(2)
+
+
+func test_series_is_not_saveable_mid_game() -> void:
+	var s := _series(3)
+	assert_bool(s.at_checkpoint()).is_false()

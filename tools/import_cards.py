@@ -27,6 +27,16 @@ CATEGORY_KEYS = {
 # Confirmed corrections (file 06): misplaced On Summon effects stored in the condition column.
 CONDITION_TO_SUMMON = {"63", "97"}
 
+# User-confirmed rewordings (design/decision-register-answers.md P-19, P-23, P-30, and
+# confirmation C-03). Field -> replacement text; source CSVs stay unchanged.
+TEXT_CORRECTIONS = {
+    45: {"condition": "If your opponent declares an attack on one of your units in this Column:"},
+    47: {"condition": "If your opponent declares an attack on one of your units in this Column:"},
+    90: {"on_field": "Once per turn, you can Apply 1 Paralyse to a Unit."},
+    169: {"on_field": "At the start of your turn, draw one additional card."},
+    183: {"on_field": "At the start of your turn, your opponent loses 6 HP."},
+}
+
 
 def nullable_type(value):
     """`?` Race/Type means none (a defined value), encoded as an empty string."""
@@ -91,6 +101,17 @@ def main():
             "art": {"image": row["image"].strip(), "card_img": row["card_img"].strip(), "type_icon": row["type_icon"].strip()},
             "source": {"sheet": row["sheet"].strip(), "index": int(row["index"])},
         })
+    for c in cards:
+        for field, text in TEXT_CORRECTIONS.get(c["id"], {}).items():
+            c[field] = text
+        if c["id"] in TEXT_CORRECTIONS:
+            parts = []
+            if c["condition"]:
+                parts.append(c["condition"])
+            for label, key in (("On Summon: ", "on_summon"), ("", "on_field"), ("On Destroy: ", "on_destruction")):
+                if c[key]:
+                    parts.append(label + c[key])
+            c["description"] = " ".join(parts)
     ids = [c["id"] for c in cards]
     assert len(cards) == 183, len(cards)
     assert len(set(ids)) == len(ids), "duplicate ids"
