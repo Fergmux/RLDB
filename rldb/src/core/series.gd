@@ -11,6 +11,7 @@ signal changed
 signal checkpoint
 
 const STAGE_DECKS := "decks"
+const MAX_CUSTOM_DECK := 500
 const STAGE_GAME := "game"
 const STAGE_REWARDS := "rewards"
 const STAGE_FIRST := "first_player"
@@ -35,6 +36,7 @@ var series_log: Array = []
 var forfeit_by: int = -1             # player who abandoned the series, if any
 var save_id: String = ""             # identifies this series' save file
 var seat_ids: Array = [0, 0]         # optional platform ids (e.g. SteamIDs) bound to seats
+var client_token: String = ""        # network seat-1 token, kept so a resumed series binds the same player
 var starters: Array = []
 var _seed: int = 0
 
@@ -122,7 +124,7 @@ func to_save() -> Dictionary:
 		"decks": decks, "deck_names": deck_names, "scores": scores, "game_no": game_no,
 		"last_loser": last_loser, "first_player": first_player, "history": history,
 		"rewards": rewards, "series_log": series_log, "forfeit_by": forfeit_by,
-		"rng_state": str(rng.state), "seat_ids": seat_ids.map(func(x): return str(x)),
+		"rng_state": str(rng.state), "seat_ids": seat_ids.map(func(x): return str(x)), "client_token": client_token,
 		"saved_at": Time.get_datetime_string_from_system()}
 
 
@@ -159,6 +161,7 @@ static func from_save(d: Dictionary) -> Series:
 	s.forfeit_by = int(d.get("forfeit_by", -1))
 	s.save_id = d["save_id"]
 	s.seat_ids = d.get("seat_ids", ["0", "0"]).map(func(x): return int(x))
+	s.client_token = String(d.get("client_token", ""))
 	s.rng.state = int(d["rng_state"])
 	s.starters = load_starters()
 	s.deck_ready = [true, true]
@@ -205,8 +208,16 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 		"custom_deck":
 			if cfg["deck_mode"] == "draft":
 				return "This series uses drafting."
+			var raw_cards = cmd.get("cards", [])
+			if not (raw_cards is Array) or not (cmd.get("name", "") is String):
+				return "Malformed deck."
+			# Resource guard only (P-03 keeps decks unrestricted): far above any real deck.
+			if raw_cards.size() > MAX_CUSTOM_DECK:
+				return "Decks are limited to %d cards for performance." % MAX_CUSTOM_DECK
 			var ids := []
-			for raw in cmd.get("cards", []):
+			for raw in raw_cards:
+				if not (raw is int or raw is float):
+					return "Malformed deck."
 				var id := int(raw)
 				if not CardDB.has(id):
 					return "Unknown card id %d." % id

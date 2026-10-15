@@ -57,6 +57,8 @@ var _cfg: Dictionary = {}
 var raw_received: Array = []    # client: decoded payloads, kept for redaction tests
 var _disconnected_at := 0       # host: when the client dropped (msec)
 var claim_wait_seconds := 60    # P-02: host may claim the current game after this wait
+var _resume_token := ""         # host: seat-1 token from a resumed save
+const MAX_LOG_RESEND := 400     # full log resends are capped to keep views small
 
 
 ## Seconds until the host may claim the current game (0 = available now).
@@ -127,6 +129,7 @@ func _start_series(cfg: Dictionary) -> void:
 		# on Steam the saved SteamID must match).
 		series = cfg["resume"]
 		client_steam_id = series.seat_ids[CLIENT_SEAT]
+		_resume_token = series.client_token
 		opponent_ever_joined = false
 	else:
 		series = Series.new()
@@ -405,10 +408,19 @@ func _c2s_hello(token: String, player_name: String, have_log_seq: int) -> void:
 	var steam_id := 0
 	if transport == "steam" and api.multiplayer_peer is SteamMultiplayerPeer:
 		steam_id = (api.multiplayer_peer as SteamMultiplayerPeer).get_steam_id_for_peer_id(sender)
+	if token.length() < 16:
+		_s2c_error.rpc_id(sender, "Invalid session token.")
+		return
 	var same_player := token == client_token or (steam_id != 0 and steam_id == client_steam_id)
 	if client_token == "":
-		# First bind: anyone for a new series; for a resumed Steam series, the saved player only.
-		same_player = client_steam_id == 0 or steam_id == client_steam_id
+		# First bind: anyone for a new series; a resumed series accepts only the saved
+		# player (same SteamID, or the same persisted session token on LAN).
+		if client_steam_id != 0:
+			same_player = steam_id == client_steam_id
+		elif _resume_token != "":
+			same_player = token == _resume_token
+		else:
+			same_player = true
 	if not same_player:
 		_s2c_error.rpc_id(sender, "This seat belongs to another player.")
 		return
@@ -419,6 +431,7 @@ func _c2s_hello(token: String, player_name: String, have_log_seq: int) -> void:
 		api.multiplayer_peer.disconnect_peer(old)
 	var rejoin := client_token != ""
 	client_token = token
+	series.client_token = token
 	if steam_id != 0:
 		client_steam_id = steam_id
 		series.seat_ids[CLIENT_SEAT] = steam_id
@@ -562,7 +575,10 @@ func _send_view(seat: int) -> void:
 			since = 0   # new game (or first bind): send the whole log and tell the client to reset
 			v["log_reset"] = true
 			_log_game_sent[seat] = series.game_no
-		v["match"]["log"] = full.filter(func(e): return e["seq"] > since)
+		var delta: Array = full.filter(func(e): return e["seq"] > since)
+		if delta.size() > MAX_LOG_RESEND:
+			delta = delta.slice(delta.size() - MAX_LOG_RESEND)
+		v["match"]["log"] = delta
 		if not full.is_empty():
 			_log_sent[seat] = full[-1]["seq"]
 	var raw := var_to_bytes(v)

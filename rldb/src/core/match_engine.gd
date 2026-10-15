@@ -531,9 +531,9 @@ func _op_place(f: Dictionary, op: Dictionary) -> int:
 			return R.END
 		slot = free[0]
 	place_unit(uid, f["ctl"], slot, stance)
-	add_fx({"k": "summon", "p": f["ctl"], "slot": slot})
 	add_log("%s summons %s in %s stance (%s row, column %d)." % [pname(f["ctl"]), name_of(uid),
 		"Attack" if stance == "atk" else "Defense", "front" if slot_row(slot) == 0 else "back", slot_col(slot) + 1])
+	add_fx({"k": "summon", "p": f["ctl"], "slot": slot})
 	return R.CONT
 
 

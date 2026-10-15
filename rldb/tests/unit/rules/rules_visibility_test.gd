@@ -130,3 +130,14 @@ func test_opponent_spent_exhaust_and_extra_contents_are_redacted() -> void:
 	assert_int(counts["spent"]).is_equal(1)
 	assert_int(counts["exhaust"]).is_equal(1)
 	assert_int(counts["extra"]).is_equal(1)
+
+
+func test_private_only_log_entries_carry_no_public_fx() -> void:
+	var m := TB.make()
+	var u := TB.card(m, 0, TB.FIRE)
+	m.submit(0, {"t": "summon", "uid": u})
+	m.submit(0, {"t": "cancel", "id": m.pending["id"]})    # private-only "Cancelled" entry
+	TB.summon(m, 0, TB.FIRE, 1)
+	for e in MatchView.log_for(m, 1):
+		if not e["fx"].is_empty():
+			assert_str(e["text"].strip_edges()).is_not_empty()

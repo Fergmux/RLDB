@@ -226,8 +226,9 @@ func add_log(pub: String, priv: Dictionary = {}) -> void:
 ## public information (players, board positions, amounts), never hidden identities,
 ## so clients may animate them; they never affect rules state.
 func add_fx(fx: Dictionary) -> void:
-	if log_entries.is_empty():
-		add_log("")
+	# Never attach a public effect to a private-only entry (that would reveal its timing).
+	if log_entries.is_empty() or log_entries[-1]["pub"] == "":
+		add_log(" ")
 	log_entries[-1]["fx"].append(fx)
 
 

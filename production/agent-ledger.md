@@ -11,6 +11,8 @@ model override is set.
 | Art bible + board UX spec | art-director | Sonnet | `design/art/art-bible.md`, `design/ux/match-board.md` |
 | Board/cards/hover actions/animations (I-01..I-03) | ui-programmer | Sonnet | In progress |
 | Deck builder + main menu | ui-programmer | Sonnet | In progress |
+| Untimed mandatory card text audit (P-30) | general-purpose | Haiku | None found besides 90/183 (already corrected); reviewed by lead |
+| Privacy/security review of new fx, saves, custom decks, claim | security-engineer | Opus | 1 leak (accepted P-27 trade-off, documented), 1 exploit + 3 risks fixed with tests |
 
 Earlier pass (rules/08) reviews, for reference: gameplay-programmer, security-engineer,
 network-programmer, systems-designer, qa-lead — all inherited Opus.

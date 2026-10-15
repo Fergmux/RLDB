@@ -177,3 +177,24 @@ func test_series_saves_and_resumes_between_games() -> void:
 func test_series_is_not_saveable_mid_game() -> void:
 	var s := _series(3)
 	assert_bool(s.at_checkpoint()).is_false()
+
+
+func test_custom_deck_rejects_malformed_and_oversized_input() -> void:
+	var s := Series.new()
+	s.setup({"seed": 3})
+	assert_str(s.submit(0, {"t": "custom_deck", "cards": "1,2,3"})).is_equal("Malformed deck.")
+	assert_str(s.submit(0, {"t": "custom_deck", "cards": [1, "x"]})).is_equal("Malformed deck.")
+	assert_str(s.submit(0, {"t": "custom_deck", "cards": [1], "name": 5})).is_equal("Malformed deck.")
+	var big := []
+	big.resize(Series.MAX_CUSTOM_DECK + 1)
+	big.fill(1)
+	assert_str(s.submit(0, {"t": "custom_deck", "cards": big})).contains("limited")
+	assert_bool(s.deck_ready[0]).is_false()
+
+
+func test_saved_series_keeps_client_token_for_resume_binding() -> void:
+	var s := _series(3)
+	s.client_token = "abcdef0123456789abcdef01"
+	s.submit(s.game.active, {"t": "concede"})
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(s.to_save()))
+	assert_str(Series.from_save(saved).client_token).is_equal("abcdef0123456789abcdef01")
