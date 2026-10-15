@@ -386,9 +386,10 @@ func _op_fusion(f: Dictionary, op: Dictionary) -> int:
 	var ops := []
 	for i in script_of(fu)["fusion"].size():
 		ops.append({"op": "fusion_mat", "i": i})
-	ops.append({"op": "fusion_tribute"})
-	ops.append({"op": "pick_slot", "zone": "unit", "as": "fslot"})
+	# Zone is checked (counting zones the Field materials will free) before anything is consumed (P-16).
+	ops.append({"op": "pick_slot", "zone": "unit", "as": "fslot", "freeing": "$fmats"})
 	ops.append({"op": "pick_stance", "as": "stance"})
+	ops.append({"op": "fusion_tribute"})
 	ops.append({"op": "place", "target": fu, "slot": "$fslot", "stance": "$stance"})
 	ops += summon_tail(fu, p)
 	_splice(f, ops)

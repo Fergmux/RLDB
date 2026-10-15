@@ -33,7 +33,31 @@ func _ready() -> void:
 
 ## A friend's invite was accepted in the Steam overlay while the game is running.
 func _on_steam_join_requested(lobby: int, _friend: int) -> void:
+	if net != null and is_instance_valid(net) and net.is_active():
+		if net.lobby_id == lobby:
+			return
+		_confirm_leave("Accepting this invite will leave your current series. Continue?", func(): join_steam_lobby(lobby))
+		return
 	join_steam_lobby(lobby)
+
+
+func _confirm_leave(text: String, on_yes: Callable) -> void:
+	var p := UIStyle.panel(Color(0.06, 0.07, 0.09, 0.97))
+	p.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	p.custom_minimum_size = Vector2(520, 160)
+	p.position = Vector2(540, 380)
+	add_child(p)
+	var v := VBoxContainer.new()
+	p.add_child(v)
+	v.add_child(UIStyle.label(text, 16, UIStyle.ACCENT, true))
+	var row := HBoxContainer.new()
+	v.add_child(row)
+	var yes := UIStyle.button("Leave and continue", 14)
+	yes.pressed.connect(func(): p.queue_free(); on_yes.call())
+	row.add_child(yes)
+	var no := UIStyle.button("Stay", 14)
+	no.pressed.connect(func(): p.queue_free())
+	row.add_child(no)
 
 
 var _auto_started := false
@@ -137,6 +161,12 @@ func _show_menu() -> void:
 	var find_b := UIStyle.button("Find lobbies", 15)
 	find_b.pressed.connect(_start_steam_browse)
 	steam_row.add_child(find_b)
+	var pub := CheckBox.new()
+	pub.text = "List my lobby publicly"
+	pub.tooltip_text = "Off: friends-only, joined by invite. On: also visible under Find lobbies."
+	pub.button_pressed = opts.get("public_lobby", false)
+	pub.toggled.connect(func(on): opts["public_lobby"] = on)
+	steam_row.add_child(pub)
 	status_label = UIStyle.label(SteamBridge.describe(), 12, UIStyle.MUTED, true)
 	box.add_child(status_label)
 	box.add_child(HSeparator.new())
@@ -177,7 +207,7 @@ func _show_menu() -> void:
 func _new_screen() -> GameScreen:
 	screen = GameScreen.new()
 	add_child(screen)
-	screen.back_to_menu.connect(_show_menu)
+	screen.back_to_menu.connect(_on_menu_requested)
 	return screen
 
 
@@ -356,3 +386,10 @@ func _show_card_list() -> void:
 		var w := CardWidget.new().setup(gs._summary_view(summary), "big")
 		flow.add_child(w)
 	gs.free()
+
+
+func _on_menu_requested() -> void:
+	if net != null and is_instance_valid(net) and net.is_active():
+		_confirm_leave("Leave this online series? Your opponent will be left waiting.", _show_menu)
+		return
+	_show_menu()

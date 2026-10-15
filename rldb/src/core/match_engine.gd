@@ -291,7 +291,6 @@ func validate(p: int, cmd: Dictionary) -> String:
 			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
 			if phase != PHASE_MAIN1: return "Stance can only be changed in Main Phase 1."
 			if has_flag(uid, "no_defense") and inst["stance"] == "atk": return "This unit cannot be in Defense stance."
-			if inst.get("stance_turn", -1) == turn: return "This unit already changed stance this turn."
 			return ""
 		"attack":
 			return _attack_check(p, uid)
@@ -654,10 +653,11 @@ func _op_tribute(f: Dictionary, op: Dictionary) -> int:
 			emit("tribute_or_sacrifice", {"self": m, "ctl": p, "player": p, "tribute": true, "debilitated": snap["st"].get("debilitate", 0) > 0})
 		elif from == "hand":
 			move_to_pile(m, "exhaust")
-			add_log("%s tributes %s from Hand (exhausted)." % [pname(p), name_of(m)])
+			add_log("%s tributes a card from Hand (exhausted)." % pname(p), {p: "%s tributes %s from Hand (exhausted)." % [pname(p), name_of(m)]})
 		else:
 			move_to_pile(m, "exhaust")
-			add_log("%s exhausts %s from %s as material." % [pname(p), name_of(m), from.capitalize()])
+			add_log("%s exhausts a card from %s as material." % [pname(p), from.capitalize()],
+				{p: "%s exhausts %s from %s as material." % [pname(p), name_of(m), from.capitalize()]})
 	if op.get("ritual", false) and d(f["src"])["cost"] == null:
 		var n: int = f["vars"]["runes_used"]
 		cards[f["src"]]["runes_used"] = n
@@ -801,6 +801,7 @@ func _op_attack_declare(f: Dictionary, op: Dictionary) -> int:
 	if f["vars"].get("blind", false):
 		decrement_status(uid, "blind")
 	if target != -1 and is_protected(target):
+		f["vars"]["infiltrated"] = true
 		decrement_status(uid, "infiltrate")
 		add_log("%s uses Infiltrate (Infiltrate -1)." % name_of(uid))
 	var burn := status_count(uid, "burn")
@@ -816,6 +817,7 @@ func _op_attack_window(f: Dictionary, op: Dictionary) -> int:
 	var uid: int = f["src"]
 	var target: int = f["vars"]["target"]
 	var ev := {"name": "attack", "player": f["ctl"], "attacker": uid, "target": target, "column": f["vars"]["column"],
+		"lks": {uid: {"atk": atk_of(uid), "def": def_of(uid)}},
 		"text": "%s attacks %s" % [name_of(uid), "directly" if target == -1 else name_of(target)]}
 	f["event"] = ev
 	_splice(f, [{"op": "window", "event": ev}])
@@ -853,6 +855,12 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 	if not unit_on_field(target) or cards[target]["ctl"] != q:
 		add_log("The attack does not resolve (target left the Field).")
 		return R.END
+	if is_protected(target) and not f["vars"].get("infiltrated", false):
+		add_log("The attack does not resolve (target is now protected).")
+		return R.END
+	# Snapshot both combatants first: destruction is simultaneous for immunity checks.
+	var snap_a := {"atk": atk_of(a), "type": unit_type(a), "debilitated": is_debilitated(a)}
+	var snap_t := {"atk": atk_of(target), "type": unit_type(target), "debilitated": is_debilitated(target)}
 	var av := atk_of(a)
 	var defending_atk: bool = cards[target]["stance"] == "atk"
 	var dv := atk_of(target) if defending_atk else def_of(target)
@@ -870,22 +878,22 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 	var no_dmg := has_flag(a, "no_battle_damage")
 	if defending_atk:
 		if av > dv:
-			destroy(target, "battle", a, p, a)
+			destroy(target, "battle", a, p, snap_a)
 			if winner == -1:
 				if no_dmg:
 					add_log("%s's attacks do not inflict damage." % name_of(a))
 				else:
 					change_hp(q, -(av - dv), " (battle)")
 		elif av == dv:
-			destroy(target, "battle", a, p, a)
-			destroy(a, "battle", target, q, target)
+			destroy(target, "battle", a, p, snap_a)
+			destroy(a, "battle", target, q, snap_t)
 		else:
-			destroy(a, "battle", target, q, target)
+			destroy(a, "battle", target, q, snap_t)
 			if winner == -1:
 				change_hp(p, -(dv - av), " (battle)")
 	else:
 		if av > dv:
-			destroy(target, "battle", a, p, a)
+			destroy(target, "battle", a, p, snap_a)
 			var pierce: int = status_count(a, "pierce") if unit_on_field(a) else f["vars"].get("pierce_snapshot", 0)
 			if pierce > 0 and winner == -1:
 				if unit_on_field(a):

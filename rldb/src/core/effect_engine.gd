@@ -7,6 +7,8 @@ extends GameCore
 
 enum R { CONT, WAIT, STAY, END }
 
+const HIDDEN_PILES := ["hand", "draw", "spent", "exhaust", "extra"]
+
 var stack: Array = []           # frames; back() is resolving
 var trigger_queue: Array = []   # {uid, ctl, ops, label, event}
 var window_queue: Array = []    # response-window events awaiting a frame
@@ -37,7 +39,7 @@ func run() -> void:
 			break
 		if not window_queue.is_empty():
 			var ev: Dictionary = window_queue.pop_front()
-			push_frame(make_frame(-1, ev.get("by", active), [{"op": "window", "event": ev}], "response window", ev))
+			push_frame(make_frame(-1, opp(active), [{"op": "window", "event": ev}], "response window", ev))
 			continue
 		if not trigger_queue.is_empty():
 			_flush_triggers()
@@ -347,6 +349,8 @@ func eval_num(f: Dictionary, x) -> int:
 			var r := refs(f, x.get("of", "self"))
 			if r.is_empty():
 				base = 0
+			elif not unit_on_field(r[0]) and f["event"].get("lks", {}).has(r[0]):
+				base = f["event"]["lks"][r[0]][x["stat"]]   # last-known state (P-11)
 			else:
 				base = _pile_atk(r[0]) if x["stat"] == "atk" else _pile_def(r[0])
 		elif x.has("status"):
@@ -529,26 +533,34 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 	f["vars"]["used"] = used
 	if f["vars"].get("passed", false):
 		return R.CONT
+	if ev.get("player", -1) == responder:
+		return R.CONT
 	var eligible := []
+	var concealed := false   # any face-down card that could plausibly be a Trap
 	for uid in backrow_cards(responder):
+		if not is_face_up(uid) and cards[uid]["set_turn"] != turn:
+			concealed = true
 		if category(uid) != "trap" or uid in used:
 			continue
 		if cards[uid]["set_turn"] == turn:
 			continue
 		if _trap_eligible(uid, responder, ev):
 			eligible.append(uid)
-	if eligible.is_empty():
+	# Opening the window only when a Trap is eligible would tell the opponent so.
+	# With hidden_response_windows the responder is asked whenever they hold a
+	# face-down card, and simply passes when nothing can respond.
+	var always: bool = config.get("hidden_response_windows", true)
+	if eligible.is_empty() and (not always or not concealed or not used.is_empty()):
 		return R.CONT
 	var ans: Variant = take_answer(f)
 	if ans == null:
-		var opts := [{"v": -1, "label": "Pass"}]
+		var opts := [{"v": -1, "label": "Pass" if not eligible.is_empty() else "Pass (no Trap can respond)"}]
 		for uid in eligible:
 			opts.append(card_option(uid, "Activate " + name_of(uid)))
 		return ask(f, responder, "trap_response", "Respond to: %s" % ev.get("text", ev["name"]), opts)
 	var choice: int = ans[0]
 	if choice == -1:
 		f["vars"]["passed"] = true
-		add_log("%s does not respond." % pname(responder))
 		return R.CONT
 	used.append(choice)
 	activate_trap(choice, responder, ev)
@@ -616,10 +628,12 @@ func _op_choose(f: Dictionary, op: Dictionary) -> int:
 		var ex := refs(f, op["exclude"])
 		cands = cands.filter(func(u): return not (u in ex))
 	var chooser: int = who(f, op.get("chooser", "self"))
+	if op["sel"].get("kind", "unit") in ["hand", "draw", "spent", "exhaust", "extra", "spent_or_draw"]:
+		cands.sort()
 	if cands.is_empty():
 		f["vars"][op["as"]] = []
 		if not op.get("optional", false) and not op.get("quiet", false):
-			add_log("%s: no legal choice." % f["label"])
+			add_log("", {f["ctl"]: "%s: no legal choice." % f["label"]})
 		return R.END if op.get("end_if_none", false) else R.CONT
 	if op.get("random", false):
 		f["vars"][op["as"]] = [cands[rng.randi_range(0, cands.size() - 1)]]
@@ -727,11 +741,13 @@ func _op_stat(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
 		if not unit_on_field(u):
 			continue
-		if (a > 0 or df > 0) and has_flag(u, "no_gain"):
-			a = mini(a, 0)
-			df = mini(df, 0)
-		cards[u]["mods"].append({"atk": a, "def": df, "until": op.get("until", "field"), "src": name_of(f["src"]) if f["src"] != -1 else "effect"})
-		add_log("%s %+d ATK / %+d DEF%s (now %d/%d)." % [name_of(u), a, df, " until end of turn" if op.get("until", "") == "turn" else "", atk_of(u), def_of(u)])
+		var ua := a
+		var ud := df
+		if has_flag(u, "no_gain"):
+			ua = mini(ua, 0)
+			ud = mini(ud, 0)
+		cards[u]["mods"].append({"atk": ua, "def": ud, "until": op.get("until", "field"), "src": name_of(f["src"]) if f["src"] != -1 else "effect"})
+		add_log("%s %+d ATK / %+d DEF%s (now %d/%d)." % [name_of(u), ua, ud, " until end of turn" if op.get("until", "") == "turn" else "", atk_of(u), def_of(u)])
 	return R.CONT
 
 
@@ -777,19 +793,22 @@ func _op_draw(f: Dictionary, op: Dictionary) -> int:
 func _op_move(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
 		var from: String = cards[u]["zone"]
+		var was_public := not (from in HIDDEN_PILES)
+		if from == "backrow" and not is_face_up(u):
+			was_public = false
 		var label := public_label(u)
-		var hidden_dest: bool = op["to"] in ["hand", "draw", "draw_top"]
 		if from == "unit" or from == "backrow" or from == "power":
 			_leave_field(u, op["to"], "effect", f)
 		else:
 			move_to_pile(u, op["to"])
 		var owner: int = cards[u]["owner"]
 		var dest_name: String = {"draw_top": "the top of Draw"}.get(op["to"], op["to"].capitalize())
-		if from in ["hand", "draw"] or (hidden_dest and from in ["spent", "exhaust", "extra"] and op.get("hidden", false)):
+		if was_public:
+			add_log("%s moves from %s to %s." % [label, from.capitalize(), dest_name])
+		else:
+			# Hidden source pile: the opponent learns only that a card moved.
 			add_log("%s moves a card from %s to %s." % [pname(owner), from.capitalize(), dest_name],
 				{owner: "%s moves from %s to %s." % [name_of(u), from.capitalize(), dest_name]})
-		else:
-			add_log("%s moves from %s to %s." % [label, from.capitalize(), dest_name])
 	return R.CONT
 
 
@@ -856,16 +875,18 @@ func snapshot(uid: int) -> Dictionary:
 
 ## Destroys a field card. Handles replacement (Mans Best Friend), protection flags and
 ## Eternal. Returns true if the card was destroyed.
-func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: int = -1) -> bool:
+## battle_vs: the other combatant's state captured before either unit was destroyed
+## ({"atk", "type", "debilitated"}), so simultaneous destruction reads consistent values.
+func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Dictionary = {}) -> bool:
 	if not on_field(uid):
 		return false
 	var inst: Dictionary = cards[uid]
 	if inst["zone"] == "unit":
-		if cause == "battle" and battle_vs != -1:
-			if has_flag(uid, "battle_immune_30atk") and atk_of(battle_vs) >= 30:
+		if cause == "battle" and not battle_vs.is_empty():
+			if has_flag(uid, "battle_immune_30atk") and battle_vs["atk"] >= 30:
 				add_log("%s cannot be destroyed by battle with a unit of 30+ ATK." % name_of(uid))
 				return false
-			if has_flag(uid, "battle_immune_lightning") and unit_type(battle_vs) == "Lightning":
+			if has_flag(uid, "battle_immune_lightning") and battle_vs["type"] == "Lightning":
 				add_log("%s cannot be destroyed by battle with a Lightning unit." % name_of(uid))
 				return false
 		_guardian_replacement(uid)
@@ -879,7 +900,7 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: in
 	var snap := snapshot(uid)
 	var debil := is_debilitated(uid)
 	var dest := "spent"
-	if has_flag_raw(uid, "exhaust_on_destroy") or has_flag_raw(uid, "exhaust_on_spent"):
+	if (has_flag_raw(uid, "exhaust_on_destroy") and not debil) or has_flag_raw(uid, "exhaust_on_spent"):
 		dest = "exhaust"
 	move_to_pile(uid, dest)
 	add_log("%s is destroyed%s." % [label, " by battle" if cause == "battle" else ""])
@@ -889,9 +910,11 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: in
 	emit("destroyed", ev)
 	if was_unit:
 		if by_player != -1 and by_player != p:
-			emit("destroyed_opp_unit", {"self": by_uid, "victim": uid, "ctl": by_player, "cause": cause, "player": active})
+			emit("destroyed_opp_unit", {"self": by_uid, "victim": uid, "ctl": by_player, "cause": cause, "player": active,
+				"debilitated": battle_vs.get("debilitated", false)})
 		if cause == "battle" and by_uid != -1:
-			emit("battle_destroyed", {"self": by_uid, "victim": uid, "ctl": by_player, "player": active})
+			emit("battle_destroyed", {"self": by_uid, "victim": uid, "ctl": by_player, "player": active,
+				"debilitated": battle_vs.get("debilitated", false)})
 		emit("unit_destroyed", {"victim": uid, "ctl": p, "type": snap.get("type_now", ""), "cause": cause, "player": active, "by": by_uid})
 		window_queue.append({"name": "destroyed", "self": uid, "ctl": p, "cause": cause, "by_player": by_player,
 			"by": by_uid, "player": active, "text": "%s destroyed" % label})

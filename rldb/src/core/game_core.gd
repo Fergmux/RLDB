@@ -230,7 +230,20 @@ func public_label(uid: int) -> String:
 	var inst: Dictionary = cards[uid]
 	if inst["zone"] == "backrow" and not is_face_up(uid):
 		return "a face-down card"
+	if inst["zone"] in ["hand", "draw", "spent", "exhaust", "extra"]:
+		return "a hidden card"
 	return name_of(uid)
+
+
+## Logs text about a card; "§" is replaced by its public label for everyone and by
+## its real name for its owner when the card is hidden from the opponent.
+func card_log(uid: int, template: String) -> void:
+	var pub := template.replace("§", public_label(uid))
+	var named := template.replace("§", name_of(uid))
+	if pub == named:
+		add_log(pub)
+	else:
+		add_log(pub, {cards[uid]["owner"]: named})
 
 
 func is_face_up(uid: int) -> bool:
@@ -426,32 +439,31 @@ func _clear_statuses_of_class(uid: int, buffs: bool) -> Array:
 func apply_status(uid: int, s: String, n: int) -> int:
 	if n <= 0 or not cards.has(uid):
 		return 0
-	var who := public_label(uid)
 	if s == "rune":
 		_set_status(uid, "rune", status_count(uid, "rune") + n)
-		add_log("%s gains %d Rune (now %d)." % [who, n, status_count(uid, "rune")])
+		card_log(uid, "§ gains %d Rune (now %d)." % [n, status_count(uid, "rune")])
 		return n
 	if CardDB.is_buff(s) and has_flag(uid, "no_buffs"):
-		add_log("%s cannot receive Buffs." % who)
+		card_log(uid, "§ cannot receive Buffs.")
 		return 0
 	if CardDB.is_buff(s) and status_count(uid, "curse") > 0 and s != "cleanse":
 		_set_status(uid, "curse", status_count(uid, "curse") - 1)
-		add_log("Curse on %s prevents %s (Curse -1)." % [who, s.capitalize()])
+		card_log(uid, "Curse on § prevents %s (Curse -1)." % s.capitalize())
 		return 0
 	if s == "cleanse" and status_count(uid, "curse") > 0:
 		_set_status(uid, "curse", status_count(uid, "curse") - 1)
-		add_log("Curse on %s prevents Cleanse (Curse -1)." % who)
+		card_log(uid, "Curse on § prevents Cleanse (Curse -1).")
 		return 0
 	if CardDB.is_debuff(s) and status_count(uid, "cleanse") > 0 and s != "curse":
 		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
-		add_log("Cleanse on %s prevents %s (Cleanse -1)." % [who, s.capitalize()])
+		card_log(uid, "Cleanse on § prevents %s (Cleanse -1)." % s.capitalize())
 		return 0
 	if s == "curse" and status_count(uid, "cleanse") > 0:
 		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
-		add_log("Cleanse on %s prevents Curse (Cleanse -1)." % who)
+		card_log(uid, "Cleanse on § prevents Curse (Cleanse -1).")
 		return 0
 	_set_status(uid, s, status_count(uid, s) + n)
-	add_log("%s gains %d %s (now %d)." % [who, n, s.capitalize(), status_count(uid, s)])
+	card_log(uid, "§ gains %d %s (now %d)." % [n, s.capitalize(), status_count(uid, s)])
 	_after_status_gain(uid, s)
 	return n
 
@@ -462,11 +474,11 @@ func _after_status_gain(uid: int, s: String) -> void:
 	if s == "cleanse" and has_any_debuff(uid):
 		var removed := _clear_statuses_of_class(uid, false)
 		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
-		add_log("Cleanse removes %s from %s (Cleanse -1)." % [", ".join(removed), public_label(uid)])
+		card_log(uid, "Cleanse removes %s from § (Cleanse -1)." % ", ".join(removed))
 	elif s == "curse" and has_any_buff(uid):
 		var removed := _clear_statuses_of_class(uid, true)
 		_set_status(uid, "curse", status_count(uid, "curse") - 1)
-		add_log("Curse removes %s from %s (Curse -1)." % [", ".join(removed), public_label(uid)])
+		card_log(uid, "Curse removes %s from § (Curse -1)." % ", ".join(removed))
 
 
 func decrement_status(uid: int, s: String, n: int = 1) -> void:
@@ -552,6 +564,8 @@ func _reset_field_state(uid: int) -> void:
 func move_to_pile(uid: int, dest: String) -> void:
 	var inst: Dictionary = cards[uid]
 	var was_field := on_field(uid)
+	if inst["zone"] == "hand" and dest != "hand":
+		inst["st"] = {}
 	if was_field and inst["zone"] == "unit":
 		inst["orig_slot"] = inst["slot"]
 	_remove_from_zone(uid)

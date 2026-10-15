@@ -168,6 +168,12 @@ func test_disconnect_pauses_and_reconnect_restores_pending_prompt_once(timeout :
 	client.local_seat.send({"t": "choose", "id": pd["id"], "indices": [idx]})
 	assert_bool(await _wait(func(): return m.pending.get("kind", "") == "trap_response")).is_true()
 	host.local_seat.send({"t": "choose", "id": m.pending["id"], "indices": [0]})   # pass
+	# Hidden response windows: the host still holds a face-down card, so later events
+	# (the destruction) ask again; pass each one.
+	for i in 5:
+		await _wait(func(): return m.pending.get("kind", "") == "trap_response" or (m.stack.is_empty() and m.pending.is_empty()), 60)
+		if m.pending.get("kind", "") == "trap_response":
+			host.local_seat.send({"t": "choose", "id": m.pending["id"], "indices": [0]})
 	assert_bool(await _wait(func(): return m.stack.is_empty() and m.pending.is_empty())).is_true()
 	assert_str(m.cards[s["def"]]["zone"]).is_equal("spent")
 	assert_int(m.players[0]["hp"]).is_equal(58)

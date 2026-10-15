@@ -74,3 +74,42 @@ func test_choice_payload_uses_indices_not_hidden_uids() -> void:
 	m.submit(1, {"t": "ability", "uid": m.players[1]["powers"][0], "idx": 0})
 	var v := MatchView.build(m, 1)
 	assert_bool(JSON.stringify(v).contains(str(fd))).is_false()
+
+
+func test_hidden_window_prompts_holder_of_face_down_card_even_without_eligible_trap() -> void:
+	var m := TB.make(7, 20, true)
+	TB.to_turn2(m)
+	TB.to_battle(m)
+	TB.set_card(m, 0, 83, 2)                    # a face-down Spell: cannot respond
+	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
+	TB.attack(m, a, -1)
+	assert_str(m.pending["kind"]).is_equal("trap_response")
+	assert_int(m.pending["options"].size()).is_equal(1)
+	assert_str(MatchView.build(m, 1)["pending"]["prompt"]).contains("deciding whether to respond")
+	TB.choose(m, ["Pass"])
+	assert_int(m.players[0]["hp"]).is_equal(50)
+
+
+func test_hidden_window_looks_identical_to_opponent_with_or_without_eligible_trap() -> void:
+	var with_trap := TB.make(7, 20, true)
+	var without := TB.make(7, 20, true)
+	for m in [with_trap, without]:
+		TB.to_turn2(m)
+		TB.to_battle(m)
+	TB.set_card(with_trap, 0, 45, 0)
+	TB.set_card(without, 0, 83, 0)
+	for m in [with_trap, without]:
+		TB.attack(m, TB.unit(m, 1, TB.WATER, 0, "atk", 10), -1)
+	var v1: Dictionary = MatchView.build(with_trap, 1)["pending"]
+	var v2: Dictionary = MatchView.build(without, 1)["pending"]
+	assert_str(v1["prompt"]).is_equal(v2["prompt"])
+	assert_array(v1.keys()).contains_exactly_in_any_order(v2.keys())
+
+
+func test_no_window_when_opponent_has_no_face_down_cards() -> void:
+	var m := TB.make(7, 20, true)
+	TB.to_turn2(m)
+	TB.to_battle(m)
+	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
+	TB.attack(m, a, -1)
+	assert_bool(m.pending.is_empty()).is_true()

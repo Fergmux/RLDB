@@ -8,9 +8,10 @@ extends Node
 ## see and alter full state; this design does not defend against that (documented).
 ##
 ## Continuity: a client disconnect pauses the series (no commands accepted) and the
-## host waits indefinitely (P-06). The client reconnects with its session token; the
-## host rebinds the seat and resends the current view, including any pending choice.
-## Commands carry a per-seat sequence number so a resent command is never applied twice.
+## host waits indefinitely (P-06). The client reconnects with its session token
+## (persisted, so a restarted client can reclaim its seat); the host rebinds the seat
+## and resends the current view, including any pending choice. Commands carry a
+## per-seat sequence number so a resent command is never applied twice.
 
 signal lobbies_found(lobbies: Array)
 signal session_status(text: String)
@@ -18,6 +19,10 @@ signal session_status(text: String)
 const HOST_SEAT := 0
 const CLIENT_SEAT := 1
 const RECONNECT_INTERVAL := 2.0
+const CONNECT_WATCHDOG := 10.0
+const MAX_RECONNECT_ATTEMPTS := 150      # ~5 minutes of retries, then report the host as gone
+const SESSION_FILE := "user://rldb_sessions.cfg"
+const VIEW_SIZE_WARNING := 400000        # Steam reliable messages are limited to 512 KB
 
 var is_host := false
 var series: Series
@@ -26,19 +31,27 @@ var api: SceneMultiplayer
 var transport := ""             # "enet" | "steam"
 var remote_peer: int = 0        # host: the bound client peer id
 var client_token := ""          # host: token the client seat is bound to
+var client_steam_id := 0        # host (Steam): SteamID the client seat is bound to
 var paused := false
 var opponent_ever_joined := false
 var last_seq := [0, 0]          # host: last applied command seq per seat
 var _log_sent := [0, 0]         # host: last log seq sent per seat
+var _log_game_sent := [-1, -1]  # host: game number the log deltas refer to
 var _client_log: Array = []     # client: accumulated log for the current game
 var _client_log_game := -1
 var _seq := 0                   # client: outgoing command counter
 var _token := ""                # client: our session token
+var _session_key := ""          # client: which host/lobby the token belongs to
+var _awaiting_view := false     # client: connected but no fresh view yet (sends blocked)
+var _reconnect_attempts := 0
+var _requested_lobby := 0
+var host_gone := false
 var _enet_addr := ""
 var _enet_port := 0
 var _steam_host_id := 0
 var lobby_id := 0
 var _reconnect_timer: Timer
+var _watchdog: Timer
 var _cfg: Dictionary = {}
 var raw_received: Array = []    # client: decoded payloads, kept for redaction tests
 
@@ -61,6 +74,11 @@ func _enter_tree() -> void:
 	_reconnect_timer.one_shot = true
 	_reconnect_timer.timeout.connect(_try_reconnect)
 	add_child(_reconnect_timer)
+	_watchdog = Timer.new()
+	_watchdog.wait_time = CONNECT_WATCHDOG
+	_watchdog.one_shot = true
+	_watchdog.timeout.connect(_on_watchdog)
+	add_child(_watchdog)
 
 
 func _exit_tree() -> void:
@@ -68,6 +86,13 @@ func _exit_tree() -> void:
 		api.multiplayer_peer.close()
 	if lobby_id != 0 and SteamBridge.available():
 		SteamBridge.steam().leaveLobby(lobby_id)
+
+
+## True while this session is part of a live series (used to confirm before leaving).
+func is_active() -> bool:
+	if is_host:
+		return series != null and series.stage != Series.STAGE_OVER
+	return not local_seat.last_view.is_empty() and local_seat.last_view.get("stage", "") != "over" and not host_gone
 
 
 # ---------------------------------------------------------------- hosting
@@ -80,13 +105,13 @@ func _start_series(cfg: Dictionary) -> void:
 	var c := cfg.duplicate(true)
 	c["names"] = [cfg.get("host_name", "Host"), "Waiting for opponent"]
 	series.setup(c)
-	series.changed.connect(_broadcast)
 
 
 func host_enet(port: int, cfg: Dictionary) -> String:
 	transport = "enet"
 	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_server(port, 1)
+	# Two slots so a reconnecting client can take over before ENet times out its old link.
+	var err := peer.create_server(port, 2)
 	if err != OK:
 		return "Could not host on port %d (error %d)." % [port, err]
 	api.multiplayer_peer = peer
@@ -103,7 +128,8 @@ func host_steam(cfg: Dictionary) -> void:
 	_start_series(cfg)
 	if not s.lobby_created.is_connected(_on_lobby_created):
 		s.lobby_created.connect(_on_lobby_created)
-	s.createLobby(SteamBridge.LOBBY_FRIENDS_ONLY, 2)
+	# Friends-only lobbies are invite-only and never appear in lobby searches.
+	s.createLobby(SteamBridge.LOBBY_PUBLIC if cfg.get("public_lobby", false) else SteamBridge.LOBBY_FRIENDS_ONLY, 2)
 	_status("Creating a Steam lobby…")
 	_broadcast()
 
@@ -141,16 +167,20 @@ func join_enet(host: String, port: int) -> String:
 	_enet_port = port
 	is_host = false
 	local_seat.seat = CLIENT_SEAT
+	_session_key = "enet:%s:%d" % [host, port]
 	_token = _load_or_make_token()
 	return _connect_enet()
 
 
 func _connect_enet() -> String:
+	if api.multiplayer_peer != null:
+		api.multiplayer_peer.close()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(_enet_addr, _enet_port)
 	if err != OK:
 		return "Could not connect to %s:%d (error %d)." % [_enet_addr, _enet_port, err]
 	api.multiplayer_peer = peer
+	_watchdog.start()
 	_status("Connecting to %s:%d…" % [_enet_addr, _enet_port])
 	return ""
 
@@ -162,7 +192,7 @@ func browse_steam() -> void:
 	s.addRequestLobbyListStringFilter(SteamBridge.LOBBY_GAME_KEY, SteamBridge.LOBBY_GAME_VALUE, 0)
 	s.addRequestLobbyListDistanceFilter(3)
 	s.requestLobbyList()
-	_status("Searching for RLDB lobbies…")
+	_status("Searching for public RLDB lobbies…")
 
 
 func _on_lobby_list(lobbies: Array) -> void:
@@ -171,13 +201,15 @@ func _on_lobby_list(lobbies: Array) -> void:
 	for id in lobbies:
 		out.append({"id": id, "host": s.getLobbyData(id, "host_name"), "members": s.getNumLobbyMembers(id)})
 	lobbies_found.emit(out)
-	_status("Found %d lobby(s)." % out.size() if not out.is_empty() else "No lobbies found. Ask a friend to host and invite you.")
+	_status("Found %d lobby(s)." % out.size() if not out.is_empty() else "No public lobbies found. Friends-only lobbies are joined through invites.")
 
 
 func join_steam(id: int) -> void:
 	transport = "steam"
 	is_host = false
 	local_seat.seat = CLIENT_SEAT
+	_requested_lobby = id
+	_session_key = "steam:%d" % id
 	_token = _load_or_make_token()
 	var s := SteamBridge.steam()
 	if not s.lobby_joined.is_connected(_on_lobby_joined):
@@ -187,18 +219,23 @@ func join_steam(id: int) -> void:
 
 
 func _on_lobby_joined(id: int, _perm: int, _locked: bool, response: int) -> void:
+	if is_host or id != _requested_lobby:
+		return
 	if response != SteamBridge.LOBBY_ENTER_SUCCESS:
-		_status("Could not join the lobby (response %d)." % response)
+		local_seat.status_changed.emit("Could not join the lobby (Steam response %d)." % response)
 		return
 	var s := SteamBridge.steam()
 	lobby_id = id
 	_steam_host_id = s.getLobbyOwner(id)
 	if _steam_host_id == s.getSteamID():
+		local_seat.status_changed.emit("Could not join: you are the host of this lobby.")
 		return
 	_connect_steam()
 
 
 func _connect_steam() -> void:
+	if api.multiplayer_peer != null:
+		api.multiplayer_peer.close()
 	var peer := SteamMultiplayerPeer.new()
 	var err := peer.create_client(_steam_host_id, 0)
 	if err != OK:
@@ -206,20 +243,41 @@ func _connect_steam() -> void:
 		_reconnect_timer.start()
 		return
 	api.multiplayer_peer = peer
+	_watchdog.start()
 	_status("Connecting to %s over Steam…" % SteamBridge.name_of(_steam_host_id))
 
 
+## The session token (and last command sequence) survive a client restart, so a
+## crashed or relaunched client can reclaim its seat.
 func _load_or_make_token() -> String:
 	if _token != "":
 		return _token
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	return "%08x%08x" % [rng.randi(), rng.randi()]
+	var cf := ConfigFile.new()
+	cf.load(SESSION_FILE)
+	var tok: String = cf.get_value(_session_key, "token", "")
+	_seq = int(cf.get_value(_session_key, "seq", 0))
+	if tok == "":
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		tok = "%08x%08x%08x" % [rng.randi(), rng.randi(), rng.randi()]
+		cf.set_value(_session_key, "token", tok)
+		cf.save(SESSION_FILE)
+	return tok
+
+
+func _save_seq() -> void:
+	if _session_key == "":
+		return
+	var cf := ConfigFile.new()
+	cf.load(SESSION_FILE)
+	cf.set_value(_session_key, "token", _token)
+	cf.set_value(_session_key, "seq", _seq)
+	cf.save(SESSION_FILE)
 
 
 # ---------------------------------------------------------------- connection events
 
-func _on_peer_connected(id: int) -> void:
+func _on_peer_connected(_id: int) -> void:
 	if is_host:
 		_status("A player connected; waiting for their hello.")
 
@@ -235,6 +293,9 @@ func _on_peer_disconnected(id: int) -> void:
 
 
 func _on_connected() -> void:
+	_watchdog.stop()
+	_reconnect_attempts = 0
+	_awaiting_view = true
 	_status("Connected. Identifying…")
 	var player_name: String = SteamBridge.steam().getPersonaName() if transport == "steam" and SteamBridge.available() else "Guest"
 	_c2s_hello.rpc_id(1, _token, player_name, _client_log_seq())
@@ -255,8 +316,33 @@ func _on_server_disconnected() -> void:
 	_reconnect_timer.start()
 
 
+## A connection attempt that neither succeeds nor fails is abandoned and retried.
+func _on_watchdog() -> void:
+	if is_host or host_gone:
+		return
+	var peer := api.multiplayer_peer
+	if peer == null or peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		if peer != null:
+			peer.close()
+		api.multiplayer_peer = null
+		_reconnect_timer.start()
+
+
 func _try_reconnect() -> void:
-	if is_host:
+	if is_host or host_gone:
+		return
+	_reconnect_attempts += 1
+	var owner_now_me := false
+	if transport == "steam" and SteamBridge.available() and lobby_id != 0:
+		# If the host left, Steam hands lobby ownership to us: the series is gone.
+		owner_now_me = SteamBridge.steam().getLobbyOwner(lobby_id) == SteamBridge.my_id()
+	if owner_now_me or _reconnect_attempts > MAX_RECONNECT_ATTEMPTS:
+		host_gone = true
+		var v := local_seat.last_view.duplicate()
+		v["net"] = {"paused": true, "opponent_connected": false, "host_gone": true,
+			"message": "The host has left, so this series has ended. Use Menu to return to the main menu."}
+		local_seat.deliver(v)
+		local_seat.status_changed.emit("Lost connection to the host for good.")
 		return
 	if transport == "enet":
 		var e := _connect_enet()
@@ -285,14 +371,22 @@ func _c2s_hello(token: String, player_name: String, have_log_seq: int) -> void:
 	if not is_host:
 		return
 	var sender := api.get_remote_sender_id()
-	if remote_peer != 0 and remote_peer != sender:
-		_s2c_error.rpc_id(sender, "This game already has two players.")
-		return
-	if client_token != "" and token != client_token:
+	var steam_id := 0
+	if transport == "steam" and api.multiplayer_peer is SteamMultiplayerPeer:
+		steam_id = (api.multiplayer_peer as SteamMultiplayerPeer).get_steam_id_for_peer_id(sender)
+	var same_player := client_token == "" or token == client_token or (steam_id != 0 and steam_id == client_steam_id)
+	if not same_player:
 		_s2c_error.rpc_id(sender, "This seat belongs to another player.")
 		return
+	if remote_peer != 0 and remote_peer != sender:
+		# The rightful player reconnected while the host still holds their old link.
+		var old := remote_peer
+		remote_peer = 0
+		api.multiplayer_peer.disconnect_peer(old)
 	var rejoin := client_token != ""
 	client_token = token
+	if steam_id != 0:
+		client_steam_id = steam_id
 	remote_peer = sender
 	paused = false
 	opponent_ever_joined = true
@@ -303,6 +397,8 @@ func _c2s_hello(token: String, player_name: String, have_log_seq: int) -> void:
 	elif series.game != null:
 		series.game.add_log("Connection: %s reconnected; match resumed." % series.names[CLIENT_SEAT])
 	_log_sent[CLIENT_SEAT] = have_log_seq if rejoin else 0
+	if not rejoin or have_log_seq == 0:
+		_log_game_sent[CLIENT_SEAT] = -1
 	_s2c_welcome.rpc_id(sender, last_seq[CLIENT_SEAT])
 	_status("%s %s." % [series.names[CLIENT_SEAT], "reconnected" if rejoin else "joined"])
 	_broadcast()
@@ -314,6 +410,10 @@ func _c2s_command(seq: int, cmd: Dictionary) -> void:
 		return
 	if api.get_remote_sender_id() != remote_peer:
 		return
+	if cmd.has("values"):
+		# Remote clients answer choices by option index only; raw uids could be probed.
+		_s2c_error.rpc_id(remote_peer, "Invalid choice format.")
+		return
 	_apply(CLIENT_SEAT, seq, cmd)
 
 
@@ -324,8 +424,7 @@ func _s2c_view(data: PackedByteArray, raw_size: int) -> void:
 	if raw_received.size() > 8:
 		raw_received.pop_front()
 	_merge_client_log(v)
-	if paused:
-		pass
+	_awaiting_view = false
 	_status("")
 	local_seat.deliver(v)
 
@@ -335,6 +434,7 @@ func _s2c_view(data: PackedByteArray, raw_size: int) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _s2c_welcome(host_last_seq: int) -> void:
 	_seq = maxi(_seq, host_last_seq)
+	_save_seq()
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -364,10 +464,10 @@ func _apply(seat: int, seq: int, cmd: Dictionary) -> void:
 		# Duplicate or replayed command (e.g. resent after reconnect): never re-apply.
 		_send_view(seat)
 		return
-	last_seq[seat] = seq
 	if paused or (remote_peer == 0 and series.stage == Series.STAGE_GAME):
 		_error(seat, "The match is paused until your opponent reconnects.")
 		return
+	last_seq[seat] = seq
 	var err := series.submit(seat, cmd)
 	if err != "":
 		_error(seat, err)
@@ -408,14 +508,18 @@ func _send_view(seat: int) -> void:
 	if v.has("match"):
 		var since: int = _log_sent[seat]
 		var full: Array = v["match"]["log"]
-		if not full.is_empty() and full[-1]["seq"] < since:
-			since = 0   # new game: logs restart
+		if _log_game_sent[seat] != series.game_no:
+			since = 0   # new game (or first bind): send the whole log and tell the client to reset
 			v["log_reset"] = true
+			_log_game_sent[seat] = series.game_no
 		v["match"]["log"] = full.filter(func(e): return e["seq"] > since)
 		if not full.is_empty():
 			_log_sent[seat] = full[-1]["seq"]
 	var raw := var_to_bytes(v)
-	_s2c_view.rpc_id(remote_peer, raw.compress(FileAccess.COMPRESSION_ZSTD), raw.size())
+	var packed := raw.compress(FileAccess.COMPRESSION_ZSTD)
+	if packed.size() > VIEW_SIZE_WARNING:
+		push_warning("NetSession: view for seat %d is %d bytes compressed (Steam limit 512 KB)." % [seat, packed.size()])
+	_s2c_view.rpc_id(remote_peer, packed, raw.size())
 
 
 # ---------------------------------------------------------------- client sending
@@ -427,7 +531,12 @@ func send_from_local(cmd: Dictionary) -> void:
 	if api.multiplayer_peer == null or api.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
 		local_seat.status_changed.emit("Not connected to the host.")
 		return
+	if _awaiting_view:
+		# Just reconnected: the screen may be stale until the host's fresh view arrives.
+		local_seat.status_changed.emit("Reconnecting — please wait for the board to refresh.")
+		return
 	_seq += 1
+	_save_seq()
 	_c2s_command.rpc_id(1, _seq, cmd)
 
 

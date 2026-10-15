@@ -147,9 +147,9 @@ static func _build() -> Dictionary:
 			ch({"kind": "spent", "side": "self", "unit_card": true}, "u", false, "Summon a unit from your Spent into this column."),
 			{"op": "summon", "target": "$u", "place": "column", "stance": "choose"}], false, {"ap": 2})]}
 	t[13] = {"flags": ["mage_type_aura"],
-		"abilities": [abil("Declare a Type for all Mage units", [{"op": "declare_type", "types": CardDB.ELEMENTS + [""], "as": "ty"}, {"op": "set_declared", "var": "ty"}])],
+		"abilities": [abil("Declare a Type for all Mage units", [{"op": "declare_type", "types": CardDB.ELEMENTS, "as": "ty"}, {"op": "set_declared", "var": "ty"}])],
 		"on": [trig("destroyed", [yes("Change an opponent's unit to a Type of your choosing?"), ch({"kind": "unit", "side": "opp"}, "u"), need("u"),
-			{"op": "declare_type", "types": CardDB.ELEMENTS + [""], "as": "ty"}, {"op": "set_type", "target": "$u", "var": "ty"}])]}
+			{"op": "declare_type", "types": CardDB.ELEMENTS, "as": "ty"}, {"op": "set_type", "target": "$u", "var": "ty"}])]}
 	t[14] = {"on": [trig("summoned", [ch({"kind": "unit"}, "u", true, "Apply 1 Rune to a unit?"), st("$u", "rune")]),
 		trig("destroyed", [hp("self", -6), hp("opp", -6)])],
 		"abilities": [abil("Apply 6 Burn to a unit", [ch({"kind": "unit"}, "u"), st("$u", "burn", 6)])]}
@@ -375,7 +375,8 @@ static func _build() -> Dictionary:
 
 	# ------------------------------------------------------------ Arcane
 	t[170] = {"on": [trig("summoned", [ch({"kind": "hand", "side": "self"}, "h", true, "Send a card from Hand to Spent to gain 1 AP?"), need("h"), {"op": "move", "target": "$h", "to": "spent"}, {"op": "ap", "n": 1}]),
-		trig("destroyed", [yes("Lose 10 HP to add a card from Spent to Hand?"), hp("self", -10), ch({"kind": "spent", "side": "self", "not_self": true}, "u", false, "Add a card from Spent to Hand."), {"op": "move", "target": "$u", "to": "hand"}])]}
+		trig("destroyed", [{"op": "require", "cond": {"count": {"kind": "spent", "side": "self", "not_self": true}, "min": 1}},
+			yes("Lose 10 HP to add a card from Spent to Hand?"), hp("self", -10), ch({"kind": "spent", "side": "self", "not_self": true}, "u", false, "Add a card from Spent to Hand."), {"op": "move", "target": "$u", "to": "hand"}])]}
 	t[171] = {"flags": ["direct_attack", "exhaust_on_destroy"], "on": [trig("start_turn", [{"op": "stat", "target": "self", "atk": 6}], "own_turn", "start of turn")]}
 	t[172] = {"on": [trig("sacrificed", [ch({"kind": "field_card", "has_status": "reveal"}, "u", true, "Destroy a card with Reveal?"), {"op": "destroy", "target": "$u"}])]}
 	t[173] = {"on": [trig("summoned", [hp("opp", {"count": {"kind": "unit", "side": "opp"}, "mul": -4})]), trig("destroyed", [all_({"kind": "unit"}), st("$all", "paralyse")])]}

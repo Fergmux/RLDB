@@ -10,12 +10,14 @@ const PHYSICAL := 115      # Basic Mage (Physical)
 
 
 ## A fresh match with filler decks. Player 0 starts. Turn 1 is in Main Phase 1.
-static func make(seed_value: int = 7, deck_size: int = 20) -> MatchEngine:
+static func make(seed_value: int = 7, deck_size: int = 20, hidden_windows: bool = false) -> MatchEngine:
 	var m := MatchEngine.new()
 	var deck := []
 	for i in deck_size:
 		deck.append(FILLER)
-	m.setup([deck.duplicate(), deck.duplicate()], 0, seed_value)
+	# Rules tests open trap windows only when a Trap is eligible; the hidden-window
+	# behaviour (prompt whenever a face-down card exists) has its own tests.
+	m.setup([deck.duplicate(), deck.duplicate()], 0, seed_value, {"hidden_response_windows": hidden_windows})
 	return m
 
 
