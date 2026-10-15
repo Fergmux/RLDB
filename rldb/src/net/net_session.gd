@@ -229,7 +229,8 @@ func _on_peer_disconnected(id: int) -> void:
 		remote_peer = 0
 		paused = true
 		_status("Opponent disconnected. The match is paused until they reconnect.")
-		series.game.add_log("Connection: %s disconnected; match paused." % series.names[CLIENT_SEAT]) if series.game != null else null
+		if series.game != null:
+			series.game.add_log("Connection: %s disconnected; match paused." % series.names[CLIENT_SEAT])
 		_broadcast()
 
 
@@ -269,6 +270,8 @@ func _try_reconnect() -> void:
 func simulate_drop() -> void:
 	if api.multiplayer_peer != null:
 		api.multiplayer_peer.close()
+	# Closing our own peer does not emit server_disconnected locally; run the same path.
+	_on_server_disconnected()
 
 
 func _client_log_seq() -> int:
@@ -419,8 +422,7 @@ func _send_view(seat: int) -> void:
 
 func send_from_local(cmd: Dictionary) -> void:
 	if is_host:
-		last_seq[HOST_SEAT] += 1
-		_apply(HOST_SEAT, last_seq[HOST_SEAT], cmd)
+		_apply(HOST_SEAT, last_seq[HOST_SEAT] + 1, cmd)
 		return
 	if api.multiplayer_peer == null or api.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
 		local_seat.status_changed.emit("Not connected to the host.")
@@ -436,8 +438,8 @@ func send_raw(seq: int, cmd: Dictionary) -> void:
 
 func _status(text: String) -> void:
 	session_status.emit(text)
-	if text != "":
-		local_seat.status_changed.emit(text) if text.begins_with("Could not") or text.begins_with("Lost") else null
+	if text.begins_with("Could not") or text.begins_with("Lost"):
+		local_seat.status_changed.emit(text)
 
 
 class NetSeat:
