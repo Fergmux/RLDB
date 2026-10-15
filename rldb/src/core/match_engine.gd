@@ -1128,3 +1128,31 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 			change_hp(p, -(dv - av), " (battle)")
 	_apply_burn(a, p, burn_before)
 	return R.CONT
+
+
+## Independent deep copy of the whole match state, for look-ahead (the bot opponent tries moves
+## on a copy and scores the result). The copy has no log history and emits nothing anyone hears.
+func clone_for_sim() -> MatchEngine:
+	var m := MatchEngine.new()
+	m.cards = cards.duplicate(true)
+	m.players = players.duplicate(true)
+	m.turn = turn
+	m.active = active
+	m.phase = phase
+	m.winner = winner
+	m.rng.seed = rng.seed
+	m.rng.state = rng.state
+	m.config = config.duplicate(true)
+	m.reversal_turn = reversal_turn
+	m.reversal_count = reversal_count
+	m.swap_turn = swap_turn
+	m.swap_uids = swap_uids.duplicate(true)
+	m._next_log_seq = _next_log_seq
+	m.stack = stack.duplicate(true)
+	m.trigger_queue = trigger_queue.duplicate(true)
+	m.window_queue = window_queue.duplicate(true)
+	m.pending = pending.duplicate(true)
+	m._next_choice_id = _next_choice_id
+	m.first_turn_player = first_turn_player
+	m.command_count = command_count
+	return m

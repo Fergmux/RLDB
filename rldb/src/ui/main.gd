@@ -93,6 +93,12 @@ func _parse_cmdline() -> void:
 			_auto_started = true
 			call_deferred("_run_deckbuilder_shots", a.split("=", true, 1)[1])
 			return
+		if a.begins_with("--bot-shots="):
+			_auto_started = true
+			var bd: Node = load("res://src/dev/bot_driver.gd").new()
+			add_child(bd)
+			bd.call_deferred("run", self, a.split("=", true, 1)[1])
+			return
 		if a.begins_with("--f02-shots="):
 			_auto_started = true
 			var f2: Node = load("res://src/dev/f02_driver.gd").new()
@@ -108,6 +114,9 @@ func _parse_cmdline() -> void:
 		if a == "--local":
 			_auto_started = true
 			call_deferred("_start_local", cfg)
+		elif a == "--bot":
+			_auto_started = true
+			call_deferred("_start_bot", cfg)
 		elif a.begins_with("--host="):
 			_auto_started = true
 			call_deferred("_start_lan_host", int(a.split("=")[1]), cfg)
@@ -229,6 +238,9 @@ func _show_menu() -> void:
 	var row_b := HBoxContainer.new()
 	row_b.add_theme_constant_override("separation", 12)
 	box.add_child(row_b)
+	var bot_b := _hero_button("Play vs Bot", true, "Play a series against the computer.")
+	bot_b.pressed.connect(func(): _start_bot(opts.duplicate(true)))
+	row_b.add_child(bot_b)
 	var local_b := _hero_button("Hot-seat match", false, "Two players, one screen.")
 	local_b.pressed.connect(func(): _start_local(opts.duplicate(true)))
 	row_b.add_child(local_b)
@@ -346,6 +358,22 @@ func _start_local(cfg: Dictionary) -> void:
 	screen.attach(local_host.seats[0])
 	for s in local_host.seats:
 		s.view_changed.connect(func(_v): call_deferred("_check_hotseat"))
+
+
+## Series against the bot: you are seat 0, the BotPlayer drives seat 1 (random starter deck).
+## The screen never switches seats.
+func _start_bot(cfg: Dictionary) -> void:
+	_clear_screens()
+	cfg["names"] = ["Player", "Bot"]
+	local_host = LocalHost.new()
+	add_child(local_host)
+	local_host.start(cfg)
+	_new_screen()
+	_shown_seat = 0
+	screen.attach(local_host.seats[0])
+	var bot := BotPlayer.new()
+	local_host.add_child(bot)
+	bot.start(local_host, 1, screen)
 
 
 ## Hot-seat: when the other seat must act, hand the screen over (optionally behind

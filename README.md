@@ -10,9 +10,10 @@ over Steam (lobbies + friend invites).
 | --- | --- |
 | Exported Windows build | `build/windows/RLDB.exe` (re-export: see *Build* below; `build/` is git-ignored) |
 | From source | Open `rldb/project.godot` in Godot 4.6.1, press Play (main scene `res://main.tscn`) |
-| Headless/CLI | `godot --path rldb -- --local` (hot-seat), `-- --host=24680`, `-- --join=127.0.0.1:24680` |
+| Headless/CLI | `godot --path rldb -- --local` (hot-seat), `-- --bot` (vs bot), `-- --host=24680`, `-- --join=127.0.0.1:24680` |
 
-Main menu: **Host Steam lobby & invite a friend**, **Find lobbies** (public lobbies only),
+Main menu: **Play vs Bot** (you against the computer; the bot picks a random starter deck),
+**Host Steam lobby & invite a friend**, **Find lobbies** (public lobbies only),
 **Resume a saved series** (between-game saves), **Local hot-seat match** (optional privacy
 screen), **Deck builder** (unrestricted custom decks) and, under *Advanced*, **Host/Join LAN**.
 Series length (best of 1/3/5/7) and deck mode (starter/custom decks or draft) are chosen on the menu.
@@ -53,13 +54,25 @@ logged into a different Steam account, the accounts being Steam friends. Copy th
 7. Quit and relaunch B, rejoin through *Find lobbies*/invite → B gets its seat back.
 8. Finish the series (rewards, loser picks first player, final screen). Note anything that differs between the two screens.
 
+## Bot opponent
+
+`rldb/src/ai/bot_brain.gd` is a heuristic opponent, not machine learning. For each legal move it
+plays the move on a private copy of the match (`MatchEngine.clone_for_sim`), lets effects resolve,
+and scores the position: HP difference, each side's units (ATK/DEF, a stance that suits the stats,
+buffs minus debuffs, runes), Powers, set cards and hand size. It makes the best move while that beats
+doing nothing, otherwise it moves to the next phase; its own targets, zones and Trap responses are
+chosen the same way. It only scores public information (in its simulations you always pass on Traps,
+and your hand is only counted). `bot_player.gd` drives the seat with a 0.8–1.3 s pause before every
+move, waits for animations, and thinks on a worker thread. Weights and delays are constants at the top
+of both files. Live check: `godot --path rldb -- --bot-shots=<dir>`.
+
 ## Tests
 
 ```
 godot --headless --path rldb -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode -c
 ```
 
-405 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
+412 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
 summons, per-card behaviour (every effect card), series flow, review regressions, and
 two-client ENet integration tests (trap suspension, illegal input, payload redaction,
 reconnect during a pending prompt, duplicate-command replay, and complete best-of-3 /
