@@ -13,6 +13,7 @@ var client_errors: Array = []
 
 
 func before_test() -> void:
+	SeriesStore.DIR = "user://test_saves"
 	host_errors = []
 	client_errors = []
 	var hroot := Node.new()

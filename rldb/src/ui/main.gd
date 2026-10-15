@@ -78,12 +78,19 @@ func _parse_cmdline() -> void:
 			cfg["best_of"] = int(a.split("=")[1])
 		elif a == "--no-privacy":
 			_privacy = false
+		if a.ends_with("shots") or a.contains("shots="):
+			# Scripted screenshot runs must never create or show the player's real saves.
+			SeriesStore.DIR = "user://dev_saves"
 	for a in args:
 		if a.begins_with("--net-shots="):
 			_auto_started = true
 			var nd: Node = load("res://src/dev/net_shot_driver.gd").new()
 			add_child(nd)
 			nd.call_deferred("run", self, a.split("=")[1])
+			return
+		if a.begins_with("--deckbuilder-shots="):
+			_auto_started = true
+			call_deferred("_run_deckbuilder_shots", a.split("=", true, 1)[1])
 			return
 		if a.begins_with("--shots="):
 			_auto_started = true
@@ -116,45 +123,109 @@ func _clear_screens() -> void:
 
 # ---------------------------------------------------------------- menu
 
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Variable.ttf")
+const M_WOOD := Color("2a211a")
+const M_DEEP := Color("0e0d0c")
+const M_SLATE := Color("1f1c1a")
+const M_BRONZE := Color("7a5a30")
+const M_GOLD := Color("d4a64a")
+const M_PARCH := Color("ece4d2")
+const M_DIM := Color("a79c88")
+
+
+func _title_label(text: String, size: int, color: Color = M_GOLD) -> Label:
+	var l := UIStyle.label(text, size, color)
+	l.add_theme_font_override("font", FONT_TITLE)
+	return l
+
+
+## A bronze-trimmed slate plate with a heading; returns the VBox to fill.
+func _section(parent: Control, heading: String, note: String = "") -> VBoxContainer:
+	var p := PanelContainer.new()
+	var sb := UIStyle.flat(M_SLATE, M_BRONZE, 1, 6)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 12
+	p.add_theme_stylebox_override("panel", sb)
+	parent.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	p.add_child(v)
+	v.add_child(_title_label(heading, 18, M_GOLD))
+	if note != "":
+		v.add_child(UIStyle.label(note, 12, M_DIM, true))
+	return v
+
+
 func _show_menu() -> void:
 	_clear_screens()
 	menu = Control.new()
 	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(menu)
 	var bg := ColorRect.new()
-	bg.color = UIStyle.BG
+	bg.color = M_DEEP
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	menu.add_child(bg)
+	var table := ColorRect.new()
+	table.color = M_WOOD
+	table.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	table.anchor_left = 0.12
+	table.anchor_right = 0.88
+	table.offset_left = 0
+	table.offset_right = 0
+	menu.add_child(table)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	menu.add_child(scroll)
 	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	menu.add_child(center)
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(center)
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(620, 0)
-	box.add_theme_constant_override("separation", 10)
+	box.custom_minimum_size = Vector2(700, 0)
+	box.add_theme_constant_override("separation", 12)
 	center.add_child(box)
-	box.add_child(UIStyle.label("RLDB", 54, UIStyle.ACCENT))
-	box.add_child(UIStyle.label("A two-player roguelike deck builder", 16, UIStyle.MUTED))
-	box.add_child(HSeparator.new())
-	# Series options
+
+	# Title treatment
+	var title := _title_label("RLDB", 76, M_GOLD)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(title)
+	var sub := _title_label("A TWO-PLAYER ROGUELIKE DECK BATTLER", 15, M_DIM)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(sub)
+	var rule := ColorRect.new()
+	rule.color = M_BRONZE
+	rule.custom_minimum_size = Vector2(0, 2)
+	box.add_child(rule)
+
+	# Series settings
+	var cfg_box := _section(box, "Series settings")
 	var row := HBoxContainer.new()
-	box.add_child(row)
-	row.add_child(UIStyle.label("Series: best of", 14))
+	row.add_theme_constant_override("separation", 10)
+	cfg_box.add_child(row)
+	row.add_child(UIStyle.label("Best of", 14, M_PARCH))
 	var bo := OptionButton.new()
 	for n in [1, 3, 5, 7]:
 		bo.add_item(str(n), n)
 	bo.select([1, 3, 5, 7].find(opts["best_of"]))
 	bo.item_selected.connect(func(i): opts["best_of"] = bo.get_item_id(i))
 	row.add_child(bo)
-	row.add_child(UIStyle.label("   Decks:", 14))
+	row.add_child(UIStyle.label("   Decks", 14, M_PARCH))
 	var dm := OptionButton.new()
 	dm.add_item("Starter decks")
 	dm.add_item("Draft")
 	dm.select(0 if opts["deck_mode"] == "starter" else 1)
 	dm.item_selected.connect(func(i): opts["deck_mode"] = "starter" if i == 0 else "draft")
 	row.add_child(dm)
-	box.add_child(UIStyle.label("Online (Steam)", 18, UIStyle.TEXT))
+	cfg_box.add_child(UIStyle.label("Custom decks allowed: in any starter-deck series, pick one of your saved custom decks on the deck-selection screen. Build them under Deck builder below.", 12, M_DIM, true))
+
+	# Online
+	var online := _section(box, "Online (Steam)")
 	var steam_row := HBoxContainer.new()
-	box.add_child(steam_row)
+	steam_row.add_theme_constant_override("separation", 8)
+	online.add_child(steam_row)
 	var host_b := UIStyle.button("Host Steam lobby & invite a friend", 15)
 	host_b.pressed.connect(_start_steam_host)
 	steam_row.add_child(host_b)
@@ -167,12 +238,17 @@ func _show_menu() -> void:
 	pub.button_pressed = opts.get("public_lobby", false)
 	pub.toggled.connect(func(on): opts["public_lobby"] = on)
 	steam_row.add_child(pub)
-	status_label = UIStyle.label(SteamBridge.describe(), 12, UIStyle.MUTED, true)
-	box.add_child(status_label)
-	box.add_child(HSeparator.new())
-	box.add_child(UIStyle.label("Development harness (not a substitute for Steam play)", 14, UIStyle.MUTED))
+	status_label = UIStyle.label(SteamBridge.describe(), 12, M_DIM, true)
+	online.add_child(status_label)
+
+	# Saved series (only present when there are saves)
+	_add_saved_series(box)
+
+	# Dev harness
+	var dev_box := _section(box, "Development harness", "Not a substitute for Steam play.")
 	var dev := HBoxContainer.new()
-	box.add_child(dev)
+	dev.add_theme_constant_override("separation", 8)
+	dev_box.add_child(dev)
 	var local_b := UIStyle.button("Local hot-seat match", 14)
 	local_b.pressed.connect(func(): _start_local(opts.duplicate(true)))
 	dev.add_child(local_b)
@@ -182,7 +258,8 @@ func _show_menu() -> void:
 	priv.toggled.connect(func(on): _privacy = on)
 	dev.add_child(priv)
 	var lan := HBoxContainer.new()
-	box.add_child(lan)
+	lan.add_theme_constant_override("separation", 8)
+	dev_box.add_child(lan)
 	var addr := LineEdit.new()
 	addr.text = "127.0.0.1:24680"
 	addr.custom_minimum_size = Vector2(200, 0)
@@ -195,12 +272,21 @@ func _show_menu() -> void:
 	lan.add_child(addr)
 	lan.add_child(lan_host)
 	lan.add_child(lan_join)
-	box.add_child(HSeparator.new())
-	var ledger := UIStyle.button("Card list & implementation ledger", 14)
+
+	# Collection
+	var coll := _section(box, "Collection")
+	var crow := HBoxContainer.new()
+	crow.add_theme_constant_override("separation", 8)
+	coll.add_child(crow)
+	var builder := UIStyle.button("Deck builder", 15)
+	builder.pressed.connect(_show_deck_builder)
+	crow.add_child(builder)
+	var ledger := UIStyle.button("Card list & implementation ledger", 15)
 	ledger.pressed.connect(_show_card_list)
-	box.add_child(ledger)
-	var quit := UIStyle.button("Quit", 14)
+	crow.add_child(ledger)
+	var quit := UIStyle.button("Quit", 15)
 	quit.pressed.connect(func(): get_tree().quit())
+	quit.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(quit)
 
 
@@ -288,14 +374,14 @@ func _start_lan_join(host: String, port: int) -> void:
 		net.local_seat.status_changed.emit(err)
 
 
-func _start_steam_host() -> void:
+func _start_steam_host(cfg: Dictionary = {}) -> void:
 	if not SteamBridge.available():
 		status_label.text = SteamBridge.describe()
 		return
 	_clear_screens()
 	net = NetSession.new()
 	add_child(net)
-	net.host_steam(opts.duplicate(true))
+	net.host_steam(cfg if not cfg.is_empty() else opts.duplicate(true))
 	_new_screen()
 	screen.attach(net.local_seat)
 
@@ -393,3 +479,117 @@ func _on_menu_requested() -> void:
 		_confirm_leave("Leave this online series? Your opponent will be left waiting.", _show_menu)
 		return
 	_show_menu()
+
+
+
+# ---------------------------------------------------------------- saved series (P-02)
+
+## Lists unfinished series saved at between-game checkpoints, each resumable as
+## hot-seat, LAN host or Steam host (the opponent rejoins as before).
+func _add_saved_series(box: VBoxContainer) -> void:
+	var saves := SeriesStore.list()
+	if saves.is_empty():
+		return
+	var sec := _section(box, "Resume a saved series")
+	for sv in saves.slice(0, 4):
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		sec.add_child(row)
+		var info := UIStyle.label("%s vs %s · %d–%d · best of %d · %s" % [sv["names"][0], sv["names"][1], sv["scores"][0], sv["scores"][1],
+			sv["best_of"], String(sv["saved_at"]).replace("T", " ")], 12, M_DIM)
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(info)
+		var id: String = sv["id"]
+		var hs := UIStyle.button("Hot-seat", 12)
+		hs.pressed.connect(func(): _resume(id, "local"))
+		row.add_child(hs)
+		var lan := UIStyle.button("Host LAN", 12)
+		lan.pressed.connect(func(): _resume(id, "lan"))
+		row.add_child(lan)
+		var st := UIStyle.button("Host Steam", 12)
+		st.disabled = not SteamBridge.available()
+		st.pressed.connect(func(): _resume(id, "steam"))
+		row.add_child(st)
+		var del := UIStyle.button("Delete", 12)
+		del.pressed.connect(func(): _confirm_leave("Delete this saved series?", func(): SeriesStore.delete(id); _show_menu()))
+		row.add_child(del)
+
+
+func _resume(id: String, how: String) -> void:
+	var s := SeriesStore.load_series(id)
+	if s == null:
+		status_label.text = "That save could not be read."
+		return
+	var cfg := {"resume": s}
+	match how:
+		"local": _start_local(cfg)
+		"lan": _start_lan_host(24680, cfg)
+		"steam": _start_steam_host(cfg)
+
+
+func _show_deck_builder() -> void:
+	_clear_screens()
+	var db: Control = load("res://src/ui/deck_builder.gd").new()
+	menu = db
+	add_child(db)
+	db.connect("closed", _show_menu)
+
+
+# ---------------------------------------------------------------- dev: deck builder screenshots
+
+func _shot_to(dir: String, shot_name: String) -> void:
+	await RenderingServer.frame_post_draw
+	var path := dir.path_join(shot_name + ".png")
+	get_viewport().get_texture().get_image().save_png(path)
+	print("saved ", path)
+
+
+## `-- --deckbuilder-shots=<dir>`: drives the builder, saves a deck, captures, quits.
+func _run_deckbuilder_shots(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	for i in 5:
+		await get_tree().process_frame
+	_show_menu()
+	for i in 4:
+		await get_tree().process_frame
+	await _shot_to(dir, "01_main_menu")
+	_show_deck_builder()
+	for i in 4:
+		await get_tree().process_frame
+	var db: DeckBuilder = menu as DeckBuilder
+	await _shot_to(dir, "02_builder_empty")
+	db.set_filters("dragon")
+	db.deck_name_edit.text = "Screenshot Deck"
+	var added := 0
+	for d in CardDB.all():
+		if added >= 10:
+			break
+		if DeckBuilder.matches(d, "dragon", "", "", "", ""):
+			db.add_card(int(d["id"]), 2 if added < 2 else 1)
+			added += 1
+	for cost in ["kind:fusion", "kind:ritual", "kind:arcane"]:
+		for d in CardDB.all():
+			if DeckBuilder.matches(d, "", "", "", "", cost):
+				db.add_card(int(d["id"]))
+				break
+	for d in CardDB.all():
+		if d["category"] in ["spell", "trap", "power"]:
+			db.add_card(int(d["id"]))
+			if db.counts.size() > 18:
+				break
+	for d in CardDB.all():
+		if d["category"] == "fusion":
+			db.show_preview(int(d["id"]))
+			break
+	for i in 3:
+		await get_tree().process_frame
+	await _shot_to(dir, "03_builder_search_dragon")
+	db.set_filters("")
+	db._cat_opt.select(db._cat_opt.item_count - 1)
+	db._refresh_catalogue()
+	db.save()
+	for i in 3:
+		await get_tree().process_frame
+	await _shot_to(dir, "04_builder_saved_filter_arcane")
+	DeckStore.delete_deck("Screenshot Deck")  # leave the player's decks untouched
+	get_tree().quit()

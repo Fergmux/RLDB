@@ -15,6 +15,7 @@ var errors := [[], []]
 
 
 func before_test() -> void:
+	SeriesStore.DIR = "user://test_saves"
 	var hroot := Node.new()
 	hroot.name = "FH"
 	add_child(hroot)

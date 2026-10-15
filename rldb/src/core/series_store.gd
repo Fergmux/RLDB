@@ -3,7 +3,8 @@ extends RefCounted
 ## Between-game series saves (P-02: a series can be paused and resumed at a later date,
 ## at between-game checkpoints only). Saves live in user://saves/<save_id>.json.
 
-const DIR := "user://saves"
+## Save directory; tests point this elsewhere so they never touch real saves.
+static var DIR := "user://saves"
 
 
 static func save(s: Series) -> void:
