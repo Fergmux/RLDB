@@ -1,0 +1,641 @@
+class_name GameCore
+extends RefCounted
+## Deterministic game state plus low-level helpers (zones, stats, statuses, HP, log).
+## No Godot nodes or UI. Card instances are plain Dictionaries so they can be
+## snapshotted, redacted and sent over the network without custom serialisation.
+
+const UNIT_SLOTS := 6
+const BACKROW_SLOTS := 3
+const POWER_SLOTS := 4
+const START_HP := 60
+const BASE_AP := 2
+const BASE_DRAW := 4
+
+const PHASE_MAIN1 := "main1"
+const PHASE_BATTLE := "battle"
+const PHASE_MAIN2 := "main2"
+const PHASE_END := "end"
+const PHASE_OVER := "over"
+
+var cards: Dictionary = {}        # uid -> instance Dictionary
+var players: Array = []           # 2 player Dictionaries
+var turn: int = 0                 # global turn counter, 1-based
+var active: int = 0               # active player index
+var phase: String = PHASE_MAIN1
+var winner: int = -1
+var rng := RandomNumberGenerator.new()
+var log_entries: Array = []       # {seq, pub, priv:{player:text}}
+var config: Dictionary = {}
+var reversal_turn: int = -1       # Sneaky Snunday: reversal active during this turn
+var swap_turn: int = -1           # Freaky Funday: turn whose swapped units are listed in swap_uids
+var swap_uids: Array = []
+var _next_log_seq: int = 1
+
+
+# ---------------------------------------------------------------- setup
+
+func _new_player(index: int) -> Dictionary:
+	var units := []
+	units.resize(UNIT_SLOTS)
+	units.fill(-1)
+	var backrow := []
+	backrow.resize(BACKROW_SLOTS)
+	backrow.fill(-1)
+	var powers := []
+	powers.resize(POWER_SLOTS)
+	powers.fill(-1)
+	return {
+		"index": index, "hp": START_HP, "ap": 0, "ap_next": [], "delayed": [],
+		"units": units, "backrow": backrow, "powers": powers,
+		"hand": [], "draw": [], "spent": [], "exhaust": [], "extra": [],
+		"name": "Player %d" % (index + 1),
+	}
+
+
+## Creates a fresh instance for a definition id. Uids are drawn randomly so they
+## carry no information about deck order.
+func _create_instance(def_id: int, owner: int) -> int:
+	var uid := rng.randi_range(1000, 999999)
+	while cards.has(uid):
+		uid = rng.randi_range(1000, 999999)
+	cards[uid] = {
+		"uid": uid, "id": def_id, "owner": owner, "ctl": owner,
+		"zone": "draw", "slot": -1, "face_up": false, "stance": "atk",
+		"st": {}, "runes": 0, "mods": [], "cost_p": 0, "cost_t": [],
+		"summoned_turn": -1, "attacked_turn": -1, "moved_turn": -1, "opt": {},
+		"type_o": null, "race_o": null, "base_atk": null, "base_def": null,
+		"orig_slot": -1, "control_until": -1, "set_turn": -1,
+	}
+	return uid
+
+
+# ---------------------------------------------------------------- lookups
+
+func c(uid: int) -> Dictionary:
+	return cards[uid]
+
+
+func d(uid: int) -> Dictionary:
+	return CardDB.get_def(cards[uid]["id"])
+
+
+func opp(p: int) -> int:
+	return 1 - p
+
+
+func name_of(uid: int) -> String:
+	return d(uid)["name"]
+
+
+func category(uid: int) -> String:
+	return d(uid)["category"]
+
+
+func is_unit(uid: int) -> bool:
+	return CardDB.is_unit_category(category(uid))
+
+
+func is_extra(uid: int) -> bool:
+	return CardDB.is_extra_category(category(uid))
+
+
+func on_field(uid: int) -> bool:
+	return cards.has(uid) and cards[uid]["zone"] in ["unit", "backrow", "power"]
+
+
+func unit_on_field(uid: int) -> bool:
+	return cards.has(uid) and cards[uid]["zone"] == "unit"
+
+
+func pile(p: int, zone: String) -> Array:
+	return players[p][zone]
+
+
+func field_units(p: int) -> Array:
+	var out := []
+	for uid in players[p]["units"]:
+		if uid != -1:
+			out.append(uid)
+	return out
+
+
+func all_field_units() -> Array:
+	return field_units(active) + field_units(opp(active))
+
+
+func backrow_cards(p: int) -> Array:
+	return players[p]["backrow"].filter(func(u): return u != -1)
+
+
+func power_cards(p: int) -> Array:
+	return players[p]["powers"].filter(func(u): return u != -1)
+
+
+func field_cards(p: int) -> Array:
+	return field_units(p) + backrow_cards(p) + power_cards(p)
+
+
+static func slot_col(slot: int) -> int:
+	return slot % 3
+
+
+static func slot_row(slot: int) -> int:
+	return slot / 3   # 0 = front, 1 = back
+
+
+static func adjacent_slots(slot: int) -> Array:
+	var out := []
+	for s in range(UNIT_SLOTS):
+		if s != slot and absi(slot_col(s) - slot_col(slot)) <= 1 and absi(slot_row(s) - slot_row(slot)) <= 1:
+			out.append(s)
+	return out
+
+
+func column_of(uid: int) -> int:
+	return slot_col(cards[uid]["slot"])
+
+
+## Back-row units are protected while the front-row zone in the same column is occupied.
+func is_protected(uid: int) -> bool:
+	var inst: Dictionary = cards[uid]
+	if inst["zone"] != "unit" or slot_row(inst["slot"]) == 0:
+		return false
+	return players[inst["ctl"]]["units"][slot_col(inst["slot"])] != -1
+
+
+## The front-row unit protecting this back-row unit, or -1.
+func protector_of(uid: int) -> int:
+	if not is_protected(uid):
+		return -1
+	return players[cards[uid]["ctl"]]["units"][column_of(uid)]
+
+
+## The back-row unit this front-row unit protects, or -1.
+func protected_by(uid: int) -> int:
+	var inst: Dictionary = cards[uid]
+	if inst["zone"] != "unit" or slot_row(inst["slot"]) != 0:
+		return -1
+	return players[inst["ctl"]]["units"][inst["slot"] + 3]
+
+
+func adjacent_units(uid: int) -> Array:
+	var inst: Dictionary = cards[uid]
+	var out := []
+	for s in adjacent_slots(inst["slot"]):
+		var other: int = players[inst["ctl"]]["units"][s]
+		if other != -1:
+			out.append(other)
+	return out
+
+
+func free_unit_slots(p: int) -> Array:
+	var out := []
+	for s in range(UNIT_SLOTS):
+		if players[p]["units"][s] == -1:
+			out.append(s)
+	return out
+
+
+func free_backrow_slots(p: int) -> Array:
+	var out := []
+	for s in range(BACKROW_SLOTS):
+		if players[p]["backrow"][s] == -1:
+			out.append(s)
+	return out
+
+
+func free_power_slots(p: int) -> Array:
+	var out := []
+	for s in range(POWER_SLOTS):
+		if players[p]["powers"][s] == -1:
+			out.append(s)
+	return out
+
+
+# ---------------------------------------------------------------- log
+
+## Adds a log entry. `pub` is shown to both players; `priv` maps a player index to
+## the text that player sees instead (used to keep hidden identities private).
+func add_log(pub: String, priv: Dictionary = {}) -> void:
+	log_entries.append({"seq": _next_log_seq, "turn": turn, "pub": pub, "priv": priv})
+	_next_log_seq += 1
+
+
+func pname(p: int) -> String:
+	return players[p]["name"]
+
+
+## Public label for a card: hidden set cards are never named in public text.
+func public_label(uid: int) -> String:
+	var inst: Dictionary = cards[uid]
+	if inst["zone"] == "backrow" and not is_face_up(uid):
+		return "a face-down card"
+	return name_of(uid)
+
+
+func is_face_up(uid: int) -> bool:
+	var inst: Dictionary = cards[uid]
+	return inst["face_up"] or inst["st"].get("reveal", 0) > 0
+
+
+# ---------------------------------------------------------------- abilities & suppression
+
+func is_debilitated(uid: int) -> bool:
+	return cards[uid]["st"].get("debilitate", 0) > 0
+
+
+## Card scripts are looked up through here so suppression applies uniformly.
+func script_of(uid: int) -> Dictionary:
+	return CardScripts.get_entry(cards[uid]["id"])
+
+
+## True if a passive flag is active for this unit (on Field and not suppressed).
+func has_flag(uid: int, flag: String) -> bool:
+	if not on_field(uid) or is_debilitated(uid):
+		return false
+	return script_of(uid).get("flags", []).has(flag)
+
+
+## True if any non-suppressed card controlled by p has the flag (Powers, units).
+func player_has_flag(p: int, flag: String) -> bool:
+	for uid in field_units(p) + power_cards(p):
+		if has_flag(uid, flag):
+			return true
+	return false
+
+
+# ---------------------------------------------------------------- types and stats
+
+func unit_type(uid: int) -> String:
+	var inst: Dictionary = cards[uid]
+	# Chaos Witch aura: mage units become the declared type.
+	if inst["zone"] == "unit":
+		for src in all_field_units():
+			if has_flag(src, "mage_type_aura") and cards[src].get("declared_type", "") != "" \
+					and unit_race(uid) == "Mage":
+				return cards[src]["declared_type"]
+	if inst["type_o"] != null:
+		return inst["type_o"]
+	return d(uid)["type"]
+
+
+func unit_race(uid: int) -> String:
+	var inst: Dictionary = cards[uid]
+	if inst["race_o"] != null:
+		return inst["race_o"]
+	return d(uid)["race"]
+
+
+func base_atk(uid: int) -> int:
+	var inst: Dictionary = cards[uid]
+	if inst["base_atk"] != null:
+		return inst["base_atk"]
+	var v = d(uid)["atk"]
+	return 0 if v == null else v
+
+
+func base_def(uid: int) -> int:
+	var inst: Dictionary = cards[uid]
+	if inst["base_def"] != null:
+		return inst["base_def"]
+	var v = d(uid)["def"]
+	return 0 if v == null else v
+
+
+func reversal_active() -> bool:
+	return reversal_turn == turn
+
+
+## Returns {"atk", "def", "parts": [explanations]} for a unit, recalculated live.
+func stat_breakdown(uid: int) -> Dictionary:
+	var inst: Dictionary = cards[uid]
+	var atk := base_atk(uid)
+	var def := base_def(uid)
+	var parts := ["Base %d/%d" % [atk, def]]
+	var no_gain := has_flag(uid, "no_gain")
+	for m in inst["mods"]:
+		var ma: int = m["atk"]
+		var md: int = m["def"]
+		if no_gain:
+			ma = mini(ma, 0)
+			md = mini(md, 0)
+		atk += ma
+		def += md
+		if ma != 0 or md != 0:
+			parts.append("%s %+d/%+d%s" % [m.get("src", "effect"), ma, md, " (this turn)" if m["until"] == "turn" else ""])
+	if inst["zone"] == "unit":
+		for aura in CardScripts.auras_for(self, uid):
+			var aa: int = aura["atk"]
+			var ad: int = aura["def"]
+			if reversal_active():
+				aa = -aa
+				ad = -ad
+			if no_gain:
+				aa = mini(aa, 0)
+				ad = mini(ad, 0)
+			atk += aa
+			def += ad
+			if aa != 0 or ad != 0:
+				parts.append("%s %+d/%+d%s" % [aura["src"], aa, ad, " (reversed)" if reversal_active() else ""])
+	if swap_turn == turn and uid in swap_uids and inst["zone"] == "unit":
+		var t := atk
+		atk = def
+		def = t
+		parts.append("Freaky Funday: ATK/DEF switched")
+	return {"atk": maxi(atk, 0), "def": maxi(def, 0), "parts": parts}
+
+
+func atk_of(uid: int) -> int:
+	return stat_breakdown(uid)["atk"]
+
+
+func def_of(uid: int) -> int:
+	return stat_breakdown(uid)["def"]
+
+
+## Current ordinary AP cost (floored at zero). Extra-deck cards return -1 (no ordinary cost).
+func current_cost(uid: int) -> int:
+	var df := d(uid)
+	if df["cost_kind"] != "ap":
+		return -1
+	var inst: Dictionary = cards[uid]
+	var v: int = df["cost"] + inst["cost_p"]
+	for m in inst["cost_t"]:
+		if m["turn"] == turn:
+			v += m["n"]
+	var p: int = inst["owner"]
+	var cat: String = df["category"]
+	if cat == "spell" and player_has_flag(p, "spells_cost_less"):
+		v -= 1
+	if cat == "trap" and player_has_flag(p, "traps_cost_less"):
+		v -= 1
+	if CardDB.is_unit_category(cat) and player_has_flag(p, "units_cost_less_if_behind") \
+			and field_units(p).is_empty() and not field_units(opp(p)).is_empty():
+		v -= 1
+	return maxi(v, 0)
+
+
+## Printed cost label using the current cost where it applies.
+func cost_text(uid: int) -> String:
+	return CardDB.cost_label(d(uid), current_cost(uid))
+
+
+# ---------------------------------------------------------------- statuses
+
+func has_any_buff(uid: int) -> bool:
+	for s in cards[uid]["st"]:
+		if CardDB.is_buff(s) and cards[uid]["st"][s] > 0:
+			return true
+	return false
+
+
+func has_any_debuff(uid: int) -> bool:
+	for s in cards[uid]["st"]:
+		if CardDB.is_debuff(s) and cards[uid]["st"][s] > 0:
+			return true
+	return false
+
+
+func status_count(uid: int, s: String) -> int:
+	if s == "rune":
+		return cards[uid]["runes"]
+	return cards[uid]["st"].get(s, 0)
+
+
+func _set_status(uid: int, s: String, n: int) -> void:
+	if s == "rune":
+		cards[uid]["runes"] = maxi(n, 0)
+		return
+	if n <= 0:
+		cards[uid]["st"].erase(s)
+	else:
+		cards[uid]["st"][s] = n
+
+
+func _clear_statuses_of_class(uid: int, buffs: bool) -> Array:
+	var removed := []
+	for s in cards[uid]["st"].keys():
+		if (buffs and CardDB.is_buff(s)) or (not buffs and CardDB.is_debuff(s)):
+			removed.append(s)
+			cards[uid]["st"].erase(s)
+	return removed
+
+
+## Applies n stacks of a status, honouring Curse/Cleanse prevention and Cleanse
+## clearing. Runes are counters and bypass both. Returns the stacks actually added.
+func apply_status(uid: int, s: String, n: int) -> int:
+	if n <= 0 or not cards.has(uid):
+		return 0
+	var who := public_label(uid)
+	if s == "rune":
+		_set_status(uid, "rune", status_count(uid, "rune") + n)
+		add_log("%s gains %d Rune (now %d)." % [who, n, status_count(uid, "rune")])
+		return n
+	if CardDB.is_buff(s) and has_flag(uid, "no_buffs"):
+		add_log("%s cannot receive Buffs." % who)
+		return 0
+	if CardDB.is_buff(s) and status_count(uid, "curse") > 0 and s != "cleanse":
+		_set_status(uid, "curse", status_count(uid, "curse") - 1)
+		add_log("Curse on %s prevents %s (Curse -1)." % [who, s.capitalize()])
+		return 0
+	if s == "cleanse" and status_count(uid, "curse") > 0:
+		_set_status(uid, "curse", status_count(uid, "curse") - 1)
+		add_log("Curse on %s prevents Cleanse (Curse -1)." % who)
+		return 0
+	if CardDB.is_debuff(s) and status_count(uid, "cleanse") > 0 and s != "curse":
+		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
+		add_log("Cleanse on %s prevents %s (Cleanse -1)." % [who, s.capitalize()])
+		return 0
+	if s == "curse" and status_count(uid, "cleanse") > 0:
+		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
+		add_log("Cleanse on %s prevents Curse (Cleanse -1)." % who)
+		return 0
+	_set_status(uid, s, status_count(uid, s) + n)
+	add_log("%s gains %d %s (now %d)." % [who, n, s.capitalize(), status_count(uid, s)])
+	_after_status_gain(uid, s)
+	return n
+
+
+## Cleanse clears all existing debuffs when gained (consuming one stack);
+## Curse clears all existing buffs when gained (consuming one stack).
+func _after_status_gain(uid: int, s: String) -> void:
+	if s == "cleanse" and has_any_debuff(uid):
+		var removed := _clear_statuses_of_class(uid, false)
+		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
+		add_log("Cleanse removes %s from %s (Cleanse -1)." % [", ".join(removed), public_label(uid)])
+	elif s == "curse" and has_any_buff(uid):
+		var removed := _clear_statuses_of_class(uid, true)
+		_set_status(uid, "curse", status_count(uid, "curse") - 1)
+		add_log("Curse removes %s from %s (Curse -1)." % [", ".join(removed), public_label(uid)])
+
+
+func decrement_status(uid: int, s: String, n: int = 1) -> void:
+	_set_status(uid, s, status_count(uid, s) - n)
+
+
+# ---------------------------------------------------------------- HP and AP
+
+## Changes HP. Returns true if the game ended. Immediate defeat at zero.
+func change_hp(p: int, amount: int, reason: String) -> bool:
+	if amount == 0 or winner != -1:
+		return winner != -1
+	players[p]["hp"] += amount
+	if amount < 0:
+		add_log("%s loses %d HP%s (HP %d)." % [pname(p), -amount, reason, players[p]["hp"]])
+	else:
+		add_log("%s gains %d HP%s (HP %d)." % [pname(p), amount, reason, players[p]["hp"]])
+	if players[p]["hp"] <= 0:
+		players[p]["hp"] = 0
+		end_game(opp(p), "%s reached 0 HP" % pname(p))
+		return true
+	return false
+
+
+func end_game(win: int, reason: String) -> void:
+	if winner != -1:
+		return
+	winner = win
+	phase = PHASE_OVER
+	add_log("GAME OVER: %s wins (%s)." % [pname(win), reason])
+	_on_game_over()
+
+
+func _on_game_over() -> void:
+	pass
+
+
+func change_ap(p: int, amount: int, reason: String) -> void:
+	if amount == 0:
+		return
+	players[p]["ap"] = maxi(players[p]["ap"] + amount, 0)
+	add_log("%s %s %d AP%s (AP %d)." % [pname(p), "gains" if amount > 0 else "loses", absi(amount), reason, players[p]["ap"]])
+
+
+# ---------------------------------------------------------------- zone movement
+
+func _remove_from_zone(uid: int) -> void:
+	var inst: Dictionary = cards[uid]
+	var p: int = inst["ctl"] if inst["zone"] in ["unit", "backrow", "power"] else inst["owner"]
+	match inst["zone"]:
+		"unit":
+			players[p]["units"][inst["slot"]] = -1
+		"backrow":
+			players[p]["backrow"][inst["slot"]] = -1
+		"power":
+			players[p]["powers"][inst["slot"]] = -1
+		"hand", "draw", "spent", "exhaust", "extra":
+			players[inst["owner"]][inst["zone"]].erase(uid)
+	inst["slot"] = -1
+
+
+## Resets field-only state when a card leaves Field. Persistent cost changes survive.
+func _reset_field_state(uid: int) -> void:
+	var inst: Dictionary = cards[uid]
+	inst["st"] = {}
+	inst["runes"] = 0
+	inst["mods"] = []
+	inst["opt"] = {}
+	inst["type_o"] = null
+	inst["race_o"] = null
+	inst["base_atk"] = null
+	inst["base_def"] = null
+	inst["stance"] = "atk"
+	inst["face_up"] = false
+	inst["ctl"] = inst["owner"]
+	inst["control_until"] = -1
+	inst.erase("declared_type")
+	inst.erase("runes_used")
+
+
+## Moves a card to a pile ("hand", "draw", "draw_top", "spent", "exhaust", "extra").
+## Extra-deck cards sent to Hand/Draw go back to the Extra Deck instead (P-17 style).
+func move_to_pile(uid: int, dest: String) -> void:
+	var inst: Dictionary = cards[uid]
+	var was_field := on_field(uid)
+	if was_field and inst["zone"] == "unit":
+		inst["orig_slot"] = inst["slot"]
+	_remove_from_zone(uid)
+	if was_field:
+		_reset_field_state(uid)
+	var owner: int = inst["owner"]
+	if dest in ["hand", "draw", "draw_top"] and is_extra(uid):
+		dest = "extra"
+	match dest:
+		"draw_top":
+			players[owner]["draw"].append(uid)  # top of Draw = end of array
+			inst["zone"] = "draw"
+		"draw":
+			var pos := rng.randi_range(0, players[owner]["draw"].size())
+			players[owner]["draw"].insert(pos, uid)
+			inst["zone"] = "draw"
+		_:
+			players[owner][dest].append(uid)
+			inst["zone"] = dest
+	inst["face_up"] = false
+	inst["slot"] = -1
+
+
+func place_unit(uid: int, p: int, slot: int, stance: String) -> void:
+	_remove_from_zone(uid)
+	var inst: Dictionary = cards[uid]
+	inst["zone"] = "unit"
+	inst["slot"] = slot
+	inst["ctl"] = p
+	inst["stance"] = stance
+	inst["face_up"] = true
+	inst["summoned_turn"] = turn
+	players[p]["units"][slot] = uid
+
+
+func move_unit_slot(uid: int, slot: int) -> void:
+	var inst: Dictionary = cards[uid]
+	players[inst["ctl"]]["units"][inst["slot"]] = -1
+	players[inst["ctl"]]["units"][slot] = uid
+	inst["slot"] = slot
+
+
+func shuffle_array(arr: Array) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t = arr[i]
+		arr[i] = arr[j]
+		arr[j] = t
+
+
+## Draws up to n cards; recycles Spent when Draw is empty. Missing draws are skipped.
+func draw_cards(p: int, n: int) -> Array:
+	var drawn := []
+	for i in range(n):
+		if players[p]["draw"].is_empty():
+			recycle_spent(p)
+		if players[p]["draw"].is_empty():
+			add_log("%s has no cards to draw; remaining draws skipped." % pname(p))
+			break
+		var uid: int = players[p]["draw"].pop_back()
+		cards[uid]["zone"] = "hand"
+		players[p]["hand"].append(uid)
+		drawn.append(uid)
+	if not drawn.is_empty():
+		var names := ", ".join(drawn.map(func(u): return name_of(u)))
+		add_log("%s draws %d card%s." % [pname(p), drawn.size(), "" if drawn.size() == 1 else "s"],
+			{p: "You draw %d: %s." % [drawn.size(), names]})
+	return drawn
+
+
+## Shuffles Spent into Draw; Fusion/Ritual/Arcane cards return to the Extra Deck.
+func recycle_spent(p: int) -> void:
+	var spent: Array = players[p]["spent"].duplicate()
+	if spent.is_empty():
+		return
+	var to_extra := 0
+	for uid in spent:
+		players[p]["spent"].erase(uid)
+		if is_extra(uid):
+			players[p]["extra"].append(uid)
+			cards[uid]["zone"] = "extra"
+			to_extra += 1
+		else:
+			players[p]["draw"].append(uid)
+			cards[uid]["zone"] = "draw"
+	shuffle_array(players[p]["draw"])
+	add_log("%s recycles Spent: %d into Draw, %d to Extra Deck." % [pname(p), spent.size() - to_extra, to_extra])

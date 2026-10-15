@@ -1,0 +1,92 @@
+[
+ {
+  "id": "rune",
+  "name": "Rune",
+  "source_class": "buff",
+  "source_text": "You can summon a Ritual Unit from the Extra Deck by Tributing a Unit that has the required Runes"
+ },
+ {
+  "id": "retain",
+  "name": "Retain",
+  "source_class": "buff",
+  "source_text": "This card is not discarded at the end of your turn. at the start of your turn reduce Retain by 1"
+ },
+ {
+  "id": "reveal",
+  "name": "Reveal",
+  "source_class": "debuff",
+  "source_text": "A card with Reveal is face up"
+ },
+ {
+  "id": "eternal",
+  "name": "Eternal",
+  "source_class": "buff",
+  "source_text": "The first time this Unit would be destroyed it is not, reduce Eternal by 1"
+ },
+ {
+  "id": "burn",
+  "name": "Burn",
+  "source_class": "debuff",
+  "source_text": "If this Unit attacks, you lose HP equal to the number of Burn on this Unit and remove all Burn"
+ },
+ {
+  "id": "pierce",
+  "name": "Pierce",
+  "source_class": "buff",
+  "source_text": "If this Unit attacks a Defense Stance Unit, excess ATK Damages your opponent, reduce Pierce by 1"
+ },
+ {
+  "id": "cleanse",
+  "name": "Cleanse",
+  "source_class": "buff",
+  "source_text": "Remove all Debuffs or prevent a Debuff being Applied, reduce curse by 1."
+ },
+ {
+  "id": "paralyse",
+  "name": "Paralyse",
+  "source_class": "debuff",
+  "source_text": "This Unit cannot declare an attack or move Zone. At the end of your turn reduce Paralyse by 1"
+ },
+ {
+  "id": "medic",
+  "name": "Medic",
+  "source_class": "buff",
+  "source_text": "At the start of your turn gain HP equal to the number of Medic on this Unit, reduce Medic by 1"
+ },
+ {
+  "id": "curse",
+  "name": "Curse",
+  "source_class": "debuff",
+  "source_text": "Remove all Buffs or prevent a Buff being Applied, reduce curse by 1."
+ },
+ {
+  "id": "poison",
+  "name": "Poison",
+  "source_class": "debuff",
+  "source_text": "At the end of your turn lose HP equal to the number of Poison on this Unit, reduce Poison by 1"
+ },
+ {
+  "id": "infiltrate",
+  "name": "Infiltrate",
+  "source_class": "buff",
+  "source_text": "This Unit can attack Protected Units. If it attacks a Protected Unit reduce Infiltrate by 1"
+ },
+ {
+  "id": "blind",
+  "name": "Blind",
+  "source_class": "debuff",
+  "source_text": "If this Unit attacks, the target is selected at random. If it attacks reduce Blind by 1"
+ },
+ {
+  "id": "nimble",
+  "name": "Nimble",
+  "source_class": "buff",
+  "source_text": "Once per turn this Unit can move to an Adjacent Zone, reduce Nimble by 1"
+ },
+ {
+  "id": "debilitate",
+  "name": "Debilitate",
+  "source_class": "debuff",
+  "source_text": "Unit cannot be Sacrificed, Tributed, or use its Effects. At the end of your turn reduce Debilitate by 1"
+ }
+]
