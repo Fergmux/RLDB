@@ -13,8 +13,14 @@ over Steam (lobbies + friend invites).
 | Headless/CLI | `godot --path rldb -- --local` (hot-seat), `-- --host=24680`, `-- --join=127.0.0.1:24680` |
 
 Main menu: **Host Steam lobby & invite a friend**, **Find lobbies** (public lobbies only),
-**Local hot-seat match** (with an optional privacy screen between seats) and **Host/Join LAN**.
-Series length (best of 1/3/5/7) and deck mode (starter decks or draft) are chosen on the menu.
+**Resume a saved series** (between-game saves), **Local hot-seat match** (optional privacy
+screen), **Deck builder** (unrestricted custom decks) and, under *Advanced*, **Host/Join LAN**.
+Series length (best of 1/3/5/7) and deck mode (starter/custom decks or draft) are chosen on the menu.
+
+In a match: hover a card (or press Tab) to see its legal actions on the card; click/right-click a
+card to inspect it in the details panel; number keys pick prompt options; **Settings** toggles
+reduced motion and fast animations. If an opponent disconnects, the host may claim the current
+game after 60 seconds (the series continues).
 
 Extra command-line flags (after `--`): `--no-steam`, `--seed=N`, `--draft`, `--bo=5`,
 `--no-privacy`, `--shots=<dir>` (scripted UI screenshots), `--net-shots=<dir>` (networked screenshots).
@@ -46,7 +52,7 @@ To verify, use two PCs (or two Steam accounts) with the exported build:
 godot --headless --path rldb -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode -c
 ```
 
-262 GdUnit4 tests: rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
+309 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
 summons, per-card behaviour (every effect card), series flow, review regressions, and
 two-client ENet integration tests (trap suspension, illegal input, payload redaction,
 reconnect during a pending prompt, duplicate-command replay, and complete best-of-3 /

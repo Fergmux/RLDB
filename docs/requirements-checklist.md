@@ -1,8 +1,8 @@
 # Requirements checklist
 
 Requirement-by-requirement status against `rules/` (01–08), from an independent QA audit plus
-the gaps closed after it. Evidence: GdUnit4 tests (262, all passing — see README for the
-command) and screenshots in `production/qa/evidence/2026-10-15-final/`.
+the gaps closed after it. Evidence: GdUnit4 tests (309, all passing — see README for the
+command) and screenshots in `production/qa/evidence/2026-10-15-ui-v3/` (current) and `2026-10-15-final/` (before the production pass).
 
 Legend: **Done** = implemented and tested · **Done (manual)** = implemented, verified by
 running the game/screenshots, no automated test · **Partial** · **Blocked** = needs something
@@ -69,9 +69,24 @@ outside this repo.
 ## Open items for the user
 
 1. **Steam verification** — run the README's two-account checklist.
-2. **Possible endless games** — the rules have no fatigue/turn limit, and Exhaust never returns,
-   so two players can run out of cards with no way to finish (seen in random-bot play). Decide
-   whether to add a rule (e.g. a turn limit or fatigue damage); none was invented.
+2. ~~Possible endless games~~ — resolved by C-04 fatigue damage (default 2 HP per missed draw; confirm the number).
 3. **Open decisions in `rules/06`** — prototype answers are listed as P-xx in
    `design/decision-register.md`; review and confirm or change them.
 4. **Artwork** — drop files into `rldb/art/cards/` using the source image filenames.
+
+## Production-quality pass (rules/09, 2026-10-15)
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Decision answers P-01..P-31, S-01..S-04 reconciled in the engine | Done | `rules_decisions_test.gd` (each changed decision seen failing first), commit ab59612 |
+| C-03 Damage Conversion = Magic Cylinder condition; C-04 fatigue damage | Done | decision + turn tests |
+| Reworded card texts shown in game (MC, DC, Chains, Options, Yamata) | Done | `tools/import_cards.py` TEXT_CORRECTIONS |
+| 60 s host claim of the current game only (P-02/P-06) | Done | `test_host_can_claim_current_game_only_after_wait`, QA series suite |
+| Between-game series save/resume (hot-seat, LAN, Steam host), seat bound to original player | Done | series save tests, QA `qa_net_series_test.gd` |
+| Custom deck builder (unrestricted) + starter + draft routes | Done | deck builder tests, ui-v2/deckbuilder |
+| I-01 board layout from reference image, seat-relative | Done | ui-v3, independent UX review: MEETS |
+| I-02 legal actions on hovered card; details inspection-only; keyboard fallback | Done | ui-v3 02a/02a2/02b/02c/02d |
+| I-03 visual direction, animation, reduced motion | Done (art pending) | ui-v3, art bible, perf probe |
+| Studio settings: rigor full, review full, team studio, QA full, multiplayer, strict evidence | Done | `project.yaml`, resolved via yaml-helper |
+| Independent reviews (security, UX, adversarial QA) with fixes re-verified | Done | `production/agent-ledger.md`, `production/qa/qa-adversarial-2026-10-15.md` |
+| Steam matchmaking/invites in a real environment | Blocked | Needs Steam client running + second account (README checklist) |
