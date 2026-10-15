@@ -16,10 +16,21 @@ func run(main_node: Node, dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	await _frames(5)
 	main._privacy = false
-	main._start_local({"seed": 4242, "best_of": 3, "deck_mode": "starter", "names": ["Ana", "Ben"]})
+	main._show_menu()
 	await _frames(6)
+	await _shot("00_main_menu")
+	# A saved custom deck so the deck-select tiles include one (removed again below).
+	DeckStore.save_deck("Shot Deck", [112, 112, 36, 34, 70, 162, 29, 54, 51, 37, 28])
+	main._start_local({"seed": 4242, "best_of": 3, "deck_mode": "starter", "names": ["Ana", "Ben"]})
+	await _frames(8)
 	host = main.local_host
 	await _shot("01_deck_select")
+	main.screen._deck_open["s1"] = true
+	main.screen._overlay_sig = 0
+	main.screen._render_overlay()
+	await _frames(6)
+	await _shot("01b_deck_select_full_list")
+	DeckStore.delete_deck("Shot Deck")
 	host.handle(0, {"t": "pick_starter", "index": 1})
 	host.handle(1, {"t": "pick_starter", "index": 3})
 	await _frames(4)
@@ -33,14 +44,20 @@ func run(main_node: Node, dir: String) -> void:
 	var hs: GameScreen = main.screen
 	await _real_mouse_hover_shot(hs)
 	hs.debug_hover_hand(0)
-	await _frames(25)
+	await get_tree().create_timer(0.5).timeout
 	await _shot("02b_hover_hand_card")
 	hs.debug_hover_hand(2)
-	await _frames(25)
+	await get_tree().create_timer(0.5).timeout
 	await _shot("02b2_hover_hand_spell")
 	hs.debug_hover_slot(m.active, "unit", 0)
-	await _frames(25)
+	await get_tree().create_timer(0.5).timeout
 	await _shot("02c_hover_field_card")
+	hs.debug_clear_hover()
+	await _frames(5)
+	# Keyboard fallback: Tab opens the first actionable card's action row.
+	hs._kb_cycle(1)
+	await get_tree().create_timer(0.5).timeout
+	await _shot("02d_keyboard_focus_action_row")
 	hs.debug_clear_hover()
 	await _frames(5)
 	# Details for a unit with statuses and an aura-modified stat.
@@ -67,6 +84,10 @@ func run(main_node: Node, dir: String) -> void:
 	var attacker: int = m.players[attacker_side]["units"][0]
 	host.handle(attacker_side, {"t": "attack", "uid": attacker})
 	await _frames(3)
+	# Real pointer on a legal target so the acting-card -> target arrow is drawn.
+	var tr: Rect2 = screen.fx_slot_global_rect(1 - attacker_side, "unit", 0)
+	get_viewport().warp_mouse(tr.get_center())
+	await get_tree().create_timer(1.2).timeout
 	await _shot("05_attack_target_selection")
 	var target_opt := -1
 	for o in m.pending["options"]:

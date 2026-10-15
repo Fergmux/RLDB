@@ -361,7 +361,7 @@ func _hp(p: int, d: int) -> void:
 		return
 	var pl: PlayerPlate = screen.plate_of(p)
 	var heal := d > 0
-	_float_text(("+%d" % d) if heal else ("%d" % d), UIStyle.GOOD if heal else Color("ff6b5e"), pl.hp_anchor(), 28, 36.0, 0.7)
+	_float_text(("+%d" % d) if heal else ("%d" % d), UIStyle.GOOD if heal else Color("ff6b5e"), pl.hp_anchor(), 28, 22.0, 0.7)
 	pl.pulse()
 	if not heal:
 		_shake(pl, 5.0)
@@ -473,94 +473,71 @@ func _next_banner() -> void:
 		return
 	_banner_active = true
 	var e: Dictionary = _banner_q.pop_front()
+	_show_strip(String(e["text"]), String(e["sub"]), e["col"], e["flare"], 0.55)
+
+
+## Short, click-through pill in the top strip (above the board) so it can never cover a zone the
+## player has to pick. Slides down, holds, slides back.
+func _show_strip(text: String, sub: String, col: Color, flare: bool, hold: float, final: bool = false) -> void:
 	var area: Rect2 = screen.board_global_rect()
 	var layer: Control = screen.banner_layer
-	var band := Control.new()
-	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var lp := layer.get_global_transform().affine_inverse() * area.position
-	band.size = Vector2(area.size.x, 104)
-	band.position = Vector2(lp.x, lp.y + area.size.y / 2.0 - 52.0)
-	var bg := ColorRect.new()
-	bg.color = Color(0.04, 0.035, 0.03, 0.66)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	band.add_child(bg)
-	for y in [0.0, 102.0]:
-		var rule := ColorRect.new()
-		rule.color = Color(UIStyle.GOLD, 0.8)
-		rule.position = Vector2(0, y)
-		rule.size = Vector2(area.size.x, 2)
-		rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		band.add_child(rule)
-	var title := UIStyle.label(e["text"], 44, e["col"], false, true)
+	var pill := PanelContainer.new()
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := UIStyle.flat(Color(0.05, 0.04, 0.035, 0.92), UIStyle.GOLD, 2, 22)
+	sb.content_margin_left = 26
+	sb.content_margin_right = 26
+	sb.content_margin_top = 2
+	sb.content_margin_bottom = 2
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 6
+	pill.add_theme_stylebox_override("panel", sb)
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 14)
+	pill.add_child(row)
+	var title := UIStyle.label(text, 26, col, false, true)
 	title.add_theme_font_override("font", UIStyle.font_display(700))
 	title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	title.add_theme_constant_override("outline_size", 6)
-	title.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.add_theme_constant_override("outline_size", 4)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if e["sub"] != "":
-		title.offset_top = -10
-	band.add_child(title)
-	if e["sub"] != "":
-		var sub := UIStyle.label(e["sub"], 16, UIStyle.MUTED)
-		sub.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		sub.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-		sub.offset_bottom = -6
-		sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		band.add_child(sub)
-	_banner_node = band
-	_add_node(band, layer)
+	row.add_child(title)
+	if sub != "":
+		var sl := UIStyle.label(sub, 17, UIStyle.MUTED)
+		sl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(sl)
+	pill.reset_size()
+	var lp := layer.get_global_transform().affine_inverse() * Vector2(area.get_center().x, 4.0)
+	var home := Vector2(lp.x - pill.size.x / 2.0, lp.y)
+	pill.position = home
+	_banner_node = pill
+	_add_node(pill, layer)
+	pill.size = pill.get_combined_minimum_size()
+	pill.position.x = lp.x - pill.size.x / 2.0
+	home = pill.position
 	var tw := _tw()
 	if UIStyle.reduce_motion:
-		band.modulate.a = 0.0
-		tw.tween_property(band, "modulate:a", 1.0, 0.15)
-		tw.tween_interval(0.6)
-		tw.tween_property(band, "modulate:a", 0.0, 0.15)
+		pill.modulate.a = 0.0
+		tw.tween_property(pill, "modulate:a", 1.0, 0.12)
+		tw.tween_interval(hold)
+		tw.tween_property(pill, "modulate:a", 0.0, 0.12)
 	else:
-		var x0 := band.position.x
-		band.position.x = x0 - area.size.x
-		tw.tween_property(band, "position:x", x0, UIStyle.dur(0.18)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
-		if e["flare"]:
-			tw.tween_callback(func():
-				_burst("spark", Rect2(band.global_position, band.size).get_center(), UIStyle.GOLD_HI, 12, 120.0, 0.45))
-		tw.tween_interval(UIStyle.dur(0.54))
-		tw.tween_property(band, "position:x", x0 + area.size.x, UIStyle.dur(0.18)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+		pill.position.y = home.y - 70.0
+		tw.tween_property(pill, "position:y", home.y, UIStyle.dur(0.16)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		if flare:
+			tw.tween_callback(func(): _burst("spark", Rect2(pill.global_position, pill.size).get_center(), UIStyle.GOLD_HI, 10, 70.0, 0.4))
+		tw.tween_interval(UIStyle.dur(hold))
+		tw.tween_property(pill, "position:y", home.y - 70.0, UIStyle.dur(0.14)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
 	tw.tween_callback(func():
-		_free_node(band)
+		_free_node(pill)
 		_banner_node = null
-		_next_banner())
+		if final:
+			_banner_active = false
+		else:
+			_next_banner())
 
 
 func _game_over(winner: int) -> void:
-	var area: Rect2 = screen.board_global_rect()
-	var layer: Control = screen.banner_layer
-	var root := Control.new()
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var lp := layer.get_global_transform().affine_inverse() * area.position
-	root.position = lp
-	root.size = area.size
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(dim)
 	var won: bool = winner == screen.me()
-	var l := UIStyle.label("VICTORY" if won else "DEFEAT", 72, UIStyle.GOLD_HI if won else Color("e8605a"), false, true)
-	l.add_theme_font_override("font", UIStyle.font_display(700))
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	l.add_theme_constant_override("outline_size", 8)
-	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(l)
-	_add_node(root, layer)
-	root.modulate.a = 0.0
-	var tw := _tw()
-	tw.tween_property(root, "modulate:a", 1.0, UIStyle.dur(0.25))
-	tw.tween_interval(UIStyle.dur(1.4))
-	tw.tween_property(root, "modulate:a", 0.0, UIStyle.dur(0.3))
-	tw.tween_callback(_free_node.bind(root))
+	_banner_active = true
+	_show_strip("VICTORY" if won else "DEFEAT", "", UIStyle.GOLD_HI if won else Color("e8605a"), won, 1.2, true)

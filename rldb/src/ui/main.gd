@@ -152,10 +152,18 @@ func _section(parent: Control, heading: String, note: String = "") -> VBoxContai
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	p.add_child(v)
-	v.add_child(_title_label(heading, 18, M_GOLD))
+	v.add_child(_title_label(heading, 20, M_GOLD))
 	if note != "":
-		v.add_child(UIStyle.label(note, 12, M_DIM, true))
+		v.add_child(UIStyle.label(note, 14, M_DIM, true))
 	return v
+
+
+func _hero_button(text: String, primary: bool, tip: String = "") -> Button:
+	var b := UIStyle.primary_button(text, 22) if primary else UIStyle.button(text, 21)
+	b.custom_minimum_size = Vector2(0, 72)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.tooltip_text = tip
+	return b
 
 
 func _show_menu() -> void:
@@ -184,15 +192,15 @@ func _show_menu() -> void:
 	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.add_child(center)
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(700, 0)
+	box.custom_minimum_size = Vector2(780, 0)
 	box.add_theme_constant_override("separation", 12)
 	center.add_child(box)
 
 	# Title treatment
-	var title := _title_label("RLDB", 76, M_GOLD)
+	var title := _title_label("RLDB", 84, M_GOLD)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
-	var sub := _title_label("A TWO-PLAYER ROGUELIKE DECK BATTLER", 15, M_DIM)
+	var sub := _title_label("A TWO-PLAYER ROGUELIKE DECK BATTLER", 17, M_DIM)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(sub)
 	var rule := ColorRect.new()
@@ -200,91 +208,112 @@ func _show_menu() -> void:
 	rule.custom_minimum_size = Vector2(0, 2)
 	box.add_child(rule)
 
-	# Series settings
-	var cfg_box := _section(box, "Series settings")
+	# Hero: the play actions
+	var saves := SeriesStore.list()
+	var row_a := HBoxContainer.new()
+	row_a.add_theme_constant_override("separation", 12)
+	box.add_child(row_a)
+	var host_b := _hero_button("Host Steam lobby", true, "Host a lobby and invite a friend through Steam.")
+	host_b.pressed.connect(_start_steam_host)
+	row_a.add_child(host_b)
+	var find_b := _hero_button("Find lobbies", false, "Browse public RLDB lobbies.")
+	find_b.pressed.connect(_start_steam_browse)
+	row_a.add_child(find_b)
+	var row_b := HBoxContainer.new()
+	row_b.add_theme_constant_override("separation", 12)
+	box.add_child(row_b)
+	var local_b := _hero_button("Hot-seat match", false, "Two players, one screen.")
+	local_b.pressed.connect(func(): _start_local(opts.duplicate(true)))
+	row_b.add_child(local_b)
+	var resume_b := _hero_button("Resume saved series (%d)" % saves.size() if not saves.is_empty() else "Resume saved series", false, "Continue an unfinished series.")
+	resume_b.disabled = saves.is_empty()
+	row_b.add_child(resume_b)
+	status_label = UIStyle.label(SteamBridge.describe(), 14, M_DIM, true)
+	box.add_child(status_label)
+	var saved_holder := VBoxContainer.new()
+	saved_holder.visible = false
+	box.add_child(saved_holder)
+	if not saves.is_empty():
+		_add_saved_series(saved_holder, saves)
+		resume_b.pressed.connect(func(): saved_holder.visible = not saved_holder.visible)
+
+	# Match options
+	var cfg_box := _section(box, "Match options")
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	cfg_box.add_child(row)
-	row.add_child(UIStyle.label("Best of", 14, M_PARCH))
+	row.add_child(UIStyle.label("Best of", 16, M_PARCH))
 	var bo := OptionButton.new()
 	for n in [1, 3, 5, 7]:
 		bo.add_item(str(n), n)
 	bo.select([1, 3, 5, 7].find(opts["best_of"]))
 	bo.item_selected.connect(func(i): opts["best_of"] = bo.get_item_id(i))
 	row.add_child(bo)
-	row.add_child(UIStyle.label("   Decks", 14, M_PARCH))
+	row.add_child(UIStyle.label("   Decks", 16, M_PARCH))
 	var dm := OptionButton.new()
 	dm.add_item("Starter decks")
 	dm.add_item("Draft")
 	dm.select(0 if opts["deck_mode"] == "starter" else 1)
 	dm.item_selected.connect(func(i): opts["deck_mode"] = "starter" if i == 0 else "draft")
 	row.add_child(dm)
-	cfg_box.add_child(UIStyle.label("Custom decks allowed: in any starter-deck series, pick one of your saved custom decks on the deck-selection screen. Build them under Deck builder below.", 12, M_DIM, true))
-
-	# Online
-	var online := _section(box, "Online (Steam)")
-	var steam_row := HBoxContainer.new()
-	steam_row.add_theme_constant_override("separation", 8)
-	online.add_child(steam_row)
-	var host_b := UIStyle.button("Host Steam lobby & invite a friend", 15)
-	host_b.pressed.connect(_start_steam_host)
-	steam_row.add_child(host_b)
-	var find_b := UIStyle.button("Find lobbies", 15)
-	find_b.pressed.connect(_start_steam_browse)
-	steam_row.add_child(find_b)
+	var opts_row := HBoxContainer.new()
+	opts_row.add_theme_constant_override("separation", 18)
+	cfg_box.add_child(opts_row)
 	var pub := CheckBox.new()
 	pub.text = "List my lobby publicly"
+	pub.add_theme_font_size_override("font_size", 15)
 	pub.tooltip_text = "Off: friends-only, joined by invite. On: also visible under Find lobbies."
 	pub.button_pressed = opts.get("public_lobby", false)
 	pub.toggled.connect(func(on): opts["public_lobby"] = on)
-	steam_row.add_child(pub)
-	status_label = UIStyle.label(SteamBridge.describe(), 12, M_DIM, true)
-	online.add_child(status_label)
-
-	# Saved series (only present when there are saves)
-	_add_saved_series(box)
-
-	# Dev harness
-	var dev_box := _section(box, "Development harness", "Not a substitute for Steam play.")
-	var dev := HBoxContainer.new()
-	dev.add_theme_constant_override("separation", 8)
-	dev_box.add_child(dev)
-	var local_b := UIStyle.button("Local hot-seat match", 14)
-	local_b.pressed.connect(func(): _start_local(opts.duplicate(true)))
-	dev.add_child(local_b)
+	opts_row.add_child(pub)
 	var priv := CheckBox.new()
-	priv.text = "Privacy screen between seats"
+	priv.text = "Privacy screen between seats (hot-seat)"
+	priv.add_theme_font_size_override("font_size", 15)
 	priv.button_pressed = _privacy
 	priv.toggled.connect(func(on): _privacy = on)
-	dev.add_child(priv)
+	opts_row.add_child(priv)
+	cfg_box.add_child(UIStyle.label("Starter-deck series can also use your saved custom decks (pick one on the deck screen).", 14, M_DIM, true))
+
+	# Collection
+	var coll := _section(box, "Collection")
+	var crow := HBoxContainer.new()
+	crow.add_theme_constant_override("separation", 10)
+	coll.add_child(crow)
+	var builder := UIStyle.button("Deck builder", 17)
+	builder.custom_minimum_size = Vector2(0, 44)
+	builder.pressed.connect(_show_deck_builder)
+	crow.add_child(builder)
+	var ledger := UIStyle.button("Card list & implementation ledger", 17)
+	ledger.custom_minimum_size = Vector2(0, 44)
+	ledger.pressed.connect(_show_card_list)
+	crow.add_child(ledger)
+
+	# Advanced / LAN (dev): collapsed by default
+	var adv_toggle := UIStyle.button("Advanced / LAN (dev)  +", 15)
+	adv_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	box.add_child(adv_toggle)
+	var dev_box := _section(box, "Development harness", "Not a substitute for Steam play.")
+	dev_box.get_parent().visible = false
 	var lan := HBoxContainer.new()
 	lan.add_theme_constant_override("separation", 8)
 	dev_box.add_child(lan)
 	var addr := LineEdit.new()
 	addr.text = "127.0.0.1:24680"
-	addr.custom_minimum_size = Vector2(200, 0)
-	var lan_host := UIStyle.button("Host LAN (ENet)", 14)
+	addr.custom_minimum_size = Vector2(220, 0)
+	var lan_host := UIStyle.button("Host LAN (ENet)", 15)
 	lan_host.pressed.connect(func(): _start_lan_host(int(addr.text.split(":")[-1]), opts.duplicate(true)))
-	var lan_join := UIStyle.button("Join LAN", 14)
+	var lan_join := UIStyle.button("Join LAN", 15)
 	lan_join.pressed.connect(func():
 		var hp := addr.text.split(":")
 		_start_lan_join(hp[0], int(hp[1])))
 	lan.add_child(addr)
 	lan.add_child(lan_host)
 	lan.add_child(lan_join)
-
-	# Collection
-	var coll := _section(box, "Collection")
-	var crow := HBoxContainer.new()
-	crow.add_theme_constant_override("separation", 8)
-	coll.add_child(crow)
-	var builder := UIStyle.button("Deck builder", 15)
-	builder.pressed.connect(_show_deck_builder)
-	crow.add_child(builder)
-	var ledger := UIStyle.button("Card list & implementation ledger", 15)
-	ledger.pressed.connect(_show_card_list)
-	crow.add_child(ledger)
-	var quit := UIStyle.button("Quit", 15)
+	adv_toggle.pressed.connect(func():
+		dev_box.get_parent().visible = not dev_box.get_parent().visible
+		adv_toggle.text = "Advanced / LAN (dev)  −" if dev_box.get_parent().visible else "Advanced / LAN (dev)  +")
+	var quit := UIStyle.button("Quit", 16)
+	quit.custom_minimum_size = Vector2(120, 40)
 	quit.pressed.connect(func(): get_tree().quit())
 	quit.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(quit)
@@ -486,31 +515,28 @@ func _on_menu_requested() -> void:
 
 ## Lists unfinished series saved at between-game checkpoints, each resumable as
 ## hot-seat, LAN host or Steam host (the opponent rejoins as before).
-func _add_saved_series(box: VBoxContainer) -> void:
-	var saves := SeriesStore.list()
-	if saves.is_empty():
-		return
+func _add_saved_series(box: VBoxContainer, saves: Array) -> void:
 	var sec := _section(box, "Resume a saved series")
 	for sv in saves.slice(0, 4):
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
 		sec.add_child(row)
 		var info := UIStyle.label("%s vs %s · %d–%d · best of %d · %s" % [sv["names"][0], sv["names"][1], sv["scores"][0], sv["scores"][1],
-			sv["best_of"], String(sv["saved_at"]).replace("T", " ")], 12, M_DIM)
+			sv["best_of"], String(sv["saved_at"]).replace("T", " ")], 14, M_DIM)
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(info)
 		var id: String = sv["id"]
-		var hs := UIStyle.button("Hot-seat", 12)
+		var hs := UIStyle.button("Hot-seat", 14)
 		hs.pressed.connect(func(): _resume(id, "local"))
 		row.add_child(hs)
-		var lan := UIStyle.button("Host LAN", 12)
+		var lan := UIStyle.button("Host LAN", 14)
 		lan.pressed.connect(func(): _resume(id, "lan"))
 		row.add_child(lan)
-		var st := UIStyle.button("Host Steam", 12)
+		var st := UIStyle.button("Host Steam", 14)
 		st.disabled = not SteamBridge.available()
 		st.pressed.connect(func(): _resume(id, "steam"))
 		row.add_child(st)
-		var del := UIStyle.button("Delete", 12)
+		var del := UIStyle.button("Delete", 14)
 		del.pressed.connect(func(): _confirm_leave("Delete this saved series?", func(): SeriesStore.delete(id); _show_menu()))
 		row.add_child(del)
 

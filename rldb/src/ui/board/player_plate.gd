@@ -121,7 +121,7 @@ func _init() -> void:
 	name_label.clip_text = true
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(name_label)
-	next_label = UIStyle.label("", 12, UIStyle.MUTED)
+	next_label = UIStyle.label("", 13, UIStyle.MUTED)
 	head.add_child(next_label)
 	hp_bar = HpBar.new()
 	v.add_child(hp_bar)
@@ -131,18 +131,18 @@ func _init() -> void:
 	row.add_theme_constant_override("separation", 3)
 	v.add_child(row)
 	for z in CHIP_ZONES:
-		var b := UIStyle.button("%s 0" % z[1], 11)
-		b.custom_minimum_size = Vector2(0, 24)
+		var b := UIStyle.button("%s 0" % z[1], 13)
+		b.custom_minimum_size = Vector2(0, 26)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.add_theme_stylebox_override("normal", UIStyle.flat(UIStyle.PANEL_LIGHT, Color(UIStyle.BRONZE, 0.7), 1, 11))
 		b.add_theme_stylebox_override("hover", UIStyle.flat(UIStyle.PANEL_LIGHT.lightened(0.1), UIStyle.GOLD, 1, 11))
-		b.add_theme_stylebox_override("disabled", UIStyle.flat(UIStyle.PANEL_INK, Color(UIStyle.BRONZE, 0.4), 1, 11))
+		b.add_theme_stylebox_override("disabled", UIStyle.flat(Color(UIStyle.PANEL_LIGHT, 0.7), Color(UIStyle.BRONZE, 0.6), 1, 11))
 		for s in ["normal", "hover", "disabled"]:
 			(b.get_theme_stylebox(s) as StyleBoxFlat).content_margin_left = 4
 			(b.get_theme_stylebox(s) as StyleBoxFlat).content_margin_right = 4
 			(b.get_theme_stylebox(s) as StyleBoxFlat).content_margin_top = 1
 			(b.get_theme_stylebox(s) as StyleBoxFlat).content_margin_bottom = 1
-		b.add_theme_color_override("font_disabled_color", UIStyle.MUTED)
+		b.add_theme_color_override("font_disabled_color", UIStyle.TEXT)
 		b.tooltip_text = CHIP_TIPS[z[0]]
 		var zone: String = z[0]
 		b.pressed.connect(func(): pile_pressed.emit(zone))
@@ -192,7 +192,9 @@ func pulse() -> void:
 
 
 func hp_anchor() -> Vector2:
-	return hp_bar.get_global_rect().get_center() + Vector2(-40, 0)
+	# Over the right end of the HP bar: never over the player name at the top-left of the plate.
+	var r := hp_bar.get_global_rect()
+	return Vector2(r.end.x - 56.0, r.get_center().y)
 
 
 func ap_anchor() -> Vector2:

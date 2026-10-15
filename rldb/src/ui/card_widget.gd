@@ -21,6 +21,8 @@ const UNIT_CATS := ["basic_unit", "unit", "fusion", "ritual", "arcane"]
 
 static var _tex_cache := {}
 static var _radial_cache := {}
+## Shaped text paragraphs are expensive; share them across all widgets (bounded).
+static var _para_shared := {}
 
 var view: Dictionary = {}
 var size_kind: String = "board"
@@ -39,7 +41,6 @@ var fx_flash: float = 0.0: set = _set_flash
 var fx_glow: Color = Color(1, 1, 1, 0): set = _set_glow
 
 var _s: float = 1.0
-var _para_cache := {}
 var _self_hover := false
 
 
@@ -60,7 +61,6 @@ func setup(v, kind: String = "board", empty_label: String = "") -> CardWidget:
 	custom_minimum_size = SIZES[kind]
 	size = SIZES[kind]
 	pivot_offset = size / 2.0
-	_para_cache.clear()
 	if view.is_empty() or view.get("hidden", false) or not show_tooltip:
 		tooltip_text = ""
 	else:
@@ -69,11 +69,18 @@ func setup(v, kind: String = "board", empty_label: String = "") -> CardWidget:
 	return self
 
 
-func set_marks(is_target: bool, is_selected: bool, is_dimmed: bool = false) -> void:
+## `is_dimmed` = hard dim (non-target while a target is being chosen, ~0.55);
+## `soft_dim` = gentle dim for cards that cannot act right now.
+func set_marks(is_target: bool, is_selected: bool, is_dimmed: bool = false, soft_dim: bool = false) -> void:
 	highlighted = is_target
 	selected = is_selected
 	dimmed = is_dimmed
-	self_modulate = Color(1, 1, 1, 0.72) if dimmed else Color.WHITE
+	if is_dimmed:
+		self_modulate = Color(0.55, 0.55, 0.55, 1.0)
+	elif soft_dim:
+		self_modulate = Color(0.8, 0.8, 0.8, 1.0)
+	else:
+		self_modulate = Color.WHITE
 	set_process(highlighted and not UIStyle.reduce_motion)
 	queue_redraw()
 
@@ -100,7 +107,6 @@ func _process(_d: float) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		pivot_offset = size / 2.0
-		_para_cache.clear()
 		queue_redraw()
 
 
@@ -148,14 +154,16 @@ func _text_c(font: Font, text: String, centre: Vector2, fs: int, col: Color, out
 
 func _para(text: String, font: Font, tag: String, fs: int, width: float, max_lines: int) -> TextParagraph:
 	var key := "%s|%s|%d|%d|%d" % [text, tag, fs, int(width), max_lines]
-	if _para_cache.has(key):
-		return _para_cache[key]
+	if _para_shared.has(key):
+		return _para_shared[key]
+	if _para_shared.size() > 600:
+		_para_shared.clear()
 	var tp := TextParagraph.new()
 	tp.width = width
 	tp.max_lines_visible = max_lines
 	tp.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	tp.add_string(text, font, fs)
-	_para_cache[key] = tp
+	_para_shared[key] = tp
 	return tp
 
 
@@ -449,11 +457,11 @@ func _shield(rect: Rect2, is_atk: bool, value, printed, fs: int) -> void:
 func _status_list() -> Array:
 	var out := []
 	if view.get("runes", 0) > 0:
-		out.append({"t": "RN%d" % view["runes"], "c": UIStyle.RUNE_BLUE})
+		out.append({"t": "RN%d" % view["runes"], "c": UIStyle.RUNE_BLUE, "k": 0})
 	for s in CardDB.STATUS_ORDER:
 		var n: int = view.get("statuses", {}).get(s, 0)
 		if n > 0:
-			out.append({"t": "%s%d" % [UIStyle.STATUS_SHORT[s], n], "c": Color("6fd38a") if CardDB.is_buff(s) else Color("e8605a")})
+			out.append({"t": "%s%d" % [UIStyle.STATUS_SHORT[s], n], "c": Color("6fd38a") if CardDB.is_buff(s) else Color("e8605a"), "k": 1 if CardDB.is_buff(s) else -1})
 	return out
 
 
@@ -468,21 +476,35 @@ func _chips(x0: float, x1: float, y: float, h: float, fs_base: float) -> void:
 	var shown := 0
 	for i in list.size():
 		var e: Dictionary = list[i]
-		var w := font.get_string_size(e["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 7.0 * _s
+		var w := font.get_string_size(e["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 11.0 * _s
 		var remaining := list.size() - i - 1
 		var reserve := (font.get_string_size("+%d" % remaining, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 7.0 * _s) if remaining > 0 else 0.0
 		if x + w + reserve > xmax and i > 0 or shown >= 3:
 			var more := list.size() - i
 			_chip_draw(x, y * _s, font.get_string_size("+%d" % more, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 7.0 * _s, h * _s, "+%d" % more, UIStyle.MUTED, font, fs)
 			return
-		_chip_draw(x, y * _s, w, h * _s, e["t"], e["c"], font, fs)
+		_chip_draw(x, y * _s, w, h * _s, e["t"], e["c"], font, fs, int(e["k"]))
 		x += w + 2.0 * _s
 		shown += 1
 
 
-func _chip_draw(x: float, y: float, w: float, h: float, text: String, col: Color, font: Font, fs: int) -> void:
+## `kind`: +1 buff (up triangle), -1 debuff (down triangle), 0 rune (diamond), 2 neutral (no mark).
+## The mark means chips never rely on colour alone.
+func _chip_draw(x: float, y: float, w: float, h: float, text: String, col: Color, font: Font, fs: int, kind: int = 2) -> void:
 	_round_rect(Rect2(x, y, w, h), Color(col.darkened(0.7), 0.95), h / 2.0, col, maxf(1.0, _s))
-	_text_c(font, text, Vector2(x + w / 2.0, y + h / 2.0), fs, col.lightened(0.45))
+	var tx := x + w / 2.0
+	if kind != 2:
+		var m := Vector2(x + h * 0.55 + 1.0 * _s, y + h / 2.0)
+		var a := h * 0.2
+		var lc := col.lightened(0.45)
+		if kind > 0:
+			draw_colored_polygon(PackedVector2Array([m + Vector2(0, -a), m + Vector2(a, a), m + Vector2(-a, a)]), lc)
+		elif kind < 0:
+			draw_colored_polygon(PackedVector2Array([m + Vector2(0, a), m + Vector2(a, -a), m + Vector2(-a, -a)]), lc)
+		else:
+			draw_colored_polygon(PackedVector2Array([m + Vector2(0, -a * 1.2), m + Vector2(a, 0), m + Vector2(0, a * 1.2), m + Vector2(-a, 0)]), lc)
+		tx = x + w / 2.0 + 3.0 * _s
+	_text_c(font, text, Vector2(tx, y + h / 2.0), fs, col.lightened(0.45))
 
 
 func _stance_tab(rect: Rect2) -> void:
@@ -585,9 +607,11 @@ func _draw_tall(big: bool) -> void:
 			"chip_y": 262.0, "chip_x": [66.0, 174.0], "atk": [6, 272, 52, 58], "def": [182, 272, 52, 58], "gem": [26, 26, 20],
 			"f_name": 20.0, "f_line": 13.0, "f_text": 15.0, "f_chip": 12.0, "f_stat": 32.0, "f_gem": 24.0, "chip_h": 17.0, "chip_y_nu": 306.0}
 	else:
-		g = {"art": [6, 6, 116, 88], "plate": [6, 82, 116, 22], "line": 106.0, "text": [6, 119, 116, 28 if is_unit else 52],
+		# Text well ends (y 140 / 158) above the shields (y 142) and the non-unit chip row (y 162),
+		# so ATK/DEF never overlap effect text. Long text is truncated; the details panel shows it all.
+		g = {"art": [6, 6, 116, 70], "plate": [6, 64, 116, 22], "line": 89.0, "text": [6, 104, 116, 36 if is_unit else 54],
 			"chip_y": 148.0, "chip_x": [38.0, 90.0], "atk": [3, 142, 34, 38], "def": [91, 142, 34, 38], "gem": [15, 15, 14],
-			"f_name": 13.0, "f_line": 10.0, "f_text": 11.0, "f_chip": 9.0, "f_stat": 20.0, "f_gem": 16.0, "chip_h": 14.0, "chip_y_nu": 162.0}
+			"f_name": 13.0, "f_line": 11.0, "f_text": 12.0, "f_chip": 10.0, "f_stat": 20.0, "f_gem": 16.0, "chip_h": 14.0, "chip_y_nu": 162.0}
 	_frame(8.0)
 	var a: Array = g["art"]
 	_draw_art(_r(a[0], a[1], a[2], a[3]))
@@ -618,7 +642,7 @@ func _draw_tall(big: bool) -> void:
 		rules = "[Effect not implemented] " + rules
 	_round_rect(_r(t[0], t[1], t[2], t[3]), Color(0.847, 0.8, 0.69, 0.08), 3.0 * _s)
 	var tfs := _fs(g["f_text"])
-	var lines := maxi(1, int(float(t[3]) / (float(g["f_text"]) * 1.18)))
+	var lines := maxi(1, int(float(t[3]) / (float(g["f_text"]) * 1.22)))
 	if rules != "":
 		var tp := _para(rules, UIStyle.font_body(), "b", tfs, (float(t[2]) - 8.0) * _s, lines)
 		tp.draw(get_canvas_item(), _p(t[0] + 4, t[1] + 2), UIStyle.TEXT)
@@ -658,7 +682,7 @@ func _draw_back() -> void:
 	var rad := 8.0 if size_kind in ["hand", "big", "mini", "back"] else 6.0
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color("1d1630")
-	sb.border_color = UIStyle.GOLD
+	sb.border_color = Color("6e5a9a")
 	sb.set_border_width_all(maxi(2, roundi(3.0 * _s)))
 	sb.set_corner_radius_all(roundi(rad * _s))
 	sb.shadow_color = Color(0, 0, 0, 0.5)
@@ -709,5 +733,6 @@ func _draw_overlays() -> void:
 		var a := 1.0
 		if not UIStyle.reduce_motion:
 			a = 0.55 + 0.45 * (0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 900.0 * TAU))
-		_ring(Color(UIStyle.TARGET, 0.3 * a), 4.0 * _s, rect.grow(3.0 * _s), rad + 3.0 * _s)
-		_ring(Color(UIStyle.TARGET, a), 3.0 * _s, rect, rad)
+		_round_rect(rect, Color(UIStyle.TARGET, 0.07 + 0.12 * a), rad)
+		_ring(Color(UIStyle.TARGET, 0.35 * a), 5.0 * _s, rect.grow(3.5 * _s), rad + 3.0 * _s)
+		_ring(Color(UIStyle.TARGET, a), 3.5 * _s, rect, rad)

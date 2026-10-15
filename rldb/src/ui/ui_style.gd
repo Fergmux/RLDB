@@ -14,8 +14,8 @@ const BRONZE := Color("7a5a30")
 const GOLD := Color("d4a64a")
 const GOLD_HI := Color("f0cf7a")
 const TEXT := Color("ece4d2")
-const MUTED := Color("a79c88")
-const DISABLED := Color("6f6757")
+const MUTED := Color("c2b8a2")
+const DISABLED := Color("918874")
 const ON_GOLD := Color("1a1208")
 const ACCENT := GOLD
 const GOOD := Color("6fd38a")
@@ -226,6 +226,19 @@ static func make_theme() -> Theme:
 	th.set_stylebox("hover", "Button", hover)
 	th.set_stylebox("pressed", "Button", pressed)
 	th.set_stylebox("disabled", "Button", disabled)
+	# Wider, higher-contrast scrollbars so scrollable panels read as scrollable.
+	var track := flat(Color(0, 0, 0, 0.35), Color.TRANSPARENT, 0, 5)
+	track.content_margin_left = 5
+	track.content_margin_right = 5
+	var grab := flat(Color(GOLD, 0.7), Color.TRANSPARENT, 0, 5)
+	var grab_hi := flat(GOLD_HI, Color.TRANSPARENT, 0, 5)
+	for sb in [grab, grab_hi]:
+		sb.content_margin_left = 5
+		sb.content_margin_right = 5
+	th.set_stylebox("scroll", "VScrollBar", track)
+	th.set_stylebox("grabber", "VScrollBar", grab)
+	th.set_stylebox("grabber_highlight", "VScrollBar", grab_hi)
+	th.set_stylebox("grabber_pressed", "VScrollBar", grab_hi)
 	th.set_font("font", "Button", font_bold())
 	th.set_color("font_color", "Button", TEXT)
 	th.set_color("font_hover_color", "Button", GOLD_HI)
