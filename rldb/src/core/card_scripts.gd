@@ -340,6 +340,10 @@ static func _build() -> Dictionary:
 	t[163] = {"trap": {"when": ["activate", "attack"], "ops": [ch({"kind": "field_card", "side": "self", "not_self": true}, "u", false, "Destroy any number of your cards (+10 HP each)."),
 		{"op": "plan_b"}]}}
 	t[163]["trap"]["ops"][0]["n"] = "any"
+	# User decision 2026-10-15: Plan B must destroy at least one card, and is only offered
+	# when you control another card to destroy.
+	t[163]["trap"]["ops"][0]["min"] = 1
+	t[163]["trap"]["needs_target"] = true
 	t[164] = {"trap": {"when": "attack", "cond": {"event_target_unit": true}, "ops": [st("event.target", "curse"), {"op": "no_loyalty"}]}}
 	t[52] = {"trap": {"when": "summon", "cond": {"event_cost_min": 2}, "ops": [ch({"kind": "spent", "side": "self", "unit_card": true, "cost_max": 2}, "u", false, "Summon a 2-cost or lower unit from your Spent."),
 		need("u"), {"op": "summon", "target": "$u", "place": "column", "stance": "atk"}]}}

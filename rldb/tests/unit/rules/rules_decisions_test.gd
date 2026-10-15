@@ -194,3 +194,27 @@ func test_p27_no_prompt_without_a_legal_response() -> void:
 	TB.set_card(m, 0, 83, 2)                              # face-down Spell, cannot respond
 	TB.attack(m, TB.unit(m, 1, TB.WATER, 0, "atk", 10), -1)
 	assert_bool(m.pending.is_empty()).is_true()
+
+
+# User decision 2026-10-15: Plan B must destroy at least one card.
+func test_plan_b_rejects_zero_targets() -> void:
+	var m := _battle()
+	TB.set_card(m, 0, 163, 2)
+	var d1 := TB.unit(m, 0, TB.WATER, 0)
+	TB.unit(m, 0, TB.WATER, 1)
+	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 5)
+	TB.attack(m, a, d1)
+	TB.choose(m, ["Activate Plan B"])
+	assert_int(int(m.pending["min"])).is_equal(1)
+	assert_str(m.submit(0, {"t": "choose", "id": m.pending["id"], "indices": []})).is_not_empty()
+	assert_str(m.pending["kind"]).is_equal("select")
+
+
+func test_plan_b_not_offered_without_another_own_card() -> void:
+	var m := _battle()
+	TB.set_card(m, 0, 163, 2)                             # Plan B is the only card defender controls
+	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 5)
+	m.submit(1, {"t": "attack", "uid": a})
+	if m.pending.get("kind", "") == "attack_target":
+		TB.choose(m, ["directly"])
+	assert_bool(m.pending.get("kind", "") == "trap_response").is_false()

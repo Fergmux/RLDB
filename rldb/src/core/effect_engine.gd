@@ -622,6 +622,10 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 			if tr.get("by_opponent", false) and ev.get("by_player", -1) != opp(p): return false
 	if tr.has("cond") and not eval_cond(f, tr["cond"]):
 		return false
+	if tr.get("needs_target", false):
+		for op in tr["ops"]:
+			if op["op"] == "choose":
+				return not select(f, op["sel"]).is_empty()
 	return true
 
 
@@ -671,6 +675,8 @@ func _op_choose(f: Dictionary, op: Dictionary) -> int:
 	var n = op.get("n", 1)
 	var max_n: int = cands.size() if n is String else mini(n, cands.size())
 	var min_n: int = 0 if (op.get("optional", false) or n is String) else max_n
+	if op.has("min"):
+		min_n = clampi(int(op["min"]), 0, max_n)
 	if min_n == max_n and cands.size() == max_n and not op.get("always_ask", false) \
 			and not op.get("optional", false) and op["sel"].get("kind", "unit") in ["unit", "power", "field_card", "backrow"]:
 		f["vars"][op["as"]] = cands

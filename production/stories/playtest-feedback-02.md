@@ -45,5 +45,5 @@ Automated: 392 GdUnit4 tests pass (`rules_f02_test.gd` 18, `ui_f02_interaction_t
 
 ## Open
 - **F02-13:** the sound balance has not been judged by ear. Please listen and say which sounds need adjusting.
-- **Plan B with zero targets:** Plan B accepts zero targets, which uses up the Trap, matching the card text "any number". It was raised by QA for a design check and has not been changed.
+- **Plan B:** user decided (15 Oct) it must destroy at least one card and is only offered when you control another card; implemented with tests seen failing first.
 - **Frame time:** in the last windowed perf run it was 5.4 ms average and 19.0 ms at the 99th percentile, up from about 16.9 ms recorded before this pass. Machine load differed and the baseline could not be re-run.
