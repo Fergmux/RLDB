@@ -23,6 +23,11 @@ const MAX_FX_ENTRIES := 25
 const ZONE_KEY := {"unit": "units", "backrow": "backrow", "power": "powers"}
 const ZONE_KIND := {"unit": "board", "backrow": "trap", "power": "power"}
 const PHASE_ORDER := [["main1", "Main 1"], ["battle", "Battle"], ["main2", "Main 2"], ["end", "End"]]
+const READY_KINDS := ["summon", "cast", "set", "power", "ritual", "arcane", "ability", "attack", "activate_set"]
+## Prompt kinds answered by picking cards/zones directly (board, hand or the pile tray) with
+## the context banner (F02-07 / F02-10); others (responses, ordering, yes/no) use the sidebar.
+const PICK_KINDS := ["select", "attack_target", "slot"]
+const VERDICT_COLORS := {"good": Color("5fd068"), "bad": Color("e5534b"), "neutral": Color("e0b84a")}
 
 var client: SeatClient
 var view: Dictionary = {}
@@ -59,6 +64,15 @@ var _src_uid_cache: int = -1
 var _hover_opt: int = -1           # prompt option under the sidebar mouse
 var _kb_uid: int = -1              # keyboard-focused card
 var _kb_idx: int = 0               # keyboard-focused action in its row
+var _ready_uids: Dictionary = {}   # uid -> true for cards that can act now (F02-11)
+var _row_open: bool = false        # action row shown for the click-selected card (F02-01)
+var _acting_uid: int = -1          # card whose action opened the current choice (arrow source)
+var _preview_ws: Array = []        # widgets currently showing a combat preview (F02-12)
+var _preview_opt: int = -2         # option whose preview is shown
+var _preview_text: String = ""
+var _preview_verdict: String = ""
+var _tray_cards: Dictionary = {}   # uid -> card view shown only for the current choice
+var _seen_toast_seq: int = -1
 
 # Layers / nodes
 var table: ColorRect
@@ -103,6 +117,14 @@ var empty_hand_label: Label
 var opp_hand_box: Control
 var opp_hand_n: int = -1
 var opp_hand_count_label: Label
+var ctx_banner: PanelContainer
+var banner_title: Label
+var banner_sub: RichTextLabel
+var banner_btns: HBoxContainer
+var tray: PanelContainer
+var tray_box: VBoxContainer
+var details_view: CardDetailsPanel
+var sfx_vol: HSlider
 
 var _plates: Array = []            # [top plate, bottom plate]
 var _slots: Dictionary = {}        # "side:zone:slot" -> {holder, widget, hash, pidx}
@@ -149,6 +171,8 @@ class ArrowLayer extends Control:
 	var a: Vector2 = Vector2.ZERO
 	var b: Vector2 = Vector2.ZERO
 	var on: bool = false
+	## Neutral gold, or the combat-preview verdict colour while hovering an attack target.
+	var col: Color = UIStyle.TARGET
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -162,7 +186,6 @@ class ArrowLayer extends Control:
 		if length < 24.0:
 			return
 		var dir := d / length
-		var col := UIStyle.TARGET
 		var head := 16.0
 		var seg := 16.0
 		var gap := 9.0
@@ -287,6 +310,8 @@ class PhasePips extends Control:
 
 func _ready() -> void:
 	UIStyle.load_settings()
+	Sfx.load_settings()
+	Sfx._free_voice()          # create the voice pool now so the first game sounds are not dropped
 	theme = UIStyle.make_theme()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_PASS
@@ -325,6 +350,12 @@ func attach(c: SeatClient) -> void:
 	selected_uid = -1
 	_peek_uid = -1
 	_kb_uid = -1
+	_row_open = false
+	_acting_uid = -1
+	_seen_toast_seq = -1
+	_preview_opt = -2
+	_clear_previews()
+	_clear_stack()
 	_overlay_sig = 0
 	_prompt_sig = 0
 	_details_sig = ""
@@ -395,23 +426,50 @@ func _build_board() -> void:
 	board_layer.add_child(opp_hand_count_label)
 
 
+## A board zone: `zone_node` covers the zone rect (square unit slot, landscape Trap/Spell
+## zone, portrait Power zone) and holds `bg`, the drawn empty zone. The card itself lives in
+## `holder`, a box sized to the displayed 2:3 card (rotated 3:2 for Defense units and set
+## cards) and centred in the zone, so cards are never stretched to the zone shape (F02-03).
 func _make_slot(side: int, zone: String, slot: int) -> void:
-	var holder := Control.new()
-	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var w := CardWidget.new()
-	w.auto_hover = false
-	w.show_tooltip = false
+	var zone_node := Control.new()
+	zone_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var label := ""
 	match zone:
 		"unit": label = "%s %d" % ["Front" if slot < 3 else "Back", slot % 3 + 1]
 		"backrow": label = "Trap / Spell %d" % (slot + 1)
 		"power": label = "Power %d" % (slot + 1)
+	var bg := CardWidget.new()
+	bg.auto_hover = false
+	bg.show_tooltip = false
+	bg.setup(null, ZONE_KIND[zone], label)
+	bg.pressed.connect(_on_widget_pressed)
+	bg.right_pressed.connect(_on_widget_right)
+	zone_node.add_child(bg)
+	var holder := Control.new()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zone_node.add_child(holder)
+	var w := CardWidget.new()
+	w.auto_hover = false
+	w.show_tooltip = false
 	w.setup(null, ZONE_KIND[zone], label)
+	w.visible = false
 	w.pressed.connect(_on_widget_pressed)
 	w.right_pressed.connect(_on_widget_right)
 	holder.add_child(w)
-	board_layer.add_child(holder)
-	_slots[_key(side, zone, slot)] = {"holder": holder, "widget": w, "hash": -1, "pidx": -1, "label": label}
+	board_layer.add_child(zone_node)
+	_slots[_key(side, zone, slot)] = {"zone_node": zone_node, "bg": bg, "holder": holder, "widget": w, "hash": -1, "pidx": -1,
+		"label": label, "zone": zone, "rot": false}
+
+
+## Sizes and centres a slot's card box for the card it shows (or the zone when empty).
+func _place_card(it: Dictionary) -> void:
+	var zr: Control = it["zone_node"]
+	var w: CardWidget = it["widget"]
+	var holder: Control = it["holder"]
+	var csz: Vector2 = w.size if w.visible else zr.size
+	holder.size = csz
+	holder.pivot_offset = csz / 2.0
+	holder.position = ((zr.size - csz) / 2.0).round()
 
 
 func _key(side: int, zone: String, slot: int) -> String:
@@ -515,7 +573,7 @@ func _build_side() -> void:
 	# Details
 	details_panel = _side_panel()
 	details_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	details_panel.size_flags_stretch_ratio = 1.15
+	details_panel.size_flags_stretch_ratio = 1.75   # F02-05: details get most of the height
 	col.add_child(details_panel)
 	var dv := VBoxContainer.new()
 	dv.add_theme_constant_override("separation", 4)
@@ -525,10 +583,10 @@ func _build_side() -> void:
 	details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dv.add_child(details_scroll)
-	details_box = VBoxContainer.new()
-	details_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	details_box.add_theme_constant_override("separation", 4)
-	details_scroll.add_child(details_box)
+	details_view = CardDetailsPanel.new()
+	details_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	details_box = details_view
+	details_scroll.add_child(details_view)
 	scroll_cue = ScrollCue.new()
 	dv.add_child(scroll_cue)
 	var vb := details_scroll.get_v_scroll_bar()
@@ -537,7 +595,7 @@ func _build_side() -> void:
 	# Log
 	log_panel = _side_panel()
 	log_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	log_panel.size_flags_stretch_ratio = 0.95
+	log_panel.size_flags_stretch_ratio = 0.8
 	col.add_child(log_panel)
 	var lv := VBoxContainer.new()
 	lv.add_theme_constant_override("separation", 4)
@@ -595,6 +653,58 @@ func _build_top_strip() -> void:
 	menu_b.custom_minimum_size = Vector2(60, 28)
 	menu_b.pressed.connect(func(): back_to_menu.emit())
 	row.add_child(menu_b)
+	# F02-07 context banner: covers the top strip (never the board) while I pick targets.
+	ctx_banner = PanelContainer.new()
+	var bs := UIStyle.flat(Color(0.11, 0.085, 0.05, 0.98), UIStyle.GOLD, 2, 8)
+	bs.border_width_left = 8
+	bs.content_margin_left = 12
+	bs.content_margin_right = 8
+	bs.content_margin_top = 3
+	bs.content_margin_bottom = 3
+	ctx_banner.add_theme_stylebox_override("panel", bs)
+	ctx_banner.visible = false
+	ctx_banner.z_index = 70
+	add_child(ctx_banner)
+	var bh := HBoxContainer.new()
+	bh.add_theme_constant_override("separation", 10)
+	ctx_banner.add_child(bh)
+	var bv := VBoxContainer.new()
+	bv.add_theme_constant_override("separation", 0)
+	bv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bv.alignment = BoxContainer.ALIGNMENT_CENTER
+	bh.add_child(bv)
+	banner_title = UIStyle.label("", 17, UIStyle.GOLD_HI, false, true)
+	banner_title.clip_text = true
+	banner_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	bv.add_child(banner_title)
+	banner_sub = RichTextLabel.new()
+	banner_sub.bbcode_enabled = true
+	banner_sub.fit_content = true
+	banner_sub.scroll_active = false
+	banner_sub.autowrap_mode = TextServer.AUTOWRAP_OFF
+	banner_sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner_sub.add_theme_font_size_override("normal_font_size", 14)
+	banner_sub.add_theme_font_size_override("bold_font_size", 14)
+	banner_sub.add_theme_font_override("normal_font", UIStyle.font_body())
+	banner_sub.add_theme_font_override("bold_font", UIStyle.font_bold())
+	bv.add_child(banner_sub)
+	banner_btns = HBoxContainer.new()
+	banner_btns.add_theme_constant_override("separation", 6)
+	banner_btns.alignment = BoxContainer.ALIGNMENT_END
+	bh.add_child(banner_btns)
+	# F02-10 pile tray: cards offered only for this choice; click a card to choose it.
+	tray = PanelContainer.new()
+	tray.add_theme_stylebox_override("panel", UIStyle.panel_style(Color(0.07, 0.062, 0.056, 0.97), UIStyle.GOLD, 12))
+	tray.visible = false
+	tray.z_index = 65
+	add_child(tray)
+	var tsc := ScrollContainer.new()
+	tsc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tray.add_child(tsc)
+	tray_box = VBoxContainer.new()
+	tray_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tray_box.add_theme_constant_override("separation", 8)
+	tsc.add_child(tray_box)
 
 
 func _build_pause() -> void:
@@ -660,6 +770,27 @@ func _build_overlays() -> void:
 	fa.button_pressed = UIStyle.fast_anim
 	fa.toggled.connect(func(on): UIStyle.set_fast_anim(on))
 	sv.add_child(fa)
+	# F02-13 sound controls (persisted by Sfx).
+	Sfx.load_settings()
+	var sr := HBoxContainer.new()
+	sr.add_theme_constant_override("separation", 8)
+	sv.add_child(sr)
+	sr.add_child(UIStyle.label("Sound volume", 14, UIStyle.TEXT))
+	sfx_vol = HSlider.new()
+	sfx_vol.min_value = 0.0
+	sfx_vol.max_value = 1.0
+	sfx_vol.step = 0.05
+	sfx_vol.value = Sfx.get_volume()
+	sfx_vol.custom_minimum_size = Vector2(160, 24)
+	sfx_vol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sfx_vol.value_changed.connect(func(v): Sfx.set_volume(v))
+	sfx_vol.drag_ended.connect(func(_c): Sfx.play("select"))
+	sr.add_child(sfx_vol)
+	var mute := CheckBox.new()
+	mute.text = "Mute sounds"
+	mute.button_pressed = Sfx.is_muted()
+	mute.toggled.connect(func(on): Sfx.set_muted(on))
+	sv.add_child(mute)
 	var cl := UIStyle.button("Close", 13)
 	cl.pressed.connect(func(): settings_popup.visible = false)
 	sv.add_child(cl)
@@ -707,9 +838,10 @@ func _relayout() -> void:
 		var parts: PackedStringArray = (key as String).split(":")
 		var r := _slot_rect(int(parts[0]), parts[1], int(parts[2]))
 		var it: Dictionary = _slots[key]
-		(it["holder"] as Control).position = r.position
-		(it["holder"] as Control).size = r.size
-		(it["widget"] as Control).size = r.size
+		(it["zone_node"] as Control).position = r.position
+		(it["zone_node"] as Control).size = r.size
+		(it["bg"] as Control).size = r.size
+		_place_card(it)
 	var pw := 300.0
 	(_plates[0] as Control).position = Vector2(_area.end.x - pw - 14.0, _y0 - 6.0)
 	(_plates[0] as Control).size = Vector2(pw, 0)
@@ -728,6 +860,9 @@ func _relayout() -> void:
 	side_root.size = Vector2(SIDEBAR_W, h / _side_k)
 	top_strip.position = Vector2.ZERO
 	top_strip.size = Vector2(w - _sbw, TOP_H)
+	ctx_banner.position = Vector2(4, 2)
+	ctx_banner.size = Vector2(w - _sbw - 8.0, TOP_H - 4.0)
+	_place_tray()
 	pause_dim.position = Vector2(0, TOP_H)
 	pause_dim.size = Vector2(w - _sbw, h - TOP_H)
 	pause_panel.position = (pause_dim.size - Vector2(440, 160)) / 2.0
@@ -769,7 +904,7 @@ func _place_opp_hand() -> void:
 	var shown := mini(n, 10)
 	var step := 0.0
 	if shown > 1:
-		step = minf(40.0, (200.0 - 64.0) / float(shown - 1))
+		step = minf(40.0, (200.0 - CardWidget.SIZES["back"].x) / float(shown - 1))
 	for i in shown:
 		var b := CardWidget.new().setup({"hidden": true, "zone": "hand"}, "back")
 		b.show_tooltip = false
@@ -787,7 +922,7 @@ func _layout_hand(new_ids: Array, instant: bool) -> void:
 	empty_hand_label.position = Vector2(_area.size.x / 2.0 - 60.0, size.y - HAND_H / 2.0 - 10.0)
 	if n == 0:
 		return
-	var cw := 128.0
+	var cw: float = CardWidget.SIZES["hand"].x
 	var step := cw + 8.0
 	var span_max := 1000.0
 	if n * cw + (n - 1) * 8.0 > span_max:
@@ -809,7 +944,7 @@ func _layout_hand(new_ids: Array, instant: bool) -> void:
 		var rot := deg_to_rad(t * 2.0) if fan else 0.0
 		holder.set_meta("rest_rot", rot)
 		holder.set_meta("rest_pos", pos)
-		var is_hv: bool = not _hv.is_empty() and _hv.get("uid", -9) == uid and _hv.get("kind", "") == "hand"
+		var is_hv: bool = (not _hv.is_empty() and _hv.get("uid", -9) == uid and _hv.get("kind", "") == "hand") or (_row_open and uid == selected_uid)
 		if uid in new_ids and not instant and not UIStyle.reduce_motion:
 			holder.position = pos
 			holder.rotation = rot
@@ -843,11 +978,46 @@ func _layout_hand(new_ids: Array, instant: bool) -> void:
 
 func _on_status(text: String) -> void:
 	_error_text = text
+	if text != "":
+		Sfx.play("deny")
+	_toast(text, UIStyle.BAD, 4.0)
+
+
+## Short non-blocking message over the board; it never waits for input.
+func _toast(text: String, col: Color, secs: float) -> void:
 	toast.text = text
-	var t := get_tree().create_timer(4.0)
+	toast.add_theme_color_override("font_color", col)
+	var t := get_tree().create_timer(secs)
 	t.timeout.connect(func():
 		if toast.text == text:
 			toast.text = "")
+
+
+var _toast_game: int = -99
+
+
+## F02-09: log entries flagged as toasts (e.g. a triggered effect with no legal target)
+## also show briefly over the board. Only new entries of the current game; never on attach.
+func _show_log_toasts() -> void:
+	if mv.is_empty():
+		return
+	var game_no: int = view.get("game_no", 0)
+	var entries: Array = mv.get("log", [])
+	var maxseq := -1
+	for e in entries:
+		maxseq = maxi(maxseq, int(e["seq"]))
+	if game_no != _toast_game or _seen_toast_seq < 0:
+		_toast_game = game_no
+		_seen_toast_seq = maxseq
+		return
+	var shown := []
+	for e in entries:
+		if int(e["seq"]) > _seen_toast_seq and e.get("toast", false) and String(e["text"]) != "":
+			shown.append(String(e["text"]))
+	_seen_toast_seq = maxi(_seen_toast_seq, maxseq)
+	if not shown.is_empty():
+		Sfx.play("notice")
+		_toast("  ·  ".join(shown.slice(maxi(0, shown.size() - 2))), UIStyle.GOLD_HI, 4.5)
 
 
 func _on_view(v: Dictionary) -> void:
@@ -867,7 +1037,13 @@ func _on_view(v: Dictionary) -> void:
 			_draws_me += int(e["n"])
 	if _laid_size != size:
 		_relayout()
+	if selected_uid != -1 and _find_card(selected_uid).is_empty():
+		selected_uid = -1
+		_row_open = false
+	if _acting_uid != -1 and mv.get("pending", {}).is_empty():
+		_acting_uid = -1
 	_render_all()
+	_show_log_toasts()
 	if not events.is_empty():
 		fx.play(events, prev_mv)
 
@@ -955,14 +1131,26 @@ func _clear(node: Node) -> void:
 		ch.queue_free()
 
 
+## True while one of my choices is answered by picking cards or zones directly (board, Hand or
+## the pile tray) under the context banner, instead of from a sidebar list.
 func _board_targeting() -> bool:
 	var pd := _pending()
-	if pd.is_empty() or not pd["mine"]:
+	if pd.is_empty() or not pd["mine"] or not (String(pd["kind"]) in PICK_KINDS):
 		return false
 	for o in pd["options"]:
-		if o.has("ref") or (o.has("slot") and not o.has("card")):
+		if o.has("ref") or o.has("slot") or o.has("card"):
 			return true
 	return false
+
+
+## Prompt options that are not cards or zones (e.g. "Attack directly", "Skip").
+func _text_options(pd: Dictionary) -> Array:
+	return pd.get("options", []).filter(func(o): return not (o.has("ref") or o.has("slot") or o.has("card")))
+
+
+## Card options that are neither on the board nor in my Hand: shown in the pile tray (F02-10).
+func _tray_options(pd: Dictionary) -> Array:
+	return pd.get("options", []).filter(func(o): return o.has("card") and not o.has("ref") and not _hand_items.has(int(o["card"].get("uid", -1))))
 
 
 func _render_board() -> void:
@@ -971,6 +1159,7 @@ func _render_board() -> void:
 	var o := 1 - p
 	var targeting := _board_targeting()
 	_src_uid_cache = _source_uid() if targeting else -1
+	_ready_uids = _compute_ready()
 	for side in 2:
 		var pidx := p if side == 1 else o
 		for zone in ["unit", "backrow", "power"]:
@@ -989,6 +1178,8 @@ func _render_board() -> void:
 					parts.append("%+d" % m["n"])
 				nxt = "next turn %s AP" % " ".join(parts)
 			pl.update_from(pv, active, pidx == p, "  (you)" if pidx == p else "", nxt)
+			if pidx == p:
+				_mark_extra_chip(pl, pv)
 	deco.glow_side = -1   # active player is shown by the plate's turn marker, not a table band
 	deco.queue_redraw()
 	_render_hand(targeting)
@@ -998,6 +1189,42 @@ func _render_board() -> void:
 		_place_opp_hand()
 
 
+## F02-11: cards of yours that can act right now (play/summon/set from Hand, manual
+## Unit/Power/set-Spell effects, attacks). Stance changes and sacrifices are always
+## available in Main 1 and would light up every unit, so they do not count.
+## The Extra Deck chip glows (with a ▲ cue) while a Ritual/Arcane summon is available there.
+func _mark_extra_chip(pl: PlayerPlate, pv: Dictionary) -> void:
+	var ready := false
+	for c in pv.get("extra", []):
+		if _ready_uids.has(int(c.get("uid", -1))):
+			ready = true
+	var b: Button = pl.chips["extra"]
+	var base := "Extra %d" % int(pv["counts"]["extra"])
+	b.text = ("▲ " + base) if ready else base
+	if ready:
+		b.add_theme_stylebox_override("normal", UIStyle.flat(UIStyle.PANEL_LIGHT, UIStyle.READY, 2, 11))
+	else:
+		b.add_theme_stylebox_override("normal", UIStyle.flat(UIStyle.PANEL_LIGHT, Color(UIStyle.BRONZE, 0.7), 1, 11))
+
+
+func _compute_ready() -> Dictionary:
+	var out := {}
+	if _locked() or mv["active"] != me():
+		return out
+	for a in mv.get("actions", []):
+		if a["ok"] and a.has("uid") and String(a["t"]) in READY_KINDS:
+			out[int(a["uid"])] = true
+	return out
+
+
+## 1-based pick order of a prompt option in an ordered multi-selection, else 0.
+func _order_no(opt: int) -> int:
+	var pd := _pending()
+	if opt == -1 or pd.is_empty() or int(pd.get("max", 1)) <= 1:
+		return 0
+	return multi.find(opt) + 1
+
+
 func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, targeting: bool) -> void:
 	var it: Dictionary = _slots[_key(side, zone, slot)]
 	var w: CardWidget = it["widget"]
@@ -1005,15 +1232,32 @@ func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, target
 	if have:
 		cv = _pv(pidx)[ZONE_KEY[zone]][slot]
 	var hsh := hash(cv) if cv != null else 0
+	var bg: CardWidget = it["bg"]
 	if it["hash"] != hsh or it["pidx"] != pidx:
-		w.setup(cv, ZONE_KIND[zone], it["label"])
+		# Defense units and every Trap/Spell-zone card are the 2:3 card turned sideways.
+		var rot: bool = cv != null and (zone == "backrow" or (zone == "unit" and cv.get("stance", "atk") == "def"))
+		if cv != null:
+			w.setup(cv, ZONE_KIND[zone], it["label"], rot)
+		w.visible = cv != null
 		it["hash"] = hsh
 		it["pidx"] = pidx
-	w.show_label = have and bool(mv.get("first_turn", false))
+		it["rot"] = rot
+		_place_card(it)
+	bg.show_label = have and bool(mv.get("first_turn", false))
 	var opt := _option_for_ref(pidx, zone, slot)
 	var vis: bool = cv != null and not cv.get("hidden", false)
-	var is_sel: bool = vis and cv.get("uid", -2) == selected_uid
-	w.set_marks(opt != -1, is_sel or (opt != -1 and opt in multi), targeting and opt == -1 and not (vis and cv.get("uid", -2) == _src_uid_cache))
+	var uid: int = cv.get("uid", -2) if vis else -2
+	var is_sel: bool = vis and uid == selected_uid
+	var chosen: bool = opt != -1 and opt in multi
+	var dim: bool = targeting and opt == -1 and not (vis and uid == _src_uid_cache)
+	if cv == null:
+		bg.set_marks(opt != -1, chosen, dim)
+		return
+	bg.set_marks(false, false, dim)
+	w.set_marks(opt != -1, is_sel or chosen, dim)
+	w.set_ready(vis and _ready_uids.has(uid))
+	w.order_no = _order_no(opt)
+	w.queue_redraw()
 
 
 func _render_hand(targeting: bool) -> void:
@@ -1050,15 +1294,12 @@ func _render_hand(targeting: bool) -> void:
 			wd.setup(c, "hand")
 			it["hash"] = hsh
 		var opt := _option_for_uid(uid)
-		var playable := false
-		if my_turn:
-			for a in mv.get("actions", []):
-				if a.get("uid", -1) == uid and a["ok"]:
-					playable = true
-					break
+		var playable: bool = my_turn and _ready_uids.has(uid)
 		var strong := targeting and opt == -1 and uid != _src_uid_cache
-		var soft := not strong and not playable and opt == -1
+		var soft := not strong and not playable and opt == -1 and my_turn
 		wd.set_marks(opt != -1, uid == selected_uid or (opt != -1 and opt in multi), strong, soft)
+		wd.set_ready(playable)
+		wd.order_no = _order_no(opt)
 	for uid in _hand_items.keys():
 		if not seen.has(uid):
 			var h: Control = _hand_items[uid]["holder"]
@@ -1187,36 +1428,91 @@ func _option_for_uid(uid: int) -> int:
 	return -1
 
 
+## Left click: answers my pending choice when the card/zone is one of its options; otherwise
+## click-selects the card (F02-01) — details pinned, and for my own card while nothing is
+## pending, its legal action buttons. Clicking the selected card again deselects it.
 func _on_widget_pressed(w: CardWidget) -> void:
 	fx.finish_all()
 	var opt := -1
-	var idx := -1
 	for k in _slots.keys():
-		if _slots[k]["widget"] == w:
+		if _slots[k]["widget"] == w or _slots[k]["bg"] == w:
 			var parts: PackedStringArray = (k as String).split(":")
 			var pidx := me() if int(parts[0]) == 1 else 1 - me()
 			opt = _option_for_ref(pidx, parts[1], int(parts[2]))
-			idx = 1
 			break
 	if opt == -1 and not w.view.is_empty():
 		opt = _option_for_uid(w.view.get("uid", -2))
 	if opt != -1:
 		_pick_option(opt)
 		return
-	_pin(w)
+	if w.view.is_empty() or w.view.get("hidden", false) or not w.view.has("uid"):
+		if not w.view.is_empty() and w.view.get("hidden", false):
+			_deselect()          # face-down/hidden cards are never selectable or inspectable
+		return
+	var uid: int = w.view["uid"]
+	if uid == selected_uid and _row_open:
+		_deselect()
+		Sfx.play("cancel")
+		return
+	_select(uid)
 
 
 func _on_widget_right(w: CardWidget) -> void:
 	fx.finish_all()
-	_pin(w)
+	_cancel()
 
 
-func _pin(w: CardWidget) -> void:
-	if not w.view.is_empty() and not w.view.get("hidden", false) and w.view.has("uid"):
-		selected_uid = w.view["uid"]
-		_peek_uid = -1
-		_render_board()
-		_render_details()
+## Click-selects a visible card: details pinned; the action row opens for my own card.
+func _select(uid: int) -> void:
+	var prev := selected_uid
+	selected_uid = uid
+	_peek_uid = -1
+	_row_open = true
+	_kb_uid = -1
+	Sfx.play("select")
+	_restyle_selection(prev)
+	_render_board()
+	_render_details()
+	_rebuild_stack()
+
+
+func _deselect() -> void:
+	if selected_uid == -1 and not _row_open:
+		return
+	var prev := selected_uid
+	selected_uid = -1
+	_row_open = false
+	_peek_uid = -1
+	_restyle_selection(prev)
+	_render_board()
+	_render_details()
+	_clear_stack()
+
+
+## Selected hand cards stay lifted while their action row is open; the previous one drops.
+func _restyle_selection(prev: int) -> void:
+	if prev != -1 and prev != selected_uid:
+		var pit := _item_for_uid(prev)
+		if not pit.is_empty() and not (not _hv.is_empty() and _hv.get("uid", -9) == prev):
+			_unlift(pit)
+	var it := _item_for_uid(selected_uid)
+	if not it.is_empty() and it["own"] and it["kind"] == "hand":
+		_lift(it)
+
+
+## Hover-style item (see _hover_items_under) for a visible card by uid, or {}.
+func _item_for_uid(uid: int) -> Dictionary:
+	if uid == -1:
+		return {}
+	if _hand_items.has(uid):
+		var hi: Dictionary = _hand_items[uid]
+		return {"key": "h:%d" % uid, "w": hi["widget"], "holder": hi["holder"], "uid": uid, "kind": "hand", "own": true}
+	for k in _slots.keys():
+		var sl: Dictionary = _slots[k]
+		var wd: CardWidget = sl["widget"]
+		if wd.visible and not wd.view.is_empty() and not wd.view.get("hidden", false) and wd.view.get("uid", -9) == uid:
+			return {"key": k, "w": wd, "holder": sl["holder"], "uid": uid, "kind": ZONE_KIND[sl["zone"]], "own": (k as String).begins_with("1:")}
+	return {}
 
 
 func _pick_option(i: int) -> void:
@@ -1224,14 +1520,37 @@ func _pick_option(i: int) -> void:
 	if pd["max"] > 1:
 		if i in multi:
 			multi.erase(i)
+			Sfx.play("cancel")
 		else:
 			multi.append(i)
+			Sfx.play("select")
 		_render_all()
 		return
+	Sfx.play("confirm")
 	_send({"t": "choose", "id": pd["id"], "indices": [i]})
 
 
+func _confirm_multi() -> void:
+	var pd := _pending()
+	if pd.is_empty() or multi.size() < int(pd["min"]):
+		return
+	Sfx.play("confirm")
+	_send({"t": "choose", "id": pd["id"], "indices": multi.duplicate()})
+
+
+## Clicks on the bare table (not on a card, button or panel) clear the selection.
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if _pending().is_empty() or not _pending().get("mine", false):
+			_deselect()
+
+
+## Commands sent by this screen (dev/QA: proves hover and previews send nothing).
+var debug_sent: int = 0
+
+
 func _send(cmd: Dictionary) -> void:
+	debug_sent += 1
 	toast.text = ""
 	if client != null:
 		client.send(cmd)
@@ -1260,12 +1579,10 @@ func _cancel() -> void:
 	var pd := _pending()
 	if not pd.is_empty() and pd["mine"] and pd["cancellable"]:
 		multi = []
+		Sfx.play("cancel")
 		_send({"t": "cancel", "id": pd["id"]})
-	elif selected_uid != -1:
-		selected_uid = -1
-		_peek_uid = -1
-		_render_board()
-		_render_details()
+	elif selected_uid != -1 or _row_open:
+		_deselect()
 	_clear_hover()
 
 
@@ -1310,7 +1627,7 @@ func _handle_key(e: InputEventKey) -> bool:
 			_pick_option(pd["options"][num - 1]["i"])
 			return true
 		if is_enter and pd["max"] > 1 and multi.size() >= pd["min"]:
-			_send({"t": "choose", "id": pd["id"], "indices": multi.duplicate()})
+			_confirm_multi()
 			return true
 		return false
 	if _hover_blocked() or mv.get("resolving", false):
@@ -1318,7 +1635,7 @@ func _handle_key(e: InputEventKey) -> bool:
 	if k == KEY_TAB:
 		_kb_cycle(-1 if e.shift_pressed else 1)
 		return true
-	if _kb_uid != -1 and _stack != null and not _hv.is_empty():
+	if _kb_uid != -1 and _stack != null:
 		var acts := _actions_for_card(_kb_uid)
 		if k == KEY_UP or k == KEY_LEFT or k == KEY_DOWN or k == KEY_RIGHT:
 			var step := -1 if (k == KEY_UP or k == KEY_LEFT) else 1
@@ -1367,39 +1684,49 @@ func _has_ok_action(uid: int) -> bool:
 	return false
 
 
+## Tab / Shift+Tab: click-select the next/previous card of yours that can act, opening its
+## action row (keyboard equivalent of a click, F02-01).
 func _kb_cycle(dir: int) -> void:
 	var list := _kb_cards()
 	if list.is_empty():
 		return
 	var cur := -1
 	for i in list.size():
-		if list[i]["uid"] == _kb_uid:
+		if list[i]["uid"] == selected_uid:
 			cur = i
 	var nxt := 0
 	if cur == -1:
 		nxt = 0 if dir > 0 else list.size() - 1
 	else:
 		nxt = wrapi(cur + dir, 0, list.size())
-	var item: Dictionary = list[nxt]
-	_kb_uid = item["uid"]
+	var uid: int = list[nxt]["uid"]
+	_select(uid)
+	_kb_uid = uid
 	_kb_idx = 0
-	_hv_forced = false
-	_set_hover(item)
-	_hv_forced = true
-	_peek_uid = _kb_uid
-	_render_details()
+	_rebuild_stack()
+
+
+## Game keys are handled here, before GUI focus navigation, so a focused button can neither
+## swallow Tab/arrows nor double-handle Enter (the board has its own keyboard scheme).
+const GAME_KEYS := [KEY_TAB, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE]
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and is_visible_in_tree():
+		var ke := event as InputEventKey
+		if (ke.keycode in GAME_KEYS or _digit_of(ke.keycode) > 0) and _handle_key(ke):
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventMouseMotion and _kb_uid != -1 and (event as InputEventMouseMotion).relative.length() > 3.0:
 		_kb_uid = -1
-		_hv_forced = false
+		if _stack != null:
+			_rebuild_stack()
 	if (event is InputEventMouseButton and event.pressed) or (event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_SPACE]):
 		if fx != null and fx.busy():
 			fx.finish_all()
 
 
-# ---------------------------------------------------------------- hover + on-card actions
+# ---------------------------------------------------------------- hover (inspection only) + selected-card actions
 
 func _locked() -> bool:
 	if mv.is_empty() or view.get("stage", "") != "game" or mv["winner"] != -1:
@@ -1418,9 +1745,9 @@ func _process(_d: float) -> void:
 	if not is_visible_in_tree():
 		return
 	_update_arrow()
-	if _hv_forced:
-		return
-	_update_hover(get_global_mouse_position())
+	if not _hv_forced:
+		_update_hover(get_global_mouse_position())
+	_update_preview()
 
 
 func _hover_items_under(m: Vector2, exclude_key: String) -> Dictionary:
@@ -1434,45 +1761,50 @@ func _hover_items_under(m: Vector2, exclude_key: String) -> Dictionary:
 	for k in _slots.keys():
 		var sl: Dictionary = _slots[k]
 		var w: CardWidget = sl["widget"]
-		if k == exclude_key or w.view.is_empty() or w.view.get("hidden", false):
+		if k == exclude_key or not w.visible or w.view.is_empty() or w.view.get("hidden", false):
 			continue
+		# The card box is the displayed card (2:3, or 3:2 when turned), not the whole zone.
 		var h2: Control = sl["holder"]
 		if h2.get_global_rect().has_point(m):
-			var parts: PackedStringArray = (k as String).split(":")
-			var zone: String = parts[1]
-			return {"key": k, "w": w, "holder": h2, "uid": w.view.get("uid", -1), "kind": ZONE_KIND[zone], "own": int(parts[0]) == 1}
+			return {"key": k, "w": w, "holder": h2, "uid": w.view.get("uid", -1), "kind": ZONE_KIND[sl["zone"]], "own": (k as String).begins_with("1:")}
 	return {}
 
 
+func _stack_rect() -> Rect2:
+	if _stack == null or not is_instance_valid(_stack):
+		return Rect2()
+	return _stack.get_global_rect()
+
+
+## Hover only lifts the card and previews its details; it never shows action buttons and
+## never sends anything (F02-01). Over the selected card's action row, nothing else hovers.
 func _update_hover(m: Vector2) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if _hover_blocked():
 		if not _hv.is_empty():
 			_clear_hover()
 		return
+	var on_row := _stack_rect().grow(3.0).has_point(m) or (tray.visible and tray.get_global_rect().has_point(m)) 		or (ctx_banner.visible and ctx_banner.get_global_rect().has_point(m))
 	if not _hv.is_empty():
 		if not is_instance_valid(_hv["w"]) or not (_hv["w"] as Node).is_inside_tree():
 			_clear_hover()
 			return
 		var tr := _target_rect(_hv)
-		var in_stack := _stack != null and _stack.get_global_rect().grow(3.0).has_point(m)
-		if tr.has_point(m) or in_stack:
+		if tr.has_point(m) or (on_row and _hv["uid"] == selected_uid):
 			_close_at = -1.0
 		else:
-			var cand := _hover_items_under(m, _hv["key"])
+			var cand := {} if on_row else _hover_items_under(m, _hv["key"])
 			if not cand.is_empty():
 				_set_hover(cand)
 			else:
 				var region := tr.grow(10.0).merge((_hv["holder"] as Control).get_global_rect())
-				if _stack != null:
-					region = region.merge(_stack.get_global_rect())
-				if region.has_point(m):
+				if region.has_point(m) and not on_row:
 					_close_at = -1.0
 				elif _close_at < 0.0:
-					_close_at = now + 0.15
+					_close_at = now + 0.12
 				elif now >= _close_at:
 					_clear_hover()
-	else:
+	elif not on_row:
 		var cand2 := _hover_items_under(m, "")
 		if not cand2.is_empty():
 			_set_hover(cand2)
@@ -1500,15 +1832,14 @@ func _target_rect(it: Dictionary) -> Rect2:
 	return Rect2(c - hr.size * float(lp[0]) / 2.0, hr.size * float(lp[0]))
 
 
-func _set_hover(it: Dictionary) -> void:
-	if not _hv.is_empty():
-		_unlift(_hv)
-	_hv = it
-	_close_at = -1.0
-	_peek_at = Time.get_ticks_msec() / 1000.0 + 0.25
+## A selected hand card stays lifted while its action row is open.
+func _keeps_lift(it: Dictionary) -> bool:
+	return _row_open and it.get("uid", -9) == selected_uid and it.get("kind", "") == "hand"
+
+
+func _lift(it: Dictionary) -> void:
 	var w: CardWidget = it["w"]
 	var holder: Control = it["holder"]
-	w.hovered = true
 	holder.z_index = 40
 	if it["kind"] == "hand":
 		hand_layer.move_child(holder, -1)
@@ -1524,7 +1855,18 @@ func _set_hover(it: Dictionary) -> void:
 	tw.tween_property(w, "scale", Vector2(lp[0], lp[0]), d).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if it["kind"] == "hand":
 		tw.tween_property(holder, "rotation", 0.0, d)
-	_rebuild_stack()
+
+
+func _set_hover(it: Dictionary) -> void:
+	if not _hv.is_empty():
+		_unlift(_hv)
+	_hv = it
+	_close_at = -1.0
+	_peek_at = Time.get_ticks_msec() / 1000.0 + 0.2
+	(it["w"] as CardWidget).hovered = true
+	_lift(it)
+	if _stack != null:
+		hover_layer.move_child(_stack, -1)
 
 
 func _kill_hv_tween(w: CardWidget) -> void:
@@ -1538,8 +1880,10 @@ func _unlift(it: Dictionary) -> void:
 	var w: CardWidget = it["w"]
 	if not is_instance_valid(w):
 		return
-	var holder: Control = it["holder"]
 	w.hovered = false
+	if _keeps_lift(it):
+		return
+	var holder: Control = it["holder"]
 	_kill_hv_tween(w)
 	var tw := create_tween()
 	w.set_meta("hv_tw", tw)
@@ -1563,11 +1907,9 @@ func _clear_hover() -> void:
 		_unlift(_hv)
 	_hv = {}
 	_hv_forced = false
-	_kb_uid = -1
 	_close_at = -1.0
 	_peek_at = -1.0
-	_clear_stack()
-	if selected_uid != -1 and _peek_uid != -1:
+	if _peek_uid != -1:
 		_peek_uid = -1
 		_render_details()
 
@@ -1602,20 +1944,24 @@ func _actions_for_card(uid: int) -> Array:
 func _act_sig(acts: Array) -> String:
 	var parts := []
 	for a in acts:
-		parts.append("%s/%s/%s/%s" % [a["t"], a.get("idx", ""), a["ok"], a.get("reason", "")])
+		parts.append("%s/%s/%s/%s/%s" % [a["t"], a.get("idx", ""), a.get("stance", ""), a["ok"], a.get("reason", "")])
 	return "|".join(parts)
 
 
+func _row_wanted() -> bool:
+	if not _row_open or selected_uid == -1 or _locked():
+		return false
+	var it := _item_for_uid(selected_uid)
+	return not it.is_empty() and it["own"]
+
+
 func _refresh_stack() -> void:
-	if _hv.is_empty():
-		return
-	if not _hv["own"] or _locked():
+	if not _row_wanted():
 		if _stack != null:
 			_clear_stack()
 		return
-	var uid: int = _hv["uid"]
-	var sig := _stack_sig_for(uid, _actions_for_card(uid))
-	if sig != _stack_sig:
+	var sig := _stack_sig_for(selected_uid, _actions_for_card(selected_uid))
+	if sig != _stack_sig or _stack == null:
 		_rebuild_stack()
 
 
@@ -1623,36 +1969,39 @@ func _stack_sig_for(uid: int, acts: Array) -> String:
 	return _act_sig(acts) + "#%d" % (_kb_idx if uid == _kb_uid else -1)
 
 
-## Action row for a hovered own card. It sits OUTSIDE the card body: above a lifted hand card,
-## just below a field card, so the name plate, ATK/DEF and status chips are never covered.
+## Action row for the click-selected own card (F02-01/F02-02/F02-04). It sits against the
+## card but OUTSIDE its body — above a lifted hand card, just below a field card — so the
+## name plate, ATK/DEF and status chips stay visible. Buttons carry short labels; the full
+## description is the tooltip and lives in the details panel.
 func _rebuild_stack() -> void:
 	_clear_stack()
-	if _hv.is_empty() or not _hv["own"]:
+	if not _row_wanted():
 		return
-	var uid: int = _hv["uid"]
+	var uid := selected_uid
+	var it := _item_for_uid(uid)
 	var acts := _actions_for_card(uid)
 	_stack_sig = _stack_sig_for(uid, acts)
 	if acts.is_empty():
 		return
-	var tr := _target_rect(_hv)
-	var kind: String = _hv["kind"]
+	var tr := _target_rect(it)
+	var kind: String = it["kind"]
 	var n := acts.size()
 	var hand := kind == "hand"
-	var bh := 28.0 if hand else 26.0
+	var bh := 30.0
 	var gap := 3.0
 	var cols := 1 if (hand or n <= 2) else 2
 	var rows := int(ceil(float(n) / float(cols)))
-	var w := maxf(tr.size.x, 136.0)
+	var w := maxf(tr.size.x, 150.0 if cols == 1 else 236.0)
 	var bw := (w - gap * float(cols - 1)) / float(cols)
 	var total := rows * bh + (rows - 1) * gap
 	var x := tr.get_center().x - w / 2.0
 	var top := 0.0
 	if hand:
-		top = tr.position.y - total - 4.0
+		top = tr.position.y - total - 6.0
 	else:
-		top = tr.end.y + 3.0
-		if top + total > size.y - 6.0:
-			top = tr.position.y - total - 3.0
+		top = tr.end.y + 4.0
+		if top + total > size.y - HAND_H + 4.0 and it["own"]:
+			top = tr.position.y - total - 4.0
 	x = clampf(x, 4.0, maxf(4.0, _area.end.x - w - 4.0))
 	top = maxf(top, TOP_H + 2.0)
 	var box := Control.new()
@@ -1661,14 +2010,14 @@ func _rebuild_stack() -> void:
 	box.position = hover_layer.get_global_transform().affine_inverse() * Vector2(x, top)
 	for i in n:
 		var a: Dictionary = acts[i]
-		var full: String = a["label"] if a["ok"] else String(a["reason"])
-		var b := UIStyle.button(full, 13)
+		var txt: String = String(a["label"]) if a["ok"] else String(a["reason"])
+		var b := UIStyle.button(txt, 14)
 		b.size = Vector2(bw, bh)
 		b.custom_minimum_size = Vector2(bw, bh)
 		b.position = Vector2(float(i % cols) * (bw + gap), float(int(i / cols)) * (bh + gap))
 		b.clip_text = true
 		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		b.tooltip_text = full
+		b.tooltip_text = String(a.get("full", a["label"])) + ("" if a["ok"] else "\n" + String(a["reason"]))
 		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if a["ok"] else Control.CURSOR_ARROW
 		var primary: bool = i == 0 and a["ok"]
 		var kbf: bool = uid == _kb_uid and i == _kb_idx
@@ -1678,8 +2027,8 @@ func _rebuild_stack() -> void:
 		for st in [nrm, hov, dis]:
 			st.content_margin_top = 1
 			st.content_margin_bottom = 1
-			st.content_margin_left = 4
-			st.content_margin_right = 4
+			st.content_margin_left = 5
+			st.content_margin_right = 5
 		b.add_theme_stylebox_override("normal", nrm)
 		b.add_theme_stylebox_override("hover", hov)
 		b.add_theme_stylebox_override("pressed", hov)
@@ -1695,8 +2044,7 @@ func _rebuild_stack() -> void:
 	if not UIStyle.reduce_motion:
 		box.modulate.a = 0.0
 		var tw := create_tween()
-		tw.tween_interval(UIStyle.dur(0.05))
-		tw.tween_property(box, "modulate:a", 1.0, UIStyle.dur(0.1))
+		tw.tween_property(box, "modulate:a", 1.0, UIStyle.dur(0.08))
 	box.set_meta("rect_global", Rect2(Vector2(x, top), Vector2(w, total)))
 
 
@@ -1704,15 +2052,25 @@ func _run_action(uid: int, a: Dictionary) -> void:
 	# Ignore a stale click: the action must still be legal for this card instance.
 	var still := false
 	for b in mv.get("actions", []):
-		if b.get("uid", -1) == uid and b["t"] == a["t"] and b.get("idx", -1) == a.get("idx", -1) and b["ok"]:
+		if b.get("uid", -1) == uid and b["t"] == a["t"] and b.get("idx", -1) == a.get("idx", -1) and b.get("stance", "") == a.get("stance", "") and b["ok"]:
 			still = true
 	if not still or _locked():
+		Sfx.play("deny")
 		return
 	var cmd := {"t": a["t"], "uid": uid}
 	if a.has("idx"):
 		cmd["idx"] = a["idx"]
+	if a.has("stance"):
+		cmd["stance"] = a["stance"]
 	selected_uid = uid
-	_clear_hover()
+	_acting_uid = uid
+	_row_open = false
+	_kb_uid = -1
+	_clear_stack()
+	var it := _item_for_uid(uid)
+	if not it.is_empty() and not (not _hv.is_empty() and _hv["uid"] == uid):
+		_unlift(it)
+	Sfx.play("confirm")
 	_send(cmd)
 
 
@@ -1806,6 +2164,8 @@ func _render_prompt() -> void:
 	_prompt_sig = sig
 	_clear(prompt_box)
 	_hover_opt = -1
+	_render_banner()
+	_render_tray()
 	var decision := false
 	if _render_net_banner():
 		prompt_box.add_child(UIStyle.label("Match paused. Nothing can happen until both players are connected.", 14, UIStyle.MUTED, true))
@@ -1823,7 +2183,7 @@ func _render_prompt() -> void:
 	if mv["winner"] != -1:
 		prompt_box.add_child(UIStyle.label("Game over: %s wins." % _pv(mv["winner"])["name"], 17, UIStyle.ACCENT, true, true))
 	elif pd.is_empty():
-		var txt := "Your turn. Hover a card (or press Tab) to see what it can do." if mv["active"] == me() else "Opponent's turn."
+		var txt := "Your turn. Click a card (or press Tab) to see what it can do; hover to read it." if mv["active"] == me() else "Opponent's turn."
 		if mv["resolving"]:
 			txt = "Resolving…"
 		prompt_box.add_child(UIStyle.label(txt, 15, UIStyle.TEXT if mv["active"] == me() else UIStyle.MUTED, true))
@@ -1839,59 +2199,169 @@ func _render_prompt() -> void:
 func _render_choice(pd: Dictionary) -> void:
 	prompt_box.add_child(UIStyle.label(pd["prompt"], 16, UIStyle.TARGET, true))
 	if _board_targeting():
-		prompt_box.add_child(UIStyle.label("Click a highlighted card or zone, or pick below (keys 1-9).", 13, UIStyle.MUTED, true))
+		# F02-07: no list of field cards here — targets are picked on the board / tray, and
+		# the banner at the top says what is being chosen and holds Confirm / Cancel.
+		var where := "Click a highlighted card or zone." if _tray_options(pd).is_empty() else "Click a card in the selection tray."
+		prompt_box.add_child(UIStyle.label(where + " The banner above the board explains the choice.", 13, UIStyle.MUTED, true))
+		return
 	if pd["kind"] == "trap_response":
 		prompt_box.add_child(UIStyle.label("Your opponent is waiting. Activate a Trap or pass.", 13, UIStyle.MUTED, true))
-	# Cards shown only for this selection (e.g. a hidden pile) get previews; everything
-	# else (zones, field cards, yes/no) is a full-width text button.
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 4)
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 3)
-	prompt_box.add_child(flow)
 	prompt_box.add_child(list)
 	var shown := 0
 	for o in pd["options"]:
 		var chosen: bool = o["i"] in multi
 		var idx: int = o["i"]
 		shown += 1
-		if o.has("card") and not o.has("ref"):
-			var cell := VBoxContainer.new()
-			var w := CardWidget.new().setup(o["card"], "mini")
-			w.show_tooltip = false
-			w.set_marks(true, chosen)
-			w.pressed.connect(func(_w): _pick_option(idx))
-			cell.add_child(w)
-			var b := UIStyle.button(("✓ " if chosen else "") + ("%d  " % shown if shown <= 9 else "") + "Choose", 13)
-			b.pressed.connect(_pick_option.bind(idx))
-			cell.add_child(b)
-			flow.add_child(cell)
-		else:
-			var b2 := UIStyle.button(("✓ " if chosen else "") + ("%d · " % shown if shown <= 9 else "") + o["label"], 14)
-			b2.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			b2.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-			b2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			b2.tooltip_text = o["label"]
-			b2.pressed.connect(_pick_option.bind(idx))
-			b2.mouse_entered.connect(func(): _hover_opt = idx)
-			b2.mouse_exited.connect(func(): if _hover_opt == idx: _hover_opt = -1)
-			list.add_child(b2)
+		var b2 := UIStyle.button(("✓ " if chosen else "") + ("%d · " % shown if shown <= 9 else "") + o["label"], 14)
+		b2.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b2.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		b2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b2.tooltip_text = o["label"]
+		b2.pressed.connect(_pick_option.bind(idx))
+		b2.mouse_entered.connect(func(): _hover_opt = idx)
+		b2.mouse_exited.connect(func(): if _hover_opt == idx: _hover_opt = -1)
+		list.add_child(b2)
 	if pd["max"] > 1:
-		var total_txt := ""
-		if pd.get("min_total", 0) > 0:
-			var total := 0
-			for i in multi:
-				total += maxi(pd["options"][i].get("card", {}).get("cost", 0), 0)
-			total_txt = "  ·  cost total %d / %d" % [total, pd["min_total"]]
-		prompt_box.add_child(UIStyle.label("Selected %d (choose %d–%d)%s" % [multi.size(), pd["min"], pd["max"], total_txt], 13, UIStyle.MUTED))
+		prompt_box.add_child(UIStyle.label(_multi_status(pd), 13, UIStyle.MUTED))
 		var confirm := UIStyle.primary_button("Confirm selection  (Enter)", 15)
 		confirm.disabled = multi.size() < pd["min"]
-		confirm.pressed.connect(func(): _send({"t": "choose", "id": pd["id"], "indices": multi.duplicate()}))
+		confirm.pressed.connect(_confirm_multi)
 		prompt_box.add_child(confirm)
 	if pd["cancellable"]:
 		var cancel := UIStyle.button("Cancel  (Esc)", 14)
-		cancel.pressed.connect(func(): multi = []; _send({"t": "cancel", "id": pd["id"]}))
+		cancel.pressed.connect(_cancel)
 		prompt_box.add_child(cancel)
+
+
+func _multi_status(pd: Dictionary) -> String:
+	var total_txt := ""
+	if pd.get("min_total", 0) > 0:
+		var total := 0
+		for i in multi:
+			total += maxi(pd["options"][i].get("card", {}).get("cost", 0), 0)
+		total_txt = "  ·  cost total %d / %d" % [total, pd["min_total"]]
+	var rng := "%d" % pd["min"] if pd["min"] == pd["max"] else "%d–%d" % [pd["min"], pd["max"]]
+	return "Selected %d of %s, in the order clicked%s" % [multi.size(), rng, total_txt]
+
+
+## F02-07 context banner: what is being chosen, for which effect, how many and in what order,
+## plus the non-card options (e.g. a direct attack), Confirm and Cancel. It covers only the top
+## strip, never a target card.
+func _render_banner() -> void:
+	var pd := _pending()
+	var on := _board_targeting() and not overlay.visible
+	ctx_banner.visible = on
+	_clear(banner_btns)
+	if not on:
+		return
+	banner_title.text = String(pd["prompt"])
+	var tray_n := _tray_options(pd).size()
+	var what := "card"
+	if pd["kind"] == "slot":
+		what = "zone"
+	var how := ""
+	if int(pd["max"]) > 1:
+		how = _multi_status(pd) + ("  ·  numbers show the order" if not multi.is_empty() else "")
+	else:
+		how = "Click a highlighted %s%s." % [what, " in the tray" if tray_n > 0 else ""]
+	if pd["kind"] == "attack_target":
+		how = "Hover a target to preview the battle, click to attack."
+	_banner_how = how
+	_update_banner_sub()
+	var n := 0
+	for o in pd["options"]:
+		n += 1
+		if o.has("ref") or o.has("slot") or o.has("card"):
+			continue
+		var idx: int = o["i"]
+		var b := UIStyle.primary_button(("%d · " % n if n <= 9 else "") + String(o["label"]), 14) if pd["kind"] == "attack_target" else UIStyle.button(("%d · " % n if n <= 9 else "") + String(o["label"]), 14)
+		b.custom_minimum_size = Vector2(0, 32)
+		b.pressed.connect(_pick_option.bind(idx))
+		b.mouse_entered.connect(func(): _hover_opt = idx)
+		b.mouse_exited.connect(func(): if _hover_opt == idx: _hover_opt = -1)
+		banner_btns.add_child(b)
+	if int(pd["max"]) > 1:
+		var c := UIStyle.primary_button("Confirm (Enter)", 14)
+		c.custom_minimum_size = Vector2(0, 32)
+		c.disabled = multi.size() < int(pd["min"])
+		c.pressed.connect(_confirm_multi)
+		banner_btns.add_child(c)
+	if pd["cancellable"]:
+		var x := UIStyle.button("Cancel (Esc)", 14)
+		x.custom_minimum_size = Vector2(0, 32)
+		x.pressed.connect(_cancel)
+		banner_btns.add_child(x)
+
+
+var _banner_how: String = ""
+
+
+func _update_banner_sub() -> void:
+	if banner_sub == null:
+		return
+	var t := "[color=#c2b8a2]%s[/color]" % _banner_how.replace("[", "(")
+	if _preview_text != "":
+		var col: Color = VERDICT_COLORS.get(_preview_verdict, UIStyle.TEXT)
+		t = "[b][color=#%s]%s[/color][/b]" % [col.to_html(false), _preview_text.replace("[", "(")]
+	if banner_sub.text != t:
+		banner_sub.text = t
+
+
+func _place_tray() -> void:
+	if tray == null:
+		return
+	var n := maxi(1, _tray_cards.size())
+	var wmax := clampf(n * (CardWidget.SIZES["mini"].x + 8.0) + 40.0, 420.0, minf(_area.size.x - 60.0, 900.0))
+	var need := tray_box.get_combined_minimum_size()
+	var h := minf(need.y + 28.0, _area.size.y - 40.0)
+	tray.size = Vector2(wmax, maxf(h, 120.0))
+	tray.position = Vector2(_area.position.x + (_area.size.x - wmax) / 2.0, _area.position.y + 20.0)
+
+
+## F02-10 tray of the cards offered from a pile (Spent, Draw, Extra, an opponent's pile when
+## the effect allows it). Click a card to choose it; multi-choices keep their order and use
+## the banner's Confirm. Hover shows the card's details; the tray never offers other cards.
+func _render_tray() -> void:
+	var pd := _pending()
+	var opts: Array = _tray_options(pd) if _board_targeting() else []
+	_tray_cards.clear()
+	_clear(tray_box)
+	tray.visible = not opts.is_empty() and not overlay.visible
+	if not tray.visible:
+		return
+	var head := "Choose %s" % ("one card" if int(pd["max"]) <= 1 else "cards in order")
+	tray_box.add_child(UIStyle.label("%s — click a card. Hover to read it." % head, 15, UIStyle.GOLD, true, true))
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 8)
+	flow.add_theme_constant_override("v_separation", 8)
+	tray_box.add_child(flow)
+	for o in opts:
+		var cv: Dictionary = o["card"]
+		var uid: int = int(cv.get("uid", -1))
+		_tray_cards[uid] = cv
+		var idx: int = o["i"]
+		var w := CardWidget.new().setup(cv, "mini")
+		w.show_tooltip = false
+		w.set_marks(true, idx in multi)
+		w.order_no = _order_no(idx)
+		w.pressed.connect(func(_w): _pick_option(idx))
+		w.mouse_entered.connect(func():
+			_peek_uid = uid
+			_render_details())
+		w.mouse_exited.connect(func():
+			if _peek_uid == uid:
+				_peek_uid = -1
+				_render_details())
+		flow.add_child(w)
+	_place_tray()
+	_fit_tray.call_deferred()
+
+
+func _fit_tray() -> void:
+	await get_tree().process_frame
+	_place_tray()
 
 
 func _stage_hint() -> String:
@@ -1908,6 +2378,8 @@ func _stage_hint() -> String:
 func _find_card(uid: int) -> Dictionary:
 	if mv.is_empty() or uid == -1:
 		return {}
+	if _tray_cards.has(uid):
+		return _tray_cards[uid]
 	for p in 2:
 		var pv: Dictionary = mv["players"][p]
 		for z in ["units", "backrow", "powers", "hand", "spent", "exhaust", "extra", "draw_inspect"]:
@@ -1936,73 +2408,12 @@ func _render_details() -> void:
 	var same_card: bool = _details_sig.begins_with("%d|" % uid_key)
 	_details_sig = sig
 	var keep: int = details_scroll.scroll_vertical if same_card else 0
-	_clear(details_box)
-	_build_details(c, notes)
+	if c.is_empty():
+		details_view.show_empty("Hover a card to read it, or click it to select it (its actions appear on the card). Right-click or Esc clears.")
+	else:
+		details_view.show_card(c, notes)
 	details_scroll.set_deferred("scroll_vertical", keep)
 	_update_scroll_cue.call_deferred()
-
-
-func _build_details(c: Dictionary, notes: Array) -> void:
-	if c.is_empty():
-		details_box.add_child(UIStyle.label("Hover a card to read it, or click it to pin it here. Right-click or Esc to clear.", 14, UIStyle.MUTED, true))
-		return
-	var top := HBoxContainer.new()
-	top.add_theme_constant_override("separation", 10)
-	details_box.add_child(top)
-	var cw := CardWidget.new()
-	cw.show_tooltip = false
-	cw.auto_hover = false
-	cw.setup(c, "big")
-	cw.custom_minimum_size = Vector2(150, 210)
-	cw.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top.add_child(cw)
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.add_theme_constant_override("separation", 3)
-	top.add_child(info)
-	_card_details(info, c)
-	for part in c.get("stat_parts", []):
-		details_box.add_child(UIStyle.label("• " + part, 13, UIStyle.MUTED, true))
-	var any_status := false
-	if c.get("runes", 0) > 0:
-		details_box.add_child(UIStyle.label("Rune ×%d — %s" % [c["runes"], CardDB.STATUS_HELP["rune"]], 14, Color("8fc1ff"), true))
-		any_status = true
-	for s in CardDB.STATUS_ORDER:
-		var n: int = c.get("statuses", {}).get(s, 0)
-		if n > 0:
-			any_status = true
-			var buff := CardDB.is_buff(s)
-			details_box.add_child(UIStyle.label("%s %s ×%d — %s" % ["Buff:" if buff else "Debuff:", s.capitalize(), n, CardDB.STATUS_HELP[s]], 14, Color("9be7b7") if buff else Color("ff9d9d"), true))
-	if not any_status and c.has("race"):
-		details_box.add_child(UIStyle.label("No statuses.", 13, UIStyle.MUTED))
-	var text: String = c.get("text", "")
-	details_box.add_child(UIStyle.label(text if text != "" else "No effect text.", 15, UIStyle.TEXT, true))
-	var sup: String = c.get("support", "full")
-	if sup != "full":
-		details_box.add_child(UIStyle.label("Implementation: %s" % sup, 13, UIStyle.BAD, true))
-	for n in notes:
-		details_box.add_child(UIStyle.label(n, 13, UIStyle.MUTED, true))
-
-
-func _card_details(box: VBoxContainer, c: Dictionary) -> void:
-	box.add_child(UIStyle.label(c["name"], 18, UIStyle.GOLD_HI, true, true))
-	box.add_child(UIStyle.label("%s  ·  Cost: %s" % [UIStyle.CATEGORY_NAMES[c["category"]], c["cost_text"]], 13, UIStyle.TEXT, true))
-	if c.has("race"):
-		box.add_child(UIStyle.label("Race: %s\nType: %s" % [c["race"] if c["race"] != "" else "None", c["type"] if c["type"] != "" else "None"], 13, UIStyle.MUTED, true))
-		var pa = c.get("printed_atk")
-		var pd = c.get("printed_def")
-		box.add_child(UIStyle.label("ATK %s   DEF %s" % [str(c.get("atk", "?")), str(c.get("def", "?"))], 15, UIStyle.TEXT))
-		box.add_child(UIStyle.label("printed %s / %s" % ["?" if pa == null else str(pa), "?" if pd == null else str(pd)], 12, UIStyle.MUTED))
-		if c.get("zone", "") == "unit":
-			var flags := []
-			flags.append("Attack stance" if c["stance"] == "atk" else "Defense stance")
-			if c.get("protected", false):
-				flags.append("Protected")
-			if c.get("new", false):
-				flags.append("Summoned this turn")
-			if c.get("attacked", false):
-				flags.append("Attacked this turn")
-			box.add_child(UIStyle.label(" · ".join(flags), 12, UIStyle.MUTED, true))
 
 
 # ---------------------------------------------------------------- log
@@ -2070,8 +2481,17 @@ func _render_log() -> void:
 
 # ---------------------------------------------------------------- piles
 
-func _show_pile(zone: String) -> void:
+var _pile_zone: String = ""
+var _pile_sel: int = -1
+
+
+## Own pile inspection (Draw in a random display order, Spent, Exhaust, Extra). Clicking a
+## card selects it for the details panel; if it has legal actions (Ritual / Arcane Summon
+## from the Extra Deck) they appear under that card only (F02-01 click-to-act).
+func _show_pile(zone: String, sel_uid: int = -1) -> void:
 	_clear(pile_box)
+	_pile_zone = zone
+	_pile_sel = sel_uid
 	var pv := _pv(me())
 	var key := "draw_inspect" if zone == "draw" else zone
 	var head := HBoxContainer.new()
@@ -2083,19 +2503,43 @@ func _show_pile(zone: String) -> void:
 	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(tl)
 	var close := UIStyle.button("Close", 13)
-	close.pressed.connect(func(): pile_popup.visible = false)
+	close.pressed.connect(func(): pile_popup.visible = false; _pile_zone = "")
 	head.add_child(close)
 	var flow := HFlowContainer.new()
 	flow.add_theme_constant_override("h_separation", 8)
 	flow.add_theme_constant_override("v_separation", 8)
 	pile_box.add_child(flow)
 	for c in pv.get(key, []):
+		var uid: int = c["uid"]
+		var cell := VBoxContainer.new()
+		cell.add_theme_constant_override("separation", 3)
+		flow.add_child(cell)
 		var w := CardWidget.new().setup(c, "hand")
+		w.show_tooltip = false
+		w.set_marks(false, uid == sel_uid)
+		w.set_ready(zone == "extra" and _ready_uids.has(uid))
 		w.pressed.connect(func(_w):
-			selected_uid = c["uid"]
+			selected_uid = uid
 			_peek_uid = -1
-			_render_details())
-		flow.add_child(w)
+			Sfx.play("select")
+			_render_details()
+			_show_pile(zone, -1 if sel_uid == uid else uid))
+		cell.add_child(w)
+		if uid == sel_uid and not _locked():
+			for a in _actions_for_card(uid):
+				var b := UIStyle.button(String(a["label"]) if a["ok"] else String(a["reason"]), 13)
+				b.custom_minimum_size = Vector2(w.size.x, 28)
+				b.clip_text = true
+				b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+				b.tooltip_text = String(a.get("full", a["label"]))
+				b.disabled = not a["ok"]
+				if a["ok"]:
+					b.pressed.connect(func():
+						pile_popup.visible = false
+						_pile_zone = ""
+						_row_open = true
+						_run_action(uid, a))
+				cell.add_child(b)
 	if pv.get(key, []).is_empty():
 		pile_box.add_child(UIStyle.label("Empty.", 13, UIStyle.MUTED))
 	pile_popup.visible = true
@@ -2177,8 +2621,10 @@ func _update_arrow() -> void:
 			arrow.a = inv * src.get_center()
 			arrow.b = inv * dst.get_center()
 			on = true
-	if on or arrow.on:
+	var want_col: Color = VERDICT_COLORS.get(_preview_verdict, UIStyle.TARGET) if _preview_text != "" else UIStyle.TARGET
+	if on or arrow.on or arrow.col != want_col:
 		arrow.on = on
+		arrow.col = want_col
 		arrow.queue_redraw()
 
 
@@ -2197,6 +2643,8 @@ func _source_rect() -> Rect2:
 
 
 func _source_uid() -> int:
+	if _acting_uid != -1 and (_hand_items.has(_acting_uid) or not _item_for_uid(_acting_uid).is_empty()):
+		return _acting_uid
 	var pd := _pending()
 	var re := RegEx.new()
 	re.compile("for (.+?)[.?:]?$")
@@ -2221,17 +2669,34 @@ func _is_mine_card(uid: int) -> bool:
 
 
 func _hovered_target_rect() -> Rect2:
+	var o := _option_under_pointer()
+	return _option_rect(o) if o != -1 else Rect2()
+
+
+## The pending option the pointer is on: a banner/sidebar option button, or a highlighted
+## card / zone on the board or in the Hand. Read-only (arrow and combat preview only).
+func _option_under_pointer() -> int:
 	if _hover_opt != -1:
-		return _option_rect(_hover_opt)
+		return _hover_opt
 	var m := get_global_mouse_position()
 	for k in _slots.keys():
+		var sl: Dictionary = _slots[k]
 		var parts: PackedStringArray = (k as String).split(":")
 		var pidx := me() if int(parts[0]) == 1 else 1 - me()
-		if _option_for_ref(pidx, parts[1], int(parts[2])) != -1:
-			var r: Rect2 = (_slots[k]["holder"] as Control).get_global_rect()
-			if r.has_point(m):
-				return r
-	return Rect2()
+		var opt := _option_for_ref(pidx, parts[1], int(parts[2]))
+		if opt == -1:
+			continue
+		var w: CardWidget = sl["widget"]
+		var r: Rect2 = (sl["holder"] as Control).get_global_rect() if w.visible else (sl["zone_node"] as Control).get_global_rect()
+		if r.has_point(m):
+			return opt
+	for uid in _hand_items.keys():
+		var hr: Rect2 = (_hand_items[uid]["holder"] as Control).get_global_rect()
+		if hr.has_point(m):
+			var ho := _option_for_uid(uid)
+			if ho != -1:
+				return ho
+	return -1
 
 
 func _option_rect(i: int) -> Rect2:
@@ -2244,7 +2709,8 @@ func _option_rect(i: int) -> Rect2:
 		if o.has("slot"):
 			var oz: String = o.get("zone", "")
 			var mapped := "unit" if oz in ["unit", "adjacent", "column", "orig"] else oz
-			return fx_slot_global_rect(me(), mapped, o["slot"])
+			var zit: Dictionary = fx_slot_item(me(), mapped, o["slot"])
+			return (zit["zone_node"] as Control).get_global_rect() if not zit.is_empty() else Rect2()
 		if o.has("card") and _hand_items.has(o["card"].get("uid", -1)):
 			return (_hand_items[o["card"]["uid"]]["holder"] as Control).get_global_rect()
 	return Rect2()
@@ -2696,3 +3162,91 @@ func _render_over() -> void:
 	overlay_box.add_child(b)
 
 
+
+# ---------------------------------------------------------------- combat preview (F02-12)
+
+## While I choose an attack target, the target under the pointer shows the values the battle
+## would compare (type advantage applied by the authority) on both cards, a verdict-coloured
+## arrow and an outcome line in the banner. Presentation only: nothing is sent or changed.
+func _update_preview() -> void:
+	var pd := _pending()
+	var opt := -2
+	if not pd.is_empty() and pd.get("mine", false) and pd.get("kind", "") == "attack_target" and not overlay.visible:
+		opt = _option_under_pointer()
+	if opt == _preview_opt:
+		return
+	_clear_previews()
+	_preview_opt = opt
+	var o := {}
+	for oo in pd.get("options", []):
+		if oo["i"] == opt:
+			o = oo
+	var pv: Dictionary = o.get("preview", {})
+	if pv.is_empty():
+		_update_banner_sub()
+		return
+	var src := _item_for_uid(_source_uid())
+	var src_name := ""
+	if not src.is_empty():
+		var aw: CardWidget = src["w"]
+		src_name = String(aw.view.get("name", ""))
+		aw.set_preview("atk", int(pv["av"]), int(pv.get("bonus", 0)) if pv.get("adv", "") == "attacker" else 0)
+		_preview_ws.append(aw)
+	var tgt_name := "your opponent"
+	if o.has("ref"):
+		var tit: Dictionary = fx_slot_item(o["ref"]["p"], o["ref"]["zone"], o["ref"]["slot"])
+		if not tit.is_empty():
+			var tw: CardWidget = tit["widget"]
+			tgt_name = String(tw.view.get("name", "the target"))
+			tw.set_preview("atk" if pv.get("defending_atk", true) else "def", int(pv["dv"]), int(pv.get("bonus", 0)) if pv.get("adv", "") == "defender" else 0)
+			_preview_ws.append(tw)
+	_preview_verdict = String(pv.get("verdict", "neutral"))
+	_preview_text = preview_text(pv, src_name, tgt_name)
+	_update_banner_sub()
+
+
+func _clear_previews() -> void:
+	for w in _preview_ws:
+		if is_instance_valid(w):
+			(w as CardWidget).clear_preview()
+	_preview_ws.clear()
+	_preview_text = ""
+	_preview_verdict = ""
+
+
+## One-line outcome for a battle preview (also used by tests).
+static func preview_text(pv: Dictionary, a_name: String, t_name: String) -> String:
+	var lead: String = {"good": "Favourable", "bad": "Unfavourable", "neutral": "Even"}.get(pv.get("verdict", "neutral"), "Even")
+	var parts := []
+	if pv.get("outcome", "") == "direct":
+		parts.append("%s: direct attack, %s loses %d HP" % [lead, t_name, int(pv.get("dmg_opp", 0))])
+	else:
+		var adv := ""
+		if pv.get("adv", "") == "attacker":
+			adv = " (+%d type advantage)" % int(pv["bonus"])
+		var dadv := ""
+		if pv.get("adv", "") == "defender":
+			dadv = " (+%d type advantage)" % int(pv["bonus"])
+		parts.append("%s: %s %d%s vs %s %s %d%s" % [lead, a_name, int(pv["av"]), adv, t_name,
+			"ATK" if pv.get("defending_atk", true) else "DEF", int(pv["dv"]), dadv])
+		var res := []
+		match String(pv.get("outcome", "")):
+			"win": res.append("%s destroyed" % t_name if pv.get("t_dies", false) else "%s survives" % t_name)
+			"loss": res.append("%s destroyed" % a_name if pv.get("a_dies", false) else "%s survives" % a_name)
+			"trade":
+				if pv.get("a_dies", false) and pv.get("t_dies", false):
+					res.append("both destroyed")
+				else:
+					res.append("%s destroyed" % (a_name if pv.get("a_dies", false) else t_name) if (pv.get("a_dies", false) or pv.get("t_dies", false)) else "neither destroyed")
+			"stalemate": res.append("no damage, nothing destroyed")
+		if int(pv.get("dmg_opp", 0)) > 0:
+			res.append("opponent loses %d HP" % int(pv["dmg_opp"]))
+		if int(pv.get("dmg_you", 0)) > 0:
+			res.append("you lose %d HP" % int(pv["dmg_you"]))
+		parts.append(", ".join(res))
+	for n in pv.get("notes", []):
+		if not String(n).begins_with("type advantage"):
+			parts.append(String(n))
+	if pv.get("hidden_risk", false):
+		parts.append("face-down cards may change this")
+	return " · ".join(parts)

@@ -55,31 +55,73 @@ class HpBar extends Control:
 
 
 class ApGems extends Control:
+	## AP slot display policy (F02-06). The row shows the player's real AP capacity, not a fixed
+	## number of sockets:
+	##   capacity = max(ap_start, ap_peak, ap)  (never negative)
+	## where ap_start is this turn's effective starting allowance (after reset / modifiers such as
+	## Marked by the Abyss) and ap_peak the most AP held this turn. An ordinary 2-AP turn therefore
+	## shows exactly 2 slots; AP gained above the allowance expands the row (no UI cap); spent AP
+	## stays visible as a cracked, dark "spent" socket (capacity - ap) so usage reads at a glance.
+	## Before the first turn (everything 0) no slots are drawn, only "AP 0". Above 10 slots the
+	## gems shrink to stay inside the plate. The next turn recomputes from its own allowance.
 	var ap: int = 0
-	var max_show: int = 6
+	var ap_start: int = 0
+	var ap_peak: int = 0
+
+	const MAX_ROW_W := 190.0   # width budget for the gem row on a 300 px plate
 
 	func _init() -> void:
 		custom_minimum_size = Vector2(0, 20)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+	static func capacity_for(p_ap: int, p_start: int, p_peak: int) -> int:
+		return maxi(0, maxi(p_ap, maxi(p_start, p_peak)))
+
+	static func filled_for(p_ap: int, p_start: int, p_peak: int) -> int:
+		return clampi(p_ap, 0, capacity_for(p_ap, p_start, p_peak))
+
+	static func spent_for(p_ap: int, p_start: int, p_peak: int) -> int:
+		return capacity_for(p_ap, p_start, p_peak) - filled_for(p_ap, p_start, p_peak)
+
+	func capacity() -> int:
+		return capacity_for(ap, ap_start, ap_peak)
+
+	func filled() -> int:
+		return filled_for(ap, ap_start, ap_peak)
+
+	func spent() -> int:
+		return spent_for(ap, ap_start, ap_peak)
+
+	## Label text: "AP 1/2" (or just "AP 0" when there are no slots yet).
+	func ap_text() -> String:
+		return "AP %d/%d" % [ap, capacity()] if capacity() > 0 else "AP %d" % ap
+
 	func _draw() -> void:
 		var amber: Color = UIStyle.COST_COLORS["ap"]
+		var cap := capacity()
+		var n := filled()
+		var pitch := clampf(MAX_ROW_W / float(maxi(cap, 1)), 4.0, 20.0)
+		var rad := minf(8.0, pitch * 0.42)
 		var x := 10.0
-		var n := mini(ap, max_show)
-		for i in max_show:
-			var c := Vector2(x + 8.0, size.y / 2.0)
+		for i in cap:
+			var c := Vector2(x + pitch / 2.0, size.y / 2.0)
 			if i < n:
-				draw_circle(c, 8.0, amber.darkened(0.65))
-				draw_circle(c, 6.5, amber)
-				draw_circle(c + Vector2(-2, -2.5), 2.6, Color(1, 1, 1, 0.35))
+				draw_circle(c, rad, amber.darkened(0.65))
+				draw_circle(c, rad * 0.8, amber)
+				draw_circle(c + Vector2(-0.25, -0.3) * rad, rad * 0.32, Color(1, 1, 1, 0.35))
 			else:
-				draw_circle(c, 8.0, Color(0.1, 0.08, 0.06))
-				draw_arc(c, 7.0, 0.0, TAU, 20, Color(amber, 0.35), 1.5)
-			x += 20.0
+				# Spent: dark socket, thin outline and a crack so it never reads as "unfilled".
+				draw_circle(c, rad, Color(0.07, 0.05, 0.04))
+				draw_arc(c, rad - 0.5, 0.0, TAU, 20, Color(amber, 0.4), 1.2)
+				if rad >= 4.5:
+					draw_polyline(PackedVector2Array([c + Vector2(-0.1, -0.7) * rad, c + Vector2(0.15, -0.1) * rad,
+						c + Vector2(-0.2, 0.25) * rad, c + Vector2(0.1, 0.75) * rad]), Color(amber, 0.55), 1.0)
+			x += pitch
 		var font := UIStyle.font_display(700)
-		var txt := "AP %d" % ap
-		draw_string_outline(font, Vector2(x + 6, size.y / 2.0 + 6), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 3, Color(0, 0, 0, 0.7))
-		draw_string(font, Vector2(x + 6, size.y / 2.0 + 6), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, amber)
+		var txt := ap_text()
+		var tp := Vector2(x + 8.0, size.y / 2.0 + 6)
+		draw_string_outline(font, tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 3, Color(0, 0, 0, 0.7))
+		draw_string(font, tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, amber)
 
 
 class TurnMark extends Control:
@@ -160,7 +202,9 @@ func update_from(pv: Dictionary, active: bool, mine: bool, label_suffix: String,
 	hp_bar.hp = pv["hp"]
 	hp_bar.max_hp = _max_hp
 	hp_bar.queue_redraw()
-	ap_gems.ap = pv["ap"]
+	ap_gems.ap = int(pv["ap"])
+	ap_gems.ap_start = int(pv.get("ap_start", ap_gems.ap))
+	ap_gems.ap_peak = int(pv.get("ap_peak", ap_gems.ap))
 	ap_gems.queue_redraw()
 	next_label.text = next_text
 	var counts: Dictionary = pv["counts"]

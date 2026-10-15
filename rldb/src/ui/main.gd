@@ -92,6 +92,12 @@ func _parse_cmdline() -> void:
 			_auto_started = true
 			call_deferred("_run_deckbuilder_shots", a.split("=", true, 1)[1])
 			return
+		if a.begins_with("--f02-shots="):
+			_auto_started = true
+			var f2: Node = load("res://src/dev/f02_driver.gd").new()
+			add_child(f2)
+			f2.call_deferred("run", self, a.split("=", true, 1)[1])
+			return
 		if a.begins_with("--shots="):
 			_auto_started = true
 			var driver: Node = load("res://src/dev/shot_driver.gd").new()

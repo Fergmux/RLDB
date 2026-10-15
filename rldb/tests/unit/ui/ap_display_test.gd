@@ -1,0 +1,66 @@
+extends GdUnitTestSuite
+## F02-06: AP slot capacity / filled / spent policy of PlayerPlate.ApGems.
+
+const G := PlayerPlate.ApGems
+
+
+func _case(ap: int, start: int, peak: int, cap: int, filled: int, spent: int) -> void:
+	assert_int(G.capacity_for(ap, start, peak)).is_equal(cap)
+	assert_int(G.filled_for(ap, start, peak)).is_equal(filled)
+	assert_int(G.spent_for(ap, start, peak)).is_equal(spent)
+
+
+func test_ordinary_two_ap_turn_shows_exactly_two_slots() -> void:
+	_case(2, 2, 2, 2, 2, 0)
+
+
+func test_spending_keeps_spent_slots_visible() -> void:
+	_case(1, 2, 2, 2, 1, 1)
+	_case(0, 2, 2, 2, 0, 2)
+
+
+func test_three_ap_allowance() -> void:
+	_case(3, 3, 3, 3, 3, 0)
+	_case(1, 3, 3, 3, 1, 2)
+
+
+func test_gained_above_allowance_expands_slots() -> void:
+	_case(3, 2, 4, 4, 3, 1)
+	_case(5, 2, 5, 5, 5, 0)
+
+
+func test_before_first_turn_has_no_slots() -> void:
+	_case(0, 0, 0, 0, 0, 0)
+	var g: PlayerPlate.ApGems = auto_free(G.new())
+	assert_str(g.ap_text()).is_equal("AP 0")
+
+
+func test_large_capacity_is_not_capped() -> void:
+	_case(14, 2, 14, 14, 14, 0)
+	_case(0, 2, 25, 25, 0, 25)
+
+
+func test_text_shows_current_over_capacity() -> void:
+	var g: PlayerPlate.ApGems = auto_free(G.new())
+	g.ap = 1
+	g.ap_start = 2
+	g.ap_peak = 2
+	assert_str(g.ap_text()).is_equal("AP 1/2")
+
+
+func _pv(ap: int, extra: Dictionary = {}) -> Dictionary:
+	var pv := {"name": "P", "hp": 60, "ap": ap, "counts": {"hand": 0, "draw": 0, "spent": 0, "exhaust": 0, "extra": 0}}
+	pv.merge(extra)
+	return pv
+
+
+func test_plate_reads_new_fields_with_fallback() -> void:
+	var plate: PlayerPlate = auto_free(PlayerPlate.new())
+	plate.update_from(_pv(3, {"ap_start": 2, "ap_peak": 4}), true, true, "", "")
+	assert_int(plate.ap_gems.capacity()).is_equal(4)
+	assert_int(plate.ap_gems.filled()).is_equal(3)
+	# Older views without ap_start / ap_peak fall back to the current AP.
+	plate.update_from(_pv(2), true, true, "", "")
+	assert_int(plate.ap_gems.capacity()).is_equal(2)
+	plate.update_from(_pv(0), false, true, "", "")
+	assert_int(plate.ap_gems.capacity()).is_equal(0)

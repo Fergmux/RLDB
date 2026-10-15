@@ -60,6 +60,9 @@ func _start_turn(p: int) -> void:
 		ap += 1
 		notes.append("+1 Marked by the Abyss")
 	players[p]["ap"] = maxi(ap, 0)
+	# Display-only bookkeeping (F02-06): the turn's starting allowance and the most AP held.
+	players[p]["ap_start"] = players[p]["ap"]
+	players[p]["ap_peak"] = players[p]["ap"]
 	add_log("%s's AP is set to %d%s." % [pname(p), players[p]["ap"], (" (" + ", ".join(notes) + ")") if notes else ""])
 	# P-19 (reworded Options): each active copy draws one additional card.
 	var draw_n := BASE_DRAW + count_flag(p, "draw_extra")
@@ -244,6 +247,12 @@ func validate(p: int, cmd: Dictionary) -> String:
 	var main := phase in [PHASE_MAIN1, PHASE_MAIN2]
 	var own_turn_phase := phase in [PHASE_MAIN1, PHASE_BATTLE, PHASE_MAIN2]
 	var df := d(uid)
+	# F02-02: summons may carry the chosen stance; card stance restrictions still apply.
+	if cmd.has("stance"):
+		if not (t in ["summon", "ritual", "arcane"]) or not (cmd["stance"] in ["atk", "def"]):
+			return "Invalid stance."
+		if cmd["stance"] == "def" and has_flag_raw(uid, "no_defense"):
+			return "This unit cannot be in Defense stance."
 	match t:
 		"summon":
 			if inst["owner"] != p or inst["zone"] != "hand": return "Card is not in your Hand."
@@ -384,7 +393,7 @@ func _execute(p: int, cmd: Dictionary) -> void:
 		"summon":
 			push_frame(make_frame(uid, p, [
 				{"op": "pick_slot", "zone": "unit", "as": "slot", "cancellable": true},
-				{"op": "pick_stance", "as": "stance", "cancellable": true},
+				_stance_op(cmd),
 				{"op": "pay", "target": "self"},
 				{"op": "place", "target": "self", "slot": "$slot", "stance": "$stance"},
 			] + summon_tail(uid, p), "summon " + name_of(uid)))
@@ -430,16 +439,23 @@ func _execute(p: int, cmd: Dictionary) -> void:
 		"ritual":
 			push_frame(make_frame(uid, p, [{"op": "ritual_material", "as": "mat", "cancellable": true},
 				{"op": "pick_slot", "zone": "unit", "as": "slot", "cancellable": true, "freeing": "$mat"},
-				{"op": "pick_stance", "as": "stance", "cancellable": true},
+				_stance_op(cmd),
 				{"op": "tribute", "target": "$mat", "ritual": true},
 				{"op": "place", "target": "self", "slot": "$slot", "stance": "$stance"}] + summon_tail(uid, p), "Ritual summon " + name_of(uid)))
 		"arcane":
 			push_frame(make_frame(uid, p, [{"op": "arcane_materials", "as": "mats", "cancellable": true},
 				{"op": "pick_slot", "zone": "unit", "as": "slot", "cancellable": true},
-				{"op": "pick_stance", "as": "stance", "cancellable": true},
+				_stance_op(cmd),
 				{"op": "tribute", "target": "$mats", "to": "exhaust"},
 				{"op": "place", "target": "self", "slot": "$slot", "stance": "$stance"}] + summon_tail(uid, p), "Arcane summon " + name_of(uid)))
 	run()
+
+
+## Stance step of a summon: fixed when the command chose it (F02-02), otherwise a prompt.
+func _stance_op(cmd: Dictionary) -> Dictionary:
+	if cmd.get("stance", "") in ["atk", "def"]:
+		return {"op": "pick_stance", "as": "stance", "fixed": cmd["stance"]}
+	return {"op": "pick_stance", "as": "stance", "cancellable": true}
 
 
 func _spell_ops(uid: int) -> Array:
@@ -498,6 +514,9 @@ func _op_pick_slot(f: Dictionary, op: Dictionary) -> int:
 func _op_pick_stance(f: Dictionary, op: Dictionary) -> int:
 	if has_flag_raw(f["src"], "no_defense") or op.get("fixed", "") == "atk":
 		f["vars"][op["as"]] = "atk"
+		return R.CONT
+	if op.get("fixed", "") == "def":
+		f["vars"][op["as"]] = "def"
 		return R.CONT
 	var ans: Variant = take_answer(f)
 	if ans != null:
@@ -791,6 +810,8 @@ func _op_attack_target(f: Dictionary, op: Dictionary) -> int:
 			opts.append({"v": -1, "label": "Attack %s directly" % pname(opp(f["ctl"]))})
 		else:
 			opts.append(card_option(t, "Attack " + _target_label(t, f["ctl"])))
+		# F02-12: preview of the battle from current public state (presentation only).
+		opts[-1]["preview"] = battle_preview(uid, t)
 	return ask(f, f["ctl"], "attack_target", "Choose a target for %s." % name_of(uid), opts, 1, 1, true)
 
 
@@ -848,6 +869,143 @@ func _advantaged(a: int, b: int) -> bool:
 	return ta != "" and CardDB.TYPE_ADVANTAGE.get(ta, "") == tb
 
 
+## The values a battle compares (shared by the battle itself and its preview): attacker ATK
+## and defender ATK or DEF by stance, with the type-advantage bonus on the advantaged side.
+func battle_values(a: int, target: int) -> Dictionary:
+	var p: int = cards[a]["ctl"]
+	var q: int = cards[target]["ctl"]
+	var av := atk_of(a)
+	var defending_atk: bool = cards[target]["stance"] == "atk"
+	var dv := atk_of(target) if defending_atk else def_of(target)
+	var notes := []
+	var adv := ""
+	var bonus := 0
+	if _advantaged(a, target):
+		bonus = type_bonus(p)
+		av += bonus
+		adv = "attacker"
+		notes.append("type advantage +%d to attacker" % bonus)
+	elif _advantaged(target, a):
+		bonus = type_bonus(q)
+		dv += bonus
+		adv = "defender"
+		notes.append("type advantage +%d to defender" % bonus)
+	return {"av": av, "dv": dv, "defending_atk": defending_atk, "notes": notes, "adv": adv, "bonus": bonus}
+
+
+## Why battle destruction of `uid` by an opponent with `vs` ({"atk", "type"}) would be
+## prevented right now ("" = it would not). Mirrors destroy() for previews.
+func _battle_survives(uid: int, vs: Dictionary) -> String:
+	if has_flag(uid, "battle_immune_30atk") and vs["atk"] >= 30:
+		return "%s cannot be destroyed by a unit with 30+ ATK" % name_of(uid)
+	if has_flag(uid, "battle_immune_lightning") and vs["type"] == "Lightning":
+		return "%s cannot be destroyed by a Lightning unit" % name_of(uid)
+	if unit_race(uid) == "Warrior":
+		for g in field_units(cards[uid]["ctl"]):
+			if g != uid and has_flag(g, "warrior_guard") and column_of(g) == column_of(uid):
+				return "%s is protected by %s" % [name_of(uid), name_of(g)]
+	if status_count(uid, "eternal") > 0:
+		return "Eternal saves %s" % name_of(uid)
+	return ""
+
+
+## F02-12 preview of attacking `target` (-1 = direct) with `a`, from the current public
+## state only. Unknown face-down cards and triggered effects can still change the result,
+## so `hidden_risk` flags opposing set cards. Never mutates state.
+func battle_preview(a: int, target: int) -> Dictionary:
+	var p: int = cards[a]["ctl"]
+	var q := opp(p)
+	var no_dmg := has_flag(a, "no_battle_damage")
+	var burn := status_count(a, "burn")
+	var hidden := false
+	for u in players[q]["backrow"]:
+		if u != -1 and not is_face_up(u):
+			hidden = true
+	var pv := {"target": target, "hidden_risk": hidden, "burn": burn, "notes": [], "atk_base": atk_of(a)}
+	if target == -1:
+		pv["outcome"] = "direct"
+		pv["av"] = atk_of(a)
+		pv["dmg_opp"] = 0 if no_dmg else atk_of(a)
+		pv["dmg_you"] = burn
+		pv["a_dies"] = false
+		pv["t_dies"] = false
+		pv["verdict"] = "neutral" if no_dmg else "good"
+		if no_dmg:
+			pv["notes"].append("%s's attacks do not inflict damage" % name_of(a))
+		if burn > 0:
+			pv["notes"].append("Burn: you lose %d HP after the attack" % burn)
+		return pv
+	var calc := battle_values(a, target)
+	var av: int = calc["av"]
+	var dv: int = calc["dv"]
+	var def_atk: bool = calc["defending_atk"]
+	pv["av"] = av
+	pv["dv"] = dv
+	pv["defending_atk"] = def_atk
+	pv["adv"] = calc["adv"]
+	pv["bonus"] = calc["bonus"]
+	pv["def_base"] = atk_of(target) if def_atk else def_of(target)
+	var a_vs := {"atk": atk_of(a), "type": unit_type(a)}
+	var t_vs := {"atk": atk_of(target), "type": unit_type(target)}
+	var a_dies := false
+	var t_dies := false
+	var dmg_opp := 0
+	var dmg_you := 0
+	var outcome := ""
+	if def_atk:
+		if av > dv:
+			outcome = "win"
+			t_dies = true
+			dmg_opp = 0 if no_dmg else av - dv
+			if no_dmg:
+				pv["notes"].append("%s's attacks do not inflict damage" % name_of(a))
+		elif av == dv:
+			outcome = "trade"
+			t_dies = true
+			a_dies = true
+		else:
+			outcome = "loss"
+			a_dies = true
+			dmg_you = dv - av
+	else:
+		if av > dv:
+			outcome = "win"
+			t_dies = true
+			if status_count(a, "pierce") > 0 and not no_dmg:
+				dmg_opp = av - dv
+				pv["notes"].append("Pierce: %d excess damage" % (av - dv))
+		elif av == dv:
+			outcome = "stalemate"
+		else:
+			outcome = "loss"
+			dmg_you = dv - av
+	if t_dies:
+		var why := _battle_survives(target, a_vs)
+		if why != "":
+			t_dies = false
+			pv["notes"].append(why)
+	if a_dies:
+		var why2 := _battle_survives(a, t_vs)
+		if why2 != "":
+			a_dies = false
+			pv["notes"].append(why2)
+	dmg_you += burn
+	if burn > 0:
+		pv["notes"].append("Burn: you lose %d HP after the attack" % burn)
+	var verdict := "neutral"
+	if (t_dies and not a_dies) or (not t_dies and not a_dies and dmg_opp > 0 and dmg_you == 0):
+		verdict = "good"
+	elif (a_dies and not t_dies) or (not t_dies and not a_dies and dmg_you > 0 and dmg_opp == 0):
+		verdict = "bad"
+	pv["outcome"] = outcome
+	pv["a_dies"] = a_dies
+	pv["t_dies"] = t_dies
+	pv["dmg_opp"] = dmg_opp
+	pv["dmg_you"] = dmg_you
+	pv["verdict"] = verdict
+	return pv
+
+
 func _op_battle(f: Dictionary, op: Dictionary) -> int:
 	var a: int = f["src"]
 	var target: int = f["vars"]["target"]
@@ -879,16 +1037,11 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 	var burn_before := status_count(a, "burn")
 	var pierce_before := status_count(a, "pierce")
 	var snap_t := {"atk": atk_of(target), "type": unit_type(target), "debilitated": is_debilitated(target)}
-	var av := atk_of(a)
-	var defending_atk: bool = cards[target]["stance"] == "atk"
-	var dv := atk_of(target) if defending_atk else def_of(target)
-	var notes := []
-	if _advantaged(a, target):
-		av += type_bonus(p)
-		notes.append("type advantage +%d to attacker" % type_bonus(p))
-	elif _advantaged(target, a):
-		dv += type_bonus(q)
-		notes.append("type advantage +%d to defender" % type_bonus(q))
+	var calc := battle_values(a, target)
+	var av: int = calc["av"]
+	var dv: int = calc["dv"]
+	var defending_atk: bool = calc["defending_atk"]
+	var notes: Array = calc["notes"]
 	var summary := "%s %d vs %s %s %d" % [name_of(a), av, name_of(target), "ATK" if defending_atk else "DEF", dv]
 	if notes:
 		summary += " (" + ", ".join(notes) + ")"

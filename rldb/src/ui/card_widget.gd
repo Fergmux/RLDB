@@ -1,31 +1,45 @@
 class_name CardWidget
 extends Control
 ## Procedurally drawn card (art bible section 4): layered frame, art window (card art or
-## a placeholder), name plate, cost gem (shape per cost kind), ATK/DEF shields, status
-## chips and a face-down back. Everything is drawn from the redacted card view, so hidden
-## cards can only ever show the back. Runtime stats are never baked into art.
+## a placeholder), name plate, cost gem (shape per cost kind), ATK diamond / DEF shield,
+## status chips and a face-down back. Everything is drawn from the redacted card view, so
+## hidden cards can only ever show the back. Runtime stats are never baked into art.
 ##
-## Kinds: "board" (128x128 unit), "power" (85x128), "trap" (128x85), "hand" (128x180),
-## "mini" (96x135), "big" (240x336), "back" (64x90). Geometry is authored in base units and
-## scaled by size/base, so a widget resized by a container still draws proportionally.
+## Every card face is exactly 2:3 (portrait) or 3:2 (when `rotated`, i.e. the same portrait
+## card turned 90 degrees clockwise). If the widget rect has another ratio the card is
+## letterboxed and centred inside it (see card_rect()); the widget rect stays the hit area.
+## An EMPTY view draws a zone background that fills the whole widget rect instead.
+##
+## Kinds: "board" (85x128 compact field unit), "power" (85x128), "trap" (85x128, shown
+## rotated on the board), "hand" (120x180), "mini" (90x135), "big" (224x336), "back" (60x90).
+## Geometry is authored in base units and scaled by card width / base width.
 
 signal pressed(widget: CardWidget)
 signal right_pressed(widget: CardWidget)
 
+## Portrait sizes, all exactly 2:3 width:height.
 const SIZES := {
-	"board": Vector2(128, 128), "power": Vector2(85, 128), "trap": Vector2(128, 85),
-	"hand": Vector2(128, 180), "mini": Vector2(96, 135), "big": Vector2(240, 336), "back": Vector2(64, 90),
+	"hand": Vector2(120, 180), "mini": Vector2(90, 135), "big": Vector2(224, 336), "back": Vector2(60, 90),
+	"board": Vector2(85, 128), "power": Vector2(85, 128), "trap": Vector2(85, 128),
 }
+## Default sizes of EMPTY zone backgrounds (callers normally size these to the zone rect).
+const EMPTY_SIZES := {"board": Vector2(128, 128), "trap": Vector2(128, 85), "power": Vector2(85, 128)}
 const ART_DIR := "res://art/cards/"
 const UNIT_CATS := ["basic_unit", "unit", "fusion", "ritual", "arcane"]
+const BIG_KINDS := ["hand", "big", "mini", "back"]
 
 static var _tex_cache := {}
 static var _radial_cache := {}
 ## Shaped text paragraphs are expensive; share them across all widgets (bounded).
 static var _para_shared := {}
+## One reusable style box: StyleBoxFlat.draw emits its commands immediately, so sharing is safe
+## and avoids allocating a StyleBoxFlat for every ring/plate on every redraw.
+static var _sb := StyleBoxFlat.new()
 
 var view: Dictionary = {}
 var size_kind: String = "board"
+## Draw the portrait card turned 90 degrees clockwise inside a landscape rect (defense units, backrow).
+var rotated: bool = false
 var highlighted: bool = false
 var selected: bool = false
 var dimmed: bool = false
@@ -39,9 +53,18 @@ var show_tooltip: bool = true
 var hovered: bool = false: set = _set_hovered
 var fx_flash: float = 0.0: set = _set_flash
 var fx_glow: Color = Color(1, 1, 1, 0): set = _set_glow
+## Ordered multi-select badge: 1, 2, 3... drawn on the card while > 0.
+var order_no: int = 0: set = _set_order
 
 var _s: float = 1.0
 var _self_hover := false
+var _is_ready := false
+var _pv_stat := ""
+var _pv_value := 0
+var _pv_bonus := 0
+## Drawn card rect in widget space and the unrotated portrait size (valid inside _draw).
+var _cr := Rect2()
+var _ps := Vector2(85, 128)
 
 
 func _init() -> void:
@@ -54,19 +77,44 @@ func _ready() -> void:
 	mouse_exited.connect(func(): _self_hover = false; queue_redraw())
 
 
-func setup(v, kind: String = "board", empty_label: String = "") -> CardWidget:
+## `is_rotated` turns the portrait card 90 degrees clockwise (size becomes SIZES[kind] swapped).
+func setup(v, kind: String = "board", empty_label: String = "", is_rotated: bool = false) -> CardWidget:
 	view = v if v != null else {}
 	size_kind = kind
 	empty_text = empty_label
-	custom_minimum_size = SIZES[kind]
-	size = SIZES[kind]
-	pivot_offset = size / 2.0
+	rotated = is_rotated
+	_apply_size()
 	if view.is_empty() or view.get("hidden", false) or not show_tooltip:
 		tooltip_text = ""
 	else:
 		tooltip_text = "%s\n%s" % [view["name"], view.get("text", "")]
 	queue_redraw()
 	return self
+
+
+## Switches the portrait/landscape orientation of a card widget (defense stance, backrow) and resizes it.
+func set_rotated(on: bool) -> void:
+	if rotated == on:
+		return
+	rotated = on
+	_apply_size()
+	queue_redraw()
+
+
+## Card widgets get their 2:3 (or 3:2) size as both size and minimum. Empty zone backgrounds get the
+## default zone rect (unit slot 128x128, trap zone 128x85, power zone 85x128) with NO minimum, so the
+## caller can size them freely to the zone rect.
+func _apply_size() -> void:
+	if view.is_empty():
+		custom_minimum_size = Vector2.ZERO
+		size = EMPTY_SIZES.get(size_kind, Vector2(128, 128))
+	else:
+		var sz: Vector2 = SIZES[size_kind]
+		if rotated:
+			sz = Vector2(sz.y, sz.x)
+		custom_minimum_size = sz
+		size = sz
+	pivot_offset = size / 2.0
 
 
 ## `is_dimmed` = hard dim (non-target while a target is being chosen, ~0.55);
@@ -85,6 +133,57 @@ func set_marks(is_target: bool, is_selected: bool, is_dimmed: bool = false, soft
 	queue_redraw()
 
 
+## "This card can act now" highlight (F02-11). Static (no per-frame redraw); independent of hover/select/target.
+func set_ready(on: bool) -> void:
+	if _is_ready != on:
+		_is_ready = on
+		queue_redraw()
+
+
+func is_ready_on() -> bool:
+	return _is_ready
+
+
+## Combat preview (F02-12): shows `value` on the ATK or DEF badge in a provisional style with a
+## "+N"/"-N" tag when `bonus` != 0. Purely visual: `view` is never modified.
+func set_preview(stat: String, value: int, bonus: int) -> void:
+	var st := stat if stat in ["atk", "def"] else ""
+	if st == _pv_stat and value == _pv_value and bonus == _pv_bonus:
+		return
+	_pv_stat = st
+	_pv_value = value
+	_pv_bonus = bonus
+	queue_redraw()
+
+
+func clear_preview() -> void:
+	if _pv_stat != "":
+		_pv_stat = ""
+		_pv_value = 0
+		_pv_bonus = 0
+		queue_redraw()
+
+
+func has_preview() -> bool:
+	return _pv_stat != ""
+
+
+## The rect (widget space) the card face occupies: exactly 2:3 (3:2 when rotated), centred and
+## letterboxed inside the widget rect, never stretched.
+func card_rect() -> Rect2:
+	var aspect := 1.5 if rotated else (2.0 / 3.0)   # width / height
+	var w := size.x
+	var h := size.y
+	# 85x128 is 2:3 to within half a pixel; treat that as exact so the face is not offset by half a pixel.
+	if absf(w / maxf(h, 0.001) - aspect) < 0.006:
+		return Rect2(Vector2.ZERO, size)
+	if w / maxf(h, 0.001) > aspect:
+		w = h * aspect
+	else:
+		h = w / aspect
+	return Rect2((size.x - w) / 2.0, (size.y - h) / 2.0, w, h)
+
+
 func _set_hovered(v: bool) -> void:
 	hovered = v
 	queue_redraw()
@@ -98,6 +197,12 @@ func _set_flash(v: float) -> void:
 func _set_glow(v: Color) -> void:
 	fx_glow = v
 	queue_redraw()
+
+
+func _set_order(v: int) -> void:
+	if v != order_no:
+		order_no = v
+		queue_redraw()
 
 
 func _process(_d: float) -> void:
@@ -138,6 +243,11 @@ func _base() -> Vector2:
 	return SIZES["hand"] if size_kind == "mini" else SIZES[size_kind]
 
 
+## Shadow offset that points screen-down even when the card is rotated.
+func _shadow_off(d: float) -> Vector2:
+	return Vector2(d, 0) if rotated else Vector2(0, d)
+
+
 func _text_at(font: Font, text: String, pos_top_left: Vector2, fs: int, col: Color, width: float = -1.0, align: int = HORIZONTAL_ALIGNMENT_LEFT, line_h: float = 0.0) -> void:
 	var h := line_h if line_h > 0.0 else float(fs) * 1.1
 	var base_y := pos_top_left.y + h / 2.0 + (font.get_ascent(fs) - font.get_descent(fs)) / 2.0
@@ -167,23 +277,25 @@ func _para(text: String, font: Font, tag: String, fs: int, width: float, max_lin
 	return tp
 
 
+## Resets the shared style box to a plain fill/border (no shadow) and returns it.
+func _sbox(fill: Color, border: Color, bw: int, radius: int, with_center: bool = true) -> StyleBoxFlat:
+	var sb := _sb
+	sb.bg_color = fill
+	sb.draw_center = with_center
+	sb.border_color = border
+	sb.set_border_width_all(bw)
+	sb.set_corner_radius_all(radius)
+	sb.shadow_size = 0
+	sb.shadow_offset = Vector2.ZERO
+	return sb
+
+
 func _ring(col: Color, width: float, rect: Rect2, radius: float) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.draw_center = false
-	sb.border_color = col
-	sb.set_border_width_all(maxi(1, roundi(width)))
-	sb.set_corner_radius_all(maxi(1, roundi(radius)))
-	draw_style_box(sb, rect)
+	draw_style_box(_sbox(Color.TRANSPARENT, col, maxi(1, roundi(width)), maxi(1, roundi(radius)), false), rect)
 
 
 func _round_rect(rect: Rect2, fill: Color, radius: float, border: Color = Color.TRANSPARENT, bw: float = 0.0) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = fill
-	sb.border_color = border
-	if bw > 0.0:
-		sb.set_border_width_all(maxi(1, roundi(bw)))
-	sb.set_corner_radius_all(maxi(1, roundi(radius)))
-	draw_style_box(sb, rect)
+	draw_style_box(_sbox(fill, border, maxi(1, roundi(bw)) if bw > 0.0 else 0, maxi(1, roundi(radius))), rect)
 
 
 func _vgrad(rect: Rect2, top: Color, bottom: Color) -> void:
@@ -194,20 +306,29 @@ func _vgrad(rect: Rect2, top: Color, bottom: Color) -> void:
 # ---------------------------------------------------------------- main draw
 
 func _draw() -> void:
-	var base := _base()
-	_s = maxf(0.2, minf(size.x / base.x, size.y / base.y))
 	if view.is_empty():
+		_s = clampf(minf(size.x, size.y) / 85.0, 0.5, 1.3)
+		_cr = Rect2(Vector2.ZERO, size)
 		_draw_empty()
-	elif view.get("hidden", false):
+		_draw_overlays()
+		return
+	_cr = card_rect()
+	_ps = Vector2(_cr.size.y, _cr.size.x) if rotated else _cr.size
+	_s = maxf(0.2, _ps.x / _base().x)
+	if rotated:
+		draw_set_transform(Vector2(_cr.end.x, _cr.position.y), PI / 2.0, Vector2.ONE)
+	else:
+		draw_set_transform(_cr.position, 0.0, Vector2.ONE)
+	if view.get("hidden", false):
 		_draw_back()
 	else:
 		match size_kind:
-			"power": _draw_power()
-			"trap": _draw_trap()
+			"power", "trap": _draw_power()
 			"back": _draw_back()
 			"hand", "mini": _draw_tall(false)
 			"big": _draw_tall(true)
 			_: _draw_square()
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_overlays()
 
 
@@ -216,18 +337,14 @@ func _accent() -> Color:
 
 
 func _frame(radius: float) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("1d1a18")
-	sb.border_color = _accent()
-	sb.set_border_width_all(maxi(2, roundi(3.0 * _s)))
-	sb.set_corner_radius_all(roundi(radius * _s))
+	var sb := _sbox(Color("1d1a18"), _accent(), maxi(2, roundi(2.8 * _s)), roundi(radius * _s))
 	sb.shadow_color = Color(0, 0, 0, 0.5)
 	sb.shadow_size = roundi((14.0 if (hovered or _self_hover) else 7.0) * _s)
-	sb.shadow_offset = Vector2(0, 3.0 * _s)
-	draw_style_box(sb, Rect2(Vector2.ZERO, size))
+	sb.shadow_offset = _shadow_off(3.0 * _s)
+	draw_style_box(sb, Rect2(Vector2.ZERO, _ps))
 	var inset := 3.0 * _s
-	_vgrad(Rect2(inset, inset, size.x - 2 * inset, size.y - 2 * inset), Color(_accent().darkened(0.7), 0.45), Color(0, 0, 0, 0.45))
-	draw_line(Vector2(radius * _s, 3.5 * _s), Vector2(size.x - radius * _s, 3.5 * _s), Color(UIStyle.GOLD_HI, 0.4), 1.0)
+	_vgrad(Rect2(inset, inset, _ps.x - 2 * inset, _ps.y - 2 * inset), Color(_accent().darkened(0.7), 0.45), Color(0, 0, 0, 0.45))
+	draw_line(Vector2(radius * _s, 3.5 * _s), Vector2(_ps.x - radius * _s, 3.5 * _s), Color(UIStyle.GOLD_HI, 0.4), 1.0)
 
 
 func _art_texture() -> Texture2D:
@@ -336,14 +453,14 @@ func _fit_name(text: String, width: float, fs_max: float, fs_min: float, font: F
 	return fs
 
 
-func _name_plate(rect: Rect2, fs_max: float, reserve_l: float, reserve_r: float) -> void:
+func _name_plate(rect: Rect2, fs_max: float, reserve_l: float, reserve_r: float, fs_min: float = 9.0) -> void:
 	_round_rect(rect, Color(0.102, 0.086, 0.075, 0.94), 4.0 * _s, Color(UIStyle.GOLD, 0.65), maxf(1.0, _s))
 	var acc := _accent()
 	draw_rect(Rect2(rect.position.x + 3 * _s, rect.end.y - 3.0 * _s, rect.size.x - 6 * _s, 2.0 * _s), acc)
 	var font := UIStyle.font_display(600)
 	var avail := rect.size.x - (reserve_l + reserve_r) * _s - 6.0 * _s
 	var nm: String = view["name"]
-	var fs := _fit_name(nm, avail, fs_max, 9.0, font)
+	var fs := _fit_name(nm, avail, fs_max, fs_min, font)
 	var shown := nm
 	if font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > avail:
 		while shown.length() > 3 and font.get_string_size(shown + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > avail:
@@ -423,35 +540,132 @@ func _shield_pts(rect: Rect2) -> PackedVector2Array:
 		Vector2(x + 0.5 * w, y + h), Vector2(x, y + 0.56 * h), Vector2(x, y + 0.12 * h)])
 
 
-func _shield(rect: Rect2, is_atk: bool, value, printed, fs: int) -> void:
-	var top := Color("a8392e") if is_atk else Color("3f7ab5")
-	var bot := Color("5a1c17") if is_atk else Color("1b3a5a")
-	draw_colored_polygon(_shield_pts(rect), Color(UIStyle.GOLD, 0.95))
-	var inner := Rect2(rect.position + Vector2(1.8, 1.8) * _s, rect.size - Vector2(3.6, 3.6) * _s)
-	var pts := _shield_pts(inner)
-	var cols := PackedColorArray()
+func _diamond_pts(rect: Rect2) -> PackedVector2Array:
+	var c := rect.get_center()
+	return PackedVector2Array([Vector2(c.x, rect.position.y), Vector2(rect.end.x, c.y), Vector2(c.x, rect.end.y), Vector2(rect.position.x, c.y)])
+
+
+## Pushes every point away from `c` by `amount` (negative = inward).
+func _grow_pts(pts: PackedVector2Array, c: Vector2, amount: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
 	for p in pts:
-		cols.append(top.lerp(bot, clampf((p.y - inner.position.y) / inner.size.y, 0.0, 1.0)))
-	draw_polygon(pts, cols)
-	var col := Color.WHITE
+		out.append(p + (p - c).normalized() * amount)
+	return out
+
+
+func _closed(pts: PackedVector2Array) -> PackedVector2Array:
+	var o := PackedVector2Array(pts)
+	o.append(pts[0])
+	return o
+
+
+## Largest font size <= fs_max (base px) at which `txt` fits inside the badge's text area.
+func _fit_stat_fs(font: Font, txt: String, fs_max: float, rect: Rect2, diamond: bool) -> int:
+	var fs := maxi(6, roundi(fs_max * _s))
+	while fs > 6:
+		var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var th := float(fs) * 0.74
+		if diamond:
+			# Text box must sit inside the rhombus: tw/w + th/h <= 1 (with a margin for the outline).
+			if tw / rect.size.x + th / rect.size.y <= 0.9:
+				break
+		elif tw <= rect.size.x * 0.76 and th <= rect.size.y * 0.52:
+			break
+		fs -= 1
+	return fs
+
+
+## ATK diamond (gold rim, red gradient) or DEF shield. Shows the live value, or the preview value
+## in a provisional cyan style (dashed ring + "+N" tag) while set_preview() targets this stat.
+func _stat_badge(rect: Rect2, is_atk: bool, fs_max: float) -> void:
+	var value = view.get("atk" if is_atk else "def")
+	var printed = view.get("printed_atk" if is_atk else "printed_def")
+	var previewing := _pv_stat == ("atk" if is_atk else "def")
+	var c := rect.get_center()
+	var top := Color("c9453a") if is_atk else Color("3f7ab5")
+	var bot := Color("4d1713") if is_atk else Color("1b3a5a")
+	if is_atk:
+		var pts := _diamond_pts(rect)
+		# Perpendicular half-distance from centre to an edge, for an even rim.
+		var hw := rect.size.x / 2.0
+		var hh := rect.size.y / 2.0
+		var edge_d := hw * hh / sqrt(hw * hw + hh * hh)
+		var k := 1.0 - (2.4 * _s) / edge_d
+		var inner := PackedVector2Array()
+		for p in pts:
+			inner.append(c + (p - c) * k)
+		draw_colored_polygon(pts, Color(UIStyle.GOLD, 0.98))
+		draw_polygon(inner, PackedColorArray([top.lightened(0.15), top.lerp(bot, 0.45), bot, top.lerp(bot, 0.45)]))
+		# Upper facet highlight + rim glint (reads as cut metal).
+		draw_colored_polygon(PackedVector2Array([inner[0], inner[1], c + Vector2(0, hh * 0.02), inner[3]]), Color(1, 1, 1, 0.09))
+		draw_polyline(PackedVector2Array([pts[3], pts[0], pts[1]]), Color(UIStyle.GOLD_HI, 0.9), maxf(1.0, 0.9 * _s))
+		draw_polyline(_closed(inner), Color(0, 0, 0, 0.35), maxf(1.0, 0.8 * _s))
+	else:
+		draw_colored_polygon(_shield_pts(rect), Color(UIStyle.GOLD, 0.95))
+		var ins := Rect2(rect.position + Vector2(1.8, 1.8) * _s, rect.size - Vector2(3.6, 3.6) * _s)
+		var spts := _shield_pts(ins)
+		var cols := PackedColorArray()
+		for p in spts:
+			cols.append(top.lerp(bot, clampf((p.y - ins.position.y) / ins.size.y, 0.0, 1.0)))
+		draw_polygon(spts, cols)
+	var tcol := Color.WHITE
 	var mod := 0
-	if value != null and printed != null and view.get("zone", "") == "unit":
+	var shown_v = value
+	if previewing:
+		shown_v = _pv_value
+		tcol = Color("eafcff")
+	elif value != null and printed != null and view.get("zone", "") == "unit":
 		if value > printed:
-			col = UIStyle.GOOD
+			tcol = UIStyle.GOOD
 			mod = 1
 		elif value < printed:
-			col = Color("ff8a84")
+			tcol = Color("ff8a84")
 			mod = -1
-	var txt := "?" if value == null else str(value)
-	_text_c(UIStyle.font_display(700), txt, rect.get_center() + Vector2(0, -rect.size.y * 0.04), fs, col, maxf(1.5, 1.8 * _s))
+	var txt := "?" if shown_v == null else str(shown_v)
+	var font := UIStyle.font_display(700)
+	var fs := _fit_stat_fs(font, txt, fs_max, rect, is_atk)
+	_text_c(font, txt, c + Vector2(0, -rect.size.y * (0.0 if is_atk else 0.04)), fs, tcol, maxf(1.5, 1.8 * _s))
 	if mod != 0:
-		var ac := rect.position + Vector2(rect.size.x * 0.5, rect.size.y * 0.1)
-		var a := 3.2 * _s
+		var ac := Vector2(c.x, rect.position.y + rect.size.y * (0.2 if is_atk else 0.1))
+		var a := 3.0 * _s
 		if mod > 0:
 			draw_colored_polygon(PackedVector2Array([ac + Vector2(0, -a), ac + Vector2(a, a * 0.8), ac + Vector2(-a, a * 0.8)]), UIStyle.GOOD)
 		else:
-			ac.y += rect.size.y * 0.82
+			ac.y = rect.position.y + rect.size.y * (0.8 if is_atk else 0.92)
 			draw_colored_polygon(PackedVector2Array([ac + Vector2(0, a), ac + Vector2(a, -a * 0.8), ac + Vector2(-a, -a * 0.8)]), Color("ff8a84"))
+	if previewing:
+		_preview_decor(rect, is_atk)
+
+
+func _preview_decor(rect: Rect2, is_atk: bool) -> void:
+	var c := rect.get_center()
+	var base := _diamond_pts(rect) if is_atk else _shield_pts(rect)
+	var glow := _grow_pts(base, c, 3.4 * _s)
+	var ring := _grow_pts(base, c, 2.2 * _s)
+	draw_polyline(_closed(glow), Color(UIStyle.PREVIEW, 0.32), 3.0 * _s, true)
+	for i in ring.size():
+		draw_dashed_line(ring[i], ring[(i + 1) % ring.size()], UIStyle.PREVIEW, maxf(1.3, 1.7 * _s), 3.2 * _s, true, true)
+	if _pv_bonus == 0:
+		return
+	var up := _pv_bonus > 0
+	var font := UIStyle.font_bold()
+	var fs := _fs(10.0)
+	var minus := "−" if font.has_char(0x2212) else "-"
+	var tag := "%s%d" % ["+" if up else minus, absi(_pv_bonus)]
+	var tw := font.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var pw := tw + 13.0 * _s
+	var ph := 12.5 * _s
+	var pc := Vector2(c.x, rect.position.y - 3.0 * _s)
+	var pr := Rect2(pc - Vector2(pw / 2.0, ph / 2.0), Vector2(pw, ph))
+	_round_rect(pr, Color(0.03, 0.12, 0.16, 0.96), ph / 2.0, UIStyle.PREVIEW, maxf(1.0, _s))
+	var m := Vector2(pr.position.x + ph * 0.55, pc.y)
+	var a := ph * 0.2
+	var tc := UIStyle.GOOD if up else Color("ff8a84")
+	if up:
+		draw_colored_polygon(PackedVector2Array([m + Vector2(0, -a), m + Vector2(a, a), m + Vector2(-a, a)]), tc)
+	else:
+		draw_colored_polygon(PackedVector2Array([m + Vector2(0, a), m + Vector2(a, -a), m + Vector2(-a, -a)]), tc)
+	_text_c(font, tag, Vector2(pr.position.x + pw / 2.0 + 3.0 * _s, pc.y), fs, tc)
 
 
 func _status_list() -> Array:
@@ -476,7 +690,7 @@ func _chips(x0: float, x1: float, y: float, h: float, fs_base: float) -> void:
 	var shown := 0
 	for i in list.size():
 		var e: Dictionary = list[i]
-		var w := font.get_string_size(e["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 11.0 * _s
+		var w := font.get_string_size(e["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + (h * _s * 0.67 + 6.0 * _s if int(e["k"]) != 2 else 8.0 * _s)
 		var remaining := list.size() - i - 1
 		var reserve := (font.get_string_size("+%d" % remaining, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 7.0 * _s) if remaining > 0 else 0.0
 		if x + w + reserve > xmax and i > 0 or shown >= 3:
@@ -494,8 +708,8 @@ func _chip_draw(x: float, y: float, w: float, h: float, text: String, col: Color
 	_round_rect(Rect2(x, y, w, h), Color(col.darkened(0.7), 0.95), h / 2.0, col, maxf(1.0, _s))
 	var tx := x + w / 2.0
 	if kind != 2:
-		var m := Vector2(x + h * 0.55 + 1.0 * _s, y + h / 2.0)
-		var a := h * 0.2
+		var m := Vector2(x + h * 0.4 + 1.0 * _s, y + h / 2.0)
+		var a := h * 0.17
 		var lc := col.lightened(0.45)
 		if kind > 0:
 			draw_colored_polygon(PackedVector2Array([m + Vector2(0, -a), m + Vector2(a, a), m + Vector2(-a, a)]), lc)
@@ -503,7 +717,7 @@ func _chip_draw(x: float, y: float, w: float, h: float, text: String, col: Color
 			draw_colored_polygon(PackedVector2Array([m + Vector2(0, a), m + Vector2(a, -a), m + Vector2(-a, -a)]), lc)
 		else:
 			draw_colored_polygon(PackedVector2Array([m + Vector2(0, -a * 1.2), m + Vector2(a, 0), m + Vector2(0, a * 1.2), m + Vector2(-a, 0)]), lc)
-		tx = x + w / 2.0 + 3.0 * _s
+		tx = x + h * 0.67 + 2.0 * _s + (w - h * 0.67 - 2.0 * _s) / 2.0
 	_text_c(font, text, Vector2(tx, y + h / 2.0), fs, col.lightened(0.45))
 
 
@@ -525,22 +739,24 @@ func _stance_tab(rect: Rect2) -> void:
 
 func _protected_icon(c: Vector2, r: float) -> void:
 	if view.get("zone", "") == "unit" and view.get("protected", false):
-		draw_colored_polygon(_shield_pts(Rect2(c - Vector2(r * 0.8, r), Vector2(r * 1.6, r * 2.0))), Color(0.85, 0.92, 1.0, 0.92))
-		draw_polyline(PackedVector2Array(_shield_pts(Rect2(c - Vector2(r * 0.8, r), Vector2(r * 1.6, r * 2.0)))), Color(0.1, 0.2, 0.4), maxf(1.0, _s))
+		var pts := _shield_pts(Rect2(c - Vector2(r * 0.8, r), Vector2(r * 1.6, r * 2.0)))
+		draw_colored_polygon(pts, Color(0.85, 0.92, 1.0, 0.92))
+		draw_polyline(_closed(pts), Color(0.1, 0.2, 0.4), maxf(1.0, _s))
 
 
+## Damage-type pip on the art. Reads view.type at draw time so type changes show immediately.
 func _type_pip(c: Vector2, r: float) -> void:
-	if not view.has("type") or view.get("type", "") == "":
+	if not view.has("type"):
 		return
-	var col := UIStyle.type_color(view["type"])
-	draw_colored_polygon(_poly(c, r * 1.25, 4, PI / 4.0), Color(0, 0, 0, 0.6))
-	draw_colored_polygon(_poly(c, r, 4, PI / 4.0), col)
+	var t = view.get("type")
+	TypeIcons.draw_pip(self, "" if t == null else str(t), c, r)
 
 
 func _acted_marks(corner: Vector2) -> void:
 	if view.get("zone", "") == "unit" and view.get("attacked", false):
-		draw_circle(corner, 3.2 * _s, Color("9a9a9a"))
-		draw_circle(corner, 3.2 * _s, Color(0, 0, 0, 0.6), false, maxf(1.0, _s))
+		draw_circle(corner, 4.0 * _s, Color("9a9a9a"))
+		draw_arc(corner, 4.0 * _s, 0.0, TAU, 14, Color(0, 0, 0, 0.65), maxf(1.0, _s))
+		draw_line(corner + Vector2(-2.2, 2.2) * _s, corner + Vector2(2.2, -2.2) * _s, Color(0, 0, 0, 0.7), maxf(1.0, 1.2 * _s))
 
 
 func _set_ribbon(rect: Rect2) -> void:
@@ -551,90 +767,74 @@ func _set_ribbon(rect: Rect2) -> void:
 
 # ---------------------------------------------------------------- layouts
 
+## Compact 85x128 field unit card (no rules-text well).
 func _draw_square() -> void:
-	_frame(6.0)
-	_draw_art(_r(5, 5, 118, 66))
-	_type_pip(_p(114, 14), 4.0 * _s)
-	_protected_icon(_p(112, 30), 6.0 * _s)
-	_name_plate(_r(5, 60, 118, 18), 12.0, 14.0 if String(view.get("category", "")) in UNIT_CATS and view.get("zone", "") == "unit" else 0.0, 20.0 if view.get("zone", "") == "unit" and view.has("stance") else 0.0)
-	_stance_tab(_r(103, 62, 18, 14))
 	var is_unit: bool = String(view.get("category", "")) in UNIT_CATS
-	_chips(36, 92, 83, 13, 9.0)
+	var in_play: bool = view.get("zone", "") == "unit"
+	_frame(6.0)
+	_draw_art(_r(4, 4, 77, 54))
+	_type_pip(_p(69, 16), 7.0 * _s)
+	_protected_icon(_p(70, 36), 5.5 * _s)
+	_acted_marks(_p(11, 34))
+	_set_ribbon(_r(18, 35, 49, 12))
+	var has_tab: bool = in_play and view.has("stance")
+	_name_plate(_r(4, 48, 77, 16), 10.5, 0.0, 15.0 if has_tab else 0.0, 7.5)
+	if has_tab:
+		_stance_tab(_r(65, 50, 14, 11))
+	_chips(4, 81, 67, 11, 8.0)
 	if is_unit:
-		_shield(_r(2, 90, 31, 36), true, view.get("atk"), view.get("printed_atk"), _fs(18))
-		_shield(_r(95, 90, 31, 36), false, view.get("def"), view.get("printed_def"), _fs(18))
-	_gem(_p(14, 14), 11.0 * _s, _fs(14))
-	_acted_marks(_p(120, 8))
-	_set_ribbon(_r(40, 99, 48, 14))
+		_stat_badge(_r(2, 80, 42, 46), true, 19.0)
+		_stat_badge(_r(46, 82, 37, 42), false, 19.0)
+	_gem(_p(13, 13), 9.0 * _s, _fs(12))
 
 
+## Power / trap card: art, name, short rules text, chips. Same 85x128 portrait.
 func _draw_power() -> void:
 	_frame(6.0)
 	_draw_art(_r(4, 4, 77, 56))
-	_name_plate(_r(4, 50, 77, 20), 11.0, 0.0, 0.0)
-	_gem(_p(14, 14), 10.0 * _s, _fs(13))
+	_name_plate(_r(4, 50, 77, 18), 10.5, 0.0, 0.0, 7.5)
+	_gem(_p(13, 13), 9.0 * _s, _fs(12))
+	_set_ribbon(_r(18, 36, 49, 12))
 	var font := UIStyle.font_body()
 	var fs := _fs(9.5)
 	var txt: String = view.get("text", "")
 	if txt != "":
 		var tp := _para(txt, font, "b", fs, 77.0 * _s, 3)
-		tp.draw(get_canvas_item(), _p(4, 74), Color(UIStyle.TEXT, 0.9))
-	_chips(4, 81, 111, 12, 9.0)
-
-
-func _draw_trap() -> void:
-	_frame(6.0)
-	_draw_art(_r(4, 4, 54, 77))
-	_gem(_p(14, 14), 10.0 * _s, _fs(13))
-	var font := UIStyle.font_display(600)
-	var nm: String = view["name"]
-	var fs := _fs(11)
-	var tp := _para(nm, font, "d6", fs, 62.0 * _s, 3)
-	tp.draw_outline(get_canvas_item(), _p(62, 8), 2, Color(0, 0, 0, 0.5))
-	tp.draw(get_canvas_item(), _p(62, 8), UIStyle.TEXT)
-	var cat: String = UIStyle.CATEGORY_NAMES.get(view.get("category", "trap"), "")
-	draw_rect(_r(62, 56, 62, 2), _accent())
-	_text_at(UIStyle.font_italic(), cat, _p(62, 60), _fs(10), UIStyle.MUTED, 62.0 * _s, HORIZONTAL_ALIGNMENT_LEFT, 12.0 * _s)
-	_chips(62, 124, 70, 11, 8.5)
-	_set_ribbon(_r(8, 66, 46, 13))
+		tp.draw(get_canvas_item(), _p(4, 72), Color(UIStyle.TEXT, 0.9))
+	_chips(4, 81, 112, 12, 8.5)
 
 
 func _draw_tall(big: bool) -> void:
 	var is_unit: bool = String(view.get("category", "")) in UNIT_CATS
 	var g := {}
 	if big:
-		g = {"art": [10, 10, 220, 140], "plate": [10, 128, 220, 34], "line": 166.0, "text": [12, 190, 216, 70 if is_unit else 128],
-			"chip_y": 262.0, "chip_x": [66.0, 174.0], "atk": [6, 272, 52, 58], "def": [182, 272, 52, 58], "gem": [26, 26, 20],
-			"f_name": 20.0, "f_line": 13.0, "f_text": 15.0, "f_chip": 12.0, "f_stat": 32.0, "f_gem": 24.0, "chip_h": 17.0, "chip_y_nu": 306.0}
+		g = {"art": [10, 10, 204, 122], "plate": [10, 112, 204, 32], "line": 148.0, "text": [12, 170, 200, 72 if is_unit else 116],
+			"chip_y": 245.0, "chip_x": [12.0, 212.0], "atk": [6, 262, 76, 68], "def": [146, 264, 72, 64], "gem": [28, 28, 20],
+			"f_name": 19.0, "f_line": 13.0, "f_text": 15.0, "f_chip": 12.0, "f_stat": 36.0, "f_gem": 24.0, "chip_h": 17.0, "chip_y_nu": 292.0, "pip": 11.0}
 	else:
-		# Text well ends (y 140 / 158) above the shields (y 142) and the non-unit chip row (y 162),
-		# so ATK/DEF never overlap effect text. Long text is truncated; the details panel shows it all.
-		g = {"art": [6, 6, 116, 70], "plate": [6, 64, 116, 22], "line": 89.0, "text": [6, 104, 116, 36 if is_unit else 54],
-			"chip_y": 148.0, "chip_x": [38.0, 90.0], "atk": [3, 142, 34, 38], "def": [91, 142, 34, 38], "gem": [15, 15, 14],
-			"f_name": 13.0, "f_line": 11.0, "f_text": 12.0, "f_chip": 10.0, "f_stat": 20.0, "f_gem": 16.0, "chip_h": 14.0, "chip_y_nu": 162.0}
+		g = {"art": [6, 6, 108, 66], "plate": [6, 60, 108, 22], "line": 84.0, "text": [6, 99, 108, 31 if is_unit else 56],
+			"chip_y": 132.0, "chip_x": [6.0, 114.0], "atk": [3, 141, 41, 36], "def": [77, 143, 39, 33], "gem": [15, 15, 13],
+			"f_name": 12.5, "f_line": 11.0, "f_text": 12.0, "f_chip": 10.0, "f_stat": 21.0, "f_gem": 16.0, "chip_h": 12.0, "chip_y_nu": 159.0, "pip": 7.0}
 	_frame(8.0)
 	var a: Array = g["art"]
 	_draw_art(_r(a[0], a[1], a[2], a[3]))
-	_type_pip(_p(a[0] + a[2] - 9, a[1] + 9), 4.0 * _s if not big else 6.0 * _s)
-	_protected_icon(_p(a[0] + a[2] - 10, a[1] + 28), 7.0 * _s)
+	_type_pip(_p(a[0] + a[2] - 11.0 * (_pipk(big)), a[1] + 11.0 * _pipk(big)), float(g["pip"]) * _s)
+	_protected_icon(_p(a[0] + a[2] - 11.0 * _pipk(big), a[1] + 30.0 * _pipk(big)), 7.0 * _s)
 	var pl: Array = g["plate"]
 	var has_tab: bool = view.get("zone", "") == "unit" and view.has("stance")
-	_name_plate(_r(pl[0], pl[1], pl[2], pl[3]), g["f_name"], 20.0 if not big else 30.0, 24.0 if has_tab else 0.0)
+	_name_plate(_r(pl[0], pl[1], pl[2], pl[3]), g["f_name"], 0.0, 26.0 if (has_tab and big) else (22.0 if has_tab else 0.0))
 	if has_tab:
-		_stance_tab(_r(pl[0] + pl[2] - 22, pl[1] + 3, 18, pl[3] - 6))
+		_stance_tab(_r(pl[0] + pl[2] - (26 if big else 22), pl[1] + 3, 22 if big else 18, pl[3] - 6))
 	# Type / race line.
 	var line_fs := _fs(g["f_line"])
 	var ly: float = g["line"]
 	var lx: float = float(pl[0]) + 4.0
+	var lh := float(g["f_line"] + 3) * _s
 	if is_unit:
-		var race: String = view.get("race", "")
-		var typ: String = view.get("type", "")
-		var col := UIStyle.type_color(typ)
-		draw_rect(_r(lx, ly + 3, 8 if not big else 11, 8 if not big else 11), col)
-		_text_at(UIStyle.font_italic(), "%s · %s" % [race if race != "" else "No race", typ if typ != "" else "No type"], _p(lx + (11 if not big else 15), ly), line_fs, UIStyle.MUTED, -1.0, HORIZONTAL_ALIGNMENT_LEFT, float(g["f_line"] + 3) * _s)
+		_race_type_line(Vector2(lx * _s, ly * _s), lh, line_fs)
 	else:
-		draw_rect(_r(lx, ly + 3, 8 if not big else 11, 8 if not big else 11), _accent())
-		_text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(view.get("category", ""), ""), _p(lx + (11 if not big else 15), ly), line_fs, UIStyle.MUTED, -1.0, HORIZONTAL_ALIGNMENT_LEFT, float(g["f_line"] + 3) * _s)
+		_round_rect(_r(lx, ly + 3, 8 if not big else 11, 8 if not big else 11), _accent(), 2.0 * _s)
+		_text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(view.get("category", ""), ""), _p(lx + (11 if not big else 15), ly), line_fs, UIStyle.MUTED, -1.0, HORIZONTAL_ALIGNMENT_LEFT, lh)
 	# Rules text well.
 	var t: Array = g["text"]
 	var rules: String = view.get("text", "")
@@ -646,18 +846,44 @@ func _draw_tall(big: bool) -> void:
 	if rules != "":
 		var tp := _para(rules, UIStyle.font_body(), "b", tfs, (float(t[2]) - 8.0) * _s, lines)
 		tp.draw(get_canvas_item(), _p(t[0] + 4, t[1] + 2), UIStyle.TEXT)
-	# Chips + shields + gem.
+	# Chips + stat badges + gem.
 	if is_unit:
 		var at: Array = g["atk"]
 		var df: Array = g["def"]
 		_chips(g["chip_x"][0], g["chip_x"][1], g["chip_y"], g["chip_h"], g["f_chip"])
-		_shield(_r(at[0], at[1], at[2], at[3]), true, view.get("atk"), view.get("printed_atk"), _fs(g["f_stat"]))
-		_shield(_r(df[0], df[1], df[2], df[3]), false, view.get("def"), view.get("printed_def"), _fs(g["f_stat"]))
+		_stat_badge(_r(at[0], at[1], at[2], at[3]), true, g["f_stat"])
+		_stat_badge(_r(df[0], df[1], df[2], df[3]), false, g["f_stat"])
 	else:
-		_chips(8, 120 if not big else 230, g["chip_y_nu"], g["chip_h"], g["f_chip"])
+		_chips(g["chip_x"][0], g["chip_x"][1], g["chip_y_nu"], g["chip_h"], g["f_chip"])
 	var gm: Array = g["gem"]
 	_gem(_p(gm[0], gm[1]), float(gm[2]) * _s, _fs(g["f_gem"]))
 	_set_ribbon(_r(pl[0] + pl[2] - 52, pl[1] - 18 if not big else pl[1] - 24, 44, 14))
+
+
+func _pipk(big: bool) -> float:
+	return 1.9 if big else 1.0
+
+
+## "Race · [icon] Type": race text and damage Type stay separate; the icon is read from view.type now.
+func _race_type_line(pos: Vector2, line_h: float, fs: int) -> void:
+	var font := UIStyle.font_italic()
+	var rv = view.get("race")
+	var tv = view.get("type")
+	var race: String = "No race" if (rv == null or str(rv) == "") else str(rv)
+	var typ: String = "" if tv == null else str(tv)
+	var x := pos.x
+	var cy := pos.y + line_h / 2.0
+	var col := UIStyle.MUTED
+	var rw := font.get_string_size(race, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	_text_at(font, race, pos, fs, col, -1.0, HORIZONTAL_ALIGNMENT_LEFT, line_h)
+	x += rw
+	var sep := "  ·  "
+	_text_at(font, sep, Vector2(x, pos.y), fs, Color(col, 0.6), -1.0, HORIZONTAL_ALIGNMENT_LEFT, line_h)
+	x += font.get_string_size(sep, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var ir := line_h * 0.46
+	TypeIcons.draw_icon(self, typ, Vector2(x + ir, cy), ir)
+	x += ir * 2.0 + 3.0 * _s
+	_text_at(font, typ if typ != "" else "No type", Vector2(x, pos.y), fs, col, -1.0, HORIZONTAL_ALIGNMENT_LEFT, line_h)
 
 
 func _draw_empty() -> void:
@@ -679,21 +905,17 @@ func _draw_empty() -> void:
 
 
 func _draw_back() -> void:
-	var rad := 8.0 if size_kind in ["hand", "big", "mini", "back"] else 6.0
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("1d1630")
-	sb.border_color = Color("6e5a9a")
-	sb.set_border_width_all(maxi(2, roundi(3.0 * _s)))
-	sb.set_corner_radius_all(roundi(rad * _s))
+	var rad := 8.0 if size_kind in BIG_KINDS else 6.0
+	var sb := _sbox(Color("1d1630"), Color("6e5a9a"), maxi(2, roundi(2.8 * _s)), roundi(rad * _s))
 	sb.shadow_color = Color(0, 0, 0, 0.5)
 	sb.shadow_size = roundi(6.0 * _s)
-	sb.shadow_offset = Vector2(0, 3.0 * _s)
-	draw_style_box(sb, Rect2(Vector2.ZERO, size))
-	var inset := 6.0 * _s
-	var inner := Rect2(inset, inset, size.x - 2 * inset, size.y - 2 * inset)
+	sb.shadow_offset = _shadow_off(3.0 * _s)
+	draw_style_box(sb, Rect2(Vector2.ZERO, _ps))
+	var inset := 5.0 * _s
+	var inner := Rect2(inset, inset, _ps.x - 2 * inset, _ps.y - 2 * inset)
 	_vgrad(inner, Color("2a2050"), Color("120c22"))
 	draw_rect(inner, Color(UIStyle.GOLD, 0.35), false, maxf(1.0, _s))
-	var c := size / 2.0
+	var c := _ps / 2.0
 	var r := minf(inner.size.x, inner.size.y) * 0.34
 	var gold := Color(UIStyle.GOLD, 0.7)
 	var w := maxf(1.0, 1.4 * _s)
@@ -714,21 +936,27 @@ func _draw_back() -> void:
 			draw_line(p0, c + d * (r0 + 3.0 * _s), Color(UIStyle.GOLD, 0.35), w)
 
 
+# ---------------------------------------------------------------- overlays (screen space, follow the drawn card rect)
+
 func _draw_overlays() -> void:
-	var rad := (8.0 if size_kind in ["hand", "big", "mini", "back"] else 6.0) * _s
-	var rect := Rect2(Vector2.ZERO, size)
+	var rect := _cr
+	var rad := (8.0 if size_kind in BIG_KINDS else 6.0) * _s
 	if fx_flash > 0.001:
 		_round_rect(rect, Color(1, 1, 1, clampf(fx_flash, 0.0, 1.0) * 0.75), rad)
 	if fx_glow.a > 0.001:
 		_round_rect(rect, Color(fx_glow, fx_glow.a * 0.28), rad)
 		_ring(Color(fx_glow, fx_glow.a), 3.0 * _s, rect, rad)
 		_ring(Color(fx_glow, fx_glow.a * 0.35), 3.0 * _s, rect.grow(2.5 * _s), rad + 2.0 * _s)
+	if _is_ready:
+		_ring(Color(UIStyle.READY, 0.22), 6.0 * _s, rect.grow(3.0 * _s), rad + 3.0 * _s)
+		_ring(Color(UIStyle.READY, 0.95), 2.4 * _s, rect, rad)
 	if hovered or _self_hover:
 		_ring(Color(UIStyle.HOVER, 0.9), 2.0 * _s, rect, rad)
 		_ring(Color(UIStyle.HOVER, 0.28), 3.0 * _s, rect.grow(2.5 * _s), rad + 2.0 * _s)
 	if selected:
-		_ring(Color(UIStyle.SELECT, 0.35), 4.0 * _s, rect.grow(3.0 * _s), rad + 3.0 * _s)
-		_ring(UIStyle.SELECT, 3.0 * _s, rect, rad)
+		_ring(Color(UIStyle.SELECT, 0.3), 5.0 * _s, rect.grow(3.5 * _s), rad + 3.5 * _s)
+		_ring(UIStyle.SELECT, 3.6 * _s, rect, rad)
+		_corner_brackets(rect.grow(5.5 * _s), 9.0 * _s, UIStyle.SELECT.lightened(0.3), 2.4 * _s)
 	if highlighted:
 		var a := 1.0
 		if not UIStyle.reduce_motion:
@@ -736,3 +964,40 @@ func _draw_overlays() -> void:
 		_round_rect(rect, Color(UIStyle.TARGET, 0.07 + 0.12 * a), rad)
 		_ring(Color(UIStyle.TARGET, 0.35 * a), 5.0 * _s, rect.grow(3.5 * _s), rad + 3.0 * _s)
 		_ring(Color(UIStyle.TARGET, a), 3.5 * _s, rect, rad)
+	# Badges last so combined states (ready + selected, etc.) stay legible.
+	if _is_ready:
+		_ready_badge(rect)
+	if order_no > 0:
+		_order_badge(rect)
+
+
+## Emerald circle with a double up-chevron on the top edge: "can act now" without relying on colour.
+func _ready_badge(rect: Rect2) -> void:
+	var rr := 7.5 * _s
+	var c := Vector2(rect.get_center().x, rect.position.y + 3.0 * _s)
+	draw_circle(c, rr + 1.6 * _s, Color(0.02, 0.1, 0.08, 0.92))
+	draw_circle(c, rr, UIStyle.READY.darkened(0.2))
+	draw_arc(c, rr, 0.0, TAU, 20, UIStyle.READY.lightened(0.5), maxf(1.0, 1.2 * _s), true)
+	var w := rr * 0.48
+	for y in [c.y + rr * 0.34, c.y - rr * 0.14]:
+		draw_polyline(PackedVector2Array([Vector2(c.x - w, y), Vector2(c.x, y - w * 0.85), Vector2(c.x + w, y)]), Color.WHITE, maxf(1.4, 1.7 * _s), true)
+
+
+func _corner_brackets(r: Rect2, len_px: float, col: Color, w: float) -> void:
+	var xs := [r.position.x, r.end.x]
+	var ys := [r.position.y, r.end.y]
+	for i in 2:
+		for j in 2:
+			var p := Vector2(xs[i], ys[j])
+			var dx := len_px if i == 0 else -len_px
+			var dy := len_px if j == 0 else -len_px
+			draw_polyline(PackedVector2Array([p + Vector2(dx, 0), p, p + Vector2(0, dy)]), col, w)
+
+
+func _order_badge(rect: Rect2) -> void:
+	var rr := 8.5 * _s
+	var c := Vector2(rect.end.x - 3.0 * _s, rect.position.y + 3.0 * _s)
+	draw_circle(c, rr + 1.6 * _s, Color(0.04, 0.03, 0.03, 0.95))
+	draw_circle(c, rr, UIStyle.SELECT.darkened(0.15))
+	draw_arc(c, rr, 0.0, TAU, 20, Color.WHITE, maxf(1.0, 1.3 * _s), true)
+	_text_c(UIStyle.font_display(700), str(order_no), c, _fs(11.0 if order_no < 10 else 8.5), Color.WHITE, 1.0)

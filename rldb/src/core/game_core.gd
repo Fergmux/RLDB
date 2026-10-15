@@ -46,7 +46,7 @@ func _new_player(index: int) -> Dictionary:
 	powers.resize(POWER_SLOTS)
 	powers.fill(-1)
 	return {
-		"index": index, "hp": START_HP, "ap": 0, "ap_next": [], "delayed": [],
+		"index": index, "hp": START_HP, "ap": 0, "ap_start": 0, "ap_peak": 0, "ap_next": [], "delayed": [],
 		"units": units, "backrow": backrow, "powers": powers,
 		"hand": [], "draw": [], "spent": [], "exhaust": [], "extra": [],
 		"name": "Player %d" % (index + 1),
@@ -265,6 +265,14 @@ func card_log(uid: int, template: String) -> void:
 		add_log(pub)
 	else:
 		add_log(pub, {cards[uid]["owner"]: named})
+
+
+## Whether every player may see this card's identity right now (field, resolving, face-up set).
+func is_public_card(uid: int) -> bool:
+	if not cards.has(uid):
+		return false
+	var z: String = cards[uid]["zone"]
+	return z in ["unit", "power", "limbo"] or (z == "backrow" and is_face_up(uid))
 
 
 func is_face_up(uid: int) -> bool:
@@ -564,6 +572,7 @@ func change_ap(p: int, amount: int, reason: String) -> void:
 	if amount == 0:
 		return
 	players[p]["ap"] = maxi(players[p]["ap"] + amount, 0)
+	players[p]["ap_peak"] = maxi(players[p].get("ap_peak", 0), players[p]["ap"])
 	add_log("%s %s %d AP%s (AP %d)." % [pname(p), "gains" if amount > 0 else "loses", absi(amount), reason, players[p]["ap"]])
 	add_fx({"k": "ap", "p": p, "d": amount})
 

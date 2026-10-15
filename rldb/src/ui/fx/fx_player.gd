@@ -137,6 +137,13 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			turn_in_batch = true
 	var fast := UIStyle.reduce_motion
 	for e in events:
+		# F02-13: each public event's sound starts with its animation (Sfx rate-limits bursts).
+		var snd := Sfx.for_fx(e, screen.me())
+		if snd != "":
+			var st0 := maxf(t, attack_end) if e["k"] == "attack" else (t + 0.2 if e["k"] == "game_over" else t)
+			sched.append([st0, Sfx.play.bind(snd, 0.0, 0.04)])
+			if e["k"] == "attack" and not e.get("to", {}).get("direct", false):
+				sched.append([st0 + (0.12 if fast else 0.26), Sfx.play.bind("impact", 0.0, 0.04)])
 		match String(e["k"]):
 			"attack":
 				var st := maxf(t, attack_end)
@@ -413,11 +420,12 @@ func _destroy(at: Dictionary, prev_mv: Dictionary) -> void:
 	_burst("ember", rect.get_center(), Color("ff8a3a"), 8, 50.0, 0.5)
 	if prev_view == null:
 		return
-	var g := CardWidget.new().setup(prev_view, ZONE_KIND[zone])
+	# The ghost is the same 2:3 card, turned like it was (Defense units, Trap/Spell zone).
+	var rot: bool = zone == "backrow" or (zone == "unit" and String(prev_view.get("stance", "atk")) == "def")
+	var g := CardWidget.new().setup(prev_view, ZONE_KIND[zone], "", rot)
 	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	g.auto_hover = false
-	g.size = rect.size
-	g.position = _fx_pos(rect.position)
+	g.position = _fx_pos(rect.get_center() - g.size / 2.0)
 	_add_node(g)
 	var tw := _tw()
 	if UIStyle.reduce_motion:

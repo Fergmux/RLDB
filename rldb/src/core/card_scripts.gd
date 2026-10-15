@@ -119,6 +119,71 @@ static func tag_team(ops: Array) -> Array:
 	return [{"op": "require", "cond": {"other_in_column": true}}] + ops
 
 
+## Short on-card button labels for activated abilities (F02-04). The full label stays in
+## the card details. Unlisted labels fall back to a derived "Apply <Status>" / prefix form.
+const SHORT_LABELS := {
+	"Pay 2 AP: summon a unit from your Spent in this column": "Revive (2 AP)",
+	"Declare a Type for all Mage units": "Declare Type",
+	"Apply 6 Burn to a unit": "Apply Burn",
+	"Apply 1 Pierce to a unit": "Apply Pierce",
+	"Lose 10 HP: +10 ATK or destroy a face-down card": "Blood Price",
+	"Exhaust this unit: opponent loses 10 HP x Eternal": "Eternal Strike",
+	"Pay 1 AP: destroy a Trap with Reveal": "Break Trap",
+	"Apply 1 Paralyse and 4 Burn to a unit in this column": "Paralyse + Burn",
+	"Apply 4 Burn to a unit in this column": "Apply Burn",
+	"Apply 1 Pierce to this unit": "Gain Pierce",
+	"Apply 1 Cleanse to this unit or an adjacent unit": "Apply Cleanse",
+	"Exhaust this unit: Fusion Summon (Field and/or Spent)": "Fusion (Exhaust)",
+	"Destroy this unit: Fusion Summon (Field)": "Fusion (Destroy)",
+	"Fusion Summon (Field)": "Fusion Summon",
+	"Pay 1 AP: Fusion Summon (Field)": "Fusion (1 AP)",
+	"Apply 1 Nimble to this unit": "Gain Nimble",
+	"Apply 4 Poison to a unit in this column": "Apply Poison",
+	"Apply 1 Infiltrate to a unit": "Apply Infiltrate",
+	"Change this unit's Type (Water/Fire/Earth/Lightning)": "Change Type",
+	"Apply 1 Curse to a unit with the same Type": "Apply Curse",
+	"Apply 1 Paralyse to a unit in this column": "Apply Paralyse",
+	"Your opponent's units lose 4 ATK": "Weaken Foes",
+	"Lose 2 HP: apply Reveal to a face-down card": "Reveal (2 HP)",
+	"Apply 1 Paralyse to a unit": "Apply Paralyse",
+	"Apply 1 Retain to a card in your Hand": "Apply Retain",
+	"Exhaust a unit from your Field: destroy a unit": "Exhaust & Destroy",
+	"Gain 4 HP or your opponent loses 4 HP": "Heal or Drain",
+	"Send a card from Hand to Spent, draw 1": "Cycle a Card",
+	"Move one of your units to any free zone": "Reposition",
+	"Apply 10 Burn to all units": "Burn All",
+	"Apply 3 Poison to a unit": "Apply Poison",
+	"Apply 3 Medic to an adjacent unit": "Apply Medic",
+	"Change Type (Physical/Heavenly/Necrotic)": "Change Type",
+	"Apply 1 Nimble to all your units": "Nimble All",
+	"Apply 1 Blind to all opponent's units": "Blind Foes",
+	"Pay 1 AP: gain 10 HP": "Heal 10 (1 AP)",
+	"Exhaust a Warrior from Spent: +1 Eternal and +1 AP": "Exhaust Warrior",
+	"Apply 10 Burn, 4 Poison or 1 Curse to a unit": "Afflict",
+	"Apply Reveal to a face-down card": "Apply Reveal",
+	"Apply 1 Debilitate to a unit in this column": "Apply Debilitate",
+	"Draw a card, then send a card from Hand to Spent": "Draw & Discard",
+	"Apply 1 Debilitate to a unit": "Apply Debilitate",
+	"Apply 1 Infiltrate to this unit": "Gain Infiltrate",
+	"Lose 10 HP: destroy a unit with lower ATK": "Execute (10 HP)",
+	"Apply 2 Medic to adjacent units": "Medic Adjacent",
+}
+
+
+static func short_label(label: String) -> String:
+	if SHORT_LABELS.has(label):
+		return SHORT_LABELS[label]
+	var re := RegEx.new()
+	re.compile("^Apply [0-9]+ ([A-Za-z]+) to ")
+	var m := re.search(label)
+	if m != null:
+		return "Apply " + m.get_string(1)
+	if label.length() <= 18:
+		return label
+	var head := label.split(":")[0]
+	return head if head.length() <= 18 else head.substr(0, 17) + "…"
+
+
 const COL_OTHER := {"kind": "unit", "side": "self", "column": true, "not_self": true}
 const GOD_SUMMON := [{"op": "status", "target": "self", "s": "eternal", "n": 1}, {"op": "status", "target": "self", "s": "cleanse", "n": 3}]
 const GOD_DESTROY := [{"op": "cost_perm", "target": "self", "n": 1}]

@@ -43,9 +43,12 @@ static func card_view(m: MatchEngine, uid: int, viewer: int) -> Dictionary:
 		"cost_kind": df["cost_kind"], "cost_text": m.cost_text(uid), "cost": m.current_cost(uid),
 		"printed_cost": df["cost"], "zone": inst["zone"], "slot": inst["slot"], "owner": inst["owner"], "ctl": inst["ctl"],
 		"face_up": m.is_face_up(uid), "statuses": inst["st"].duplicate(), "runes": inst["runes"],
-		"text": _rules_text(df), "support": CardScripts.support_status(df["id"]), "art": df["art"],
+		"text": _rules_text(df), "text_parts": rules_parts(df), "support": CardScripts.support_status(df["id"]), "art": df["art"],
 		"keywords": df["keywords"],
 	}
+	var abs: Array = m.script_of(uid).get("abilities", [])
+	if not abs.is_empty():
+		v["abilities"] = ability_views(abs)
 	if m.is_unit(uid):
 		v["race"] = m.unit_race(uid)
 		v["type"] = m.unit_type(uid)
@@ -71,25 +74,46 @@ static func card_view(m: MatchEngine, uid: int, viewer: int) -> Dictionary:
 
 static func _rules_text(df: Dictionary) -> String:
 	var lines := []
-	if df["condition"] != "":
-		lines.append(("Materials: " if df["category"] == "fusion" else ("Activates: " if df["category"] == "trap" else "Condition: ")) + df["condition"])
-	if df["on_summon"] != "":
-		var prefix := "On Summon: "
-		match df["category"]:
-			"spell": prefix = "Effect: "
-			"trap": prefix = "Effect: "
-		lines.append(prefix + df["on_summon"])
-	if df["on_field"] != "":
-		lines.append(("Effect: " if df["category"] == "power" else "On Field: ") + df["on_field"])
-	if df["on_destruction"] != "":
-		lines.append("On Destruction: " + df["on_destruction"])
+	for part in rules_parts(df):
+		lines.append("%s: %s" % [part["k"], part["t"]])
 	return "\n".join(lines)
+
+
+## Rules text split by timing (F02-08): [{"k": "On Summon", "t": "..."}, ...] in card order.
+static func rules_parts(df: Dictionary) -> Array:
+	var out := []
+	if df["condition"] != "":
+		out.append({"k": "Materials" if df["category"] == "fusion" else ("Activates" if df["category"] == "trap" else "Condition"), "t": df["condition"]})
+	if df["on_summon"] != "":
+		out.append({"k": "Effect" if df["category"] in ["spell", "trap"] else "On Summon", "t": df["on_summon"]})
+	if df["on_field"] != "":
+		out.append({"k": "Effect" if df["category"] == "power" else "On Field", "t": df["on_field"]})
+	if df["on_destruction"] != "":
+		out.append({"k": "On Destruction", "t": df["on_destruction"]})
+	return out
+
+
+## Activated abilities with their short button label and full description (F02-04).
+static func ability_views(abs: Array) -> Array:
+	var shorts := []
+	for ab in abs:
+		shorts.append(CardScripts.short_label(String(ab["label"])))
+	var out := []
+	for i in abs.size():
+		var sh: String = shorts[i]
+		if shorts.count(sh) > 1:
+			sh = "%s %d" % [sh, shorts.slice(0, i + 1).count(shorts[i])]
+		var cost: Dictionary = abs[i].get("cost", {})
+		out.append({"label": String(abs[i]["label"]), "short": sh, "opt": abs[i].get("opt", false),
+			"ap": int(cost.get("ap", 0)), "hp": int(cost.get("hp", 0))})
+	return out
 
 
 static func _player_view(m: MatchEngine, p: int, viewer: int) -> Dictionary:
 	var pl: Dictionary = m.players[p]
 	var v := {
 		"name": pl["name"], "hp": pl["hp"], "ap": pl["ap"],
+		"ap_start": pl.get("ap_start", pl["ap"]), "ap_peak": pl.get("ap_peak", pl["ap"]),
 		"counts": {"hand": pl["hand"].size(), "draw": pl["draw"].size(), "spent": pl["spent"].size(),
 			"exhaust": pl["exhaust"].size(), "extra": pl["extra"].size()},
 		"units": [], "backrow": [], "powers": [],
@@ -119,6 +143,8 @@ static func _pending_view(m: MatchEngine, viewer: int) -> Dictionary:
 	for i in pd["options"].size():
 		var o: Dictionary = pd["options"][i]
 		var ov := {"i": i, "label": o["label"]}
+		if o.has("preview"):
+			ov["preview"] = o["preview"]
 		if o.has("slot"):
 			ov["slot"] = o["slot"]
 			ov["zone"] = o["zone"]
@@ -166,7 +192,10 @@ static func log_for(m: MatchEngine, viewer: int, since: int = 0) -> Array:
 			continue
 		var text: String = e["priv"].get(viewer, e["pub"])
 		if text != "":
-			out.append({"seq": e["seq"], "turn": e["turn"], "text": text, "fx": e.get("fx", [])})
+			var row := {"seq": e["seq"], "turn": e["turn"], "text": text, "fx": e.get("fx", [])}
+			if e.get("toast", false):
+				row["toast"] = true
+			out.append(row)
 		elif e["pub"] != "" and not e.get("fx", []).is_empty():
 			# Presentation-only events carry public board positions/amounts, never identities.
 			out.append({"seq": e["seq"], "turn": e["turn"], "text": "", "fx": e["fx"]})
@@ -185,32 +214,44 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 	if not can_act:
 		return out
 	var cands := []
+	# Labels are short on-card button texts (F02-04); "full" is the longer description.
 	for u in pl["hand"]:
 		match m.category(u):
-			"spell": cands += [{"t": "cast", "uid": u, "label": "Cast"}, {"t": "set", "uid": u, "label": "Set face-down"}]
-			"trap": cands.append({"t": "set", "uid": u, "label": "Set face-down"})
-			"power": cands.append({"t": "power", "uid": u, "label": "Play Power"})
-			_: cands.append({"t": "summon", "uid": u, "label": "Summon"})
+			"spell": cands += [{"t": "cast", "uid": u, "label": "Cast", "full": "Cast this Spell"},
+				{"t": "set", "uid": u, "label": "Set", "full": "Set face-down in a Trap/Spell zone"}]
+			"trap": cands.append({"t": "set", "uid": u, "label": "Set", "full": "Set face-down in a Trap/Spell zone"})
+			"power": cands.append({"t": "power", "uid": u, "label": "Play Power", "full": "Play this Power in a Power zone"})
+			_:
+				# F02-02: the stance is chosen by the button, not by a follow-up prompt.
+				cands.append({"t": "summon", "uid": u, "stance": "atk", "label": "Summon Attack", "full": "Summon in Attack stance"})
+				cands.append({"t": "summon", "uid": u, "stance": "def", "label": "Summon Defense", "full": "Summon in Defense stance"})
 	for u in m.field_units(viewer):
-		cands.append({"t": "attack", "uid": u, "label": "Attack"})
-		cands.append({"t": "stance", "uid": u, "label": "Change stance"})
-		cands.append({"t": "sacrifice", "uid": u, "label": "Sacrifice (+1 AP)"})
+		cands.append({"t": "attack", "uid": u, "label": "Attack", "full": "Declare an attack"})
+		var to_def: bool = m.cards[u]["stance"] == "atk"
+		cands.append({"t": "stance", "uid": u, "label": "To Defense" if to_def else "To Attack",
+			"full": "Change to %s stance" % ("Defense" if to_def else "Attack")})
+		cands.append({"t": "sacrifice", "uid": u, "label": "Sacrifice", "full": "Sacrifice this unit (+1 AP)"})
 		if m.status_count(u, "nimble") > 0:
-			cands.append({"t": "move", "uid": u, "label": "Move (Nimble)"})
+			cands.append({"t": "move", "uid": u, "label": "Move", "full": "Move to an adjacent empty zone (Nimble)"})
 	for u in m.field_units(viewer) + m.power_cards(viewer):
 		var abs: Array = m.script_of(u).get("abilities", [])
+		var views := ability_views(abs)
 		for i in abs.size():
-			var lbl: String = abs[i]["label"]
+			var full: String = abs[i]["label"]
 			if abs[i].get("opt", false):
-				lbl += " (once per turn)"
-			cands.append({"t": "ability", "uid": u, "idx": i, "label": lbl})
+				full += " (once per turn)"
+			cands.append({"t": "ability", "uid": u, "idx": i, "label": views[i]["short"], "full": full})
 	for u in m.backrow_cards(viewer):
 		if m.category(u) == "spell":
-			cands.append({"t": "activate_set", "uid": u, "label": "Activate"})
+			cands.append({"t": "activate_set", "uid": u, "label": "Activate", "full": "Activate this set Spell"})
 	for u in pl["extra"]:
 		match m.category(u):
-			"ritual": cands.append({"t": "ritual", "uid": u, "label": "Ritual Summon"})
-			"arcane": cands.append({"t": "arcane", "uid": u, "label": "Arcane Summon"})
+			"ritual":
+				cands.append({"t": "ritual", "uid": u, "stance": "atk", "label": "Ritual Attack", "full": "Ritual Summon in Attack stance"})
+				cands.append({"t": "ritual", "uid": u, "stance": "def", "label": "Ritual Defense", "full": "Ritual Summon in Defense stance"})
+			"arcane":
+				cands.append({"t": "arcane", "uid": u, "stance": "atk", "label": "Arcane Attack", "full": "Arcane Summon in Attack stance"})
+				cands.append({"t": "arcane", "uid": u, "stance": "def", "label": "Arcane Defense", "full": "Arcane Summon in Defense stance"})
 	for c in cands:
 		var reason := m.validate(viewer, c)
 		c["ok"] = reason == ""
