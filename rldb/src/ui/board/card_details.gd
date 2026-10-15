@@ -9,9 +9,9 @@ extends VBoxContainer
 ##   stats     - (units; no heading, the tiles are self-labelled) ATK / DEF tiles with printed-vs-current markers, stance + flag chips,
 ##               and the "Modifiers" list from stat_parts
 ##   rules     - one block per text_parts entry, coloured timing caption + body text
-##   abilities - activated abilities: button name, AP/HP cost, once-per-turn, description
-##   statuses  - runes and statuses with buff/debuff markers and explanations
-##   notes     - why actions are unavailable (muted) and implementation warnings (red)
+##   abilities - activated abilities not already stated in the rules, in the same block style
+##               ("Once per turn" / "Activate" caption with the cost, effect below)
+##   statuses  - runes and statuses with buff/debuff markers and explanations (nothing when none)
 ##
 ## Hierarchy never relies on colour alone: buff/debuff and stat changes carry a drawn
 ## triangle marker plus text. Text never drops below 13 px; long cards simply grow taller and
@@ -82,7 +82,7 @@ func show_empty(hint: String) -> void:
 
 ## Renders a card view. `c` = redacted card view ({} -> generic empty hint); `notes` = reasons
 ## actions are unavailable, e.g. "Cannot attack: ...".
-func show_card(c: Dictionary, notes: Array) -> void:
+func show_card(c: Dictionary, _notes: Array = []) -> void:
 	if c.is_empty():
 		show_empty("Hover a card to read it, or click it to pin it here. Right-click or Esc to clear.")
 		return
@@ -94,7 +94,6 @@ func show_card(c: Dictionary, notes: Array) -> void:
 	if not c.get("abilities", []).is_empty():
 		_build_abilities(c)
 	_build_statuses(c)
-	_build_notes(c, notes)
 
 
 ## All label text currently shown, newline separated (test/debug helper).
@@ -132,15 +131,15 @@ func _build_identity(c: Dictionary) -> void:
 	badges.add_theme_constant_override("v_separation", 4)
 	badges.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(badges)
-	badges.add_child(_chip(String(UIStyle.CATEGORY_NAMES.get(cat, cat)).to_upper(), cat_col, "", true))
+	badges.add_child(_chip(String(UIStyle.CATEGORY_NAMES.get(cat, cat)), cat_col, "", true))
 	badges.add_child(_cost_chip(c))
 	if c.has("race"):
 		var race: String = String(c.get("race", ""))
-		badges.add_child(_chip("Race: " + race if race != "" else "No Race", UIStyle.BRONZE.lightened(0.25)))
+		badges.add_child(_chip(race if race != "" else "No race", UIStyle.BRONZE.lightened(0.25)))
 		var ty = c.get("type", "")
 		var ty_s: String = String(ty) if ty != null else ""
 		var tc: Color = UIStyle.type_color(ty_s)
-		var chip := _chip("Type: " + ty_s if ty_s != "" else "No Type", tc, "circle")
+		var chip := _chip(ty_s if ty_s != "" else "No type", tc)
 		# TYPE ICON: the lead adds the TypeIcons glyph into this slot (HBox inside the Type chip).
 		type_icon_slot = HBoxContainer.new()
 		var hb: HBoxContainer = chip.get_child(0)
@@ -182,10 +181,6 @@ func _build_stats(c: Dictionary) -> void:
 		flags.add_child(_chip("Attack stance" if c.get("stance", "atk") == "atk" else "Defense stance", UIStyle.SELECT))
 		if c.get("protected", false):
 			flags.add_child(_chip("Protected", UIStyle.GOOD))
-		if c.get("new", false):
-			flags.add_child(_chip("Summoned this turn", UIStyle.MUTED))
-		if c.get("attacked", false):
-			flags.add_child(_chip("Attacked this turn", UIStyle.MUTED))
 		var cu = c.get("controlled_until", -1)
 		if cu != null and int(cu) != -1:
 			flags.add_child(_chip("Controlled until end of turn %d" % int(cu), UIStyle.BAD))
@@ -231,9 +226,9 @@ func _stat_tile(cap: String, cur, printed) -> Control:
 		var up: bool = cur > printed
 		col = UIStyle.GOOD if up else UIStyle.BAD
 		trend.add_child(Mark.new("up" if up else "down", col, 10))
-		trend.add_child(_lbl("printed %s" % str(printed), SMALL, col, false, false, false))
+		trend.add_child(_lbl("Base: %s" % str(printed), SMALL, col, false, false, false))
 	else:
-		trend.add_child(_lbl("printed %s" % ("?" if printed == null else str(printed)), SMALL, UIStyle.MUTED, false, false, false))
+		trend.add_child(_lbl("Base: %s" % ("?" if printed == null else str(printed)), SMALL, UIStyle.MUTED, false, false, false))
 	var num := Label.new()
 	num.text = "?" if cur == null else str(cur)
 	num.add_theme_font_override("font", UIStyle.font_display(700))
@@ -253,58 +248,65 @@ func _build_rules(c: Dictionary) -> void:
 	if parts.is_empty():
 		add_child(_lbl("No effect text.", BODY, UIStyle.MUTED))
 		return
-	for p in parts:
+	for p0 in parts:
+		var p := split_once_per_turn(p0)
 		var k: String = String(p.get("k", ""))
 		var col := _timing_color(k)
-		var pc := PanelContainer.new()
-		var sb := UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(col, 0.55), 0, 4)
-		sb.border_width_left = 3
-		sb.content_margin_left = 9
-		sb.content_margin_right = 6
-		sb.content_margin_top = 3
-		sb.content_margin_bottom = 4
-		pc.add_theme_stylebox_override("panel", sb)
-		var vb := VBoxContainer.new()
-		vb.add_theme_constant_override("separation", 0)
-		pc.add_child(vb)
-		if k != "":
-			vb.add_child(_lbl(k.to_upper(), SMALL, col, true))
-		vb.add_child(_lbl(String(p.get("t", "")), BODY, UIStyle.TEXT))
-		add_child(pc)
+		add_child(_rule_block(k, String(p.get("t", "")), col))
+
+
+## One timing block: coloured caption (e.g. ON SUMMON, ONCE PER TURN) over the effect text.
+func _rule_block(caption: String, body: String, col: Color) -> PanelContainer:
+	var pc := PanelContainer.new()
+	var sb := UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(col, 0.55), 0, 4)
+	sb.border_width_left = 3
+	sb.content_margin_left = 9
+	sb.content_margin_right = 6
+	sb.content_margin_top = 3
+	sb.content_margin_bottom = 4
+	pc.add_theme_stylebox_override("panel", sb)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 0)
+	pc.add_child(vb)
+	if caption != "":
+		vb.add_child(_lbl(caption.to_upper(), SMALL, col, true))
+	vb.add_child(_lbl(body, BODY, UIStyle.TEXT))
+	return pc
+
+
+## A rules part whose text starts with "Once per turn" gets that as its caption (user feedback:
+## every effect reads as caption + effect): {"k": "On Field", "t": "Once per turn: you can ..."}
+## -> {"k": "Once per turn", "t": "You can ..."}.
+static func split_once_per_turn(part: Dictionary) -> Dictionary:
+	var t := String(part.get("t", ""))
+	if not t.to_lower().begins_with("once per turn"):
+		return part
+	var rest := t.substr(13).lstrip(" :,").strip_edges()
+	if rest == "":
+		return part
+	return {"k": "Once per turn", "t": rest.substr(0, 1).to_upper() + rest.substr(1)}
 
 
 func _build_abilities(c: Dictionary) -> void:
-	sections.append("abilities")
-	# The full effect is already in the Rules blocks above; this section maps each on-card
-	# button name to its cost and limit, with the engine description as the tooltip (D10).
-	add_child(_heading("On-card buttons"))
+	# Abilities the rules text already states are not repeated; any other one gets a block in the
+	# timing style: caption ("Once per turn" or "Activate", plus its cost) over the effect.
+	var extra := []
 	for a in c["abilities"]:
-		var pc := PanelContainer.new()
-		var sb := UIStyle.flat(UIStyle.PANEL_LIGHT, Color(UIStyle.GOLD, 0.6), 1, 6)
-		sb.content_margin_left = 8
-		sb.content_margin_right = 8
-		sb.content_margin_top = 4
-		sb.content_margin_bottom = 5
-		pc.add_theme_stylebox_override("panel", sb)
-		var vb := VBoxContainer.new()
-		vb.add_theme_constant_override("separation", 3)
-		pc.add_child(vb)
-		var fl := HFlowContainer.new()
-		fl.add_theme_constant_override("h_separation", 5)
-		fl.add_theme_constant_override("v_separation", 3)
-		vb.add_child(fl)
-		var short: String = String(a.get("short", a.get("label", "Ability")))
-		fl.add_child(_lbl(short, 15, UIStyle.GOLD_HI, true, false, false))
-		if int(a.get("ap", 0)) > 0:
-			fl.add_child(_chip("%d AP" % int(a["ap"]), UIStyle.COST_COLORS["ap"], "circle"))
-		if int(a.get("hp", 0)) > 0:
-			fl.add_child(_chip("%d HP" % int(a["hp"]), UIStyle.BAD, "down"))
-		if a.get("opt", false):
-			fl.add_child(_chip("Once per turn", UIStyle.MUTED))
-		pc.tooltip_text = String(a.get("label", ""))
 		if not _rules_mention(c, String(a.get("label", ""))):
-			vb.add_child(_lbl(String(a.get("label", "")), 14, UIStyle.TEXT))
-		add_child(pc)
+			extra.append(a)
+	if extra.is_empty():
+		return
+	sections.append("abilities")
+	for a in extra:
+		var cap := "Once per turn" if a.get("opt", false) else "Activate"
+		var costs := []
+		if int(a.get("ap", 0)) > 0:
+			costs.append("%d AP" % int(a["ap"]))
+		if int(a.get("hp", 0)) > 0:
+			costs.append("%d HP" % int(a["hp"]))
+		if not costs.is_empty():
+			cap += " · " + ", ".join(costs)
+		add_child(_rule_block(cap, String(a.get("label", "")), _timing_color("Once per turn")))
 
 
 ## Whether the card's rules text already states this ability (most of its words appear there).
@@ -330,9 +332,6 @@ func _build_statuses(c: Dictionary) -> void:
 		if n > 0:
 			rows.append([String(s).capitalize(), n, "buff" if CardDB.is_buff(s) else "debuff", CardDB.STATUS_HELP.get(s, "")])
 	if rows.is_empty():
-		if c.has("race"):
-			sections.append("statuses")
-			add_child(_lbl("No statuses.", 14, UIStyle.MUTED))
 		return
 	sections.append("statuses")
 	add_child(_heading("Statuses"))
@@ -361,20 +360,6 @@ func _build_statuses(c: Dictionary) -> void:
 		add_child(pc)
 
 
-func _build_notes(c: Dictionary, notes: Array) -> void:
-	var sup: String = c.get("support", "full")
-	if notes.is_empty() and sup == "full":
-		return
-	sections.append("notes")
-	add_child(_heading("Notes"))
-	if sup != "full":
-		var msg := "Implementation: %s. " % sup
-		msg += "Some of this card's effects may not work yet." if sup == "partial" else "This card's effects are not implemented yet."
-		add_child(_lbl(msg, 14, UIStyle.BAD))
-	for n in notes:
-		add_child(_lbl(String(n), 14, UIStyle.MUTED))
-
-
 # ---------------------------------------------------------------- helpers
 
 ## "Burn (debuff): when this ..." -> "When this ..." (the name is already the row title).
@@ -393,6 +378,7 @@ static func _timing_color(k: String) -> Color:
 		"On Field": return UIStyle.GOLD
 		"On Destruction": return UIStyle.BAD
 		"Effect": return UIStyle.GOLD_HI
+		"Once per turn": return Color("e0b25a")
 	return UIStyle.MUTED
 
 

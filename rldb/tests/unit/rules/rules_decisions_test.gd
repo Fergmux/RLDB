@@ -134,7 +134,9 @@ func test_s04_shimmer_cost_change_reverses_but_never_below_zero() -> void:
 func test_s04_magic_cylinder_cost_change_reverses_under_snunday() -> void:
 	var m := _battle()
 	var mc := TB.set_card(m, 0, 45, 0)
+	m.phase = MatchEngine.PHASE_MAIN1                      # Spells come from the Hand only in a Main Phase
 	TB.cast(m, 1, 154)                                    # active player's reversal applies this turn
+	m.phase = MatchEngine.PHASE_BATTLE
 	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
 	TB.attack(m, a, TB.unit(m, 0, TB.WATER, 0))
 	TB.choose(m, ["Activate Magic Cylinder"])

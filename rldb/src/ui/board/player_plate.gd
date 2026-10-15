@@ -138,7 +138,6 @@ class TurnMark extends Control:
 
 var name_label: Label
 var next_label: Label
-var hand_label: Label
 var hp_bar: HpBar
 var ap_gems: ApGems
 var turn_mark: TurnMark
@@ -166,10 +165,6 @@ func _init() -> void:
 	head.add_child(name_label)
 	next_label = UIStyle.label("", 13, UIStyle.MUTED)
 	head.add_child(next_label)
-	hand_label = UIStyle.label("", 14, UIStyle.MUTED)
-	hand_label.tooltip_text = "Cards in hand"
-	hand_label.mouse_filter = Control.MOUSE_FILTER_PASS
-	head.add_child(hand_label)
 	hp_bar = HpBar.new()
 	v.add_child(hp_bar)
 	ap_gems = ApGems.new()
@@ -216,7 +211,6 @@ func update_from(pv: Dictionary, active: bool, mine: bool, label_suffix: String,
 	ap_gems.queue_redraw()
 	next_label.text = next_text
 	var counts: Dictionary = pv["counts"]
-	hand_label.text = "Hand %d" % int(counts["hand"])
 	for z in CHIP_ZONES:
 		var b: Button = chips[z[0]]
 		b.text = "%s %d" % [z[1], counts[z[0]]]

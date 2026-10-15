@@ -63,15 +63,17 @@ func _decide(p: int) -> Dictionary:
 			var r: Dictionary = v["rewards"]
 			if r["done"]:
 				return {}
+			if r.get("pending", false):
+				return {"t": "reward_add", "index": rng.randi_range(0, r["offer"].size() - 1)}
 			match rng.randi_range(0, 3):
-				0: return {"t": "reward_add", "index": rng.randi_range(0, r["offer"].size() - 1)}
+				0: return {"t": "reward_type", "category": r["types"][rng.randi_range(0, r["types"].size() - 1)]}
 				1: return {"t": "reward_remove", "card_id": v["deck"][rng.randi_range(0, v["deck"].size() - 1)]["id"]}
 				2:
 					for c in v["deck"]:
 						if c["category"] == "basic_unit":
 							var types: Array = r["basic_types"].filter(func(t): return t != c["type"])
 							return {"t": "reward_basic", "from_id": c["id"], "to_type": types[rng.randi_range(0, types.size() - 1)]}
-			return {"t": "reward_add", "index": 0}
+			return {"t": "reward_type", "category": r["types"][0]}
 		"first_player":
 			return {"t": "first_player", "who": rng.randi_range(0, 1)} if v["last_loser"] == p else {}
 		"game":

@@ -25,3 +25,8 @@ purple, Spell green, Arcane grey; one shared back; log names tinted). Checklist:
 `production/stories/playtest-feedback-03.md`. Suite 398/398, live driver 66/66 (editor + exported exe).
 Open: user's Trap-missing-from-log case (not reproduced); frame-time check, sound balance, two-account
 Steam test pending from the user.
+
+## 2026-10-16 — Playtest feedback 04 (committed)
+28 points (looks/UX, Fusion prompt bug, new rule: nothing from Hand in Battle, type-first rewards,
+basic Race+Type change, coin flip, discard animation). Checklist:
+`production/stories/playtest-feedback-04.md`. Suite 405/405, live driver 72/72 (editor + exe).

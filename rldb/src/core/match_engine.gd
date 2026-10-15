@@ -142,6 +142,7 @@ func _op_discard_hand(f: Dictionary, op: Dictionary) -> int:
 			discarded += 1
 	if discarded > 0:
 		add_log("%s discards %d card%s to Spent." % [pname(p), discarded, "" if discarded == 1 else "s"])
+		add_fx({"k": "discard", "p": p, "n": discarded})
 	return R.CONT
 
 
@@ -276,7 +277,9 @@ func validate(p: int, cmd: Dictionary) -> String:
 		"cast":
 			if inst["owner"] != p or inst["zone"] != "hand": return "Card is not in your Hand."
 			if df["category"] != "spell": return "Not a Spell."
-			if not own_turn_phase: return "Spells are cast during your turn."
+			# User rule 2026-10-16: nothing is played from the Hand in the Battle Phase; only cards
+			# already on the Field (set Spells, abilities, Traps) act there.
+			if not main: return "Spells in your Hand can only be cast in a Main Phase."
 			if current_cost(uid) > players[p]["ap"]: return "Not enough AP (%d needed)." % current_cost(uid)
 			return _spell_target_check(p, uid)
 		"activate_set":
@@ -547,11 +550,15 @@ func _op_pick_slot(f: Dictionary, op: Dictionary) -> int:
 			"backrow": label = "Trap/Spell zone, column %d" % (s + 1)
 			"power": label = "Power zone %d" % (s + 1)
 		opts.append({"v": s, "label": label, "slot": s, "zone": op["zone"]})
-	return ask(f, p, "slot", "Choose a zone for %s." % f["label"], opts, 1, 1, op.get("cancellable", false))
+	# The prompt names the card being placed (a summoned Fusion unit, not the effect's source).
+	var for_name: String = name_of(int(op["for"])) if op.has("for") else String(f["label"])
+	return ask(f, p, "slot", "Choose a zone for %s." % for_name, opts, 1, 1, op.get("cancellable", false))
 
 
 func _op_pick_stance(f: Dictionary, op: Dictionary) -> int:
-	if has_flag_raw(f["src"], "no_defense") or op.get("fixed", "") == "atk":
+	# `for`: the unit being summoned when it is not the frame's source (Fusion / special summons).
+	var unit: int = int(op.get("for", f["src"]))
+	if has_flag_raw(unit, "no_defense") or op.get("fixed", "") == "atk":
 		f["vars"][op["as"]] = "atk"
 		return R.CONT
 	if op.get("fixed", "") == "def":
@@ -561,7 +568,7 @@ func _op_pick_stance(f: Dictionary, op: Dictionary) -> int:
 	if ans != null:
 		f["vars"][op["as"]] = "atk" if ans[0] == 0 else "def"
 		return R.CONT
-	return ask(f, f["ctl"], "stance", "Choose a stance for %s." % name_of(f["src"]),
+	return ask(f, f["ctl"], "stance", "Choose a stance for %s." % name_of(unit),
 		[{"v": 0, "label": "Attack stance"}, {"v": 1, "label": "Defense stance"}], 1, 1, op.get("cancellable", false))
 
 

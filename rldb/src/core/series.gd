@@ -16,6 +16,8 @@ const STAGE_GAME := "game"
 const STAGE_REWARDS := "rewards"
 const STAGE_FIRST := "first_player"
 const STAGE_OVER := "over"
+## Card types offered by an add-card reward (user feedback 2026-10-16: choose the type first).
+const REWARD_TYPES := ["unit", "spell", "trap", "power", "fusion", "ritual", "arcane"]
 
 var cfg: Dictionary = {}
 var names: Array = ["Player 1", "Player 2"]
@@ -157,6 +159,7 @@ static func from_save(d: Dictionary) -> Series:
 		if not r.is_empty():
 			r["left"] = int(r["left"])
 			r["offer"] = r["offer"].map(func(i): return int(i))
+			r["pending"] = bool(r.get("pending", false))
 	s.series_log = d["series_log"]
 	s.forfeit_by = int(d.get("forfeit_by", -1))
 	s.save_id = d["save_id"]
@@ -328,17 +331,23 @@ func _on_game_over() -> void:
 		return
 	stage = STAGE_REWARDS
 	for p in 2:
-		rewards[p] = {"left": int(cfg["rewards_per_game"]), "offer": [], "done": false, "taken": []}
-		_new_add_offer(p)
+		# `pending`: a card type was chosen (its reward already spent) and one of `offer` must be taken.
+		rewards[p] = {"left": int(cfg["rewards_per_game"]), "offer": [], "done": false, "taken": [], "pending": false, "offer_type": ""}
 	checkpoint.emit()
 
 
-## Leaves the finished game visible until rewards complete; then the next game replaces it.
-func _new_add_offer(p: int) -> void:
+## Implemented, non-basic cards of one reward type.
+static func reward_pool(cat: String) -> Array:
 	var pool := []
 	for d in CardDB.all():
-		if CardScripts.is_implemented(d["id"]) and d["category"] != "basic_unit":
+		if CardScripts.is_implemented(d["id"]) and d["category"] == cat:
 			pool.append(d["id"])
+	return pool
+
+
+## Draws the add-card offer for player p from the chosen type.
+func _new_add_offer(p: int, cat: String) -> void:
+	var pool := reward_pool(cat)
 	var offer := []
 	for i in mini(int(cfg["reward_add_offer_count"]), pool.size()):
 		var j := rng.randi_range(0, pool.size() - 1)
@@ -352,15 +361,30 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 	if r["done"]:
 		return "You have finished choosing rewards."
 	var t: String = cmd.get("t", "")
+	if r.get("pending", false) and t != "reward_add":
+		return "Pick one of the offered cards first."
+	var spends := t in ["reward_type", "reward_remove", "reward_basic"]
 	match t:
+		"reward_type":
+			# Choosing the type spends the reward at once; one of the offered cards must be taken.
+			var cat: String = String(cmd.get("category", ""))
+			if not (cat in REWARD_TYPES) or reward_pool(cat).is_empty():
+				return "Choose a card type."
+			_new_add_offer(p, cat)
+			r["pending"] = true
+			r["offer_type"] = cat
 		"reward_add":
+			if not r.get("pending", false):
+				return "Choose a card type first."
 			var i := int(cmd.get("index", -1))
 			if i < 0 or i >= r["offer"].size():
 				return "Invalid card choice."
 			var id: int = r["offer"][i]
 			decks[p].append(id)
 			r["taken"].append("Added %s" % CardDB.get_def(id)["name"])
-			_new_add_offer(p)
+			r["offer"] = []
+			r["pending"] = false
+			r["offer_type"] = ""
 		"reward_remove":
 			var id2 := int(cmd.get("card_id", -1))
 			if not (id2 in decks[p]):
@@ -374,9 +398,10 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 			var to_type: String = cmd.get("to_type", "")
 			if not (from_id in decks[p]) or CardDB.get_def(from_id)["category"] != "basic_unit":
 				return "Choose a basic unit in your deck."
-			var to_id := basic_variant(from_id, to_type)
+			# Race and/or Type may change (user feedback 2026-10-16); an omitted race keeps the current one.
+			var to_id := basic_variant(from_id, to_type, String(cmd.get("to_race", "")))
 			if to_id == -1 or to_id == from_id:
-				return "Choose a different Type."
+				return "Choose a different Race or Type."
 			var changed_n := 0
 			for i in decks[p].size():
 				if decks[p][i] == from_id:
@@ -389,9 +414,9 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 			r["left"] = 0
 		_:
 			return "Choose a reward."
-	if t != "reward_finish":
+	if spends:
 		r["left"] -= 1
-	if r["left"] <= 0:
+	if r["left"] <= 0 and not r.get("pending", false):
 		r["done"] = true
 		_log("%s finishes choosing rewards." % names[p])
 	if rewards[0]["done"] and rewards[1]["done"]:
@@ -400,11 +425,12 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 	return ""
 
 
-## The basic unit with the same Race and the requested Type, or -1.
-static func basic_variant(from_id: int, to_type: String) -> int:
+## The basic unit with the requested Type and Race (default: the same Race), or -1.
+static func basic_variant(from_id: int, to_type: String, to_race: String = "") -> int:
 	var src := CardDB.get_def(from_id)
+	var race: String = to_race if to_race != "" else String(src["race"])
 	for d in CardDB.all():
-		if d["category"] == "basic_unit" and d["race"] == src["race"] and d["type"] == to_type:
+		if d["category"] == "basic_unit" and d["race"] == race and d["type"] == to_type:
 			return d["id"]
 	return -1
 
@@ -446,9 +472,18 @@ func view_for(p: int) -> Dictionary:
 					"offer": st["offer"].map(func(i): return _card_summary(i)), "picked": st["picked"].map(func(i): return _card_summary(i))}
 		STAGE_REWARDS:
 			var r: Dictionary = rewards[p]
+			var types := []
+			for cat in REWARD_TYPES:
+				if not reward_pool(cat).is_empty():
+					types.append(cat)
+			var races := []
+			for d in CardDB.all():
+				if d["category"] == "basic_unit" and not (d["race"] in races):
+					races.append(d["race"])
 			v["rewards"] = {"left": r["left"], "done": r["done"], "taken": r["taken"].duplicate(),
-				"offer": r["offer"].map(func(i): return _card_summary(i)),
-				"opponent_done": rewards[1 - p]["done"], "basic_types": CardDB.ELEMENTS}
+				"offer": r["offer"].map(func(i): return _card_summary(i)), "pending": r.get("pending", false),
+				"offer_type": r.get("offer_type", ""), "types": types,
+				"opponent_done": rewards[1 - p]["done"], "basic_types": CardDB.ELEMENTS, "basic_races": races}
 	if stage in [STAGE_REWARDS, STAGE_FIRST, STAGE_OVER, STAGE_DECKS]:
 		v["deck"] = decks[p].map(func(i): return _card_summary(i))
 	return v

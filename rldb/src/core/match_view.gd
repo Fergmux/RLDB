@@ -250,11 +250,11 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 	for u in pl["extra"]:
 		match m.category(u):
 			"ritual":
-				cands.append({"t": "ritual", "uid": u, "stance": "atk", "label": "Ritual Attack", "full": "Ritual Summon in Attack stance"})
-				cands.append({"t": "ritual", "uid": u, "stance": "def", "label": "Ritual Defense", "full": "Ritual Summon in Defense stance"})
+				cands.append({"t": "ritual", "uid": u, "stance": "atk", "label": "Summon Attack", "full": "Ritual Summon in Attack stance"})
+				cands.append({"t": "ritual", "uid": u, "stance": "def", "label": "Summon Defense", "full": "Ritual Summon in Defense stance"})
 			"arcane":
-				cands.append({"t": "arcane", "uid": u, "stance": "atk", "label": "Arcane Attack", "full": "Arcane Summon in Attack stance"})
-				cands.append({"t": "arcane", "uid": u, "stance": "def", "label": "Arcane Defense", "full": "Arcane Summon in Defense stance"})
+				cands.append({"t": "arcane", "uid": u, "stance": "atk", "label": "Summon Attack", "full": "Arcane Summon in Attack stance"})
+				cands.append({"t": "arcane", "uid": u, "stance": "def", "label": "Summon Defense", "full": "Arcane Summon in Defense stance"})
 	for c in cands:
 		var reason := m.validate(viewer, c)
 		c["ok"] = reason == ""

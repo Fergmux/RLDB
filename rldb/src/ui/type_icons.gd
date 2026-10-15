@@ -1,19 +1,21 @@
 class_name TypeIcons
 extends RefCounted
-## Vector damage-type icons (F02-14). One cohesive set: dark outline, type-colour fill, a light
-## gloss accent, drawn in a unit box of `radius` around `center`. Silhouettes differ so the type
+## Vector damage-type icons (F02-14). One cohesive set: light ivory outline (so the icons read on the
+## dark card body, panels and pips — user feedback 2026-10-16), type-colour fill, a light gloss accent, drawn in a unit box of `radius` around `center`. Silhouettes differ so the type
 ## reads by shape and not by colour alone:
 ##   Water = drop, Fire = flame, Earth = mountain, Lightning = bolt, Heavenly = radiant sun,
 ##   Necrotic = skull, Physical = crossed blades, typeless = hollow neutral ring.
 ## Colours come from UIStyle.TYPE_COLORS; nothing here is baked into a texture.
 
-const OUTLINE := Color(0.04, 0.03, 0.03, 0.92)
+const OUTLINE := Color(0.97, 0.93, 0.83, 0.95)
+## Outer radius of a pip (disc + rim) relative to its `radius` argument.
+const PIP_K := 1.18
 
 
 ## Draws the icon for `type` ("" or an unknown name = typeless ring) onto any CanvasItem.
 static func draw_icon(ci: CanvasItem, type: String, center: Vector2, radius: float) -> void:
 	var col := UIStyle.type_color(type)
-	var ow := maxf(0.8, radius * 0.07)
+	var ow := maxf(1.0, radius * 0.09)
 	match type:
 		"Water": _water(ci, center, radius, col, ow)
 		"Fire": _fire(ci, center, radius, col, ow)
@@ -29,8 +31,8 @@ static func draw_icon(ci: CanvasItem, type: String, center: Vector2, radius: flo
 static func draw_pip(ci: CanvasItem, type: String, center: Vector2, radius: float) -> void:
 	# Near-opaque dark backing + light rim so every type (dark Earth, pale Heavenly, yellow Lightning)
 	# keeps contrast on any art.
-	ci.draw_circle(center, radius * 1.18, Color(0.04, 0.03, 0.03, 0.94))
-	ci.draw_arc(center, radius * 1.18, 0.0, TAU, 28, Color(0.96, 0.93, 0.84, 0.9), maxf(0.8, radius * 0.045), true)
+	ci.draw_circle(center, radius * PIP_K, Color(0.04, 0.03, 0.03, 0.94))
+	ci.draw_arc(center, radius * PIP_K, 0.0, TAU, 28, UIStyle.type_color(type).lightened(0.25), maxf(1.0, radius * 0.08), true)
 	draw_icon(ci, type, center, radius * 0.86)
 
 
@@ -106,7 +108,7 @@ static func _sun(ci: CanvasItem, c: Vector2, r: float, col: Color, ow: float) ->
 		p.append(c + Vector2(cos(a), sin(a)) * r * (1.0 if i % 2 == 0 else 0.5))
 	_fill(ci, p, col, ow)
 	ci.draw_circle(c, r * 0.44, Color("fff6cf"))
-	ci.draw_arc(c, r * 0.44, 0.0, TAU, 20, OUTLINE, maxf(1.0, ow * 0.9), true)
+	ci.draw_arc(c, r * 0.44, 0.0, TAU, 20, col.darkened(0.45), maxf(1.0, ow * 0.9), true)
 	ci.draw_arc(c, r * 0.24, 0.0, TAU, 14, Color(col.darkened(0.25), 0.8), maxf(1.0, ow * 0.6), true)
 
 

@@ -127,15 +127,23 @@ var tray: PanelContainer
 var tray_box: VBoxContainer
 var details_view: CardDetailsPanel
 var sfx_vol: HSlider
+## Hot-seat: the seat switch waits until this time (msec) so an animation that belongs to the
+## current seat (end-of-turn discard) finishes on its own screen.
+var fx_hold_until: int = 0
+var wait_chip: PanelContainer
+var wait_label: Label
+var _wait_tween: Tween
+## Series whose game-1 coin flip has been shown (static: hot-seat seats share it).
+static var _coin_shown: Dictionary = {}
 
 var _plates: Array = []            # [top plate, bottom plate]
 ## Pile stacks beside the unit zones: [side][zone] -> PileStack (Draw, Extra, Spent, Exhaust).
 var _piles: Array = [{}, {}]
-const PILE_ZONES := [["draw", "Deck"], ["extra", "Extra"], ["spent", "Spent"], ["exhaust", "Exhaust"]]
+const PILE_ZONES := [["draw", "Draw"], ["extra", "Extra"], ["spent", "Spent"], ["exhaust", "Exhaust"]]
 var _slots: Dictionary = {}        # "side:zone:slot" -> {holder, widget, hash, pidx}
 var _hand_items: Dictionary = {}   # uid -> {holder, widget, hash}
 var _hand_order: Array = []
-var _gone_hand: Dictionary = {}    # uid -> global centre of a hand card removed by the last render
+var _gone_hand: Dictionary = {}    # uid -> {"c": global centre, "v": card view} of hand cards removed by the last render
 var _prompt_tween: Tween
 var _prompt_style: StyleBoxFlat
 
@@ -169,6 +177,45 @@ class BoardDeco extends Control:
 			var gc := Color(UIStyle.GOLD, 0.0)
 			var gs := Color(UIStyle.GOLD, 0.2)
 			draw_polygon(PackedVector2Array([Vector2(x0, y), Vector2(x1, y), Vector2(x1, y + dir * 22.0), Vector2(x0, y + dir * 22.0)]), PackedColorArray([gs, gs, gc, gc]))
+
+
+## Pulsing outline over a whole zone that is being chosen while a card already stands in it
+## (e.g. a Fusion summon into a material's zone). Click-through.
+class ZoneRing extends Control:
+	var on: bool = false
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		visible = false
+
+	func set_on(v: bool) -> void:
+		if v == on:
+			return
+		on = v
+		visible = v
+		set_process(v and not UIStyle.reduce_motion)
+		queue_redraw()
+
+	func _process(_d: float) -> void:
+		queue_redraw()
+
+	func _draw() -> void:
+		var a := 1.0
+		if not UIStyle.reduce_motion:
+			a = 0.55 + 0.45 * (0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 900.0 * TAU))
+		var r := Rect2(Vector2.ZERO, size)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(UIStyle.TARGET, 0.10 + 0.10 * a)
+		sb.border_color = Color(UIStyle.TARGET, a)
+		sb.set_border_width_all(4)
+		sb.set_corner_radius_all(9)
+		draw_style_box(sb, r)
+		var glow := StyleBoxFlat.new()
+		glow.draw_center = false
+		glow.border_color = Color(UIStyle.TARGET, 0.3 * a)
+		glow.set_border_width_all(5)
+		glow.set_corner_radius_all(12)
+		draw_style_box(glow, r.grow(4))
 
 
 ## Dashed gold arrow from the acting card to the hovered target while choosing a target.
@@ -479,17 +526,18 @@ func _make_slot(side: int, zone: String, slot: int) -> void:
 	var holder := Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	zone_node.add_child(holder)
+	var ring := ZoneRing.new()
 	var w := CardWidget.new()
 	w.auto_hover = false
-	w.show_tooltip = false
 	w.setup(null, ZONE_KIND[zone], label)
 	w.visible = false
 	w.pressed.connect(_on_widget_pressed)
 	w.right_pressed.connect(_on_widget_right)
 	holder.add_child(w)
+	zone_node.add_child(ring)   # above the card: a zone pick outlines the whole zone
 	board_layer.add_child(zone_node)
 	_slots[_key(side, zone, slot)] = {"zone_node": zone_node, "bg": bg, "holder": holder, "widget": w, "hash": -1, "pidx": -1,
-		"label": label, "zone": zone, "rot": false}
+		"label": label, "zone": zone, "rot": false, "ring": ring}
 
 
 ## Sizes and centres a slot's card box for the card it shows (or the zone when empty).
@@ -688,12 +736,15 @@ func _build_top_strip() -> void:
 	row.add_child(menu_b)
 	# F02-07 context banner: covers the top strip (never the board) while I pick targets.
 	ctx_banner = PanelContainer.new()
-	var bs := UIStyle.flat(Color(0.11, 0.085, 0.05, 0.98), UIStyle.GOLD, 2, 8)
-	bs.border_width_left = 8
-	bs.content_margin_left = 12
-	bs.content_margin_right = 8
-	bs.content_margin_top = 3
-	bs.content_margin_bottom = 3
+	var bs := UIStyle.flat(Color(0.09, 0.07, 0.045, 0.97), UIStyle.GOLD, 2, 12)
+	bs.border_width_left = 6
+	bs.content_margin_left = 16
+	bs.content_margin_right = 10
+	bs.content_margin_top = 6
+	bs.content_margin_bottom = 6
+	bs.shadow_color = Color(0, 0, 0, 0.55)
+	bs.shadow_size = 10
+	bs.shadow_offset = Vector2(0, 3)
 	ctx_banner.add_theme_stylebox_override("panel", bs)
 	ctx_banner.visible = false
 	ctx_banner.z_index = 70
@@ -817,6 +868,24 @@ func _build_overlays() -> void:
 	var cl := UIStyle.button("Close", 13)
 	cl.pressed.connect(func(): settings_popup.visible = false)
 	sv.add_child(cl)
+	# Opponent-is-deciding notice in the middle of the board (user feedback: otherwise the game
+	# looks stuck). Click-through.
+	wait_chip = PanelContainer.new()
+	var wsb := UIStyle.flat(Color(0.05, 0.04, 0.035, 0.9), Color(UIStyle.GOLD, 0.75), 2, 22)
+	wsb.content_margin_left = 26
+	wsb.content_margin_right = 26
+	wsb.content_margin_top = 8
+	wsb.content_margin_bottom = 8
+	wsb.shadow_color = Color(0, 0, 0, 0.5)
+	wsb.shadow_size = 8
+	wait_chip.add_theme_stylebox_override("panel", wsb)
+	wait_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wait_chip.z_index = 66
+	wait_chip.visible = false
+	wait_label = UIStyle.label("", 22, UIStyle.GOLD_HI, false, true)
+	wait_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wait_chip.add_child(wait_label)
+	add_child(wait_chip)
 	toast = UIStyle.label("", 15, UIStyle.BAD, true)
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
@@ -874,6 +943,7 @@ func _relayout() -> void:
 		(it["zone_node"] as Control).position = r.position
 		(it["zone_node"] as Control).size = r.size
 		(it["bg"] as Control).size = r.size
+		(it["ring"] as Control).size = r.size
 		_place_card(it)
 	# Piles: a 2x2 grid beside the unit zones, mirroring the Power grid (Deck/Extra nearest the
 	# centre line, Spent/Exhaust behind them).
@@ -890,8 +960,8 @@ func _relayout() -> void:
 	var ph := (_plates[1] as Control).get_combined_minimum_size().y
 	(_plates[1] as Control).position = Vector2(14.0, _y0 + BOARD_H - ph + 6.0)
 	(_plates[1] as Control).size = Vector2(pw, 0)
-	opp_hand_box.position = Vector2(14.0, TOP_H + 8.0)
-	opp_hand_count_label.position = Vector2(14.0, TOP_H + 8.0 + 96.0)
+	opp_hand_count_label.position = Vector2(14.0, TOP_H + 4.0)
+	opp_hand_box.position = Vector2(14.0, TOP_H + 26.0)
 	deco.mid_y = _y0 + 365.0
 	deco.x0 = _ux - 30.0
 	deco.x1 = _ux + 3.0 * U + 2.0 * G + 30.0
@@ -903,8 +973,7 @@ func _relayout() -> void:
 	side_root.size = Vector2(SIDEBAR_W, h / _side_k)
 	top_strip.position = Vector2.ZERO
 	top_strip.size = Vector2(w - _sbw, TOP_H)
-	ctx_banner.position = Vector2(4, 2)
-	ctx_banner.size = Vector2(w - _sbw - 8.0 - 200.0, TOP_H - 4.0)   # Settings / Menu stay visible
+	_place_banner()
 	_place_tray()
 	pause_dim.position = Vector2(0, TOP_H)
 	pause_dim.size = Vector2(w - _sbw, h - TOP_H)
@@ -953,8 +1022,7 @@ func _place_opp_hand() -> void:
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.position = Vector2(i * step, 0)
 		opp_hand_box.add_child(b)
-	# Hidden at 0: an empty stack needs no label.
-	opp_hand_count_label.text = "Opponent hand: %d" % n if n > 0 else ""
+	opp_hand_count_label.text = "Opponent hand" if not mv.is_empty() else ""
 
 
 func _layout_hand(new_ids: Array, instant: bool) -> void:
@@ -1119,8 +1187,25 @@ func _on_view(v: Dictionary) -> void:
 		_acting_uid = -1
 	_render_all()
 	_show_log_toasts()
+	_maybe_coin_flip()
 	if not events.is_empty():
 		fx.play(events, prev_mv)
+
+
+## Game 1 of a series starts with a coin flip naming who goes first (once per series).
+func _maybe_coin_flip() -> void:
+	if mv.is_empty() or view.get("stage", "") != "game" or int(view.get("game_no", 0)) != 1 or int(mv.get("turn", 0)) != 1:
+		return
+	var key := String(view.get("save_id", "local"))
+	if _coin_shown.has(key):
+		return
+	_coin_shown[key] = true
+	var first: int = int(mv["active"])
+	var coin := CoinFlip.new()
+	coin.position = _area.position
+	coin.size = _area.size
+	add_child(coin)
+	coin.play(String(_pv(first)["name"]), String(_pv(1 - first)["name"]), first == me())
 
 
 ## New presentation events since the last view; empty (skip animations) on first load,
@@ -1198,6 +1283,11 @@ func hand_anchor(p: int) -> Vector2:
 func side_center(p: int) -> Vector2:
 	var y := _y0 + (229.0 + 128.0 if _side_of(p) == 0 else 373.0 + 128.0)
 	return get_global_transform() * Vector2(_ux + (3.0 * U + 2.0 * G) / 2.0, y - 64.0)
+
+
+## Cards that left my hand in the last render, [{c: global centre, v: card view}] (discard fx).
+func gone_hand_cards() -> Array:
+	return _gone_hand.values()
 
 
 func board_global_rect() -> Rect2:
@@ -1336,11 +1426,13 @@ func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, target
 	var is_sel: bool = vis and uid == selected_uid
 	var chosen: bool = opt != -1 and opt in multi
 	var dim: bool = targeting and opt == -1 and not (vis and uid == _src_uid_cache)
+	var zone_pick: bool = opt != -1 and String(_pending().get("kind", "")) == "slot"
+	(it["ring"] as ZoneRing).set_on(zone_pick and cv != null)
 	if cv == null:
 		bg.set_marks(opt != -1, chosen, dim)
 		return
 	bg.set_marks(false, false, dim)
-	w.set_marks(opt != -1, is_sel or chosen, dim)
+	w.set_marks(opt != -1 and not zone_pick, is_sel or chosen, dim)
 	w.set_ready(vis and _ready_uids.has(uid))
 	w.order_no = _order_no(opt)
 	w.queue_redraw()
@@ -1354,6 +1446,7 @@ func _render_hand(targeting: bool) -> void:
 	var new_ids := []
 	var order := []
 	var my_turn: bool = not mv.is_empty() and mv["active"] == me() and mv["winner"] == -1 and mv.get("pending", {}).is_empty()
+	_gone_hand.clear()
 	for c in cards:
 		var uid: int = c["uid"]
 		seen[uid] = true
@@ -1366,7 +1459,6 @@ func _render_hand(targeting: bool) -> void:
 			holder.pivot_offset = holder.size / 2.0
 			var w := CardWidget.new()
 			w.auto_hover = false
-			w.show_tooltip = false
 			w.pressed.connect(_on_widget_pressed)
 			w.right_pressed.connect(_on_widget_right)
 			holder.add_child(w)
@@ -1389,7 +1481,7 @@ func _render_hand(targeting: bool) -> void:
 	for uid in _hand_items.keys():
 		if not seen.has(uid):
 			var h: Control = _hand_items[uid]["holder"]
-			_gone_hand[uid] = h.get_global_rect().get_center()
+			_gone_hand[uid] = {"c": h.get_global_rect().get_center(), "v": (_hand_items[uid]["widget"] as CardWidget).view}
 			if not _hv.is_empty() and _hv.get("uid", -9) == uid:
 				_clear_hover()
 			h.queue_free()
@@ -1451,6 +1543,8 @@ func _render_turnbar() -> void:
 		tip = "No Battle Phase on the first turn."
 	state_chip.visible = chip != ""
 	phase_btn.visible = chip == ""
+	var waiting: bool = not pd.is_empty() and not pd["mine"] and mv["winner"] == -1
+	_show_wait((("Opponent is responding…" if pd["kind"] == "trap_response" else "Opponent is choosing…") if waiting else ""))
 	state_label.text = chip
 	state_label.add_theme_color_override("font_color", UIStyle.GOLD_HI if chip_mine else UIStyle.MUTED)
 	phase_btn.text = label
@@ -1462,6 +1556,29 @@ func _render_turnbar() -> void:
 		note = "SNEAKY SNUNDAY: card-effect gains/losses reversed"
 	turn_note.text = note
 	turn_note.visible = note != ""
+
+
+## Shows (text != "") or hides the centre-of-board wait notice; it breathes gently while shown.
+func _show_wait(text: String) -> void:
+	if text == "":
+		if wait_chip.visible:
+			wait_chip.visible = false
+			if _wait_tween != null and _wait_tween.is_valid():
+				_wait_tween.kill()
+		return
+	wait_label.text = text
+	wait_chip.reset_size()
+	var sz := wait_chip.get_combined_minimum_size()
+	wait_chip.size = sz
+	wait_chip.position = Vector2(_area.position.x + (_area.size.x - sz.x) / 2.0, deco.mid_y - sz.y / 2.0)
+	if wait_chip.visible:
+		return
+	wait_chip.visible = true
+	wait_chip.modulate.a = 1.0
+	if not UIStyle.reduce_motion:
+		_wait_tween = create_tween().set_loops()
+		_wait_tween.tween_property(wait_chip, "modulate:a", 0.65, 0.9).set_trans(Tween.TRANS_SINE)
+		_wait_tween.tween_property(wait_chip, "modulate:a", 1.0, 0.9).set_trans(Tween.TRANS_SINE)
 
 
 func _update_conn() -> void:
@@ -2336,7 +2453,7 @@ func _multi_status(pd: Dictionary) -> String:
 			total += maxi(pd["options"][i].get("card", {}).get("cost", 0), 0)
 		total_txt = "  ·  cost total %d / %d" % [total, pd["min_total"]]
 	var rng := "%d" % pd["min"] if pd["min"] == pd["max"] else "%d–%d" % [pd["min"], pd["max"]]
-	return "Selected %d of %s, in the order clicked%s" % [multi.size(), rng, total_txt]
+	return "Selected %d of %s%s" % [multi.size(), rng, total_txt]
 
 
 ## F02-07 context banner: what is being chosen, for which effect, how many and in what order,
@@ -2357,7 +2474,7 @@ func _render_banner() -> void:
 	if pick:
 		var what := "zone" if pd["kind"] == "slot" else "card"
 		if int(pd["max"]) > 1:
-			how = _multi_status(pd) + ("  ·  numbers show the order" if not multi.is_empty() else "")
+			how = _multi_status(pd)
 		else:
 			how = "Click a highlighted %s%s." % [what, " in the tray" if not _tray_options(pd).is_empty() else ""]
 		if pd["kind"] == "attack_target":
@@ -2395,10 +2512,23 @@ func _render_banner() -> void:
 		x.custom_minimum_size = Vector2(0, 32)
 		x.pressed.connect(_cancel)
 		banner_btns.add_child(x)
-	ctx_banner.size = Vector2(ctx_banner.size.x, 0)
+	_place_banner()
 
 
 var _banner_how: String = ""
+
+
+## The choice banner: centred over the play area like a toast, a margin below the window top,
+## narrower than the board column so the seat label and Settings / Menu stay visible.
+func _place_banner() -> void:
+	if ctx_banner == null:
+		return
+	# Centred between the seat label (left) and the opponent's plate (right).
+	var left := _area.position.x + 230.0
+	var right := (_plates[0] as Control).position.x - 10.0 if not _plates.is_empty() else _area.end.x - 230.0
+	var bw := clampf(right - left, 460.0, 640.0)
+	ctx_banner.size = Vector2(bw, 0)
+	ctx_banner.position = Vector2(maxf(_area.position.x + 8.0, (left + right) / 2.0 - bw / 2.0), 10.0)
 
 
 func _update_banner_sub() -> void:
@@ -2435,7 +2565,7 @@ func _render_tray() -> void:
 	tray.visible = not opts.is_empty() and not overlay.visible
 	if not tray.visible:
 		return
-	var head := "Choose %s" % ("one card" if int(pd["max"]) <= 1 else "cards in order")
+	var head := "Choose %s" % ("one card" if int(pd["max"]) <= 1 else "cards")
 	tray_box.add_child(UIStyle.label("%s — click a card. Hover to read it." % head, 15, UIStyle.GOLD, true, true))
 	var flow := HFlowContainer.new()
 	flow.add_theme_constant_override("h_separation", 8)
@@ -2447,7 +2577,6 @@ func _render_tray() -> void:
 		_tray_cards[uid] = cv
 		var idx: int = o["i"]
 		var w := CardWidget.new().setup(cv, "mini")
-		w.show_tooltip = false
 		w.set_marks(true, idx in multi)
 		w.order_no = _order_no(idx)
 		w.pressed.connect(func(_w): _pick_option(idx))
@@ -2658,7 +2787,6 @@ func _show_pile(zone: String, sel_uid: int = -1) -> void:
 		cell.add_theme_constant_override("separation", 3)
 		flow.add_child(cell)
 		var w := CardWidget.new().setup(c, "hand")
-		w.show_tooltip = false
 		w.set_marks(false, uid == sel_uid)
 		w.set_ready(zone == "extra" and _ready_uids.has(uid))
 		w.pressed.connect(func(_w):
@@ -2687,6 +2815,47 @@ func _show_pile(zone: String, sel_uid: int = -1) -> void:
 		pile_box.add_child(UIStyle.label("Empty.", 13, UIStyle.MUTED))
 	pile_popup.visible = true
 	_clear_hover()
+
+
+## Your current deck (between games): every card once, with its number of copies.
+func _show_deck() -> void:
+	_clear(pile_box)
+	var cards: Array = view.get("deck", [])
+	var counts := {}
+	var order := []
+	for c in cards:
+		if not counts.has(c["id"]):
+			order.append(c)
+		counts[c["id"]] = counts.get(c["id"], 0) + 1
+	order.sort_custom(func(a, b):
+		var ka := ["basic_unit", "unit", "spell", "trap", "power", "fusion", "ritual", "arcane"].find(String(a["category"]))
+		var kb := ["basic_unit", "unit", "spell", "trap", "power", "fusion", "ritual", "arcane"].find(String(b["category"]))
+		return ka < kb if ka != kb else String(a["name"]) < String(b["name"]))
+	var head := HBoxContainer.new()
+	pile_box.add_child(head)
+	var tl := UIStyle.label("Your deck (%d cards)" % cards.size(), 18, UIStyle.GOLD, true, true)
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(tl)
+	var close := UIStyle.button("Close", 13)
+	close.pressed.connect(func(): pile_popup.visible = false)
+	head.add_child(close)
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 10)
+	flow.add_theme_constant_override("v_separation", 10)
+	pile_box.add_child(flow)
+	for c in order:
+		var cell := VBoxContainer.new()
+		cell.add_theme_constant_override("separation", 2)
+		flow.add_child(cell)
+		var w := CardWidget.new().setup(_summary_view(c), "hand")
+		w.auto_hover = true
+		cell.add_child(w)
+		if int(counts[c["id"]]) > 1:
+			var n := UIStyle.label("×%d" % int(counts[c["id"]]), 15, UIStyle.GOLD_HI, false, true)
+			n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			cell.add_child(n)
+	pile_popup.z_index = 90
+	pile_popup.visible = true
 
 
 func _show_message(text: String, buttons: Array) -> void:
@@ -2742,10 +2911,10 @@ func _render_overlay() -> void:
 		"rewards": _render_rewards()
 		"first_player": _render_first()
 		"over": _render_over()
-	if not mv.is_empty() and stage != "decks":
-		var see := UIStyle.button("View the final board and log of game %d" % view["game_no"], 14)
+	if stage in ["rewards", "first_player"] and view.has("deck"):
+		var see := UIStyle.button("View your deck", 15)
 		see.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		see.pressed.connect(func(): _overlay_hidden_by_user = true; _render_all())
+		see.pressed.connect(_show_deck)
 		overlay_box.add_child(see)
 	_place_modals()
 	_fit_overlay()
@@ -2832,7 +3001,8 @@ func _option_under_pointer() -> int:
 		if opt == -1:
 			continue
 		var w: CardWidget = sl["widget"]
-		var r: Rect2 = (sl["holder"] as Control).get_global_rect() if w.visible else (sl["zone_node"] as Control).get_global_rect()
+		var zone_pick: bool = String(_pending().get("kind", "")) == "slot"
+		var r: Rect2 = (sl["holder"] as Control).get_global_rect() if (w.visible and not zone_pick) else (sl["zone_node"] as Control).get_global_rect()
 		if r.has_point(m):
 			return opt
 	for uid in _hand_items.keys():
@@ -3130,6 +3300,12 @@ func _resize_card(w: CardWidget, sz: Vector2) -> void:
 	w.pivot_offset = sz / 2.0
 
 
+## Basic-unit change being composed on the rewards screen (unit id, chosen Race and Type).
+var _basic_sel: int = -1
+var _basic_race: String = ""
+var _basic_type: String = ""
+
+
 func _render_rewards() -> void:
 	var line := _game_result_line()
 	if line != "":
@@ -3144,47 +3320,72 @@ func _render_rewards() -> void:
 	var pr := HBoxContainer.new()
 	pr.add_theme_constant_override("separation", 12)
 	overlay_box.add_child(pr)
-	var total: int = r["left"] + r["taken"].size()
+	var total: int = r["left"] + r["taken"].size() + (1 if r.get("pending", false) else 0)
 	var pips_c := PickPips.new()
 	pips_c.left = r["left"]
 	pips_c.total = maxi(total, r["left"])
 	pips_c.custom_minimum_size = Vector2(maxf(28.0, pips_c.total * 28.0 + 4.0), 28)
 	pr.add_child(pips_c)
 	pr.add_child(UIStyle.label("%d pick%s remaining" % [r["left"], "" if r["left"] == 1 else "s"], 20, UIStyle.ACCENT, false, true))
-	overlay_box.add_child(UIStyle.label("Each pick is one of: add a card, remove a card, or change a basic unit's Type.", 14, UIStyle.MUTED, true))
 	if r["opponent_done"]:
 		overlay_box.add_child(UIStyle.label("Your opponent has finished.", 13, UIStyle.MUTED))
 	for t in r["taken"]:
 		overlay_box.add_child(UIStyle.label("✓ " + t, 14, UIStyle.GOOD))
-	# Add a card
-	overlay_box.add_child(UIStyle.label("Add a card — pick one", 18, UIStyle.GOLD, false, true))
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 14)
-	flow.add_theme_constant_override("v_separation", 10)
-	overlay_box.add_child(flow)
-	for i in r["offer"].size():
-		var c: Dictionary = r["offer"][i]
-		var cell := VBoxContainer.new()
-		cell.add_theme_constant_override("separation", 4)
-		var cw := CardWidget.new().setup(_summary_view(c), "big")
-		cw.show_tooltip = false
-		_resize_card(cw, Vector2(180, 252))
-		var idx: int = i
-		cw.pressed.connect(func(_w): _send({"t": "reward_add", "index": idx}))
-		cell.add_child(cw)
-		var b := UIStyle.primary_button("Add %s" % c["name"], 13)
-		b.clip_text = true
-		b.custom_minimum_size = Vector2(180, 0)
-		b.pressed.connect(func(): _send({"t": "reward_add", "index": idx}))
-		cell.add_child(b)
-		flow.add_child(cell)
+	if r.get("pending", false):
+		# The type was chosen and the pick is spent: one of these cards must be taken.
+		var tname: String = UIStyle.CATEGORY_NAMES.get(String(r.get("offer_type", "")), "card")
+		overlay_box.add_child(UIStyle.label("Choose your new %s" % tname, 22, UIStyle.GOLD, false, true))
+		overlay_box.add_child(UIStyle.label("Take one of these cards.", 14, UIStyle.MUTED))
+		var flow := HFlowContainer.new()
+		flow.add_theme_constant_override("h_separation", 18)
+		flow.add_theme_constant_override("v_separation", 10)
+		overlay_box.add_child(flow)
+		for i in r["offer"].size():
+			var c: Dictionary = r["offer"][i]
+			var cell := VBoxContainer.new()
+			cell.add_theme_constant_override("separation", 6)
+			var cw := CardWidget.new().setup(_summary_view(c), "big")
+			_resize_card(cw, Vector2(200, 300))
+			var idx: int = i
+			cw.pressed.connect(func(_w): _send({"t": "reward_add", "index": idx}))
+			cell.add_child(cw)
+			var b := UIStyle.primary_button("Take %s" % c["name"], 14)
+			b.clip_text = true
+			b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			b.custom_minimum_size = Vector2(200, 34)
+			b.pressed.connect(func(): _send({"t": "reward_add", "index": idx}))
+			cell.add_child(b)
+			flow.add_child(cell)
+		return
+	overlay_box.add_child(UIStyle.label("Each pick is one of: add a card, remove a card, or change a basic unit.", 14, UIStyle.MUTED, true))
+	# Add a card: choose the type first (this spends the pick), then one of three cards of it.
+	overlay_box.add_child(UIStyle.label("Add a card — choose a type", 18, UIStyle.GOLD, false, true))
+	var tf := HFlowContainer.new()
+	tf.add_theme_constant_override("h_separation", 8)
+	tf.add_theme_constant_override("v_separation", 8)
+	overlay_box.add_child(tf)
+	for cat in r.get("types", []):
+		var col: Color = UIStyle.CATEGORY_COLORS.get(cat, UIStyle.BRONZE)
+		var tb := UIStyle.button(String(UIStyle.CATEGORY_NAMES.get(cat, cat)), 16)
+		tb.custom_minimum_size = Vector2(120, 40)
+		var nrm := UIStyle.flat(Color(col.darkened(0.62), 0.97), col, 2, 8)
+		var hov := UIStyle.flat(Color(col.darkened(0.45), 0.99), col.lightened(0.3), 2, 8)
+		tb.add_theme_stylebox_override("normal", nrm)
+		tb.add_theme_stylebox_override("hover", hov)
+		tb.add_theme_stylebox_override("pressed", hov)
+		tb.add_theme_color_override("font_color", UIStyle.category_text_color(cat).lightened(0.2))
+		tb.add_theme_color_override("font_hover_color", Color.WHITE)
+		tb.tooltip_text = "Uses one pick: shows three %s cards and you take one." % String(UIStyle.CATEGORY_NAMES.get(cat, cat))
+		var c2: String = cat
+		tb.pressed.connect(func(): _send({"t": "reward_type", "category": c2}))
+		tf.add_child(tb)
 	var counts := {}
 	var order := []
 	for c in view["deck"]:
 		if not counts.has(c["id"]):
 			order.append(c)
 		counts[c["id"]] = counts.get(c["id"], 0) + 1
-	# Remove a card (list + preview) and change a basic type, side by side
+	# Remove a card (list + preview) and change a basic unit, side by side
 	var cols := HBoxContainer.new()
 	cols.add_theme_constant_override("separation", 18)
 	overlay_box.add_child(cols)
@@ -3198,7 +3399,7 @@ func _render_rewards() -> void:
 	left.add_child(lr)
 	var lsc := ScrollContainer.new()
 	lsc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	lsc.custom_minimum_size = Vector2(0, 260)
+	lsc.custom_minimum_size = Vector2(0, 270)
 	lsc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lr.add_child(lsc)
 	var lv := VBoxContainer.new()
@@ -3213,7 +3414,7 @@ func _render_rewards() -> void:
 	prev.auto_hover = false
 	prev.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	prev.setup(_summary_view(order[0]) if not order.is_empty() else null, "big")
-	_resize_card(prev, Vector2(180, 252))
+	_resize_card(prev, Vector2(180, 270))
 	prev_panel.add_child(prev)
 	for c in order:
 		var b2 := UIStyle.button("− %s%s" % [c["name"], " ×%d" % counts[c["id"]] if counts[c["id"]] > 1 else ""], 16)
@@ -3223,35 +3424,80 @@ func _render_rewards() -> void:
 		var cc: Dictionary = c
 		b2.mouse_entered.connect(func():
 			prev.setup(_summary_view(cc), "big")
-			_resize_card(prev, Vector2(180, 252)))
+			_resize_card(prev, Vector2(180, 270)))
 		b2.pressed.connect(func(): _send({"t": "reward_remove", "card_id": cc["id"]}))
 		lv.add_child(b2)
-	var right := VBoxContainer.new()
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right.add_theme_constant_override("separation", 6)
-	cols.add_child(right)
-	right.add_child(UIStyle.label("Change a basic unit's Type", 18, UIStyle.GOLD, false, true))
-	right.add_child(UIStyle.label("Applies to all copies.", 14, UIStyle.MUTED))
-	for c in order:
-		if c["category"] != "basic_unit":
-			continue
-		right.add_child(UIStyle.label("%s ×%d  (now %s)" % [c["name"], counts[c["id"]], c["type"] if c["type"] != "" else "None"], 15, UIStyle.TEXT))
-		var tf := HFlowContainer.new()
-		tf.add_theme_constant_override("h_separation", 4)
-		tf.add_theme_constant_override("v_separation", 4)
-		right.add_child(tf)
-		for t in r["basic_types"]:
-			if t == c["type"]:
-				continue
-			var tb := UIStyle.button(t, 14)
-			tb.add_theme_color_override("font_color", UIStyle.type_color(t).lightened(0.35))
-			var cid: int = c["id"]
-			tb.pressed.connect(func(): _send({"t": "reward_basic", "from_id": cid, "to_type": t}))
-			tf.add_child(tb)
+	cols.add_child(_basic_change_panel(r, order, counts))
 	var fin := UIStyle.primary_button("Finish rewards" if not r["taken"].is_empty() else "Skip remaining rewards", 16)
 	fin.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	fin.pressed.connect(func(): _send({"t": "reward_finish"}))
 	overlay_box.add_child(fin)
+
+
+## Basic-unit change: pick one of your basic units, then a Race and a Type, then Confirm.
+## Applies to every copy.
+func _basic_change_panel(r: Dictionary, order: Array, counts: Dictionary) -> Control:
+	var right := VBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation", 6)
+	right.add_child(UIStyle.label("Change a basic unit", 18, UIStyle.GOLD, false, true))
+	right.add_child(UIStyle.label("Choose a unit, then its new Race and Type. Applies to all copies.", 14, UIStyle.MUTED, true))
+	var basics := order.filter(func(c): return c["category"] == "basic_unit")
+	if basics.is_empty():
+		right.add_child(UIStyle.label("No basic units in your deck.", 14, UIStyle.MUTED))
+		return right
+	var sel: Dictionary = {}
+	for c in basics:
+		if int(c["id"]) == _basic_sel:
+			sel = c
+	var uf := HFlowContainer.new()
+	uf.add_theme_constant_override("h_separation", 4)
+	uf.add_theme_constant_override("v_separation", 4)
+	right.add_child(uf)
+	for c in basics:
+		var on: bool = int(c["id"]) == _basic_sel
+		var ub: Button = UIStyle.primary_button("%s ×%d" % [c["name"], counts[c["id"]]], 14) if on else UIStyle.button("%s ×%d" % [c["name"], counts[c["id"]]], 14)
+		var cc: Dictionary = c
+		ub.pressed.connect(func():
+			_basic_sel = int(cc["id"])
+			_basic_race = String(cc["race"])
+			_basic_type = String(cc["type"])
+			_overlay_sig = 0
+			_render_overlay())
+		uf.add_child(ub)
+	if sel.is_empty():
+		return right
+	for pair in [["Race", r.get("basic_races", []), "_basic_race"], ["Type", r.get("basic_types", []), "_basic_type"]]:
+		right.add_child(UIStyle.label(pair[0], 14, UIStyle.GOLD))
+		var rf := HFlowContainer.new()
+		rf.add_theme_constant_override("h_separation", 4)
+		rf.add_theme_constant_override("v_separation", 4)
+		right.add_child(rf)
+		for val in pair[1]:
+			var key: String = pair[2]
+			var cur: String = String(get(key))
+			var chosen: bool = String(val) == cur
+			var vb := UIStyle.button(("✓ " if chosen else "") + String(val), 14)
+			if pair[0] == "Type":
+				vb.add_theme_color_override("font_color", UIStyle.type_color(val).lightened(0.35))
+			if chosen:
+				vb.add_theme_stylebox_override("normal", UIStyle.flat(Color(UIStyle.GOLD, 0.22), UIStyle.GOLD_HI, 2, 6))
+			var v2: String = String(val)
+			vb.pressed.connect(func():
+				set(key, v2)
+				_overlay_sig = 0
+				_render_overlay())
+			rf.add_child(vb)
+	var same: bool = _basic_race == String(sel["race"]) and _basic_type == String(sel["type"])
+	var ok := UIStyle.primary_button("Confirm: Basic %s (%s)" % [_basic_race, _basic_type] if not same else "Choose a new Race or Type", 15)
+	ok.disabled = same
+	var fid: int = int(sel["id"])
+	ok.pressed.connect(func():
+		var cmd := {"t": "reward_basic", "from_id": fid, "to_type": _basic_type, "to_race": _basic_race}
+		_basic_sel = -1
+		_send(cmd))
+	right.add_child(ok)
+	return right
 
 
 func _render_first() -> void:

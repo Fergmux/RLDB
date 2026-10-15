@@ -34,6 +34,14 @@ func test_game_starts_when_both_decks_locked() -> void:
 	assert_int(s.game.players[0]["extra"].size()).is_equal(3)
 
 
+## Add-card reward (feedback 04): choose a type (spends the pick), then take one offered card.
+func _add(s: Series, p: int, cat: String, index: int) -> String:
+	var err := s.submit(p, {"t": "reward_type", "category": cat})
+	if err != "":
+		return err
+	return s.submit(p, {"t": "reward_add", "index": index})
+
+
 func test_win_moves_both_players_to_four_rewards() -> void:
 	var s := _series()
 	var loser: int = s.game.active
@@ -50,15 +58,15 @@ func test_rewards_accept_any_combination_and_persist_into_next_game() -> void:
 	s.submit(loser, {"t": "concede"})
 	var size_before: int = s.decks[0].size()
 	# Player 0: add, add, remove, change basic type.
-	assert_str(s.submit(0, {"t": "reward_add", "index": 0})).is_empty()
-	assert_str(s.submit(0, {"t": "reward_add", "index": 1})).is_empty()
+	assert_str(_add(s, 0, "spell", 0)).is_empty()
+	assert_str(_add(s, 0, "unit", 1)).is_empty()
 	assert_str(s.submit(0, {"t": "reward_remove", "card_id": 7})).is_empty()
 	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 1, "to_type": "Fire"})).is_empty()
 	assert_bool(s.rewards[0]["done"]).is_true()
 	assert_int(s.decks[0].size()).is_equal(size_before + 1)
 	assert_int(s.decks[0].count(110)).is_equal(3)   # all three Water Mages became Fire Mages
 	assert_int(s.decks[0].count(1)).is_equal(0)
-	assert_str(s.submit(0, {"t": "reward_add", "index": 0})).is_not_empty()
+	assert_str(s.submit(0, {"t": "reward_type", "category": "spell"})).is_not_empty()
 	# Player 1: four removals.
 	for i in 4:
 		assert_str(s.submit(1, {"t": "reward_remove", "card_id": s.decks[1][-1]})).is_empty()
@@ -128,7 +136,7 @@ func test_draft_builds_deck_from_category_quotas() -> void:
 func test_opponent_reward_choices_are_private() -> void:
 	var s := _series()
 	s.submit(s.game.active, {"t": "concede"})
-	s.submit(0, {"t": "reward_add", "index": 0})
+	_add(s, 0, "trap", 0)
 	var v := s.view_for(1)
 	assert_bool(v.has("deck")).is_true()
 	assert_bool(JSON.stringify(v["rewards"]).contains("Added")).is_false()
@@ -160,7 +168,7 @@ func test_award_game_counts_one_game_win_only() -> void:
 func test_series_saves_and_resumes_between_games() -> void:
 	var s := _series(3)
 	s.submit(s.game.active, {"t": "concede"})
-	s.submit(0, {"t": "reward_add", "index": 0})
+	_add(s, 0, "power", 0)
 	var saved: Dictionary = JSON.parse_string(JSON.stringify(s.to_save()))
 	var r := Series.from_save(saved)
 	assert_str(r.stage).is_equal(Series.STAGE_REWARDS)
@@ -198,3 +206,53 @@ func test_saved_series_keeps_client_token_for_resume_binding() -> void:
 	s.submit(s.game.active, {"t": "concede"})
 	var saved: Dictionary = JSON.parse_string(JSON.stringify(s.to_save()))
 	assert_str(Series.from_save(saved).client_token).is_equal("abcdef0123456789abcdef01")
+
+
+func test_reward_type_spends_the_pick_and_offers_three_of_that_type() -> void:
+	var s := _series()
+	s.submit(s.game.active, {"t": "concede"})
+	assert_str(s.submit(0, {"t": "reward_add", "index": 0})).is_equal("Choose a card type first.")
+	assert_str(s.submit(0, {"t": "reward_type", "category": "trap"})).is_empty()
+	assert_int(s.rewards[0]["left"]).is_equal(3)            # spent at once: no backing out
+	var offer: Array = s.view_for(0)["rewards"]["offer"]
+	assert_int(offer.size()).is_equal(3)
+	for c in offer:
+		assert_str(String(c["category"])).is_equal("trap")
+	# Nothing else (another type, remove, change, finish) until a card is taken.
+	assert_str(s.submit(0, {"t": "reward_type", "category": "spell"})).is_equal("Pick one of the offered cards first.")
+	assert_str(s.submit(0, {"t": "reward_remove", "card_id": s.decks[0][0]})).is_equal("Pick one of the offered cards first.")
+	assert_str(s.submit(0, {"t": "reward_finish"})).is_equal("Pick one of the offered cards first.")
+	var picked: int = s.rewards[0]["offer"][2]
+	assert_str(s.submit(0, {"t": "reward_add", "index": 2})).is_empty()
+	assert_int(s.decks[0].count(picked)).is_greater_equal(1)
+	assert_int(s.rewards[0]["left"]).is_equal(3)
+	assert_bool(s.rewards[0]["pending"]).is_false()
+
+
+func test_last_pick_type_waits_for_the_card_before_finishing() -> void:
+	var s := _series()
+	s.submit(s.game.active, {"t": "concede"})
+	for i in 3:
+		assert_str(s.submit(0, {"t": "reward_remove", "card_id": s.decks[0][-1]})).is_empty()
+	assert_str(s.submit(0, {"t": "reward_type", "category": "unit"})).is_empty()
+	assert_bool(s.rewards[0]["done"]).is_false()             # left is 0 but a card is still owed
+	assert_str(s.submit(0, {"t": "reward_add", "index": 0})).is_empty()
+	assert_bool(s.rewards[0]["done"]).is_true()
+
+
+func test_unknown_reward_type_is_refused() -> void:
+	var s := _series()
+	s.submit(s.game.active, {"t": "concede"})
+	assert_str(s.submit(0, {"t": "reward_type", "category": "basic_unit"})).is_equal("Choose a card type.")
+	assert_int(s.rewards[0]["left"]).is_equal(4)
+
+
+func test_basic_change_can_change_race_and_type() -> void:
+	var s := _series()
+	s.submit(s.game.active, {"t": "concede"})
+	var n: int = s.decks[0].count(1)                         # Basic Mage (Water)
+	assert_int(n).is_greater(0)
+	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 1, "to_type": "Fire", "to_race": "Dragon"})).is_empty()
+	assert_int(s.decks[0].count(111)).is_equal(n)            # Basic Dragon (Fire)
+	assert_int(s.decks[0].count(1)).is_equal(0)
+	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 111, "to_type": "Fire", "to_race": "Dragon"})).contains("different")

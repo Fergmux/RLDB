@@ -474,7 +474,7 @@ func _c2s_command(seq: int, cmd: Dictionary) -> void:
 
 
 const _INT_FIELDS := ["uid", "idx", "id", "index", "who", "card_id", "from_id"]
-const _STR_FIELDS := ["t", "to_type", "name", "stance"]
+const _STR_FIELDS := ["t", "to_type", "to_race", "category", "name", "stance"]
 
 
 ## Rejects remote commands whose fields have the wrong types (never trust a client).

@@ -1,14 +1,15 @@
 class_name PileStack
 extends Control
-## A card pile drawn as a stack of card backs (or the top card face for public piles) whose
-## height grows with the number of cards, plus a name/count plate. Used for Draw, Extra, Spent
-## and Exhaust beside the unit zones (user feedback 2026-10-15). Clicking emits `pressed`
-## when `clickable`. Only counts are shown for piles the viewer may not inspect.
+## A card pile drawn as a stack of card backs whose height grows with the number of cards. The
+## bottom card fills the whole rect (the same size as a Power zone); extra layers rise a few
+## pixels above it. The pile's name sits on a plate at the foot of the top card and the count is
+## overlaid in the middle (user feedback 2026-10-16). Used for Draw, Extra, Spent and Exhaust
+## beside the unit zones. Clicking emits `pressed` when `clickable`.
 
 signal pressed(zone: String)
 
-const MAX_LAYERS := 10
-const LAYER_STEP := 1.5
+const MAX_LAYERS := 6
+const LAYER_STEP := 1.2
 
 var zone: String = "draw"
 var title: String = "Deck"
@@ -43,49 +44,43 @@ func _gui_input(event: InputEvent) -> void:
 
 ## Centre of the top card (where cards fly to/from).
 func top_center() -> Vector2:
-	return get_global_rect().get_center() - Vector2(0, _layers() * LAYER_STEP)
+	return get_global_rect().get_center() - Vector2(0, maxi(_layers() - 1, 0) * LAYER_STEP)
 
 
 func _layers() -> int:
 	if count <= 0:
 		return 0
-	return clampi(int(ceil(float(count) / 2.0)), 1, MAX_LAYERS)
+	return clampi(int(ceil(float(count) / 3.0)), 1, MAX_LAYERS)
 
 
 func _draw() -> void:
-	var plate_h := 20.0
-	# The pile's cards keep the 2:3 card shape; the stack rises above the bottom card.
-	var avail := size.y - plate_h - 6.0 - MAX_LAYERS * LAYER_STEP
-	var ch := minf(avail, (size.x - 8.0) * 1.5)
-	var cw := ch / 1.5
-	var card := Rect2(Vector2((size.x - cw) / 2.0, 2.0 + MAX_LAYERS * LAYER_STEP), Vector2(cw, ch))
-	# Empty pile outline.
-	var sb := StyleBoxFlat.new()
-	sb.draw_center = count == 0
-	sb.bg_color = Color(0, 0, 0, 0.25)
-	sb.border_color = Color(UIStyle.BRONZE, 0.55)
-	sb.set_border_width_all(1)
-	sb.set_corner_radius_all(6)
-	draw_style_box(sb, card)
+	var card := Rect2(Vector2.ZERO, size)
 	var n := _layers()
+	if n == 0:
+		# Empty pile: a zone-like outline with the name.
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0, 0, 0, 0.22)
+		sb.border_color = Color(UIStyle.BRONZE, 0.55)
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(6)
+		draw_style_box(sb, card)
 	for i in n:
 		var r := card
 		r.position.y -= float(i) * LAYER_STEP
-		r.position.x += (0.6 if i % 2 == 0 else -0.6)
 		var b := StyleBoxFlat.new()
 		b.bg_color = Color("1d1630")
 		b.border_color = Color("6e5a9a")
 		b.set_border_width_all(1 if i < n - 1 else 2)
 		b.set_corner_radius_all(6)
-		if i == n - 1:
+		if i == 0:
 			b.shadow_color = Color(0, 0, 0, 0.45)
 			b.shadow_size = 4
 		draw_style_box(b, r)
 		if i == n - 1:
 			CardWidget.draw_back_art(self, r, r.size.x / 90.0)   # the same back as every card
+	var top := card
+	top.position.y -= float(maxi(n - 1, 0)) * LAYER_STEP
 	if _hover and clickable:
-		var top := card
-		top.position.y -= float(maxi(n - 1, 0)) * LAYER_STEP
 		var h := StyleBoxFlat.new()
 		h.draw_center = false
 		h.border_color = UIStyle.GOLD_HI
@@ -93,26 +88,34 @@ func _draw() -> void:
 		h.set_corner_radius_all(7)
 		draw_style_box(h, top.grow(2))
 	if ready_mark:
-		var rr2 := card
-		rr2.position.y -= float(maxi(n - 1, 0)) * LAYER_STEP
 		var rb := StyleBoxFlat.new()
 		rb.draw_center = false
 		rb.border_color = UIStyle.READY
 		rb.set_border_width_all(3)
-		rb.set_corner_radius_all(8)
-		draw_style_box(rb, rr2.grow(3))
-	# Name / count plate.
-	var pr := Rect2(Vector2(0, size.y - plate_h), Vector2(size.x, plate_h))
+		rb.set_corner_radius_all(9)
+		draw_style_box(rb, top.grow(4))
+	# Count overlaid in the middle of the top card.
+	var font := UIStyle.font_display(700)
+	var num := str(count)
+	var fs := 30
+	var c := top.get_center() + Vector2(0, -6)
+	var tsz := font.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+	draw_circle(c, maxf(tsz.x, tsz.y * 0.7) / 2.0 + 10.0, Color(0.05, 0.04, 0.08, 0.82 if n > 0 else 0.5))
+	var pos := Vector2(c.x - tsz.x / 2.0, c.y + (font.get_ascent(fs) - font.get_descent(fs)) / 2.0)
+	draw_string_outline(font, pos, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.85))
+	draw_string(font, pos, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UIStyle.GOLD_HI if n > 0 else UIStyle.MUTED)
+	# Name plate at the foot of the top card.
+	var plate_h := 20.0
+	var pr := Rect2(Vector2(top.position.x + 5.0, top.end.y - plate_h - 6.0), Vector2(top.size.x - 10.0, plate_h))
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.08, 0.07, 0.06, 0.92)
-	ps.border_color = Color(UIStyle.BRONZE, 0.8)
+	ps.border_color = Color(UIStyle.GOLD, 0.65)
 	ps.set_border_width_all(1)
-	ps.set_corner_radius_all(5)
+	ps.set_corner_radius_all(4)
 	draw_style_box(ps, pr)
-	var font := UIStyle.font_bold()
-	var txt := "%s %d" % [title, count]
-	var fs := 13
-	while fs > 9 and font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > size.x - 6:
-		fs -= 1
-	var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	draw_string(font, Vector2((size.x - tw) / 2.0, pr.position.y + plate_h / 2.0 + fs * 0.36), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UIStyle.TEXT)
+	var tf := UIStyle.font_display(600)
+	var tfs := 12
+	while tfs > 9 and tf.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x > pr.size.x - 6:
+		tfs -= 1
+	var tw := tf.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x
+	draw_string(tf, Vector2(pr.position.x + (pr.size.x - tw) / 2.0, pr.position.y + plate_h / 2.0 + tfs * 0.36), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, UIStyle.TEXT)

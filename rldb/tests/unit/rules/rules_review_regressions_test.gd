@@ -142,3 +142,23 @@ func test_no_legal_choice_message_is_private() -> void:
 	TB.summon(m, 0, 73, 0)                                  # no Warrior in Draw
 	var pub := JSON.stringify(MatchView.log_for(m, 1))
 	assert_bool(pub.contains("no legal choice")).is_false()
+
+
+## Feedback 04 bug: a Fusion summon through Tag Team - S asked "Choose a stance for Tag Team - S"
+## (the effect's source) instead of naming the Fusion unit being summoned; the zone prompt too.
+func test_fusion_zone_and_stance_prompts_name_the_fusion_unit() -> void:
+	var m := TB.make()
+	TB.unit(m, 0, 4, 3)                                  # Basic Beast (Water)
+	TB.unit(m, 0, 2, 1)                                  # Basic Dragon (Water)
+	var wyrm := TB.card(m, 0, 93, "extra")
+	TB.summon(m, 0, 8, 0)                                # Tag Team - S: On Summon may Fusion Summon
+	TB.choose(m, ["Yes"])
+	TB.choose_uids(m, [wyrm])
+	assert_str(TB.pend_kind(m)).is_equal("slot")
+	assert_str(String(m.pending["prompt"])).contains(m.name_of(wyrm))
+	TB.choose(m, ["Front row, column 2"])                # the Dragon material's own zone
+	assert_str(TB.pend_kind(m)).is_equal("stance")
+	assert_str(String(m.pending["prompt"])).is_equal("Choose a stance for %s." % m.name_of(wyrm))
+	TB.choose(m, ["Defense"])
+	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
+	assert_str(m.cards[wyrm]["stance"]).is_equal("def")

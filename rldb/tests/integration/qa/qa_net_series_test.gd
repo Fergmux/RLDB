@@ -16,8 +16,9 @@ func test_series_resumes_from_save_with_same_client_and_refuses_other_token() ->
 	host.local_seat.send({"t": "concede"})
 	assert_bool(await _wait(func(): return host.series.stage == Series.STAGE_REWARDS)).is_true()
 	assert_bool(await _wait(func(): return cview().get("stage", "") == "rewards")).is_true()
+	client.local_seat.send({"t": "reward_type", "category": "unit"})
 	client.local_seat.send({"t": "reward_add", "index": 0})
-	assert_bool(await _wait(func(): return host.series.rewards[1]["left"] == 3)).is_true()
+	assert_bool(await _wait(func(): return host.series.rewards[1]["left"] == 3 and not host.series.rewards[1]["pending"])).is_true()
 	host.local_seat.send({"t": "reward_finish"})
 	assert_bool(await _wait(func(): return host.series.rewards[0]["done"])).is_true()
 	var save_id := host.series.save_id
@@ -162,7 +163,8 @@ func test_commands_sent_across_stage_transitions_are_refused_cleanly() -> void:
 	var deck_before: Array = host.series.decks[1].duplicate()
 	# Act / Assert: game, deck and first-player commands during rewards
 	for pair in [[{"t": "next_phase"}, "reward"], [{"t": "pick_starter", "index": 1}, "reward"],
-			[{"t": "first_player", "who": 1}, "reward"], [{"t": "reward_add", "index": 99}, "Invalid"],
+			[{"t": "first_player", "who": 1}, "reward"], [{"t": "reward_add", "index": 99}, "type first"],
+			[{"t": "reward_type", "category": "nope"}, "card type"],
 			[{"t": "reward_remove", "card_id": 999999}, "not in your deck"], [{"t": "reward_basic", "from_id": 21, "to_type": "Fire"}, "basic unit"]]:
 		var n := client_errors.size()
 		client.local_seat.send(pair[0])

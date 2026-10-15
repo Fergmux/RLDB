@@ -142,15 +142,28 @@ func test_defense_stance_unit_cannot_attack() -> void:
 	assert_str(m.validate(1, {"t": "attack", "uid": a})).is_equal("Only Attack-stance units can attack.")
 
 
-func test_battle_phase_forbids_summon_set_and_stance_but_allows_spells() -> void:
+## User rule 2026-10-16: nothing is played from the Hand in the Battle Phase (Spells, Powers,
+## Traps, units); only cards already on the Field act there.
+func test_battle_phase_forbids_playing_anything_from_hand() -> void:
 	var m := _battle_match()
 	var u := TB.card(m, 1, TB.WATER)
 	var trap := TB.card(m, 1, 45)
 	var spell := TB.card(m, 1, 83)       # Sacred Offerings
+	var power := TB.card(m, 1, 88)       # Elemental Mastery
 	var onfield := TB.unit(m, 1, TB.WATER, 0)
 	assert_str(m.validate(1, {"t": "summon", "uid": u})).is_not_empty()
 	assert_str(m.validate(1, {"t": "set", "uid": trap})).is_not_empty()
+	assert_str(m.validate(1, {"t": "power", "uid": power})).is_not_empty()
 	assert_str(m.validate(1, {"t": "stance", "uid": onfield})).is_not_empty()
+	assert_str(m.validate(1, {"t": "cast", "uid": spell})).is_equal("Spells in your Hand can only be cast in a Main Phase.")
+
+
+func test_cast_from_hand_is_legal_in_main_phases() -> void:
+	var m := TB.make()
+	TB.to_turn2(m)
+	TB.unit(m, 1, TB.WATER, 0)                           # Sacred Offerings needs a unit to target
+	var spell := TB.card(m, 1, 83)
+	m.players[1]["ap"] = 5
 	assert_str(m.validate(1, {"t": "cast", "uid": spell})).is_empty()
 
 

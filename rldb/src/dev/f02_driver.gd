@@ -35,7 +35,11 @@ func run(main_node: Node, dir: String) -> void:
 	_stage()
 	host.broadcast()
 	_view_seat(a)
-	await _wait(0.8)
+	await _wait(0.5)
+	var coin := gs.get_children().filter(func(n): return n is CoinFlip)
+	_check("FB4-09 game 1 starts with a coin flip", not coin.is_empty())
+	await _shot("00_coin_flip")
+	await _wait(3.4)
 	await _steps()
 	_finish()
 
@@ -204,8 +208,8 @@ func _steps() -> void:
 			await _wait(0.4)
 			break
 	await _shot("10_extra_pile_click_to_act")
-	var arc_btn := _pile_button("Arcane Defense")
-	_check("F02-02 Extra Deck card offers Arcane Attack/Defense after click", arc_btn != null)
+	var arc_btn := _pile_button("Summon Defense")
+	_check("F02-02 Extra Deck card offers Summon Attack/Defense after click", arc_btn != null)
 	if arc_btn != null:
 		await _click(arc_btn.get_global_rect().get_center())
 		await _wait(0.5)
@@ -270,6 +274,10 @@ func _steps() -> void:
 		await _click(_slot_rect(a, "unit", 0).get_center())
 		await _wait(0.3)
 		_check("F02-01 response lock: own card shows no actions", gs._stack == null)
+		# Hot-seat hands the screen to the responder at once; look from the waiting seat explicitly.
+		_view_seat(a)
+		await _wait(0.4)
+		_check("FB4-22 opponent-is-responding notice in the middle of the board", gs.wait_chip.visible and gs.wait_label.text.contains("responding"), gs.wait_label.text)
 		await _shot("16_waiting_on_opponent_response")
 		_view_seat(o)
 		await _wait(0.5)
@@ -332,6 +340,68 @@ func _steps() -> void:
 		heard[n] = true
 	for want in ["select", "confirm", "cancel", "summon", "attack", "notice", "card_draw"]:
 		_check("F02-13 sound played: %s" % want, heard.has(want), str(heard.keys()))
+	await _fusion_zone_steps()
+
+
+## FB4-15/16: a Fusion summon through Tag Team - S into the Dragon material's own zone. The zone is
+## outlined as a whole (the card in it is not the target) and the prompts name the Fusion unit.
+func _fusion_zone_steps() -> void:
+	main._start_local({"seed": 77, "best_of": 3, "deck_mode": "starter", "names": ["Ana", "Ben"]})
+	await _frames(8)
+	host = main.local_host
+	host.handle(0, {"t": "pick_starter", "index": 1})
+	host.handle(1, {"t": "pick_starter", "index": 3})
+	await _frames(4)
+	m = host.series.game
+	gs = main.screen
+	var p := m.active
+	_put(p, 4, 3, "atk")                                 # Basic Beast (Water), back row column 1
+	var dragon := _put(p, 2, 1, "atk")                   # Basic Dragon (Water), front row column 2
+	var wyrm := _new(p, 93, "extra")
+	var tt := _new(p, 8, "hand")                         # Tag Team - S
+	m.players[p]["ap"] = 5
+	host.broadcast()
+	_view_seat(p)
+	await _wait(3.6)                                     # let the game-start coin flip finish
+	host.handle(p, {"t": "summon", "uid": tt, "stance": "atk"})
+	_answer(p, "Front row, column 1")
+	await _wait(0.3)
+	_answer(p, "Yes")
+	await _wait(0.3)
+	_answer(p, m.name_of(wyrm))
+	await _wait(0.6)
+	_check("FB4-15 zone prompt names the Fusion unit", String(m.pending.get("prompt", "")).contains(m.name_of(wyrm)), String(m.pending.get("prompt", "")))
+	var it: Dictionary = gs.fx_slot_item(p, "unit", 1)
+	_check("FB4-16 occupied material zone outlined as a whole zone", (it["ring"] as GameScreen.ZoneRing).visible and not (it["widget"] as CardWidget).highlighted)
+	await _shot("23_fusion_zone_pick")
+	await _click(_zone_rect(p, "unit", 1).get_center())
+	await _wait(0.4)
+	_check("FB4-15 stance prompt names the Fusion unit", String(m.pending.get("prompt", "")) == "Choose a stance for %s." % m.name_of(wyrm), String(m.pending.get("prompt", "")))
+	await _shot("24_fusion_stance_banner")
+	_answer(p, "Defense")
+	await _wait(0.6)
+	_check("FB4-15 Fusion unit summoned into the material's zone", m.cards[wyrm]["zone"] == "unit" and m.cards[wyrm]["slot"] == 1 and m.cards[dragon]["zone"] != "unit")
+	await _shot("25_after_fusion")
+	# FB4-21: end of turn sends the hand to Spent with an animation.
+	host.handle(p, {"t": "next_phase"})
+	await _wait(0.2)
+	gs.fx.finish_all()
+	await _click(gs.phase_btn.get_global_rect().get_center())
+	await _wait(0.12)
+	await _shot("26_end_turn_discard")
+	await _wait(1.0)
+
+
+## Answers the pending choice of player p with the first option whose label contains `text`.
+func _answer(p: int, text: String) -> void:
+	if m.pending.is_empty():
+		_check("pending choice for '%s'" % text, false, "nothing pending")
+		return
+	for i in m.pending["options"].size():
+		if String(m.pending["options"][i]["label"]).contains(text):
+			host.handle(p, {"t": "choose", "id": m.pending["id"], "indices": [i]})
+			return
+	_check("option '%s' offered" % text, false, str(m.pending["options"].map(func(o): return o["label"])))
 
 
 # ---------------------------------------------------------------- checks

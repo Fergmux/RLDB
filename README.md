@@ -17,9 +17,12 @@ Main menu: **Host Steam lobby & invite a friend**, **Find lobbies** (public lobb
 screen), **Deck builder** (unrestricted custom decks) and, under *Advanced*, **Host/Join LAN**.
 Series length (best of 1/3/5/7) and deck mode (starter/custom decks or draft) are chosen on the menu.
 
-In a match: hover a card (or press Tab) to see its legal actions on the card; click/right-click a
-card to inspect it in the details panel; number keys pick prompt options; **Settings** toggles
-reduced motion and fast animations. If an opponent disconnects, the host may claim the current
+In a match: hover a card to read it (details panel and tooltip); click your card (or press Tab)
+to see its legal actions on the card; choices are made in the banner at the top or by clicking
+highlighted cards/zones; **Settings** has reduced motion, fast animations, music and sound volume.
+Nothing is played from the Hand in the Battle Phase (only cards already on the Field act there).
+After each game you pick rewards: add a card (choose its type, then one of three), remove a card,
+or change a basic unit's Race and Type. If an opponent disconnects, the host may claim the current
 game after 60 seconds (the series continues).
 
 Extra command-line flags (after `--`): `--no-steam`, `--seed=N`, `--draft`, `--bo=5`,
@@ -56,7 +59,7 @@ logged into a different Steam account, the accounts being Steam friends. Copy th
 godot --headless --path rldb -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode -c
 ```
 
-398 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
+405 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
 summons, per-card behaviour (every effect card), series flow, review regressions, and
 two-client ENet integration tests (trap suspension, illegal input, payload redaction,
 reconnect during a pending prompt, duplicate-command replay, and complete best-of-3 /

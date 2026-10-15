@@ -160,7 +160,7 @@ func _op_summon(f: Dictionary, op: Dictionary) -> int:
 	if _summon_blocked(f["ctl"], unit_type(u)):
 		add_log("%s cannot be summoned (Bahatia)." % name_of(u))
 		return R.CONT
-	var ops := [{"op": "pick_slot", "zone": op.get("place", "any") if op.get("place", "any") != "any" else "unit", "as": "sslot"},
+	var ops := [{"op": "pick_slot", "zone": op.get("place", "any") if op.get("place", "any") != "any" else "unit", "as": "sslot", "for": u},
 		{"op": "pick_stance", "as": "stance", "fixed": "atk" if op.get("stance", "choose") == "atk" else "", "for": u},
 		{"op": "place", "target": u, "slot": "$sslot", "stance": "$stance"}]
 	ops += summon_tail(u, f["ctl"])
@@ -432,8 +432,8 @@ func _op_fusion(f: Dictionary, op: Dictionary) -> int:
 	for i in script_of(fu)["fusion"].size():
 		ops.append({"op": "fusion_mat", "i": i})
 	# Zone is checked (counting zones the Field materials will free) before anything is consumed (P-16).
-	ops.append({"op": "pick_slot", "zone": "unit", "as": "fslot", "freeing": "$fmats"})
-	ops.append({"op": "pick_stance", "as": "stance"})
+	ops.append({"op": "pick_slot", "zone": "unit", "as": "fslot", "freeing": "$fmats", "for": fu})
+	ops.append({"op": "pick_stance", "as": "stance", "for": fu})
 	ops.append({"op": "fusion_tribute"})
 	ops.append({"op": "place", "target": fu, "slot": "$fslot", "stance": "$stance"})
 	ops += summon_tail(fu, p)
@@ -465,23 +465,36 @@ func _op_fusion_mat(f: Dictionary, op: Dictionary) -> int:
 	var opts := []
 	for u in ok:
 		opts.append(card_option(u, "%s (%s)" % [name_of(u), cards[u]["zone"].capitalize()]))
-	return ask(f, f["ctl"], "select", "Choose material %d of %d for %s (%s)." % [op["i"] + 1, reqs.size(), name_of(fu), _req_text(reqs[op["i"]])], opts, 1, 1, false, {"reveal_pile": true})
+	return ask(f, f["ctl"], "select", "Choose %s for the summon of %s." % [_a_an(_req_text(reqs[op["i"]])), name_of(fu)], opts, 1, 1, false, {"reveal_pile": true})
 
 
+## "a Fire unit" / "an Earth unit" (fusion material prompts).
+static func _a_an(t: String) -> String:
+	if t == "":
+		return "a material"
+	return ("an " if "AEIOUaeiou".contains(t.substr(0, 1)) else "a ") + t
+
+
+## Material requirement as a noun phrase: "Fire Mage", "Basic Unit", "unit with at least 20 ATK".
 func _req_text(req: Dictionary) -> String:
-	var parts := []
+	var adj := []
+	var noun := "unit"
+	var tail := []
 	for k in req:
+		var v = req[k]
 		match k:
-			"race": parts.append(req[k] + " unit")
-			"type": parts.append(req[k] + " unit")
-			"category": parts.append("Basic Unit")
-			"atk_min": parts.append("unit with >= %d ATK" % req[k])
-			"def_min": parts.append("unit with >= %d DEF" % req[k])
-			"has_buff": parts.append("Buffed unit")
-			"has_debuff": parts.append("Debuffed unit")
-			"has_type": parts.append("unit with a Type")
-			"same_type_as": parts.append("unit of the same Type")
-	return ", ".join(parts)
+			"type": adj.append(String(v))
+			"race": noun = String(v)
+			"category": noun = "Basic Unit" if "basic_unit" in v else "unit"
+			"atk_min": tail.append("with at least %d ATK" % int(v))
+			"def_min": tail.append("with at least %d DEF" % int(v))
+			"has_buff": adj.append("buffed" if v else "unbuffed")
+			"has_debuff": adj.append("debuffed" if v else "undebuffed")
+			"has_type": tail.append("with a Type" if v else "with no Type")
+			"same_type_as": tail.append("of the same Type")
+	if noun == "Basic Unit" and req.has("race"):
+		noun = "Basic " + String(req["race"])
+	return " ".join(adj + [noun] + tail)
 
 
 func _op_fusion_tribute(f: Dictionary, op: Dictionary) -> int:

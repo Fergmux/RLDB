@@ -356,6 +356,11 @@ func _check_hotseat() -> void:
 	var want := local_host.acting_seat()
 	if want == _shown_seat:
 		return
+	# Let the current seat's end-of-turn animation finish before handing the screen over.
+	var wait_ms: int = screen.fx_hold_until - Time.get_ticks_msec()
+	if wait_ms > 0:
+		get_tree().create_timer(float(wait_ms) / 1000.0).timeout.connect(_check_hotseat, CONNECT_ONE_SHOT)
+		return
 	if _privacy:
 		_show_privacy(want)
 	else:

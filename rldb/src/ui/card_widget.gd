@@ -277,6 +277,28 @@ func _para(text: String, font: Font, tag: String, fs: int, width: float, max_lin
 	return tp
 
 
+## Paragraph at the largest size (<= fs_max) at which ALL of `text` fits in width x height; at
+## fs_min it is clipped with an ellipsis as a last resort. Shared cache like _para.
+func _fit_para(text: String, font: Font, fs_max: int, fs_min: int, width: float, height: float) -> TextParagraph:
+	var key := "fit|%s|%d|%d|%d|%d" % [text, fs_max, fs_min, int(width), int(height)]
+	if _para_shared.has(key):
+		return _para_shared[key]
+	if _para_shared.size() > 600:
+		_para_shared.clear()
+	var tp: TextParagraph = null
+	for fs in range(fs_max, fs_min - 1, -1):
+		tp = TextParagraph.new()
+		tp.width = width
+		tp.add_string(text, font, fs)
+		if tp.get_size().y <= height:
+			break
+		if fs == fs_min:
+			tp.max_lines_visible = maxi(1, int(height / maxf(1.0, tp.get_size().y / maxf(1.0, float(tp.get_line_count())))))
+			tp.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_para_shared[key] = tp
+	return tp
+
+
 ## Resets the shared style box to a plain fill/border (no shadow) and returns it.
 func _sbox(fill: Color, border: Color, bw: int, radius: int, with_center: bool = true) -> StyleBoxFlat:
 	var sb := _sb
@@ -322,7 +344,10 @@ func _draw() -> void:
 	if view.get("hidden", false):
 		_draw_back()
 	elif _is_own_set_card():
-		_draw_set_back()
+		_draw_back()
+		# The name reads upright even though the card lies turned in the Trap/Spell zone.
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_draw_set_name()
 	else:
 		match size_kind:
 			"power", "trap": _draw_power()
@@ -342,12 +367,12 @@ func _is_own_set_card() -> bool:
 	return int(view.get("statuses", {}).get("reveal", 0)) <= 0
 
 
-func _draw_set_back() -> void:
-	_draw_back()
+## Name plate across the middle of an own face-down set card, in screen orientation (widget space).
+func _draw_set_name() -> void:
 	var h := 22.0 * _s
 	var keep: Variant = view.get("category")
 	view["category"] = ""   # the back stays identical for every kind: no kind-coloured stripe on the plate
-	_name_plate(Rect2(5.0 * _s, (_ps.y - h) / 2.0, _ps.x - 10.0 * _s, h), 10.5, 0.0, 0.0, 8.0)
+	_name_plate(Rect2(_cr.position.x + 5.0 * _s, _cr.get_center().y - h / 2.0, _cr.size.x - 10.0 * _s, h), 10.5, 0.0, 0.0, 8.0)
 	view["category"] = keep
 
 
@@ -787,26 +812,14 @@ func _chip_draw(x: float, y: float, w: float, h: float, text: String, col: Color
 	_text_c(font, text, Vector2(tx, y + h / 2.0), fs, col.lightened(0.45))
 
 
-func _protected_icon(c: Vector2, r: float) -> void:
-	if view.get("zone", "") == "unit" and view.get("protected", false):
-		var pts := _shield_pts(Rect2(c - Vector2(r * 0.8, r), Vector2(r * 1.6, r * 2.0)))
-		draw_colored_polygon(pts, Color(0.85, 0.92, 1.0, 0.92))
-		draw_polyline(_closed(pts), Color(0.1, 0.2, 0.4), maxf(1.0, _s))
-
-
 ## Damage-type pip on the art. Reads view.type at draw time so type changes show immediately.
 func _type_pip(c: Vector2, r: float) -> void:
-	if not view.has("type"):
+	# Only a real damage Type gets a pip; Spells/Traps/Powers and typeless units show none (the
+	# race/type line already says "No type").
+	if not view.has("type") or view.get("type") == null or String(view.get("type")) == "":
 		return
 	var t = view.get("type")
 	TypeIcons.draw_pip(self, "" if t == null else str(t), c, r)
-
-
-func _acted_marks(corner: Vector2) -> void:
-	if view.get("zone", "") == "unit" and view.get("attacked", false):
-		draw_circle(corner, 4.0 * _s, Color("9a9a9a"))
-		draw_arc(corner, 4.0 * _s, 0.0, TAU, 14, Color(0, 0, 0, 0.65), maxf(1.0, _s))
-		draw_line(corner + Vector2(-2.2, 2.2) * _s, corner + Vector2(2.2, -2.2) * _s, Color(0, 0, 0, 0.7), maxf(1.0, 1.2 * _s))
 
 
 # ---------------------------------------------------------------- layouts
@@ -815,15 +828,14 @@ func _acted_marks(corner: Vector2) -> void:
 func _draw_square() -> void:
 	var is_unit: bool = String(view.get("category", "")) in UNIT_CATS
 	_frame(6.0)
-	_draw_art(_r(4, 4, 77, 64))
-	_type_pip(_p(69, 16), 7.0 * _s)
-	_protected_icon(_p(70, 40), 5.5 * _s)
-	_acted_marks(_p(11, 38))
-	_name_plate(_r(4, 56, 77, 20), 10.5, 0.0, 0.0, 8.0)
-	_chips(4, 81, 77.5, 9.5, 7.5, 2)
+	_draw_art(_r(4, 4, 77, 60))
+	# Cost gem and type icon share one size (user feedback).
+	_type_pip(_p(72, 13), 9.0 / TypeIcons.PIP_K * _s)
+	_name_plate(_r(4, 52, 77, 20), 10.5, 0.0, 0.0, 8.0)
+	_chips(4, 81, 73.0, 9.5, 7.5, 2)
 	if is_unit:
-		_stat_badge(_r(2, 96, 38, 30), true, 16.0)
-		_stat_badge(_r(46, 97, 34, 28), false, 16.0)
+		_stat_badge(_r(2, 93, 36, 33), true, 16.0)
+		_stat_badge(_r(47, 94, 33, 32), false, 16.0)
 	_gem(_p(13, 13), 9.0 * _s, _fs(12))
 
 
@@ -844,18 +856,18 @@ func _draw_tall(big: bool) -> void:
 	var is_unit: bool = String(view.get("category", "")) in UNIT_CATS
 	var g := {}
 	if big:
-		g = {"art": [10, 10, 204, 122], "plate": [10, 112, 204, 32], "line": 148.0, "text": [12, 170, 200, 96 if is_unit else 122],
-			"chip_y": 270.0, "chip_x": [12.0, 212.0], "chip_rows": 1, "atk": [6, 290, 58, 46], "def": [160, 292, 54, 42], "gem": [28, 28, 20],
-			"f_name": 19.0, "f_line": 13.0, "f_text": 13.0, "f_chip": 11.0, "f_stat": 30.0, "f_gem": 24.0, "chip_h": 15.0, "chip_y_nu": 298.0, "chip_rows_nu": 2, "pip": 11.0}
+		g = {"art": [10, 10, 204, 110], "plate": [10, 100, 204, 32], "line": 136.0, "text": [12, 156, 200, 98 if is_unit else 134],
+			"chip_y": 258.0, "chip_x": [12.0, 212.0], "chip_rows": 1, "atk": [6, 279, 56, 53], "def": [162, 281, 52, 50], "gem": [27, 27, 17],
+			"f_name": 19.0, "f_line": 13.0, "f_text": 13.0, "f_chip": 11.0, "f_stat": 30.0, "f_gem": 21.0, "chip_h": 15.0, "chip_y_nu": 298.0, "chip_rows_nu": 2, "pip": [197, 27]}
 	else:
-		g = {"art": [6, 6, 108, 66], "plate": [6, 60, 108, 22], "line": 84.0, "text": [6, 99, 108, 41 if is_unit else 62],
-			"chip_y": 142.0, "chip_x": [6.0, 114.0], "chip_rows": 1, "atk": [3, 148, 34, 29], "def": [84, 150, 32, 27], "gem": [15, 15, 13],
-			"f_name": 12.5, "f_line": 11.0, "f_text": 10.5, "f_chip": 8.5, "f_stat": 17.0, "f_gem": 16.0, "chip_h": 10.0, "chip_y_nu": 164.0, "chip_rows_nu": 1, "pip": 7.0}
+		g = {"art": [6, 6, 108, 58], "plate": [6, 52, 108, 22], "line": 76.0, "text": [6, 90, 108, 44 if is_unit else 72],
+			"chip_y": 136.0, "chip_x": [6.0, 114.0], "chip_rows": 1, "atk": [3, 146, 34, 32], "def": [84, 147, 32, 31], "gem": [17, 17, 11.5],
+			"f_name": 12.5, "f_line": 11.0, "f_text": 10.5, "f_chip": 8.5, "f_stat": 17.0, "f_gem": 14.0, "chip_h": 9.5, "chip_y_nu": 164.0, "chip_rows_nu": 1, "pip": [103, 17]}
 	_frame(8.0)
 	var a: Array = g["art"]
 	_draw_art(_r(a[0], a[1], a[2], a[3]))
-	_type_pip(_p(a[0] + a[2] - 11.0 * (_pipk(big)), a[1] + 11.0 * _pipk(big)), float(g["pip"]) * _s)
-	_protected_icon(_p(a[0] + a[2] - 11.0 * _pipk(big), a[1] + 30.0 * _pipk(big)), 7.0 * _s)
+	var gm: Array = g["gem"]
+	_type_pip(_p(g["pip"][0], g["pip"][1]), float(gm[2]) / TypeIcons.PIP_K * _s)   # same size as the cost gem
 	var pl: Array = g["plate"]
 	_name_plate(_r(pl[0], pl[1], pl[2], pl[3]), g["f_name"], 0.0, 0.0)
 	# Type / race line.
@@ -874,10 +886,9 @@ func _draw_tall(big: bool) -> void:
 	if view.get("support", "full") == "unimplemented":
 		rules = "[Effect not implemented] " + rules
 	_round_rect(_r(t[0], t[1], t[2], t[3]), Color(0.847, 0.8, 0.69, 0.08), 3.0 * _s)
-	var tfs := _fs(g["f_text"])
-	var lines := maxi(1, int(float(t[3]) / (float(g["f_text"]) * 1.22)))
 	if rules != "":
-		var tp := _para(rules, UIStyle.font_body(), "b", tfs, (float(t[2]) - 8.0) * _s, lines)
+		# The whole rules text always fits: the size steps down until it does (user feedback).
+		var tp := _fit_para(rules, UIStyle.font_body(), _fs(g["f_text"]), maxi(5, _fs(g["f_text"] * 0.55)), (float(t[2]) - 8.0) * _s, (float(t[3]) - 3.0) * _s)
 		tp.draw(get_canvas_item(), _p(t[0] + 4, t[1] + 2), UIStyle.TEXT)
 	# Chips + stat badges + gem.
 	if is_unit:
@@ -888,12 +899,7 @@ func _draw_tall(big: bool) -> void:
 		_stat_badge(_r(df[0], df[1], df[2], df[3]), false, g["f_stat"])
 	else:
 		_chips(g["chip_x"][0], g["chip_x"][1], g["chip_y_nu"], g["chip_h"], g["f_chip"], g["chip_rows_nu"])
-	var gm: Array = g["gem"]
 	_gem(_p(gm[0], gm[1]), float(gm[2]) * _s, _fs(g["f_gem"]))
-
-
-func _pipk(big: bool) -> float:
-	return 1.9 if big else 1.0
 
 
 ## "Race · [icon] Type": race text and damage Type stay separate; the icon is read from view.type now.
@@ -988,9 +994,8 @@ func _draw_overlays() -> void:
 		_ring(Color(fx_glow, fx_glow.a), 3.0 * _s, rect, rad)
 		_ring(Color(fx_glow, fx_glow.a * 0.35), 3.0 * _s, rect.grow(2.5 * _s), rad + 2.0 * _s)
 	if _is_ready:
-		# Double ring (thin outer + solid inner): a shape cue distinct from every single-ring state.
-		_ring(Color(UIStyle.READY, 0.95), maxf(1.5, 1.6 * _s), rect.grow(4.5 * _s), rad + 4.5 * _s)
-		_ring(Color(UIStyle.READY, 0.95), maxf(2.0, 2.4 * _s), rect, rad)
+		# One ring OUTSIDE the card (its own frame colour stays visible) plus the chevron badge.
+		_ring(Color(UIStyle.READY, 0.95), maxf(2.0, 2.4 * _s), rect.grow(4.0 * _s), rad + 4.0 * _s)
 	if hovered or _self_hover:
 		# Soft ivory glow, no fill: clearly not the pulsing yellow TARGET.
 		_ring(Color(UIStyle.HOVER_GLOW, 0.95), maxf(1.5, 1.8 * _s), rect, rad)
