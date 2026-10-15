@@ -47,7 +47,7 @@ or by updating this file).
 | P-24 | "Activates an Effect" | Casting/activating a Spell, using a manual unit/Power ability, or playing a Power. On Summon/On Destruction triggers are not activations. |
 | P-25 | Playing a Power | Main Phases only (like other cards played to the board); its abilities may be used in Battle. |
 | P-26 | Nimble move timing | Any of the owner's phases (Main 1, Battle, Main 2), once per turn. |
-| P-27 | Hidden response windows | Whenever a player holds a face-down card they get a response prompt for each respondable event, even if no Trap qualifies (they just Pass). This hides whether an eligible Trap exists, at the cost of more prompts. Configurable: `hidden_response_windows`. |
+| P-27 | Hidden response windows | Whenever a player holds a face-down card they get a response prompt for each respondable event, even if no Trap qualifies (they just Pass). This hides whether an eligible Trap exists, at the cost of more prompts. Configurable: `hidden_response_windows` (on for network play, off by default for hot-seat). |
 | P-28 | Last-known state in responses | Effects that read an attacker's ATK use its ATK at attack declaration if it has since left the Field (extends P-11). |
 | P-29 | Self-recovery on destruction | "Add a Warrior from Spent" style On Destruction effects cannot pick the destroyed card itself. |
 | P-30 | Optional "Once per turn" abilities | Abilities without "you can" (Chains of Binding, Yamata) are still player-activated, once per turn, not forced. |

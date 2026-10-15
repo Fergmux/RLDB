@@ -30,6 +30,7 @@ var deck_ready: Array = [false, false]
 var draft: Array = [{}, {}]          # per-player draft state
 var rewards: Array = [{}, {}]        # per-player reward state
 var series_log: Array = []
+var forfeit_by: int = -1             # player who abandoned the series, if any
 var starters: Array = []
 var _seed: int = 0
 
@@ -97,6 +98,20 @@ func submit(p: int, cmd: Dictionary) -> String:
 	if err == "":
 		changed.emit()
 	return err
+
+
+## Ends the whole series because player p abandoned it (P-02: the host may stop
+## waiting for a disconnected player, who then forfeits).
+func forfeit(p: int, reason: String) -> void:
+	if stage == STAGE_OVER:
+		return
+	forfeit_by = p
+	if game != null and game.winner == -1:
+		game.end_game(1 - p, reason)
+		history.append({"game": game_no, "winner": 1 - p, "turns": game.turn, "hp": [game.players[0]["hp"], game.players[1]["hp"]], "forfeit": true})
+	stage = STAGE_OVER
+	_log("%s forfeits the series (%s)." % [names[p], reason])
+	changed.emit()
 
 
 func _concede_series(p: int) -> String:
@@ -202,7 +217,7 @@ func _start_game() -> void:
 	game_no += 1
 	stage = STAGE_GAME
 	game = MatchEngine.new()
-	game.setup(decks.duplicate(true), first_player, rng.randi(), {"names": names, "start_hp": int(cfg["start_hp"])})
+	game.setup(decks.duplicate(true), first_player, rng.randi(), {"names": names, "start_hp": int(cfg["start_hp"]), "hidden_response_windows": cfg.get("hidden_response_windows", true)})
 	_log("Game %d begins. %s goes first." % [game_no, names[first_player]])
 
 
@@ -319,7 +334,7 @@ func view_for(p: int) -> Dictionary:
 	var v := {"you": p, "stage": stage, "scores": scores.duplicate(), "game_no": game_no,
 		"best_of": cfg["best_of"], "names": names.duplicate(), "series_log": series_log.duplicate(),
 		"history": history.duplicate(true), "last_loser": last_loser, "deck_mode": cfg["deck_mode"],
-		"deck_ready": deck_ready.duplicate(), "deck_name": deck_names[p]}
+		"deck_ready": deck_ready.duplicate(), "deck_name": deck_names[p], "forfeit_by": forfeit_by}
 	if game != null:
 		v["match"] = MatchView.build(game, p)
 	match stage:

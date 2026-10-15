@@ -113,3 +113,20 @@ func test_no_window_when_opponent_has_no_face_down_cards() -> void:
 	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
 	TB.attack(m, a, -1)
 	assert_bool(m.pending.is_empty()).is_true()
+
+
+func test_opponent_spent_exhaust_and_extra_contents_are_redacted() -> void:
+	var m := TB.make()
+	var s := TB.card(m, 0, 21, "spent")
+	var e := TB.card(m, 0, 22, "exhaust")
+	var x := TB.card(m, 0, 93, "extra")
+	var v := MatchView.build(m, 1)
+	var blob := JSON.stringify(v)
+	for name in ["Shen the World Dragon", "Zorath, Deity of the End", "Bastion Wyrm"]:
+		assert_bool(blob.contains(name)).is_false()
+	for uid in [s, e, x]:
+		assert_bool(blob.contains("\"uid\":%d" % uid)).is_false()
+	var counts: Dictionary = v["players"][0]["counts"]
+	assert_int(counts["spent"]).is_equal(1)
+	assert_int(counts["exhaust"]).is_equal(1)
+	assert_int(counts["extra"]).is_equal(1)

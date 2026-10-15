@@ -253,3 +253,15 @@ func test_snunday_does_not_reverse_battle_damage_or_ap_payment() -> void:
 	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 12)
 	TB.attack(m, a, -1)
 	assert_int(m.players[0]["hp"]).is_equal(48)
+
+
+func test_controller_orders_own_simultaneous_triggers() -> void:
+	var m := TB.make()
+	var zealot := TB.unit(m, 1, 17, 0)                  # start of turn: Rune
+	var neva := TB.unit(m, 1, 161, 1)                   # start of turn: Eternal
+	TB.to_turn2(m)
+	assert_str(m.pending["kind"]).is_equal("order")
+	TB.choose(m, ["Neva"])
+	assert_int(TB.log_index(m, "Neva the Divine Mother gains 1 Eternal")).is_less(TB.log_index(m, "Accursed Zealot gains 1 Rune"))
+	assert_int(m.status_count(zealot, "rune")).is_equal(1)
+	assert_int(m.status_count(neva, "eternal")).is_equal(1)

@@ -183,3 +183,41 @@ func test_disconnect_pauses_and_reconnect_restores_pending_prompt_once(timeout :
 	await _wait(func(): return false, 30)
 	assert_int(m.players[0]["hp"]).is_equal(58)
 	assert_str(m.phase).is_equal("battle")
+
+
+func test_drop_during_host_trap_prompt_blocks_host_until_client_returns(timeout := 40000) -> void:
+	var s := await _setup_battle()
+	var m: MatchEngine = s["m"]
+	client.local_seat.send({"t": "next_phase"})
+	assert_bool(await _wait(func(): return m.phase == "battle")).is_true()
+	client.local_seat.send({"t": "attack", "uid": s["atk"]})
+	assert_bool(await _wait(func(): return _client_view()["match"]["pending"].get("kind", "") == "attack_target")).is_true()
+	var pd: Dictionary = _client_view()["match"]["pending"]
+	var idx := 0
+	for o in pd["options"]:
+		if o.has("ref") and o["ref"]["p"] == 0:
+			idx = o["i"]
+	client.local_seat.send({"t": "choose", "id": pd["id"], "indices": [idx]})
+	assert_bool(await _wait(func(): return m.pending.get("kind", "") == "trap_response")).is_true()
+	var trap_prompt: int = m.pending["id"]
+	client.simulate_drop()
+	assert_bool(await _wait(func(): return host.paused)).is_true()
+	host.local_seat.send({"t": "choose", "id": trap_prompt, "indices": [1]})
+	assert_str(host_errors[-1]).contains("paused")
+	assert_int(m.players[1]["hp"]).is_equal(60)
+	assert_bool(await _wait(func(): return not host.paused, 900)).is_true()
+	assert_int(m.pending["id"]).is_equal(trap_prompt)
+	host.local_seat.send({"t": "choose", "id": trap_prompt, "indices": [1]})   # Magic Cylinder
+	assert_bool(await _wait(func(): return m.players[1]["hp"] == 50)).is_true()
+
+
+func test_host_can_end_series_when_opponent_does_not_return(timeout := 30000) -> void:
+	await _setup_battle()
+	client._reconnect_timer.stop()
+	client.host_gone = true                              # the client will not come back
+	client.simulate_drop()
+	assert_bool(await _wait(func(): return host.paused)).is_true()
+	host.local_seat.send({"t": "end_absent"})
+	assert_str(host.series.stage).is_equal(Series.STAGE_OVER)
+	assert_int(host.series.forfeit_by).is_equal(1)
+	assert_int(host.local_seat.last_view["forfeit_by"]).is_equal(1)

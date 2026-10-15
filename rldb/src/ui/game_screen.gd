@@ -448,6 +448,10 @@ func _render_net_banner() -> bool:
 	if net.get("paused", false):
 		prompt_box.add_child(UIStyle.label("MATCH PAUSED", 18, UIStyle.BAD))
 		prompt_box.add_child(UIStyle.label(net["message"] if net.get("message", "") != "" else "Waiting for the connection to be restored. Nothing can happen until both players are connected.", 13, UIStyle.TEXT, true))
+		if net.get("is_host", false) and view.get("stage", "") != "over":
+			var end := UIStyle.button("Stop waiting — opponent forfeits the series", 13)
+			end.pressed.connect(func(): _send({"t": "end_absent"}))
+			prompt_box.add_child(end)
 		blocking = true
 	elif not net.get("opponent_connected", true) and net.get("is_host", false):
 		prompt_box.add_child(UIStyle.label(net.get("message", "Waiting for an opponent…"), 14, UIStyle.ACCENT, true))
@@ -861,7 +865,10 @@ func _render_first() -> void:
 
 func _render_over() -> void:
 	var w := 0 if view["scores"][0] > view["scores"][1] else 1
-	overlay_box.add_child(UIStyle.label("%s wins the series %d–%d." % [view["names"][w], view["scores"][0], view["scores"][1]], 20, UIStyle.TEXT))
+	if view.get("forfeit_by", -1) != -1:
+		w = 1 - view["forfeit_by"]
+		overlay_box.add_child(UIStyle.label("%s left and forfeited the series." % view["names"][view["forfeit_by"]], 16, UIStyle.BAD))
+	overlay_box.add_child(UIStyle.label("%s wins the series (games %d–%d)." % [view["names"][w], view["scores"][0], view["scores"][1]], 20, UIStyle.TEXT))
 	for h in view["history"]:
 		overlay_box.add_child(UIStyle.label("Game %d: %s (turn %d, HP %d–%d)" % [h["game"], view["names"][h["winner"]], h["turns"], h["hp"][0], h["hp"][1]], 13, UIStyle.MUTED))
 	var b := UIStyle.button("Back to main menu", 15)

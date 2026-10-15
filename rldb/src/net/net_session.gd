@@ -460,6 +460,15 @@ func _merge_client_log(v: Dictionary) -> void:
 # ---------------------------------------------------------------- host command handling
 
 func _apply(seat: int, seq: int, cmd: Dictionary) -> void:
+	if seat == HOST_SEAT and cmd.get("t", "") == "end_absent":
+		# The host stops waiting for a disconnected opponent, who forfeits (P-02/P-06).
+		if not paused:
+			_error(seat, "Your opponent is connected.")
+			return
+		last_seq[seat] = seq
+		series.forfeit(CLIENT_SEAT, "did not reconnect")
+		_broadcast()
+		return
 	if seq <= last_seq[seat]:
 		# Duplicate or replayed command (e.g. resent after reconnect): never re-apply.
 		_send_view(seat)

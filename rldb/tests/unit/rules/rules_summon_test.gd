@@ -163,3 +163,23 @@ func test_set_spell_pays_once_and_can_be_activated_same_turn() -> void:
 	assert_int(m.players[0]["ap"]).is_equal(1)
 	assert_int(m.status_count(target, "rune")).is_equal(1)
 	assert_str(m.cards[spell]["zone"]).is_equal("spent")
+
+
+func test_tributing_mumens_bounty_from_field_gives_one_ap() -> void:
+	var m := TB.make()
+	var mumen := TB.unit(m, 0, 150, 0)
+	m.apply_status(mumen, "rune", 1)
+	var inferno := TB.card(m, 0, 98, "extra")
+	m.submit(0, {"t": "ritual", "uid": inferno})
+	TB.choose_uids(m, [mumen])
+	TB.choose(m, ["Front row, column 2"])
+	TB.choose(m, ["Attack"])
+	assert_int(m.players[0]["ap"]).is_equal(3)
+
+
+func test_newly_summoned_unit_can_attack_the_same_turn() -> void:
+	var m := TB.make()
+	TB.to_turn2(m)
+	var u := TB.summon(m, 1, TB.FIRE, 0)
+	m.submit(1, {"t": "next_phase"})
+	assert_str(m.validate(1, {"t": "attack", "uid": u})).is_empty()

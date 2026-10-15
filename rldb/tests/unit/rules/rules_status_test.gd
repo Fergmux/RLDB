@@ -118,3 +118,12 @@ func test_burn_costs_controller_hp_when_unit_attacks() -> void:
 	assert_int(m.players[1]["hp"]).is_equal(56)
 	assert_int(m.status_count(u, "burn")).is_equal(0)
 	assert_int(m.players[0]["hp"]).is_equal(55)
+
+
+func test_curse_prevents_an_incoming_buff_and_is_consumed() -> void:
+	var m := TB.make()
+	var u := TB.unit(m, 0, TB.WATER, 0)
+	m.apply_status(u, "curse", 1)
+	m.apply_status(u, "eternal", 1)
+	assert_int(m.status_count(u, "eternal")).is_equal(0)
+	assert_int(m.status_count(u, "curse")).is_equal(0)

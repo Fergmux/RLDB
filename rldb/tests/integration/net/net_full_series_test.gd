@@ -4,6 +4,7 @@ extends GdUnitTestSuite
 ## authority's state). Includes a forced disconnect/reconnect in the middle of a game.
 
 const PORT := 24721
+const TURN_CAP := 150
 
 var host: NetSession
 var client: NetSession
@@ -89,6 +90,9 @@ func _decide(p: int) -> Dictionary:
 				return {"t": "choose", "id": pd["id"], "indices": idx.slice(0, want)}
 			if mv["active"] != p or mv["resolving"]:
 				return {}
+			if mv["turn"] > TURN_CAP:
+				# Random bots can exhaust both decks into a stalemate (no fatigue rule exists).
+				return {"t": "concede"}
 			var legal: Array = mv["actions"].filter(func(a): return a["ok"])
 			if legal.is_empty():
 				return {}
@@ -155,11 +159,16 @@ func _play_series(bot_seed: int, series_seed: int, best_of: int, deck_mode: Stri
 					break
 				await get_tree().process_frame
 			assert_bool(host.paused).is_false()
-		if (commands + idle) % 400 == 0 and (commands + idle) > 0:
+		if (commands + idle) % 2000 == 0 and (commands + idle) > 0:
 			var hv: Dictionary = host.local_seat.last_view
 			print("progress cmds=%d idle=%d stage=%s game=%d pend=%s act=%s" % [commands, idle, host.series.stage, host.series.game_no,
 				str(host.series.game.pending.get("kind", "")) if host.series.game != null else "-",
 				str(host.series.game.active) if host.series.game != null else "-"])
+			if host.series.game != null:
+				var gm: MatchEngine = host.series.game
+				print("   turn=%d hp=%s units=%d/%d draw=%d/%d spent=%d/%d exh=%d/%d" % [gm.turn, str([gm.players[0]["hp"], gm.players[1]["hp"]]),
+					gm.field_units(0).size(), gm.field_units(1).size(), gm.players[0]["draw"].size(), gm.players[1]["draw"].size(),
+					gm.players[0]["spent"].size(), gm.players[1]["spent"].size(), gm.players[0]["exhaust"].size(), gm.players[1]["exhaust"].size()])
 		if not acted:
 			idle += 1
 			await get_tree().process_frame
@@ -171,9 +180,9 @@ func _play_series(bot_seed: int, series_seed: int, best_of: int, deck_mode: Stri
 	assert_bool(dropped).is_true()
 	assert_str(host.series.stage).is_equal(Series.STAGE_OVER)
 	assert_int(maxi(host.series.scores[0], host.series.scores[1])).is_equal(best_of / 2 + 1)
-	# Every game ended by HP reaching zero (no concessions in this run).
+	# Every game ended by HP reaching zero, or by the bots' turn cap.
 	for h in host.series.history:
-		assert_int(mini(h["hp"][0], h["hp"][1])).is_equal(0)
+		assert_bool(mini(h["hp"][0], h["hp"][1]) == 0 or h["turns"] > TURN_CAP).is_true()
 	# The client's final view agrees with the authority.
 	for f in 120:
 		if client.local_seat.last_view.get("stage", "") == "over":
