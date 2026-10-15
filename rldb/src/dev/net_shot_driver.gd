@@ -27,6 +27,8 @@ func run(main_node: Node, dir: String) -> void:
 	hroot.add_child(host)
 	client = NetSession.new()
 	croot.add_child(client)
+	host.session_status.connect(func(t): if t != "": print("[host] ", t))
+	client.session_status.connect(func(t): if t != "": print("[client] ", t))
 	host.host_enet(PORT, {"seed": 7, "best_of": 3, "host_name": "Host"})
 	client.join_enet("127.0.0.1", PORT)
 	screen = GameScreen.new()
@@ -103,12 +105,15 @@ func _put(m: MatchEngine, p: int, id: int, slot: int) -> int:
 	return uid
 
 
+## Waits until cond is true, up to `frames` x 1/60 s of real time (frame rate independent).
 func _until(cond: Callable, frames: int = 600) -> void:
-	for i in frames:
+	var deadline := Time.get_ticks_msec() + frames * 1000 / 60
+	while Time.get_ticks_msec() < deadline:
 		if cond.call():
 			return
 		await get_tree().process_frame
-	push_warning("net_shot_driver: condition timed out")
+	if not cond.call():
+		push_warning("net_shot_driver: condition timed out")
 
 
 func _frames(n: int) -> void:

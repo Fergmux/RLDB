@@ -38,8 +38,10 @@ func after_test() -> void:
 		await get_tree().process_frame
 
 
+## Waits for cond up to `frames` x 1/60 s of real time (independent of frame rate).
 func _wait(cond: Callable, frames: int = 600) -> bool:
-	for i in frames:
+	var deadline := Time.get_ticks_msec() + frames * 1000 / 60
+	while Time.get_ticks_msec() < deadline:
 		if cond.call():
 			return true
 		await get_tree().process_frame
