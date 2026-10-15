@@ -209,7 +209,7 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 		return out
 	var can_act := m.pending.is_empty() and m.stack.is_empty() and m.active == viewer
 	var pl: Dictionary = m.players[viewer]
-	var phase_label := {"main1": "Go to Battle Phase" if m.turn != 1 else "Go to Main Phase 2", "battle": "Go to Main Phase 2", "main2": "End turn"}
+	var phase_label := {"main1": "Go to Battle Phase" if m.turn != 1 else "Go to Recovery", "battle": "Go to Recovery", "main2": "End turn"}
 	out.append({"t": "next_phase", "label": phase_label.get(m.phase, "Next"), "ok": can_act, "reason": "" if can_act else "Not your move."})
 	if not can_act:
 		return out

@@ -155,7 +155,7 @@ func test_battle_phase_forbids_playing_anything_from_hand() -> void:
 	assert_str(m.validate(1, {"t": "set", "uid": trap})).is_not_empty()
 	assert_str(m.validate(1, {"t": "power", "uid": power})).is_not_empty()
 	assert_str(m.validate(1, {"t": "stance", "uid": onfield})).is_not_empty()
-	assert_str(m.validate(1, {"t": "cast", "uid": spell})).is_equal("Spells in your Hand can only be cast in a Main Phase.")
+	assert_str(m.validate(1, {"t": "cast", "uid": spell})).is_equal("Spells in your Hand can only be cast in the Setup or Recovery Phase.")
 
 
 func test_cast_from_hand_is_legal_in_main_phases() -> void:

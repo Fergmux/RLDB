@@ -10,7 +10,7 @@ extends Node
 
 const ZONE_KEY := {"unit": "units", "backrow": "backrow", "power": "powers"}
 const ZONE_KIND := {"unit": "board", "backrow": "trap", "power": "power"}
-const PHASE_NAMES := {"main1": "MAIN PHASE", "battle": "BATTLE PHASE", "main2": "MAIN PHASE 2", "end": "END PHASE"}
+const PHASE_NAMES := {"main1": "SETUP PHASE", "battle": "BATTLE PHASE", "main2": "RECOVERY PHASE", "end": "END PHASE"}
 
 var screen: Control
 var _tweens: Array = []

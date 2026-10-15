@@ -85,7 +85,8 @@ func test_stat_markers_and_flags() -> void:
 	var t := p.all_text()
 	assert_bool(t.contains("No type")).is_true()
 	assert_bool(t.contains("Type:")).is_false()
-	assert_bool(t.contains("Cost 3 AP (printed 2)")).is_true()
+	assert_bool(t.contains("3 AP (base 2)")).is_true()
+	assert_bool(t.contains("Cost")).is_false()
 	assert_bool(t.contains("Defense stance")).is_true()
 	assert_bool(t.contains("Protected")).is_true()
 	assert_bool(t.contains("Summoned this turn")).is_false()   # feedback 04: tags removed
@@ -136,7 +137,7 @@ func test_special_cost_cards_show_cost_text() -> void:
 	for id in [FUSION, RITUAL, ARCANE]:
 		var v := _non_unit(id, "extra")
 		p.show_card(v, [])
-		assert_bool(p.all_text().contains("Cost: " + String(v["cost_text"]))).is_true()
+		assert_bool(p.all_text().contains(String(v["cost_text"]))).is_true()
 		assert_bool(p.sections.has("stats")).is_true()
 		_assert_rules_once(p, v)
 

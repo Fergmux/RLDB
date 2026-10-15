@@ -79,7 +79,7 @@ func test_f02_02_cancel_at_zone_choice_refunds_nothing_was_paid() -> void:
 func test_f02_02_summon_stance_still_obeys_timing() -> void:
 	var m := _battle()
 	var u := TB.card(m, 1, TB.WATER)
-	assert_str(m.submit(1, {"t": "summon", "uid": u, "stance": "def"})).contains("Main Phase")
+	assert_str(m.submit(1, {"t": "summon", "uid": u, "stance": "def"})).contains("Setup or Recovery Phase")
 
 
 func test_f02_02_malformed_stance_rejected() -> void:

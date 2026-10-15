@@ -89,7 +89,7 @@ func test_p26_nimble_cannot_move_during_battle() -> void:
 	var m := _battle()
 	var u := TB.unit(m, 1, TB.WATER, 0)
 	m.apply_status(u, "nimble", 1)
-	assert_str(m.validate(1, {"t": "move", "uid": u})).contains("Main Phase")
+	assert_str(m.validate(1, {"t": "move", "uid": u})).contains("Setup or Recovery Phase")
 
 
 # P-19: Elemental Mastery and Options stack.

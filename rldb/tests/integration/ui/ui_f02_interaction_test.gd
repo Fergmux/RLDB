@@ -107,7 +107,7 @@ func test_f02_10_pile_choice_is_answered_by_clicking_the_card_in_the_tray() -> v
 	assert_bool(gs.tray.visible).is_true()
 	var cards: Array = []
 	for ch in gs.tray_box.get_children():
-		if ch is HFlowContainer:
+		if ch is GridContainer:
 			cards = ch.get_children()
 	assert_int(cards.size()).is_equal(2)
 	for c in cards:

@@ -22,7 +22,7 @@ const FIELD_SCALE := 1.08
 const MAX_FX_ENTRIES := 25
 const ZONE_KEY := {"unit": "units", "backrow": "backrow", "power": "powers"}
 const ZONE_KIND := {"unit": "board", "backrow": "trap", "power": "power"}
-const PHASE_ORDER := [["main1", "Main 1"], ["battle", "Battle"], ["main2", "Main 2"], ["end", "End"]]
+const PHASE_ORDER := [["main1", "Setup"], ["battle", "Battle"], ["main2", "Recovery"]]
 const READY_KINDS := ["summon", "cast", "set", "power", "ritual", "arcane", "ability", "attack", "activate_set"]
 ## Prompt kinds answered by picking cards/zones directly (board, hand or the pile tray) with
 ## the context banner (F02-07 / F02-10); others (responses, ordering, yes/no) use the sidebar.
@@ -126,6 +126,10 @@ var banner_flow: HFlowContainer
 var tray: PanelContainer
 var tray_box: VBoxContainer
 var details_view: CardDetailsPanel
+var details_title: Label
+## Own pile shown as a scrollable list in the details panel (instead of a board overlay).
+var pile_scroll: ScrollContainer
+var pile_list: VBoxContainer
 var sfx_vol: HSlider
 ## Hot-seat: the seat switch waits until this time (msec) so an animation that belongs to the
 ## current seat (end-of-turn discard) finishes on its own screen.
@@ -360,21 +364,49 @@ class PhasePips extends Control:
 	var phase: String = ""
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(0, 22)
+		custom_minimum_size = Vector2(0, 26)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+	## Pill tags with depth: inset dark pills for the other phases, a glowing gold pill with a
+	## gloss for the current one, joined by a thin track.
 	func _draw() -> void:
 		var n := GameScreen.PHASE_ORDER.size()
-		var w := (size.x - 6.0 * (n - 1)) / n
+		var gap := 8.0
+		var h := size.y - 4.0
+		var w := (size.x - gap * (n - 1)) / n
 		var font := UIStyle.font_bold()
+		draw_line(Vector2(w * 0.5, 2.0 + h / 2.0), Vector2(size.x - w * 0.5, 2.0 + h / 2.0), Color(UIStyle.BRONZE, 0.5), 2.0)
 		for i in n:
-			var r := Rect2(i * (w + 6.0), 0, w, size.y)
+			var r := Rect2(i * (w + gap), 2.0, w, h)
 			var on: bool = GameScreen.PHASE_ORDER[i][0] == phase
-			var sb := UIStyle.flat(UIStyle.GOLD if on else UIStyle.PANEL_INK, UIStyle.GOLD_HI if on else Color(UIStyle.BRONZE, 0.6), 1, 10)
+			var sb := StyleBoxFlat.new()
+			sb.set_corner_radius_all(int(h / 2.0))
+			if on:
+				sb.bg_color = UIStyle.GOLD
+				sb.border_color = UIStyle.GOLD_HI
+				sb.set_border_width_all(1)
+				sb.shadow_color = Color(UIStyle.GOLD_HI, 0.45)
+				sb.shadow_size = 7
+			else:
+				sb.bg_color = Color(0.07, 0.06, 0.05, 0.98)
+				sb.border_color = Color(UIStyle.BRONZE, 0.75)
+				sb.set_border_width_all(1)
+				sb.shadow_color = Color(0, 0, 0, 0.5)
+				sb.shadow_size = 3
+				sb.shadow_offset = Vector2(0, 1)
 			draw_style_box(sb, r)
+			var gl := StyleBoxFlat.new()
+			gl.bg_color = Color(1, 1, 1, 0.22 if on else 0.05)
+			gl.corner_radius_top_left = int(h / 2.0) - 1
+			gl.corner_radius_top_right = int(h / 2.0) - 1
+			draw_style_box(gl, Rect2(r.position + Vector2(2, 1.5), Vector2(r.size.x - 4, r.size.y * 0.45)))
 			var txt: String = GameScreen.PHASE_ORDER[i][1]
-			var sz := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 12)
-			draw_string(font, Vector2(r.position.x + (w - sz.x) / 2.0, size.y / 2.0 + 4.5), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, UIStyle.ON_GOLD if on else UIStyle.MUTED)
+			var fs := 13
+			var sz := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+			var pos := Vector2(r.position.x + (w - sz.x) / 2.0, r.position.y + h / 2.0 + 4.8)
+			if on:
+				draw_string(font, pos + Vector2(0, 1), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.35))
+			draw_string(font, pos, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UIStyle.ON_GOLD if on else UIStyle.MUTED)
 
 
 func _ready() -> void:
@@ -622,7 +654,7 @@ func _build_side() -> void:
 	state_chip.custom_minimum_size = Vector2(0, 44)
 	state_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	state_chip.visible = false
-	state_label = UIStyle.label("", 17, UIStyle.GOLD_HI, true, true)
+	state_label = UIStyle.label("", 15, UIStyle.GOLD_HI, false, true)
 	state_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	state_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	state_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -659,7 +691,18 @@ func _build_side() -> void:
 	var dv := VBoxContainer.new()
 	dv.add_theme_constant_override("separation", 4)
 	details_panel.add_child(dv)
-	dv.add_child(_header("Card details"))
+	var dh := _header("Card details")
+	details_title = dh.get_child(0)
+	dv.add_child(dh)
+	pile_scroll = ScrollContainer.new()
+	pile_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	pile_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	pile_scroll.visible = false
+	dv.add_child(pile_scroll)
+	pile_list = VBoxContainer.new()
+	pile_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pile_list.add_theme_constant_override("separation", 6)
+	pile_scroll.add_child(pile_list)
 	details_scroll = ScrollContainer.new()
 	details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -788,7 +831,12 @@ func _build_top_strip() -> void:
 	bh.add_child(banner_btns)
 	# F02-10 pile tray: cards offered only for this choice; click a card to choose it.
 	tray = PanelContainer.new()
-	tray.add_theme_stylebox_override("panel", UIStyle.panel_style(Color(0.07, 0.062, 0.056, 0.97), UIStyle.GOLD, 12))
+	var tsb := UIStyle.panel_style(Color(0.07, 0.062, 0.056, 0.97), UIStyle.GOLD, 12)
+	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		tsb.set_content_margin(side, TRAY_PAD)
+	tsb.shadow_size = 14
+	tsb.shadow_color = Color(0, 0, 0, 0.6)
+	tray.add_theme_stylebox_override("panel", tsb)
 	tray.visible = false
 	tray.z_index = 65
 	add_child(tray)
@@ -1242,6 +1290,11 @@ func _render_all() -> void:
 	_render_overlay()
 	_render_pause()
 	_refresh_stack()
+	if _pile_zone != "":
+		if view.get("stage", "") != "game" or mv.is_empty():
+			_close_pile()
+		else:
+			_render_pile_list()
 
 
 func me() -> int:
@@ -1779,6 +1832,9 @@ func _cancel() -> void:
 	if pile_popup.visible:
 		pile_popup.visible = false
 		return
+	if _pile_zone != "" and _pending().is_empty():
+		_close_pile()
+		return
 	if settings_popup.visible:
 		settings_popup.visible = false
 		return
@@ -2239,6 +2295,8 @@ func _rebuild_stack() -> void:
 			st.content_margin_bottom = 1
 			st.content_margin_left = 5
 			st.content_margin_right = 5
+		UIStyle._lift(nrm, Color(0, 0, 0, 0.55), 5, 2)
+		UIStyle._lift(hov, Color(UIStyle.GOLD, 0.4), 8, 0)
 		b.add_theme_stylebox_override("normal", nrm)
 		b.add_theme_stylebox_override("hover", hov)
 		b.add_theme_stylebox_override("pressed", hov)
@@ -2391,7 +2449,7 @@ func _render_prompt() -> void:
 	if mv["winner"] != -1:
 		prompt_box.add_child(UIStyle.label("Game over: %s wins." % _pv(mv["winner"])["name"], 17, UIStyle.ACCENT, true, true))
 	elif pd.is_empty():
-		var txt := "Your turn. Click a card (or press Tab) to see what it can do; hover to read it." if mv["active"] == me() else "Opponent's turn."
+		var txt := "Your turn. Click a card to see what it can do; hover to read it." if mv["active"] == me() else "Opponent's turn."
 		if mv["resolving"]:
 			txt = "Resolving…"
 		prompt_box.add_child(UIStyle.label(txt, 15, UIStyle.TEXT if mv["active"] == me() else UIStyle.MUTED, true))
@@ -2435,12 +2493,12 @@ func _render_choice(pd: Dictionary) -> void:
 		list.add_child(b2)
 	if pd["max"] > 1:
 		prompt_box.add_child(UIStyle.label(_multi_status(pd), 13, UIStyle.MUTED))
-		var confirm := UIStyle.primary_button("Confirm selection  (Enter)", 15)
+		var confirm := UIStyle.primary_button("Confirm selection", 15)
 		confirm.disabled = multi.size() < pd["min"]
 		confirm.pressed.connect(_confirm_multi)
 		prompt_box.add_child(confirm)
 	if pd["cancellable"]:
-		var cancel := UIStyle.button("Cancel  (Esc)", 14)
+		var cancel := UIStyle.button("Cancel", 14)
 		cancel.pressed.connect(_cancel)
 		prompt_box.add_child(cancel)
 
@@ -2502,13 +2560,13 @@ func _render_banner() -> void:
 	if not pick and row.get_child_count() > 0:
 		banner_flow.visible = true
 	if int(pd["max"]) > 1:
-		var c := UIStyle.primary_button("Confirm (Enter)", 14)
+		var c := UIStyle.primary_button("Confirm", 14)
 		c.custom_minimum_size = Vector2(0, 32)
 		c.disabled = multi.size() < int(pd["min"])
 		c.pressed.connect(_confirm_multi)
 		banner_btns.add_child(c)
 	if pd["cancellable"]:
-		var x := UIStyle.button("Cancel (Esc)", 14)
+		var x := UIStyle.button("Cancel", 14)
 		x.custom_minimum_size = Vector2(0, 32)
 		x.pressed.connect(_cancel)
 		banner_btns.add_child(x)
@@ -2543,15 +2601,32 @@ func _update_banner_sub() -> void:
 		banner_sub.tooltip_text = _preview_text if _preview_text != "" else _banner_how
 
 
+const TRAY_GAP := 10.0
+const TRAY_PAD := 14.0
+
+
+## Columns of the pile tray: as many as fit the play area (max 8), never more than the cards.
+func _tray_cols(n: int) -> int:
+	var cw: float = CardWidget.SIZES["mini"].x
+	var fit := int(floor((_area.size.x - 80.0 - 2.0 * TRAY_PAD + TRAY_GAP) / (cw + TRAY_GAP)))
+	return clampi(mini(n, fit), 1, 8)
+
+
+## The tray hugs its cards (same padding on every side) and sits in the middle of the play area.
 func _place_tray() -> void:
 	if tray == null:
 		return
 	var n := maxi(1, _tray_cards.size())
-	var wmax := clampf(n * (CardWidget.SIZES["mini"].x + 8.0) + 40.0, 420.0, minf(_area.size.x - 60.0, 900.0))
+	var cols := _tray_cols(n)
+	var cw: float = CardWidget.SIZES["mini"].x
+	var grid_w := cols * cw + (cols - 1) * TRAY_GAP
+	var w := maxf(grid_w, 280.0) + 2.0 * TRAY_PAD
 	var need := tray_box.get_combined_minimum_size()
-	var h := minf(need.y + 28.0, _area.size.y - 40.0)
-	tray.size = Vector2(wmax, maxf(h, 120.0))
-	tray.position = Vector2(_area.position.x + (_area.size.x - wmax) / 2.0, _area.position.y + 20.0)
+	var h := minf(need.y + 2.0 * TRAY_PAD, _area.size.y - 40.0)
+	if need.y + 2.0 * TRAY_PAD > _area.size.y - 40.0:
+		w += 12.0   # room for the scroll bar
+	tray.size = Vector2(w, h)
+	tray.position = (_area.position + (_area.size - tray.size) / 2.0).round()
 
 
 ## F02-10 tray of the cards offered from a pile (Spent, Draw, Extra, an opponent's pile when
@@ -2565,11 +2640,15 @@ func _render_tray() -> void:
 	tray.visible = not opts.is_empty() and not overlay.visible
 	if not tray.visible:
 		return
-	var head := "Choose %s" % ("one card" if int(pd["max"]) <= 1 else "cards")
-	tray_box.add_child(UIStyle.label("%s — click a card. Hover to read it." % head, 15, UIStyle.GOLD, true, true))
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 8)
-	flow.add_theme_constant_override("v_separation", 8)
+	var head := "Choose %s" % ("a card" if int(pd["max"]) <= 1 else "cards")
+	var hl := UIStyle.label(head, 16, UIStyle.GOLD, true, true)
+	hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tray_box.add_child(hl)
+	var flow := GridContainer.new()
+	flow.columns = _tray_cols(opts.size())
+	flow.add_theme_constant_override("h_separation", int(TRAY_GAP))
+	flow.add_theme_constant_override("v_separation", int(TRAY_GAP))
+	flow.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	tray_box.add_child(flow)
 	for o in opts:
 		var cv: Dictionary = o["card"]
@@ -2627,6 +2706,8 @@ func _details_uid() -> int:
 
 
 func _render_details() -> void:
+	if _pile_zone != "":
+		return   # the pile list occupies the panel until it is closed
 	var duid := _details_uid()
 	var c := _find_card(duid)
 	var notes := []
@@ -2642,7 +2723,7 @@ func _render_details() -> void:
 	_details_sig = sig
 	var keep: int = details_scroll.scroll_vertical if same_card else 0
 	if c.is_empty():
-		details_view.show_empty("Hover a card to read it, or click it to select it (its actions appear on the card). Right-click or Esc clears.")
+		details_view.show_empty("Hover a card to read it, or click it to select it (its actions appear on the card).")
 	else:
 		details_view.show_card(c, notes)
 	details_scroll.set_deferred("scroll_vertical", keep)
@@ -2757,64 +2838,159 @@ var _pile_zone: String = ""
 var _pile_sel: int = -1
 
 
-## Own pile inspection (Draw in a random display order, Spent, Exhaust, Extra). Clicking a
-## card selects it for the details panel; if it has legal actions (Ritual / Arcane Summon
-## from the Extra Deck) they appear under that card only (F02-01 click-to-act).
+## Own pile inspection in the details panel (user feedback 2026-10-16: a scrollable list, not a
+## board overlay). Draw is listed in a random display order. Clicking a row selects it; its legal
+## actions (Ritual / Arcane Summon from the Extra Deck) appear in that row. Clicking the same pile
+## again, Close, Esc or right-click returns the panel to card details.
 func _show_pile(zone: String, sel_uid: int = -1) -> void:
-	_clear(pile_box)
+	if zone == _pile_zone and sel_uid == -1 and _pile_sel == -1:
+		_close_pile()
+		return
 	_pile_zone = zone
 	_pile_sel = sel_uid
-	var pv := _pv(me())
-	var key := "draw_inspect" if zone == "draw" else zone
-	var head := HBoxContainer.new()
-	pile_box.add_child(head)
-	var title := "Your %s (%d)" % [zone.capitalize() if zone != "extra" else "Extra Deck", pv.get(key, []).size()]
-	if zone == "draw":
-		title += " — shown in a random order; the real Draw order is unchanged"
-	var tl := UIStyle.label(title, 16, UIStyle.GOLD, true, true)
-	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(tl)
-	var close := UIStyle.button("Close", 13)
-	close.pressed.connect(func(): pile_popup.visible = false; _pile_zone = "")
-	head.add_child(close)
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 8)
-	flow.add_theme_constant_override("v_separation", 8)
-	pile_box.add_child(flow)
-	for c in pv.get(key, []):
-		var uid: int = c["uid"]
-		var cell := VBoxContainer.new()
-		cell.add_theme_constant_override("separation", 3)
-		flow.add_child(cell)
-		var w := CardWidget.new().setup(c, "hand")
-		w.set_marks(false, uid == sel_uid)
-		w.set_ready(zone == "extra" and _ready_uids.has(uid))
-		w.pressed.connect(func(_w):
-			selected_uid = uid
-			_peek_uid = -1
-			Sfx.play("select")
-			_render_details()
-			_show_pile(zone, -1 if sel_uid == uid else uid))
-		cell.add_child(w)
-		if uid == sel_uid and not _locked():
-			for a in _actions_for_card(uid):
-				var b := UIStyle.button(String(a["label"]) if a["ok"] else String(a["reason"]), 13)
-				b.custom_minimum_size = Vector2(w.size.x, 28)
-				b.clip_text = true
-				b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-				b.tooltip_text = String(a.get("full", a["label"]))
-				b.disabled = not a["ok"]
-				if a["ok"]:
-					b.pressed.connect(func():
-						pile_popup.visible = false
-						_pile_zone = ""
-						_row_open = true
-						_run_action(uid, a))
-				cell.add_child(b)
-	if pv.get(key, []).is_empty():
-		pile_box.add_child(UIStyle.label("Empty.", 13, UIStyle.MUTED))
-	pile_popup.visible = true
+	_pile_sig = 0
 	_clear_hover()
+	_render_pile_list()
+	Sfx.play("select")
+
+
+var _pile_sig: int = 0
+
+
+func _close_pile() -> void:
+	_pile_zone = ""
+	_pile_sel = -1
+	_pile_sig = 0
+	pile_scroll.visible = false
+	details_scroll.visible = true
+	details_title.text = "Card details"
+	_details_sig = ""
+	_render_details()
+
+
+func _render_pile_list() -> void:
+	var pv := _pv(me())
+	var key := "draw_inspect" if _pile_zone == "draw" else _pile_zone
+	var cards: Array = pv.get(key, [])
+	var acts := _actions_for_card(_pile_sel) if _pile_sel != -1 else []
+	var sig := hash([_pile_zone, _pile_sel, cards, acts, _ready_uids.keys()])
+	details_scroll.visible = false
+	pile_scroll.visible = true
+	var names := {"draw": "Draw pile", "spent": "Spent", "exhaust": "Exhaust", "extra": "Extra Deck"}
+	details_title.text = "Your %s (%d)" % [names.get(_pile_zone, _pile_zone.capitalize()), cards.size()]
+	if sig == _pile_sig:
+		return
+	_pile_sig = sig
+	var keep := pile_scroll.scroll_vertical
+	_clear(pile_list)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 6)
+	pile_list.add_child(top)
+	var hint := UIStyle.label("Shown in a random order; the real order is unchanged." if _pile_zone == "draw" else "Hover a card to read it; click to select it.", 13, UIStyle.MUTED, true)
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(hint)
+	var close := UIStyle.button("Close", 13)
+	close.pressed.connect(_close_pile)
+	top.add_child(close)
+	if cards.is_empty():
+		pile_list.add_child(UIStyle.label("Empty.", 14, UIStyle.MUTED))
+	var sel_row: Control = null
+	for c in cards:
+		var r := _pile_row(c)
+		pile_list.add_child(r)
+		if int(c["uid"]) == _pile_sel:
+			sel_row = r
+	pile_scroll.set_deferred("scroll_vertical", keep)
+	if sel_row != null:
+		_reveal_pile_row.call_deferred(sel_row)
+
+
+## Scrolls the list so the selected row, including its action buttons, is fully visible.
+func _reveal_pile_row(row: Control) -> void:
+	await get_tree().process_frame
+	if is_instance_valid(row):
+		pile_scroll.ensure_control_visible(row)
+
+
+## One list row: small card, name, kind / cost / race·type line and the effect text; the selected
+## row shows its actions.
+func _pile_row(c: Dictionary) -> Control:
+	var uid: int = int(c["uid"])
+	var sel := uid == _pile_sel
+	var can_act := _ready_uids.has(uid)
+	var row := PanelContainer.new()
+	row.set_meta("uid", uid)
+	var sb := UIStyle.flat(Color(UIStyle.PANEL_LIGHT, 0.95) if sel else Color(UIStyle.PANEL_INK, 0.9),
+		UIStyle.SELECT if sel else (UIStyle.READY if can_act else Color(UIStyle.BRONZE, 0.6)), 2 if (sel or can_act) else 1, 8)
+	sb.content_margin_left = 6
+	sb.content_margin_right = 8
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	row.add_theme_stylebox_override("panel", sb)
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	row.tooltip_text = CardWidget.tooltip_for(c)
+	var pick := func():
+		selected_uid = uid
+		_show_pile(_pile_zone, -1 if sel else uid)
+	row.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			pick.call())
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 8)
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(hb)
+	var w := CardWidget.new().setup(c, "mini")
+	w.auto_hover = false
+	w.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_resize_card(w, Vector2(64, 96))
+	w.set_ready(can_act)
+	w.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	hb.add_child(w)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 1)
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hb.add_child(vb)
+	var cat := String(c.get("category", ""))
+	var nm := UIStyle.label(String(c.get("name", "")), 15, UIStyle.category_text_color(cat).lightened(0.2), true, true)
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(nm)
+	var bits := [String(UIStyle.CATEGORY_NAMES.get(cat, cat))]
+	bits.append(String(c.get("cost_text", "")))
+	if c.has("race"):
+		var rt := []
+		if String(c.get("race", "")) != "":
+			rt.append(String(c["race"]))
+		if c.get("type") != null and String(c.get("type", "")) != "":
+			rt.append(String(c["type"]))
+		if not rt.is_empty():
+			bits.append(" ".join(rt))
+		if c.get("atk") != null:
+			bits.append("%s / %s" % [str(c.get("atk")), str(c.get("def"))])
+	var meta := UIStyle.label("  ·  ".join(bits.filter(func(x): return x != "")), 12, UIStyle.MUTED, true)
+	meta.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(meta)
+	var tx := CardWidget.card_text(c)
+	if tx != "":
+		var tl := UIStyle.label(tx, 13, UIStyle.TEXT, true)
+		tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vb.add_child(tl)
+	if sel and not _locked():
+		var af := HFlowContainer.new()
+		af.add_theme_constant_override("h_separation", 6)
+		af.add_theme_constant_override("v_separation", 4)
+		vb.add_child(af)
+		for a in _actions_for_card(uid):
+			var b := UIStyle.primary_button(String(a["label"]), 13)
+			b.tooltip_text = String(a.get("full", a["label"]))
+			var act: Dictionary = a
+			b.pressed.connect(func():
+				_close_pile()
+				_row_open = true
+				_run_action(uid, act))
+			af.add_child(b)
+	return row
 
 
 ## Your current deck (between games): every card once, with its number of copies.

@@ -116,7 +116,7 @@ func run(main_node: Node, dir: String) -> void:
 	screen._show_pile("draw")
 	await _frames(3)
 	await _shot("08_draw_inspection")
-	screen.pile_popup.visible = false
+	screen._close_pile()
 	# Finish game 1 by concession, then rewards and first-player choice.
 	host.handle(1 - attacker_side, {"t": "concede"})
 	_view_seat(0)

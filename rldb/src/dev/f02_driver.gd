@@ -201,10 +201,12 @@ func _steps() -> void:
 	_check("Extra pile stack shows the summon-ready ring", (gs._piles[1]["extra"] as PileStack).ready_mark)
 	await _click((gs._piles[1]["extra"] as Control).get_global_rect().get_center())
 	await _wait(0.4)
-	for cell in _pile_cells():
-		var cw: CardWidget = (cell as Node).get_child(0)
-		if int(cw.view.get("uid", -1)) == uids["tyde"]:
-			await _click(cw.get_global_rect().get_center())
+	_check("FB5-10 pile opens as a list in the details panel", gs.pile_scroll.visible and not gs.pile_popup.visible and gs.details_title.text.contains("Extra"), gs.details_title.text)
+	for row in _pile_cells():
+		if int((row as Node).get_meta("uid", -1)) == uids["tyde"]:
+			gs.pile_scroll.ensure_control_visible(row)
+			await _wait(0.2)
+			await _click((row as Control).get_global_rect().get_center())
 			await _wait(0.4)
 			break
 	await _shot("10_extra_pile_click_to_act")
@@ -503,7 +505,7 @@ func _sidebar_option_buttons() -> int:
 func _tray_widgets() -> Array:
 	var out := []
 	for ch in gs.tray_box.get_children():
-		if ch is HFlowContainer:
+		if ch is GridContainer:
 			for w in ch.get_children():
 				if w is CardWidget:
 					out.append(w)
@@ -513,7 +515,7 @@ func _tray_widgets() -> Array:
 func _tray_buttons() -> int:
 	var n := 0
 	for ch in gs.tray_box.get_children():
-		if ch is HFlowContainer:
+		if ch is GridContainer:
 			for w in ch.get_children():
 				if w is Button:
 					n += 1
@@ -528,17 +530,24 @@ func _banner_button(prefix: String) -> Button:
 
 
 func _pile_cells() -> Array:
-	for ch in gs.pile_box.get_children():
-		if ch is HFlowContainer:
-			return ch.get_children()
-	return []
+	return gs.pile_list.get_children().filter(func(n): return (n as Node).has_meta("uid"))
 
 
 func _pile_button(label: String) -> Button:
 	for cell in _pile_cells():
-		for b in (cell as Node).get_children():
-			if b is Button and (b as Button).text == label:
-				return b
+		var found := _find_button(cell, label)
+		if found != null:
+			return found
+	return null
+
+
+func _find_button(n: Node, label: String) -> Button:
+	if n is Button and (n as Button).text == label:
+		return n
+	for ch in n.get_children():
+		var f := _find_button(ch, label)
+		if f != null:
+			return f
 	return null
 
 

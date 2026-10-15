@@ -161,7 +161,7 @@ static func label(text: String, size: int = 14, color: Color = TEXT, wrap: bool 
 
 
 static func button(text: String, size: int = 14) -> Button:
-	var b := Button.new()
+	var b := JuicyButton.new()
 	b.text = text
 	b.add_theme_font_size_override("font_size", size)
 	b.add_theme_font_override("font", font_bold())
@@ -183,6 +183,11 @@ static func primary_button(text: String, size: int = 15) -> Button:
 		s.content_margin_bottom = 5
 	p.content_margin_top = 6
 	p.content_margin_bottom = 4
+	n.border_width_bottom = 2
+	n.border_color = GOLD.darkened(0.35)
+	_lift(n, Color(0, 0, 0, 0.5), 4, 2)
+	_lift(h, Color(GOLD_HI, 0.45), 9, 0)          # warm glow on hover
+	_lift(p, Color(0, 0, 0, 0.45), 2, 1)
 	b.add_theme_stylebox_override("normal", n)
 	b.add_theme_stylebox_override("hover", h)
 	b.add_theme_stylebox_override("pressed", p)
@@ -191,6 +196,13 @@ static func primary_button(text: String, size: int = 15) -> Button:
 		b.add_theme_color_override(c, ON_GOLD)
 	b.add_theme_color_override("font_disabled_color", DISABLED)
 	return b
+
+
+## Drop shadow / glow on a button style (depth instead of a flat slab).
+static func _lift(sb: StyleBoxFlat, col: Color, sz: int, dy: int) -> void:
+	sb.shadow_color = col
+	sb.shadow_size = sz
+	sb.shadow_offset = Vector2(0, dy)
 
 
 ## Panel style (bronze trim on slate, rounded). `color` lets overlays use a denser fill.
@@ -237,6 +249,11 @@ static func make_theme() -> Theme:
 		s.content_margin_bottom = 5
 	pressed.content_margin_top = 6
 	pressed.content_margin_bottom = 4
+	normal.border_width_bottom = 2
+	normal.border_color = BRONZE.darkened(0.25)
+	_lift(normal, Color(0, 0, 0, 0.5), 4, 2)
+	_lift(hover, Color(GOLD, 0.32), 8, 0)
+	_lift(pressed, Color(0, 0, 0, 0.45), 2, 1)
 	th.set_stylebox("normal", "Button", normal)
 	th.set_stylebox("hover", "Button", hover)
 	th.set_stylebox("pressed", "Button", pressed)
@@ -254,6 +271,18 @@ static func make_theme() -> Theme:
 	th.set_stylebox("grabber", "VScrollBar", grab)
 	th.set_stylebox("grabber_highlight", "VScrollBar", grab_hi)
 	th.set_stylebox("grabber_pressed", "VScrollBar", grab_hi)
+	# Card-effect tooltips: near-black panel so the text reads over the board (user feedback).
+	var tip := flat(Color(0.035, 0.03, 0.025, 0.97), Color(GOLD, 0.55), 1, 6)
+	tip.content_margin_left = 10
+	tip.content_margin_right = 10
+	tip.content_margin_top = 7
+	tip.content_margin_bottom = 7
+	tip.shadow_color = Color(0, 0, 0, 0.6)
+	tip.shadow_size = 8
+	th.set_stylebox("panel", "TooltipPanel", tip)
+	th.set_color("font_color", "TooltipLabel", TEXT)
+	th.set_font("font", "TooltipLabel", font_body())
+	th.set_font_size("font_size", "TooltipLabel", 15)
 	th.set_font("font", "Button", font_bold())
 	th.set_color("font_color", "Button", TEXT)
 	th.set_color("font_hover_color", "Button", GOLD_HI)

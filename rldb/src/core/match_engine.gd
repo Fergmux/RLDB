@@ -89,14 +89,14 @@ func _advance_phase() -> void:
 		PHASE_MAIN1:
 			if turn == 1:
 				phase = PHASE_MAIN2
-				add_log("No Battle Phase on the first turn. Main Phase 2.")
+				add_log("No Battle Phase on the first turn. Recovery Phase.")
 			else:
 				phase = PHASE_BATTLE
 				add_log("Battle Phase.")
 			add_fx({"k": "phase", "phase": phase, "turn": turn})
 		PHASE_BATTLE:
 			phase = PHASE_MAIN2
-			add_log("Main Phase 2.")
+			add_log("Recovery Phase.")
 			add_fx({"k": "phase", "phase": phase, "turn": turn})
 		PHASE_MAIN2:
 			_end_turn()
@@ -261,7 +261,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 		"summon":
 			if inst["owner"] != p or inst["zone"] != "hand": return "Card is not in your Hand."
 			if not is_unit(uid) or is_extra(uid): return "Not a unit you can normal summon."
-			if not main: return "Units can only be summoned in a Main Phase."
+			if not main: return "Units can only be summoned in the Setup or Recovery Phase."
 			if current_cost(uid) > players[p]["ap"]: return "Not enough AP (%d needed)." % current_cost(uid)
 			if free_unit_slots(p).is_empty(): return "No free unit zone."
 			if _summon_blocked_by_type(p, unit_type(uid)): return "Your opponent's Bahatia prevents summoning %s units." % unit_type(uid)
@@ -269,7 +269,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 		"set":
 			if inst["owner"] != p or inst["zone"] != "hand": return "Card is not in your Hand."
 			if not (df["category"] in ["spell", "trap"]): return "Only Spells and Traps can be set."
-			if not main: return "Cards can only be set in a Main Phase."
+			if not main: return "Cards can only be set in the Setup or Recovery Phase."
 			if player_has_flag(opp(p), "no_set"): return "Draw Virus: you cannot set cards."
 			if current_cost(uid) > players[p]["ap"]: return "Not enough AP (%d needed)." % current_cost(uid)
 			if free_backrow_slots(p).is_empty(): return "No free Trap/Spell zone."
@@ -279,7 +279,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 			if df["category"] != "spell": return "Not a Spell."
 			# User rule 2026-10-16: nothing is played from the Hand in the Battle Phase; only cards
 			# already on the Field (set Spells, abilities, Traps) act there.
-			if not main: return "Spells in your Hand can only be cast in a Main Phase."
+			if not main: return "Spells in your Hand can only be cast in the Setup or Recovery Phase."
 			if current_cost(uid) > players[p]["ap"]: return "Not enough AP (%d needed)." % current_cost(uid)
 			return _spell_target_check(p, uid)
 		"activate_set":
@@ -290,7 +290,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 		"power":
 			if inst["owner"] != p or inst["zone"] != "hand": return "Card is not in your Hand."
 			if df["category"] != "power": return "Not a Power."
-			if not main: return "Powers are played in a Main Phase."
+			if not main: return "Powers are played in the Setup or Recovery Phase."
 			if current_cost(uid) > players[p]["ap"]: return "Not enough AP (%d needed)." % current_cost(uid)
 			if free_power_slots(p).is_empty(): return "No free Power zone."
 			if script_of(uid).get("flags", []).has("abyss_ap") and _deck_has_zero_cost(p):
@@ -306,21 +306,21 @@ func validate(p: int, cmd: Dictionary) -> String:
 			return _ability_check(p, uid, idx, abs[idx])
 		"stance":
 			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
-			if phase != PHASE_MAIN1: return "Stance can only be changed in Main Phase 1."
+			if phase != PHASE_MAIN1: return "Stance can only be changed in the Setup Phase."
 			if has_flag(uid, "no_defense") and inst["stance"] == "atk": return "This unit cannot be in Defense stance."
 			return ""
 		"attack":
 			return _attack_check(p, uid)
 		"sacrifice":
 			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
-			if not main: return "Sacrifice is only allowed in a Main Phase (proposal P-21)."
+			if not main: return "Sacrifice is only allowed in the Setup or Recovery Phase (proposal P-21)."
 			if inst["summoned_turn"] == turn: return "A unit summoned this turn cannot be sacrificed."
 			if is_debilitated(uid): return "Debilitated units cannot be sacrificed."
 			if inst["control_until"] != -1: return "A temporarily controlled unit cannot be sacrificed."
 			return ""
 		"move":
 			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
-			if not main: return "Nimble moves are only allowed in a Main Phase."
+			if not main: return "Nimble moves are only allowed in the Setup or Recovery Phase."
 			if status_count(uid, "nimble") <= 0: return "Requires Nimble."
 			if status_count(uid, "paralyse") > 0: return "Paralysed units cannot move."
 			if has_flag(uid, "cant_move"): return "This unit cannot move zone."
@@ -330,7 +330,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 		"ritual", "arcane":
 			if inst["owner"] != p or inst["zone"] != "extra": return "Card is not in your Extra Deck."
 			if df["category"] != t: return "Not a %s unit." % t.capitalize()
-			if not main: return "Special summons from the Extra Deck follow normal summon timing (Main Phase)."
+			if not main: return "Special summons from the Extra Deck follow normal summon timing (Setup or Recovery Phase)."
 			if _summon_blocked_by_type(p, unit_type(uid)): return "Your opponent's Bahatia prevents summoning %s units." % unit_type(uid)
 			if t == "ritual" and _ritual_materials(p, uid).is_empty(): return "No unit with enough Runes."
 			if t == "arcane" and _arcane_total(p) < df["cost"]: return "Spent units' current costs total %d; %d required." % [_arcane_total(p), df["cost"]]

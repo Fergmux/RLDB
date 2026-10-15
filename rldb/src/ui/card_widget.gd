@@ -87,7 +87,7 @@ func setup(v, kind: String = "board", empty_label: String = "", is_rotated: bool
 	if view.is_empty() or view.get("hidden", false) or not show_tooltip:
 		tooltip_text = ""
 	else:
-		tooltip_text = "%s\n%s" % [view["name"], view.get("text", "")]
+		tooltip_text = tooltip_for(view)
 	queue_redraw()
 	return self
 
@@ -529,8 +529,9 @@ func _name_plate(rect: Rect2, fs_max: float, reserve_l: float, reserve_r: float,
 	var nm: String = view["name"]
 	var x := rect.position.x + (reserve_l + 3.0) * _s
 	var fs := _fit_name(nm, avail, fs_max, fs_min, font)
+	# Names are centred on the plate (user feedback 2026-10-16).
 	if font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= avail:
-		_text_at(font, nm, Vector2(x, rect.position.y), fs, UIStyle.TEXT, -1.0, HORIZONTAL_ALIGNMENT_LEFT, rect.size.y - 3.0 * _s)
+		_text_at(font, nm, Vector2(x, rect.position.y), fs, UIStyle.TEXT, avail, HORIZONTAL_ALIGNMENT_CENTER, rect.size.y - 3.0 * _s)
 		return
 	var parts := split_name(nm)
 	var inner_h := rect.size.y - 3.0 * _s
@@ -542,9 +543,9 @@ func _name_plate(rect: Rect2, fs_max: float, reserve_l: float, reserve_r: float,
 		var lh := float(fs2) * 1.05
 		var y0 := rect.position.y + (inner_h - 2.0 * lh) / 2.0
 		for k in 2:
-			_text_at(font, _ellipsize(font, parts[k], fs2, avail), Vector2(x, y0 + float(k) * lh), fs2, UIStyle.TEXT if k == 0 else UIStyle.MUTED, -1.0, HORIZONTAL_ALIGNMENT_LEFT, lh)
+			_text_at(font, _ellipsize(font, parts[k], fs2, avail), Vector2(x, y0 + float(k) * lh), fs2, UIStyle.TEXT if k == 0 else UIStyle.MUTED, avail, HORIZONTAL_ALIGNMENT_CENTER, lh)
 		return
-	_text_at(font, _ellipsize(font, nm, fs, avail), Vector2(x, rect.position.y), fs, UIStyle.TEXT, -1.0, HORIZONTAL_ALIGNMENT_LEFT, inner_h)
+	_text_at(font, _ellipsize(font, nm, fs, avail), Vector2(x, rect.position.y), fs, UIStyle.TEXT, avail, HORIZONTAL_ALIGNMENT_CENTER, inner_h)
 
 
 func _cost_text() -> String:
@@ -812,6 +813,35 @@ func _chip_draw(x: float, y: float, w: float, h: float, text: String, col: Color
 	_text_c(font, text, Vector2(tx, y + h / 2.0), fs, col.lightened(0.45))
 
 
+## Hover tooltip: the name, then the card text wrapped to a comfortable reading width.
+static func tooltip_for(v: Dictionary, width: int = 58) -> String:
+	var out := PackedStringArray([String(v.get("name", ""))])
+	for para in card_text(v).split("\n"):
+		var line := ""
+		for word in para.split(" ", false):
+			if line != "" and line.length() + 1 + word.length() > width:
+				out.append(line)
+				line = word
+			else:
+				line = word if line == "" else line + " " + word
+		if line != "":
+			out.append(line)
+	return "\n".join(out)
+
+
+## Rules text as printed on the card face: timing captions kept ("On Summon: …") except the
+## "On Field:" one, which is implied for a card on the field (user feedback 2026-10-16).
+static func card_text(v: Dictionary) -> String:
+	var parts: Array = v.get("text_parts", [])
+	if parts.is_empty():
+		return String(v.get("text", "")).replace("On Field: ", "")
+	var lines := []
+	for p in parts:
+		var k := String(p.get("k", ""))
+		lines.append(String(p.get("t", "")) if k == "On Field" or k == "" else "%s: %s" % [k, p.get("t", "")])
+	return "\n".join(lines)
+
+
 ## Damage-type pip on the art. Reads view.type at draw time so type changes show immediately.
 func _type_pip(c: Vector2, r: float) -> void:
 	# Only a real damage Type gets a pip; Spells/Traps/Powers and typeless units show none (the
@@ -845,7 +875,7 @@ func _draw_power() -> void:
 	_draw_art(_r(4, 4, 77, 56))
 	_name_plate(_r(4, 48, 77, 20), 10.5, 0.0, 0.0, 8.0)
 	_gem(_p(13, 13), 9.0 * _s, _fs(12))
-	var txt: String = view.get("text", "")
+	var txt := card_text(view)
 	if txt != "":
 		var tp := _para(txt, UIStyle.font_body(), "b", _fs(9.0), 77.0 * _s, 4)
 		tp.draw(get_canvas_item(), _p(4, 70), Color(UIStyle.TEXT, 0.9))
@@ -882,7 +912,7 @@ func _draw_tall(big: bool) -> void:
 		_text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(view.get("category", ""), ""), _p(lx + (11 if not big else 15), ly), line_fs, UIStyle.MUTED, -1.0, HORIZONTAL_ALIGNMENT_LEFT, lh)
 	# Rules text well.
 	var t: Array = g["text"]
-	var rules: String = view.get("text", "")
+	var rules := card_text(view)
 	if view.get("support", "full") == "unimplemented":
 		rules = "[Effect not implemented] " + rules
 	_round_rect(_r(t[0], t[1], t[2], t[3]), Color(0.847, 0.8, 0.69, 0.08), 3.0 * _s)

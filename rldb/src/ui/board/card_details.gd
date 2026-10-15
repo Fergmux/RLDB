@@ -84,7 +84,7 @@ func show_empty(hint: String) -> void:
 ## actions are unavailable, e.g. "Cannot attack: ...".
 func show_card(c: Dictionary, _notes: Array = []) -> void:
 	if c.is_empty():
-		show_empty("Hover a card to read it, or click it to pin it here. Right-click or Esc to clear.")
+		show_empty("Hover a card to read it, or click it to pin it here.")
 		return
 	_reset()
 	_build_identity(c)
@@ -157,13 +157,13 @@ func _cost_chip(c: Dictionary) -> Control:
 	if kind == "ap":
 		var cost = c.get("cost")
 		var printed = c.get("printed_cost")
-		txt = "Cost %s" % str(cost)
+		txt = "%s AP" % str(cost)
 		if cost != null and printed != null and cost != printed:
-			txt += " AP (printed %s)" % str(printed)
+			txt += " (base %s)" % str(printed)
 			col = UIStyle.BAD if cost > printed else UIStyle.GOOD
 			return _chip(txt, col, "up" if cost > printed else "down")
-		return _chip(txt + " AP", col, shape)
-	return _chip("Cost: " + String(c.get("cost_text", "")), col, shape)
+		return _chip(txt, col, shape)
+	return _chip(String(c.get("cost_text", "")), col, shape)
 
 
 func _build_stats(c: Dictionary) -> void:
@@ -222,13 +222,14 @@ func _stat_tile(cap: String, cur, printed) -> Control:
 	trend.add_theme_constant_override("separation", 4)
 	left.add_child(trend)
 	var col := UIStyle.TEXT
+	var trend_mark: Mark = null
+	trend.add_child(_lbl("Base: %s" % ("?" if printed == null else str(printed)), SMALL, UIStyle.MUTED, false, false, false))
 	if cur != null and printed != null and cur != printed:
 		var up: bool = cur > printed
 		col = UIStyle.GOOD if up else UIStyle.BAD
-		trend.add_child(Mark.new("up" if up else "down", col, 10))
-		trend.add_child(_lbl("Base: %s" % str(printed), SMALL, col, false, false, false))
-	else:
-		trend.add_child(_lbl("Base: %s" % ("?" if printed == null else str(printed)), SMALL, UIStyle.MUTED, false, false, false))
+		trend_mark = Mark.new("up" if up else "down", col, 12)   # beside the resulting value
+	if trend_mark != null:
+		hb.add_child(trend_mark)
 	var num := Label.new()
 	num.text = "?" if cur == null else str(cur)
 	num.add_theme_font_override("font", UIStyle.font_display(700))
