@@ -55,6 +55,12 @@ func _parse_cmdline() -> void:
 		elif a == "--no-privacy":
 			_privacy = false
 	for a in args:
+		if a.begins_with("--net-shots="):
+			_auto_started = true
+			var nd: Node = load("res://src/dev/net_shot_driver.gd").new()
+			add_child(nd)
+			nd.call_deferred("run", self, a.split("=")[1])
+			return
 		if a.begins_with("--shots="):
 			_auto_started = true
 			var driver: Node = load("res://src/dev/shot_driver.gd").new()
