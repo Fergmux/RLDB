@@ -92,6 +92,8 @@ static func choose(m: MatchEngine, texts: Array) -> String:
 ## Answers the pending choice with specific uids (values).
 static func choose_uids(m: MatchEngine, uids: Array) -> String:
 	var pd := m.pending
+	if pd.is_empty():
+		return "no pending choice"
 	return m.submit(pd["player"], {"t": "choose", "id": pd["id"], "values": uids})
 
 
@@ -102,6 +104,62 @@ static func attack(m: MatchEngine, attacker: int, target: int) -> String:
 	if m.pending.get("kind", "") == "attack_target":
 		return choose_uids(m, [target])
 	return ""
+
+
+static func slot_label(slot: int) -> String:
+	return "%s row, column %d" % ["Front" if slot < 3 else "Back", slot % 3 + 1]
+
+
+## Summons `id` from Hand through the real command flow (with plenty of AP).
+static func summon(m: MatchEngine, p: int, id: int, slot: int, stance: String = "Attack") -> int:
+	var uid := card(m, p, id)
+	m.players[p]["ap"] = 20
+	var e := m.submit(p, {"t": "summon", "uid": uid})
+	assert(e == "", e)
+	assert(choose(m, [slot_label(slot)]) == "")
+	if m.pending.get("kind", "") == "stance":
+		choose(m, [stance])
+	return uid
+
+
+## Casts a Spell from Hand through the real command flow (with plenty of AP).
+static func cast(m: MatchEngine, p: int, id: int) -> int:
+	var uid := card(m, p, id)
+	m.players[p]["ap"] = 20
+	var e := m.submit(p, {"t": "cast", "uid": uid})
+	assert(e == "", e)
+	return uid
+
+
+static func ability(m: MatchEngine, uid: int, idx: int = 0) -> String:
+	m.players[m.cards[uid]["ctl"]]["ap"] = maxi(m.players[m.cards[uid]["ctl"]]["ap"], 5)
+	return m.submit(m.cards[uid]["ctl"], {"t": "ability", "uid": uid, "idx": idx})
+
+
+## Destroys a field card by an effect from player `by` and resolves triggers.
+static func kill(m: MatchEngine, uid: int, by: int = -1) -> void:
+	m.destroy(uid, "effect", -1, by if by != -1 else 1 - m.cards[uid]["ctl"])
+	m.run()
+
+
+## Puts a unit (any category) onto the Field as a summon and resolves its On Summon triggers.
+static func special(m: MatchEngine, p: int, id: int, slot: int, stance: String = "atk") -> int:
+	var uid := m._create_instance(id, p)
+	m.cards[uid]["zone"] = "limbo"
+	m.place_unit(uid, p, slot, stance)
+	m.emit("summoned", {"self": uid, "ctl": p, "player": p})
+	m.run()
+	return uid
+
+
+## Makes it player 1's turn 2 in the Battle Phase.
+static func p1_battle(m: MatchEngine) -> void:
+	to_turn2(m)
+	to_battle(m)
+
+
+static func pend_kind(m: MatchEngine) -> String:
+	return m.pending.get("kind", "")
 
 
 static func log_text(m: MatchEngine) -> String:
