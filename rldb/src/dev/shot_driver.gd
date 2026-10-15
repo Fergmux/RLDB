@@ -29,6 +29,19 @@ func run(main_node: Node, dir: String) -> void:
 	await _frames(4)
 	_view_seat(m.active)
 	await _shot("02_board")
+	# I-02: hover actions on a hand card and on a field card (hover API; no mouse needed).
+	var hs: GameScreen = main.screen
+	hs.debug_hover_hand(0)
+	await _frames(25)
+	await _shot("02b_hover_hand_card")
+	hs.debug_hover_hand(2)
+	await _frames(25)
+	await _shot("02b2_hover_hand_spell")
+	hs.debug_hover_slot(m.active, "unit", 0)
+	await _frames(25)
+	await _shot("02c_hover_field_card")
+	hs.debug_clear_hover()
+	await _frames(5)
 	# Details for a unit with statuses and an aura-modified stat.
 	var screen: GameScreen = main.screen
 	screen.selected_uid = m.players[m.active]["units"][1]
@@ -59,6 +72,9 @@ func run(main_node: Node, dir: String) -> void:
 		if o["v"] == m.players[1 - attacker_side]["units"][0]:
 			target_opt = m.pending["options"].find(o)
 	host.handle(attacker_side, {"t": "choose", "id": m.pending["id"], "indices": [maxi(target_opt, 0)]})
+	await get_tree().create_timer(0.17).timeout
+	await _shot("05b_attack_animation_in_progress")
+	await get_tree().create_timer(1.2).timeout
 	await _frames(3)
 	if not m.pending.is_empty() and m.pending["kind"] == "trap_response":
 		_view_seat(m.pending["player"])

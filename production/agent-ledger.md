@@ -9,7 +9,7 @@ model override is set.
 | Decision reconciliation (P-xx/S-xx/C-xx) in rules engine | lead | Opus 5.5 | Done; 17 decision tests (15 failed on old engine) |
 | Series save/resume, custom decks, 60 s claim | lead | Opus 5.5 | Done; series + net tests pass |
 | Art bible + board UX spec | art-director | Sonnet | `design/art/art-bible.md`, `design/ux/match-board.md` |
-| Board/cards/hover actions/animations (I-01..I-03) | ui-programmer | Sonnet | In progress |
+| Board/cards/hover actions/animations (I-01..I-03) | ui-programmer | Sonnet | Done (resumed once); 293 tests pass; screenshots reviewed by lead — mid-attack shot missing |
 | Deck builder + main menu | ui-programmer | Sonnet | Done (resumed once after turn limit); 4 tests; screenshots reviewed by lead |
 | Untimed mandatory card text audit (P-30) | general-purpose | Haiku | None found besides 90/183 (already corrected); reviewed by lead |
 | Privacy/security review of new fx, saves, custom decks, claim | security-engineer | Opus | 1 leak (accepted P-27 trade-off, documented), 1 exploit + 3 risks fixed with tests |
