@@ -57,6 +57,7 @@ func test_c083_sacred_offerings_adds_a_rune() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0)
 	TB.cast(m, 0, 83)
+	TB.choose_uids(m, [u])                                  # sole legal target is still chosen by the player
 	assert_int(m.status_count(u, "rune")).is_equal(1)
 
 
@@ -65,6 +66,7 @@ func test_c084_assassinate_destroys_unit_with_30_def_or_less_only() -> void:
 	var weak := TB.unit(m, 1, TB.WATER, 0, "atk", 8, 30)
 	var tough := TB.unit(m, 1, TB.WATER, 1, "atk", 8, 31)
 	TB.cast(m, 0, 84)
+	TB.choose_uids(m, [weak])               # only the 30-DEF unit is legal, but it is still chosen
 	assert_str(m.cards[weak]["zone"]).is_equal("spent")
 	assert_str(m.cards[tough]["zone"]).is_equal("unit")
 
@@ -103,6 +105,7 @@ func test_c138_no_hubris_destroys_a_buffed_unit() -> void:
 	m.apply_status(buffed, "pierce", 1)
 	TB.unit(m, 1, TB.WATER, 1)
 	TB.cast(m, 0, 138)
+	TB.choose_uids(m, [buffed])
 	assert_str(m.cards[buffed]["zone"]).is_equal("spent")
 
 
@@ -115,8 +118,9 @@ func test_c138_no_hubris_cannot_be_cast_without_buffed_target() -> void:
 
 func test_c182_shimmer_serum_cost_rises_each_activation() -> void:
 	var m := TB.make()
-	TB.unit(m, 0, TB.WATER, 0)
+	var own := TB.unit(m, 0, TB.WATER, 0)
 	var s := TB.cast(m, 0, 182)
+	TB.choose_uids(m, [own])
 	assert_int(m.current_cost(s)).is_equal(1)
 
 
@@ -124,6 +128,7 @@ func test_c152_ruler_no_more_destroys_a_power() -> void:
 	var m := TB.make()
 	var pw := TB.power(m, 1, 88)
 	TB.cast(m, 0, 152)
+	TB.choose_uids(m, [pw])
 	assert_str(m.cards[pw]["zone"]).is_equal("spent")
 
 
@@ -163,10 +168,12 @@ func test_c086_get_well_soon_heals_after_opponent_destroys_your_unit() -> void:
 func test_c087_shared_fate_retaliates_when_unit_destroyed_by_effect() -> void:
 	var m := _p1_turn()
 	TB.set_card(m, 0, 87, 0)
-	TB.unit(m, 0, TB.WATER, 0)
+	var mine := TB.unit(m, 0, TB.WATER, 0)
 	var foe := TB.unit(m, 1, TB.WATER, 0, "atk", 8, 40)
 	TB.cast(m, 1, 84)                                       # Assassinate
+	TB.choose_uids(m, [mine])                               # target first (the only 30-DEF-or-less unit), then cost, then the trap window
 	TB.choose(m, ["Activate Shared Fate"])
+	TB.choose_uids(m, [foe])                                # Shared Fate's own target, chosen by the trap owner
 	assert_str(m.cards[foe]["zone"]).is_equal("spent")
 
 
@@ -189,6 +196,7 @@ func test_c048_overextend_weakens_highest_atk_after_third_unit() -> void:
 	TB.unit(m, 1, TB.WATER, 1, "atk", 10)
 	TB.summon(m, 1, TB.FIRE, 2)
 	TB.choose(m, ["Activate Overextend"])
+	TB.choose_uids(m, [big])                                # sole highest-ATK unit: still chosen by the player
 	assert_int(m.atk_of(big)).is_equal(10)
 
 
@@ -233,6 +241,7 @@ func test_c140_energy_dispel_negates_spell_and_exhausts_itself() -> void:
 	var dispel := TB.set_card(m, 0, 140, 0)
 	var u := TB.unit(m, 1, TB.WATER, 0)
 	var spell := TB.cast(m, 1, 83)
+	TB.choose_uids(m, [u])                                  # target first, then cost, then the trap window
 	TB.choose(m, ["Activate Energy Dispel"])
 	assert_int(m.status_count(u, "rune")).is_equal(0)
 	assert_str(m.cards[spell]["zone"]).is_equal("spent")

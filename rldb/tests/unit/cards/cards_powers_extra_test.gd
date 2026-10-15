@@ -50,6 +50,7 @@ func test_c090_chains_of_binding_paralyses() -> void:
 	var ch := TB.power(m, 0, 90)
 	var foe := TB.unit(m, 1, TB.WATER, 0)
 	TB.ability(m, ch)
+	TB.choose_uids(m, [foe])              # a single legal target is still the player's choice
 	assert_int(m.status_count(foe, "paralyse")).is_equal(1)
 
 
@@ -91,7 +92,9 @@ func test_c148_martyrdom_exhausts_own_unit_to_destroy_a_unit() -> void:
 	var mt := TB.power(m, 0, 148)
 	var mine := TB.unit(m, 0, TB.WATER, 0)
 	var foe := TB.unit(m, 1, TB.WATER, 0)
-	TB.ability(m, mt)                     # single legal choice each step: resolves without prompts
+	TB.ability(m, mt)                     # each step is now the player's choice, even with one legal option
+	TB.choose_uids(m, [mine])
+	TB.choose_uids(m, [foe])
 	assert_bool(m.pending.is_empty()).is_true()
 	assert_str(m.cards[mine]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[foe]["zone"]).is_equal("spent")
@@ -235,6 +238,7 @@ func test_c061_sanctified_blade_heals_adjacent() -> void:
 	var sb := TB.unit(m, 0, 61, 0)
 	var ally := TB.unit(m, 0, TB.WATER, 1)
 	TB.ability(m, sb)
+	TB.choose_uids(m, [ally])
 	assert_int(m.status_count(ally, "medic")).is_equal(3)
 
 
@@ -377,6 +381,7 @@ func test_c063_last_foundation_reveals_and_destroys_weakest_foe_on_death() -> vo
 	var weak := TB.unit(m, 1, TB.WATER, 0, "atk", 2)
 	TB.unit(m, 1, TB.WATER, 1, "atk", 9)
 	TB.kill(m, lf)
+	TB.choose_uids(m, [weak])             # the lowest-ATK unit is the only legal target, but the player still confirms it
 	assert_str(m.cards[weak]["zone"]).is_equal("spent")
 
 
@@ -398,6 +403,7 @@ func test_c066_nyxthral_shields_neighbour_and_filters_cards() -> void:
 	var m := TB.make()
 	var ally := TB.unit(m, 0, TB.WATER, 1)
 	var nx := TB.special(m, 0, 66, 0)
+	TB.choose_uids(m, [ally])             # sole adjacent unit: still chosen by the player
 	assert_int(m.status_count(ally, "eternal")).is_equal(1)
 	var n: int = m.players[0]["hand"].size()
 	TB.ability(m, nx)
@@ -409,6 +415,7 @@ func test_c095_mimic_copies_column_foe_and_doubles_debuffs_on_death() -> void:
 	var m := TB.make()
 	var foe := TB.unit(m, 1, 37, 0)
 	var mm := TB.special(m, 0, 95, 0)
+	TB.choose_uids(m, [foe])              # sole unprotected column foe: still chosen by the player
 	assert_int(m.status_count(foe, "paralyse")).is_equal(2)
 	assert_int(m.atk_of(mm)).is_equal(26)
 	assert_str(m.unit_type(mm)).is_equal("Physical")

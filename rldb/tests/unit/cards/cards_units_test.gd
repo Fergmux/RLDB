@@ -100,6 +100,7 @@ func test_c012_tag_team_x_draws_gains_ap_and_revives_into_column() -> void:
 	var dead: int = m.players[0]["spent"][-1]
 	assert_str(TB.ability(m, x)).is_empty()
 	TB.choose_uids(m, [dead])
+	TB.choose(m, [TB.slot_label(3)])        # the only free zone is still offered to the player
 	TB.choose(m, ["Attack"])
 	assert_int(m.cards[dead]["slot"]).is_equal(3)
 
@@ -127,6 +128,7 @@ func test_c015_da_mage_applies_pierce() -> void:
 	var m := TB.make()
 	var dm := TB.unit(m, 0, 15, 0)
 	TB.ability(m, dm)
+	TB.choose_uids(m, [dm])                     # sole unit on the board: still chosen by the player
 	assert_int(m.status_count(dm, "pierce")).is_equal(1)
 
 
@@ -134,6 +136,7 @@ func test_c019_shapeshifter_loak_copies_column_foe_and_gives_it_eternal() -> voi
 	var m := TB.make()
 	var foe := TB.unit(m, 1, 37, 0)            # Solomon, the Captain 26/20 Warrior
 	var loak := TB.summon(m, 0, 19, 0)
+	TB.choose_uids(m, [foe])                   # sole column foe: still chosen by the player
 	assert_int(m.status_count(foe, "eternal")).is_equal(1)
 	assert_int(m.atk_of(loak)).is_equal(26)
 	assert_int(m.def_of(loak)).is_equal(20)
@@ -233,6 +236,7 @@ func test_c027_hydra_revives_small_dragon_into_its_zone() -> void:
 	var drake := TB.card(m, 0, 33, "spent")
 	TB.kill(m, hydra)
 	TB.choose_uids(m, [drake])
+	TB.choose(m, [TB.slot_label(2)])        # the only free zone is still offered to the player
 	TB.choose(m, ["Attack"])
 	assert_int(m.cards[drake]["slot"]).is_equal(2)
 
@@ -242,6 +246,7 @@ func test_c028_guardian_of_the_forest_summons_small_beast_into_column() -> void:
 	var ff := TB.card(m, 0, 71, "spent")
 	TB.summon(m, 0, 28, 0)
 	TB.choose_uids(m, [ff])
+	TB.choose(m, [TB.slot_label(3)])        # the only free zone is still offered to the player
 	TB.choose(m, ["Defense"])
 	assert_int(m.cards[ff]["slot"]).is_equal(3)
 	assert_str(m.cards[ff]["stance"]).is_equal("def")
@@ -254,6 +259,7 @@ func test_c029_sweeper_reveals_then_destroys_revealed_trap() -> void:
 	TB.choose_uids(m, [trap])
 	assert_bool(m.is_face_up(trap)).is_true()
 	assert_str(TB.ability(m, sw)).is_empty()
+	TB.choose_uids(m, [trap])                  # target chosen first, then the cost is paid
 	assert_str(m.cards[trap]["zone"]).is_equal("spent")
 
 
@@ -280,6 +286,7 @@ func test_c032_frost_wyvern_destroys_power_and_chills_column() -> void:
 	var m := TB.make()
 	var pw := TB.power(m, 1, 88)
 	var fw := TB.summon(m, 0, 32, 0)
+	TB.choose_uids(m, [pw])                    # sole Power: still chosen by the player
 	assert_str(m.cards[pw]["zone"]).is_equal("spent")
 	var foe := TB.unit(m, 1, TB.WATER, 0)
 	TB.ability(m, fw)
@@ -322,6 +329,8 @@ func test_c036_dante_revives_next_turn_for_one_ap() -> void:
 	TB.to_turn2(m)
 	for i in 3:
 		m.submit(1, {"t": "next_phase"})
+	assert_str(TB.pend_kind(m)).is_equal("slot")      # the only free zone is still offered to the player
+	TB.choose(m, [TB.slot_label(1)])
 	assert_str(TB.pend_kind(m)).is_equal("stance")
 	TB.choose(m, ["Attack"])
 	assert_int(m.cards[dante]["slot"]).is_equal(1)
@@ -391,6 +400,7 @@ func test_c069_magentric_gives_adjacent_unit_two_pierce() -> void:
 	var m := TB.make()
 	var friend := TB.unit(m, 0, TB.WATER, 1)
 	TB.summon(m, 0, 69, 0)
+	TB.choose_uids(m, [friend])                 # sole adjacent unit: still chosen by the player
 	assert_int(m.status_count(friend, "pierce")).is_equal(2)
 
 
@@ -402,8 +412,9 @@ func test_c040_aleister_pays_one_ap_to_fuse() -> void:
 	var wyrm := TB.card(m, 0, 93, "extra")
 	m.players[0]["ap"] = 2
 	m.submit(0, {"t": "ability", "uid": al, "idx": 0})
-	assert_int(m.players[0]["ap"]).is_equal(1)
+	assert_int(m.players[0]["ap"]).is_equal(2)          # the Fusion unit is chosen before the cost
 	TB.choose_uids(m, [wyrm])
+	assert_int(m.players[0]["ap"]).is_equal(1)
 	TB.choose(m, ["Front row, column 2"])
 	TB.choose(m, ["Attack"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
@@ -454,6 +465,7 @@ func test_c074_sparky_gives_infiltrate_when_sacrificed() -> void:
 	var sp := TB.unit(m, 0, 74, 0)
 	var friend := TB.unit(m, 0, TB.WATER, 1)
 	m.submit(0, {"t": "sacrifice", "uid": sp})
+	TB.choose_uids(m, [friend])                 # sole other unit: still chosen by the player
 	assert_int(m.status_count(friend, "infiltrate")).is_equal(1)
 
 
@@ -524,6 +536,7 @@ func test_c079_akakaiju_destroys_a_water_unit() -> void:
 	var water := TB.unit(m, 1, TB.WATER, 0)
 	TB.unit(m, 1, TB.FIRE, 1)
 	TB.summon(m, 0, 79, 0)
+	TB.choose_uids(m, [water])                  # only Water unit: still chosen by the player
 	assert_str(m.cards[water]["zone"]).is_equal("spent")
 
 

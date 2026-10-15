@@ -160,6 +160,7 @@ func test_set_spell_pays_once_and_can_be_activated_same_turn() -> void:
 	TB.choose(m, ["column 1"])
 	assert_int(m.players[0]["ap"]).is_equal(1)
 	assert_str(m.submit(0, {"t": "activate_set", "uid": spell})).is_empty()
+	TB.choose_uids(m, [target])             # target first (cancellable), then the cost is paid
 	assert_int(m.players[0]["ap"]).is_equal(1)
 	assert_int(m.status_count(target, "rune")).is_equal(1)
 	assert_str(m.cards[spell]["zone"]).is_equal("spent")

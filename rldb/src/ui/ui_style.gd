@@ -24,8 +24,8 @@ const TARGET := Color("ffd84a")
 const SELECT := Color("63b3ff")
 const HOVER := Color("f0cf7a")
 const RUNE_BLUE := Color("5aa2ff")
-## "This card can act now" highlight (F02-11): lime/chartreuse. Not used by any CATEGORY_COLORS (Arcane is teal,
-## Spell is green), nor by SELECT blue, TARGET yellow or the GOOD mint. Always paired with a double ring + chevron badge.
+## "This card can act now" highlight (F02-11): lime/chartreuse. Not used by any CATEGORY_COLORS (Spell is a
+## deeper green), nor by SELECT blue, TARGET yellow or the GOOD mint. Always paired with a double ring + chevron badge.
 ## Hover is a soft ivory glow (HOVER_GLOW), deliberately not gold so it cannot be mistaken for the pulsing TARGET.
 const READY := Color("b8f22c")
 ## Provisional combat-preview stat styling (F02-12): cyan, distinct from committed buff green / debuff red.
@@ -38,16 +38,18 @@ const TYPE_COLORS := {
 	"Lightning": Color("e0bd32"), "Heavenly": Color("f0e4b0"), "Necrotic": Color("7e4fb5"),
 	"Physical": Color("98979a"), "": Color("5b5a58"),
 }
+## Card-kind colours (user decision 2026-10-16): Trap red, Power light blue, Unit brown, Fusion dark blue,
+## Ritual purple, Spell green, Arcane grey. Used on card frames, pills, the deck builder and the game log.
 const CATEGORY_COLORS := {
-	"basic_unit": Color("6d6a66"), "unit": Color("9a8f7c"), "spell": Color("2f9a6a"),
-	"trap": Color("a8386f"), "power": Color("c9a23a"), "fusion": Color("7f5fd0"),
-	"ritual": Color("3f7fd0"), "arcane": Color("1fb0a0"),
+	"basic_unit": Color("7a5636"), "unit": Color("8b5a2b"), "spell": Color("2e9e48"),
+	"trap": Color("c8352e"), "power": Color("6ec6f0"), "fusion": Color("2747a8"),
+	"ritual": Color("8e4fd0"), "arcane": Color("9a9ca3"),
 }
 const CATEGORY_NAMES := {
 	"basic_unit": "Basic Unit", "unit": "Unit", "spell": "Spell", "trap": "Trap", "power": "Power",
 	"fusion": "Fusion Unit", "ritual": "Ritual Unit", "arcane": "Arcane Unit",
 }
-const COST_COLORS := {"ap": Color("f2b544"), "ritual": Color("4a8fe0"), "arcane": Color("1fb0a0"), "fusion": Color("9d7ae8")}
+const COST_COLORS := {"ap": Color("f2b544"), "ritual": Color("a874e0"), "arcane": Color("b4b6bc"), "fusion": Color("5a7fe0")}
 const STATUS_SHORT := {
 	"retain": "RET", "reveal": "REV", "eternal": "ETR", "burn": "BRN", "pierce": "PRC", "cleanse": "CLN",
 	"paralyse": "PAR", "medic": "MED", "curse": "CRS", "poison": "PSN", "infiltrate": "INF", "blind": "BLD",
@@ -207,6 +209,12 @@ static func panel(color: Color = PANEL) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", panel_style(color))
 	return p
+
+
+## Card-kind colour lifted for text on the dark log/panel background (dark blue and brown stay legible).
+static func category_text_color(cat: String) -> Color:
+	var c: Color = CATEGORY_COLORS.get(cat, TEXT)
+	return c.lightened(0.45) if c.get_luminance() < 0.3 else c.lightened(0.1)
 
 
 static func type_color(t) -> Color:

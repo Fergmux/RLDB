@@ -657,6 +657,8 @@ func _op_choose(f: Dictionary, op: Dictionary) -> int:
 	if op.has("exclude"):
 		var ex := refs(f, op["exclude"])
 		cands = cands.filter(func(u): return not (u in ex))
+	if cards.has(f["src"]) and cards[f["src"]]["zone"] == "hand":
+		cands = cands.filter(func(u): return u != f["src"])   # a Spell choosing before it is cast never picks itself
 	var chooser: int = who(f, op.get("chooser", "self"))
 	if op["sel"].get("kind", "unit") in ["hand", "draw", "spent", "exhaust", "extra", "spent_or_draw"]:
 		cands.sort()
@@ -677,17 +679,14 @@ func _op_choose(f: Dictionary, op: Dictionary) -> int:
 	var min_n: int = 0 if (op.get("optional", false) or n is String) else max_n
 	if op.has("min"):
 		min_n = clampi(int(op["min"]), 0, max_n)
-	if min_n == max_n and cands.size() == max_n and not op.get("always_ask", false) \
-			and not op.get("optional", false) and op["sel"].get("kind", "unit") in ["unit", "power", "field_card", "backrow"]:
-		f["vars"][op["as"]] = cands
-		return R.CONT
+	# User feedback 2026-10-15: even a single legal target is picked by the player (no auto-pick).
 	var opts := []
 	if op.get("optional", false) and max_n == 1:
 		opts.append({"v": -1, "label": "Skip"})
 		min_n = 1
 	for u in cands:
 		opts.append(card_option(u, _target_label(u, chooser)))
-	return ask(f, chooser, "select", op.get("prompt", "%s: choose." % f["label"]), opts, min_n, max_n, false,
+	return ask(f, chooser, "select", op.get("prompt", "%s: choose." % f["label"]), opts, min_n, max_n, op.get("cancellable", false),
 		{"reveal_pile": op["sel"].get("kind", "unit") in ["hand", "draw", "spent", "exhaust", "extra"]})
 
 
@@ -746,7 +745,7 @@ func _op_mode(f: Dictionary, op: Dictionary) -> int:
 	var opts := []
 	for i in op["options"].size():
 		opts.append({"v": i, "label": op["options"][i]["label"]})
-	return ask(f, f["ctl"], "mode", op.get("prompt", "Choose an effect."), opts)
+	return ask(f, f["ctl"], "mode", op.get("prompt", "Choose an effect."), opts, 1, 1, op.get("cancellable", false))
 
 
 ## Stop resolving unless the condition holds.

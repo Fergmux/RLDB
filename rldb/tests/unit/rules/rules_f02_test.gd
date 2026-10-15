@@ -241,3 +241,49 @@ func test_f02_12_preview_visible_only_to_chooser() -> void:
 	var theirs: Dictionary = MatchView.build(m, 0)["pending"]
 	assert_bool(mine["options"][0].has("preview")).is_true()
 	assert_bool(theirs.has("options")).is_false()
+
+
+# ---------------------------------------------------------------- No auto-pick / target-first (user decision 2026-10-15)
+
+func test_mandatory_single_target_effect_still_prompts() -> void:
+	var m := TB.make()
+	var ch := TB.power(m, 0, 90)                         # Chains of Binding: paralyse a foe
+	var foe := TB.unit(m, 1, TB.WATER, 0)
+	assert_str(TB.ability(m, ch)).is_empty()
+	assert_str(TB.pend_kind(m)).is_equal("select")
+	assert_int(m.pending["options"].size()).is_equal(1)
+	assert_int(m.status_count(foe, "paralyse")).is_equal(0)   # nothing happens until the player picks
+	assert_str(TB.choose_uids(m, [foe])).is_empty()
+	assert_int(m.status_count(foe, "paralyse")).is_equal(1)
+
+
+func test_ability_cancelled_at_target_step_spends_and_logs_nothing() -> void:
+	var m := TB.make()
+	var dm := TB.unit(m, 0, 15, 0)                       # Da Mage: once-per-turn "apply Pierce to a unit"
+	m.players[0]["ap"] = 5
+	var ap_before: int = m.players[0]["ap"]
+	var hp_before: int = m.players[0]["hp"]
+	var log_before: int = m.log_entries.size()
+	assert_str(m.submit(0, {"t": "ability", "uid": dm, "idx": 0})).is_empty()
+	assert_str(TB.pend_kind(m)).is_equal("select")       # target is asked before any cost
+	assert_int(m.players[0]["ap"]).is_equal(ap_before)
+	assert_str(m.submit(0, {"t": "cancel", "id": m.pending["id"]})).is_empty()
+	assert_bool(m.pending.is_empty()).is_true()
+	assert_int(m.players[0]["ap"]).is_equal(ap_before)
+	assert_int(m.players[0]["hp"]).is_equal(hp_before)
+	assert_bool(m.cards[dm]["opt"].has(0)).is_false()    # once-per-turn not consumed
+	for e in m.log_entries.slice(log_before):
+		assert_str(String(e["pub"])).is_empty()             # no public activation line (only the private "Cancelled")
+	assert_int(m.status_count(dm, "pierce")).is_equal(0)
+	assert_str(m.validate(0, {"t": "ability", "uid": dm, "idx": 0})).is_empty()
+
+
+func test_only_direct_target_is_labelled_attack_direct_and_needs_no_prompt() -> void:
+	var m := _battle()
+	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 12)       # opponent has no units: direct is the only target
+	var labels := _actions(m, 1, a).map(func(x): return x["label"])
+	assert_bool("Attack Direct" in labels).is_true()
+	assert_bool("Attack" in labels).is_false()
+	assert_str(m.submit(1, {"t": "attack", "uid": a})).is_empty()
+	assert_bool(m.pending.get("kind", "") == "attack_target").is_false()
+	assert_int(m.players[0]["hp"]).is_equal(48)

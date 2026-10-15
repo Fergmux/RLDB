@@ -122,12 +122,16 @@ var ctx_banner: PanelContainer
 var banner_title: Label
 var banner_sub: RichTextLabel
 var banner_btns: HBoxContainer
+var banner_flow: HFlowContainer
 var tray: PanelContainer
 var tray_box: VBoxContainer
 var details_view: CardDetailsPanel
 var sfx_vol: HSlider
 
 var _plates: Array = []            # [top plate, bottom plate]
+## Pile stacks beside the unit zones: [side][zone] -> PileStack (Draw, Extra, Spent, Exhaust).
+var _piles: Array = [{}, {}]
+const PILE_ZONES := [["draw", "Deck"], ["extra", "Extra"], ["spent", "Spent"], ["exhaust", "Exhaust"]]
 var _slots: Dictionary = {}        # "side:zone:slot" -> {holder, widget, hash, pidx}
 var _hand_items: Dictionary = {}   # uid -> {holder, widget, hash}
 var _hand_order: Array = []
@@ -381,10 +385,12 @@ func attach(c: SeatClient) -> void:
 	multi = []
 	_log_seq_shown = 0
 	_log_game = -1
-	_fx_seq = -1
-	_fx_game = -99
-	prev_mv = {}
-	mv = {}
+	var same_game: bool = not c.last_view.is_empty() and int(c.last_view.get("game_no", -1)) == _fx_game
+	if not same_game:
+		_fx_seq = -1
+		_fx_game = -99
+		prev_mv = {}
+		mv = {}
 	fx.finish_all()
 	_clear_hover()
 	for uid in _hand_items.keys():
@@ -437,6 +443,13 @@ func _build_board() -> void:
 		var s := side
 		pl.pile_pressed.connect(func(z): if s == 1: _show_pile(z))
 		_plates.append(pl)
+		for zt in PILE_ZONES:
+			var ps := PileStack.new()
+			ps.zone = zt[0]
+			ps.title = zt[1]
+			ps.pressed.connect(func(z): if s == 1: _show_pile(z))
+			board_layer.add_child(ps)
+			_piles[side][zt[0]] = ps
 	opp_hand_box = Control.new()
 	opp_hand_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	board_layer.add_child(opp_hand_box)
@@ -578,6 +591,7 @@ func _build_side() -> void:
 	prompt_panel = _side_panel()
 	_prompt_style = prompt_panel.get_theme_stylebox("panel") as StyleBoxFlat
 	col.add_child(prompt_panel)
+	prompt_panel.visible = false   # user feedback: choices live in the banner over the board
 	prompt_box = VBoxContainer.new()
 	prompt_box.add_theme_constant_override("separation", 4)
 	prompt_panel.add_child(prompt_box)
@@ -684,9 +698,16 @@ func _build_top_strip() -> void:
 	ctx_banner.visible = false
 	ctx_banner.z_index = 70
 	add_child(ctx_banner)
+	var bcol := VBoxContainer.new()
+	bcol.add_theme_constant_override("separation", 4)
+	ctx_banner.add_child(bcol)
 	var bh := HBoxContainer.new()
 	bh.add_theme_constant_override("separation", 10)
-	ctx_banner.add_child(bh)
+	bcol.add_child(bh)
+	banner_flow = HFlowContainer.new()
+	banner_flow.add_theme_constant_override("h_separation", 6)
+	banner_flow.add_theme_constant_override("v_separation", 4)
+	bcol.add_child(banner_flow)
 	var bv := VBoxContainer.new()
 	bv.add_theme_constant_override("separation", 0)
 	bv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -792,27 +813,7 @@ func _build_overlays() -> void:
 	fa.button_pressed = UIStyle.fast_anim
 	fa.toggled.connect(func(on): UIStyle.set_fast_anim(on))
 	sv.add_child(fa)
-	# F02-13 sound controls (persisted by Sfx).
-	Sfx.load_settings()
-	var sr := HBoxContainer.new()
-	sr.add_theme_constant_override("separation", 8)
-	sv.add_child(sr)
-	sr.add_child(UIStyle.label("Sound volume", 14, UIStyle.TEXT))
-	sfx_vol = HSlider.new()
-	sfx_vol.min_value = 0.0
-	sfx_vol.max_value = 1.0
-	sfx_vol.step = 0.05
-	sfx_vol.value = Sfx.get_volume()
-	sfx_vol.custom_minimum_size = Vector2(160, 24)
-	sfx_vol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sfx_vol.value_changed.connect(func(v): Sfx.set_volume(v))
-	sfx_vol.drag_ended.connect(func(_c): Sfx.play("select"))
-	sr.add_child(sfx_vol)
-	var mute := CheckBox.new()
-	mute.text = "Mute sounds"
-	mute.button_pressed = Sfx.is_muted()
-	mute.toggled.connect(func(on): Sfx.set_muted(on))
-	sv.add_child(mute)
+	sv.add_child(audio_controls(14))
 	var cl := UIStyle.button("Close", 13)
 	cl.pressed.connect(func(): settings_popup.visible = false)
 	sv.add_child(cl)
@@ -874,10 +875,20 @@ func _relayout() -> void:
 		(it["zone_node"] as Control).size = r.size
 		(it["bg"] as Control).size = r.size
 		_place_card(it)
+	# Piles: a 2x2 grid beside the unit zones, mirroring the Power grid (Deck/Extra nearest the
+	# centre line, Spent/Exhaust behind them).
+	for side in 2:
+		var px := _ux - PGAP - (2.0 * PW + G) if side == 1 else _ux + 3.0 * U + 2.0 * G + PGAP
+		var rows := [373.0, 509.0] if side == 1 else [229.0, 93.0]
+		for i in PILE_ZONES.size():
+			var ps: PileStack = _piles[side][PILE_ZONES[i][0]]
+			ps.position = Vector2(px + (i % 2) * (PW + G), _y0 + rows[int(i / 2)])
+			ps.size = Vector2(PW, U)
 	var pw := 300.0
 	(_plates[0] as Control).position = Vector2(_area.end.x - pw - 14.0, _y0 - 6.0)
 	(_plates[0] as Control).size = Vector2(pw, 0)
-	(_plates[1] as Control).position = Vector2(14.0, _y0 + BOARD_H - 112.0 + 6.0)
+	var ph := (_plates[1] as Control).get_combined_minimum_size().y
+	(_plates[1] as Control).position = Vector2(14.0, _y0 + BOARD_H - ph + 6.0)
 	(_plates[1] as Control).size = Vector2(pw, 0)
 	opp_hand_box.position = Vector2(14.0, TOP_H + 8.0)
 	opp_hand_count_label.position = Vector2(14.0, TOP_H + 8.0 + 96.0)
@@ -961,7 +972,7 @@ func _layout_hand(new_ids: Array, instant: bool) -> void:
 	var x0 := _area.size.x / 2.0 - span / 2.0
 	var top := size.y - HAND_H + 6.0
 	var fan := n >= 5 and not UIStyle.reduce_motion
-	var deck := (_plates[1] as PlayerPlate).deck_anchor() if not _plates.is_empty() else Vector2(100, size.y)
+	var deck := pile_anchor(me(), "draw") if not mv.is_empty() else Vector2(100, size.y)
 	var new_i := 0
 	for i in n:
 		var uid: int = _hand_order[i]
@@ -1011,6 +1022,33 @@ func _on_status(text: String) -> void:
 	if text != "":
 		Sfx.play("deny")
 	_toast(text, UIStyle.BAD, 4.0)
+
+
+## Music and sound-effect volume sliders with mute boxes (game settings and main menu).
+static func audio_controls(fs: int) -> Control:
+	Sfx.load_settings()
+	var g := GridContainer.new()
+	g.columns = 3
+	g.add_theme_constant_override("h_separation", 10)
+	for row in [["Music volume", Music.get_volume(), Music.is_muted(), Music.set_volume, Music.set_muted],
+			["Sound effects", Sfx.get_volume(), Sfx.is_muted(), Sfx.set_volume, Sfx.set_muted]]:
+		g.add_child(UIStyle.label(row[0], fs, UIStyle.TEXT))
+		var sl := HSlider.new()
+		sl.min_value = 0.0
+		sl.max_value = 1.0
+		sl.step = 0.05
+		sl.value = row[1]
+		sl.custom_minimum_size = Vector2(170, 24)
+		sl.value_changed.connect(row[3])
+		if row[0] == "Sound effects":
+			sl.drag_ended.connect(func(_c): Sfx.play("select"))
+		g.add_child(sl)
+		var mb := CheckBox.new()
+		mb.text = "Mute"
+		mb.button_pressed = row[2]
+		mb.toggled.connect(row[4])
+		g.add_child(mb)
+	return g
 
 
 ## Short non-blocking message over the board; it never waits for input.
@@ -1156,6 +1194,12 @@ func hand_anchor(p: int) -> Vector2:
 	return opp_hand_box.get_global_rect().get_center() + Vector2(60, 40)
 
 
+## Centre of a player's unit block (direct-attack animations aim here).
+func side_center(p: int) -> Vector2:
+	var y := _y0 + (229.0 + 128.0 if _side_of(p) == 0 else 373.0 + 128.0)
+	return get_global_transform() * Vector2(_ux + (3.0 * U + 2.0 * G) / 2.0, y - 64.0)
+
+
 func board_global_rect() -> Rect2:
 	return get_global_transform() * _area
 
@@ -1215,8 +1259,7 @@ func _render_board() -> void:
 					parts.append("%+d" % m["n"])
 				nxt = "next turn %s AP" % " ".join(parts)
 			pl.update_from(pv, active, pidx == p, "  (you)" if pidx == p else "", nxt)
-			if pidx == p:
-				_mark_extra_chip(pl, pv)
+			_update_piles(side, pidx, pv)
 	deco.glow_side = -1   # active player is shown by the plate's turn marker, not a table band
 	deco.queue_redraw()
 	_render_hand(targeting)
@@ -1229,19 +1272,25 @@ func _render_board() -> void:
 ## F02-11: cards of yours that can act right now (play/summon/set from Hand, manual
 ## Unit/Power/set-Spell effects, attacks). Stance changes and sacrifices are always
 ## available in Main 1 and would light up every unit, so they do not count.
-## The Extra Deck chip glows (with a ▲ cue) while a Ritual/Arcane summon is available there.
-func _mark_extra_chip(pl: PlayerPlate, pv: Dictionary) -> void:
-	var ready := false
-	for c in pv.get("extra", []):
-		if _ready_uids.has(int(c.get("uid", -1))):
-			ready = true
-	var b: Button = pl.chips["extra"]
-	var base := "Extra %d" % int(pv["counts"]["extra"])
-	b.text = ("▲ " + base) if ready else base
-	if ready:
-		b.add_theme_stylebox_override("normal", UIStyle.flat(UIStyle.PANEL_LIGHT, UIStyle.READY, 2, 11))
-	else:
-		b.add_theme_stylebox_override("normal", UIStyle.flat(UIStyle.PANEL_LIGHT, Color(UIStyle.BRONZE, 0.7), 1, 11))
+## Pile stacks: counts for both players; only your own piles open for inspection. Your Extra
+## pile carries the "can act" ring while a Ritual/Arcane summon is available from it.
+func _update_piles(side: int, pidx: int, pv: Dictionary) -> void:
+	var mine := pidx == me()
+	var extra_ready := false
+	if mine:
+		for c in pv.get("extra", []):
+			if _ready_uids.has(int(c.get("uid", -1))):
+				extra_ready = true
+	for zt in PILE_ZONES:
+		var ps: PileStack = _piles[side][zt[0]]
+		ps.visible = not mv.is_empty()
+		ps.set_pile(int(pv["counts"][zt[0]]), mine, mine and zt[0] == "extra" and extra_ready)
+
+
+## Where cards fly to/from for a player's pile (draw animations).
+func pile_anchor(p: int, zone: String) -> Vector2:
+	var ps: PileStack = _piles[_side_of(p)].get(zone)
+	return ps.top_center() if ps != null else hand_anchor(p)
 
 
 func _compute_ready() -> Dictionary:
@@ -1644,7 +1693,7 @@ func _handle_key(e: InputEventKey) -> bool:
 		return true
 	if pile_popup.visible or settings_popup.visible or pause_dim.visible or view.is_empty():
 		return false
-	var num := _digit_of(k)
+	var num := 0   # number-key shortcuts removed (user feedback)
 	var is_enter: bool = k == KEY_ENTER or k == KEY_KP_ENTER
 	var stage: String = view.get("stage", "")
 	if stage != "game":
@@ -1754,7 +1803,7 @@ const GAME_KEYS := [KEY_TAB, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_ENTER, K
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and is_visible_in_tree():
 		var ke := event as InputEventKey
-		if (ke.keycode in GAME_KEYS or _digit_of(ke.keycode) > 0) and _handle_key(ke):
+		if ke.keycode in GAME_KEYS and _handle_key(ke):
 			get_viewport().set_input_as_handled()
 			return
 	if event is InputEventMouseMotion and _kb_uid != -1 and (event as InputEventMouseMotion).relative.length() > 3.0:
@@ -1902,9 +1951,13 @@ func _set_hover(it: Dictionary) -> void:
 		_unlift(_hv)
 	_hv = it
 	_close_at = -1.0
-	_peek_at = Time.get_ticks_msec() / 1000.0 + 0.2
+	_peek_at = -1.0
 	(it["w"] as CardWidget).hovered = true
 	_lift(it)
+	# Details follow the pointer immediately (user feedback: no delay).
+	if it["uid"] != -1 and it["uid"] != _peek_uid:
+		_peek_uid = it["uid"]
+		_render_details()
 	if _stack != null:
 		hover_layer.move_child(_stack, -1)
 
@@ -1977,11 +2030,8 @@ func _actions_for_card(uid: int) -> Array:
 			oks.append(a)
 		elif a.get("reason", "") != "":
 			bad.append(a)
-	if not oks.is_empty():
-		return oks
-	if not bad.is_empty():
-		return [bad[0]]
-	return []
+	# Only legal actions are offered; reasons stay in the details panel notes.
+	return oks
 
 
 func _act_sig(acts: Array) -> String:
@@ -2158,9 +2208,7 @@ func _render_net_banner() -> bool:
 	elif not net.get("opponent_connected", true) and net.get("is_host", false):
 		prompt_box.add_child(UIStyle.label(net.get("message", "Waiting for an opponent…"), 14, UIStyle.ACCENT, true))
 		if net.get("transport", "") == "steam":
-			var inv := UIStyle.button("Invite a Steam friend", 14)
-			inv.pressed.connect(func(): get_tree().call_group("net_session", "invite_friend"))
-			prompt_box.add_child(inv)
+			pass   # the invite button lives in the pregame lobby (deck selection), not in a game
 	return false
 
 
@@ -2296,37 +2344,46 @@ func _multi_status(pd: Dictionary) -> String:
 ## strip, never a target card.
 func _render_banner() -> void:
 	var pd := _pending()
-	var on := _board_targeting() and not overlay.visible
+	var on: bool = not pd.is_empty() and pd.get("mine", false) and not overlay.visible and view.get("stage", "") == "game"
 	ctx_banner.visible = on
 	_clear(banner_btns)
+	_clear(banner_flow)
+	banner_flow.visible = false
 	if not on:
 		return
 	banner_title.text = String(pd["prompt"])
-	var tray_n := _tray_options(pd).size()
-	var what := "card"
-	if pd["kind"] == "slot":
-		what = "zone"
+	var pick := _board_targeting()
 	var how := ""
-	if int(pd["max"]) > 1:
-		how = _multi_status(pd) + ("  ·  numbers show the order" if not multi.is_empty() else "")
-	else:
-		how = "Click a highlighted %s%s." % [what, " in the tray" if tray_n > 0 else ""]
-	if pd["kind"] == "attack_target":
-		how = "Hover a target to preview the battle, click to attack."
+	if pick:
+		var what := "zone" if pd["kind"] == "slot" else "card"
+		if int(pd["max"]) > 1:
+			how = _multi_status(pd) + ("  ·  numbers show the order" if not multi.is_empty() else "")
+		else:
+			how = "Click a highlighted %s%s." % [what, " in the tray" if not _tray_options(pd).is_empty() else ""]
+		if pd["kind"] == "attack_target":
+			how = "Hover a target to preview the battle, click to attack."
+	elif pd["kind"] == "trap_response":
+		how = "Your opponent is waiting: activate a Trap or pass."
+	elif int(pd["max"]) > 1:
+		how = _multi_status(pd)
 	_banner_how = how
 	_update_banner_sub()
-	var n := 0
+	# Card/zone options are picked on the board; every other option is a button here.
+	var row: Control = banner_btns if pick else banner_flow
 	for o in pd["options"]:
-		n += 1
-		if o.has("ref") or o.has("slot") or o.has("card"):
+		if pick and (o.has("ref") or o.has("slot") or o.has("card")):
 			continue
 		var idx: int = o["i"]
-		var b := UIStyle.primary_button(("%d · " % n if n <= 9 else "") + String(o["label"]), 14) if pd["kind"] == "attack_target" else UIStyle.button(("%d · " % n if n <= 9 else "") + String(o["label"]), 14)
+		var chosen: bool = idx in multi
+		var label := ("✓ " if chosen else "") + String(o["label"])
+		var b := UIStyle.primary_button(label, 14) if (pd["kind"] == "attack_target" or (not pick and String(o["label"]).begins_with("Activate"))) else UIStyle.button(label, 14)
 		b.custom_minimum_size = Vector2(0, 32)
 		b.pressed.connect(_pick_option.bind(idx))
 		b.mouse_entered.connect(func(): _hover_opt = idx)
 		b.mouse_exited.connect(func(): if _hover_opt == idx: _hover_opt = -1)
-		banner_btns.add_child(b)
+		row.add_child(b)
+	if not pick and row.get_child_count() > 0:
+		banner_flow.visible = true
 	if int(pd["max"]) > 1:
 		var c := UIStyle.primary_button("Confirm (Enter)", 14)
 		c.custom_minimum_size = Vector2(0, 32)
@@ -2338,6 +2395,7 @@ func _render_banner() -> void:
 		x.custom_minimum_size = Vector2(0, 32)
 		x.pressed.connect(_cancel)
 		banner_btns.add_child(x)
+	ctx_banner.size = Vector2(ctx_banner.size.x, 0)
 
 
 var _banner_how: String = ""
@@ -2513,16 +2571,55 @@ func _render_log() -> void:
 			col = "#ff8a8a"
 		elif t.contains("gains") and t.contains("HP"):
 			col = "#8fe3a8"
+		elif t.contains("activates Trap"):
+			col = "#" + UIStyle.category_text_color("trap").to_html(false)
+			bold = true
+		elif t.contains("activates set Spell"):
+			col = "#" + UIStyle.category_text_color("spell").to_html(false)
+			bold = true
 		elif t.begins_with("Battle:"):
 			col = "#ffd84a"
 		elif t.begins_with("GAME OVER"):
 			col = "#ff9ff3"
 			bold = true
-		var body := t.replace("[", "(").replace("]", ")")
+		var body := _log_tint_names(t.replace("[", "(").replace("]", ")"), col)
 		if bold:
 			body = "[b]%s[/b]" % body
 		log_label.append_text("[color=%s]%s[/color]
 " % [col, body])
+
+
+static var _name_re: RegEx
+static var _name_cat: Dictionary = {}
+
+
+## Wraps every card name in a log line in its card-kind colour (Trap red, Spell green, ...).
+## A name already in the line's own colour is left plain.
+func _log_tint_names(body: String, line_col: String) -> String:
+	if _name_re == null:
+		var names: Array = []
+		for d in CardDB.all():
+			var nm := String(d["name"])
+			if nm.length() >= 3 and not _name_cat.has(nm):
+				_name_cat[nm] = String(d["category"])
+				names.append(nm)
+		names.sort_custom(func(a, b): return a.length() > b.length())
+		var alts := PackedStringArray()
+		for nm in names:
+			var esc := ""
+			for ch in nm:
+				esc += ("\\" + ch) if ".^$*+?()[]{}|\\/-".contains(ch) else ch
+			alts.append(esc)
+		_name_re = RegEx.new()
+		_name_re.compile("(?<!\\w)(" + "|".join(alts) + ")(?!\\w)")
+	var out := ""
+	var at := 0
+	for m in _name_re.search_all(body):
+		var col := "#" + UIStyle.category_text_color(_name_cat.get(m.get_string(), "")).to_html(false)
+		out += body.substr(at, m.get_start() - at)
+		out += m.get_string() if col == line_col else "[color=%s]%s[/color]" % [col, m.get_string()]
+		at = m.get_end()
+	return out + body.substr(at)
 
 
 # ---------------------------------------------------------------- piles
@@ -2809,11 +2906,23 @@ func _game_result_line() -> String:
 
 func _render_decks() -> void:
 	var p := me()
+	var net: Dictionary = view.get("net", {})
+	if not net.is_empty() and net.get("is_host", false) and not net.get("opponent_connected", true):
+		var lob := HBoxContainer.new()
+		lob.add_theme_constant_override("separation", 10)
+		overlay_box.add_child(lob)
+		var msg := UIStyle.label(net.get("message", "Waiting for an opponent to join…"), 16, UIStyle.ACCENT, true)
+		msg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lob.add_child(msg)
+		if net.get("transport", "") == "steam":
+			var inv := UIStyle.primary_button("Invite a Steam friend", 15)
+			inv.pressed.connect(func(): get_tree().call_group("net_session", "invite_friend"))
+			lob.add_child(inv)
 	if view["deck_ready"][p]:
 		overlay_box.add_child(UIStyle.label("Deck locked in: %s. Waiting for your opponent…" % view["deck_name"], 18, UIStyle.TEXT, true))
 		return
 	if view.has("starters"):
-		overlay_box.add_child(UIStyle.label("Pick a starter deck (keys 1-%d)" % view["starters"].size(), 15, UIStyle.MUTED))
+		overlay_box.add_child(UIStyle.label("Pick a starter deck", 15, UIStyle.MUTED))
 		var grid := GridContainer.new()
 		grid.columns = 2
 		grid.add_theme_constant_override("h_separation", 12)

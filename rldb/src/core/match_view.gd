@@ -226,7 +226,10 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 				cands.append({"t": "summon", "uid": u, "stance": "atk", "label": "Summon Attack", "full": "Summon in Attack stance"})
 				cands.append({"t": "summon", "uid": u, "stance": "def", "label": "Summon Defense", "full": "Summon in Defense stance"})
 	for u in m.field_units(viewer):
-		cands.append({"t": "attack", "uid": u, "label": "Attack", "full": "Declare an attack"})
+		if m.attack_targets(u) == [-1]:
+			cands.append({"t": "attack", "uid": u, "label": "Attack Direct", "full": "Attack the opponent directly"})
+		else:
+			cands.append({"t": "attack", "uid": u, "label": "Attack", "full": "Declare an attack"})
 		var to_def: bool = m.cards[u]["stance"] == "atk"
 		cands.append({"t": "stance", "uid": u, "label": "To Defense" if to_def else "To Attack",
 			"full": "Change to %s stance" % ("Defense" if to_def else "Attack")})

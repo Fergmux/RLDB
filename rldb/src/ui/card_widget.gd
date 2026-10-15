@@ -319,15 +319,10 @@ func _draw() -> void:
 		draw_set_transform(Vector2(_cr.end.x, _cr.position.y), PI / 2.0, Vector2.ONE)
 	else:
 		draw_set_transform(_cr.position, 0.0, Vector2.ONE)
-	if rotated and not view.get("hidden", false) and _base().x == 85.0 and size_kind != "back":
-		# Landscape card: frame + art are the portrait card turned 90 degrees; every text, number and
-		# badge is laid out UPRIGHT in the 128x85 box (D1) so "8" never reads as an infinity sign.
-		_frame(6.0)
-		_draw_art(_r(4, 4, 77, 120))
-		draw_set_transform(_cr.position, 0.0, Vector2.ONE)
-		_draw_landscape()
-	elif view.get("hidden", false):
+	if view.get("hidden", false):
 		_draw_back()
+	elif _is_own_set_card():
+		_draw_set_back()
 	else:
 		match size_kind:
 			"power", "trap": _draw_power()
@@ -337,6 +332,23 @@ func _draw() -> void:
 			_: _draw_square()
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_overlays()
+
+
+## True for a backrow card the viewer can see but that is still face down: it is drawn as a card
+## back with only its name. Face up (view.face_up) or Revealed (statuses.reveal > 0) shows the face.
+func _is_own_set_card() -> bool:
+	if view.get("zone", "") != "backrow" or view.get("face_up", true):
+		return false
+	return int(view.get("statuses", {}).get("reveal", 0)) <= 0
+
+
+func _draw_set_back() -> void:
+	_draw_back()
+	var h := 22.0 * _s
+	var keep: Variant = view.get("category")
+	view["category"] = ""   # the back stays identical for every kind: no kind-coloured stripe on the plate
+	_name_plate(Rect2(5.0 * _s, (_ps.y - h) / 2.0, _ps.x - 10.0 * _s, h), 10.5, 0.0, 0.0, 8.0)
+	view["category"] = keep
 
 
 func _accent() -> Color:
@@ -415,8 +427,6 @@ func _draw_art(rect: Rect2) -> void:
 	var sh := 7.0 * _s
 	draw_polygon(PackedVector2Array([rect.position, Vector2(rect.end.x, rect.position.y), Vector2(rect.end.x, rect.position.y + sh), Vector2(rect.position.x, rect.position.y + sh)]),
 		PackedColorArray([Color(0, 0, 0, 0.4), Color(0, 0, 0, 0.4), Color(0, 0, 0, 0), Color(0, 0, 0, 0)]))
-	if view.get("zone", "") == "unit" and view.get("stance", "atk") == "def":
-		draw_rect(rect, Color(0.3, 0.42, 0.62, 0.28))
 	draw_rect(rect, Color(UIStyle.BRONZE, 0.95), false, maxf(1.0, 2.0 * _s))
 
 
@@ -610,7 +620,7 @@ func _fit_stat_fs(font: Font, txt: String, fs_max: float, rect: Rect2, diamond: 
 		var th := float(fs) * 0.74
 		if diamond:
 			# Text box must sit inside the rhombus: tw/w + th/h <= 1 (with a margin for the outline).
-			if tw / rect.size.x + th / rect.size.y <= 0.8:
+			if tw / rect.size.x + th / rect.size.y <= 0.84:
 				break
 		elif tw <= rect.size.x * 0.76 and th <= rect.size.y * 0.52:
 			break
@@ -715,35 +725,47 @@ func _preview_decor(rect: Rect2, is_atk: bool) -> void:
 func _status_list() -> Array:
 	var out := []
 	if view.get("runes", 0) > 0:
-		out.append({"t": "RN%d" % view["runes"], "c": UIStyle.RUNE_BLUE, "k": 0})
+		out.append({"t": "Rune %d" % view["runes"], "c": UIStyle.RUNE_BLUE, "k": 0})
+	var backrow: bool = view.get("zone", "") == "backrow"
 	for s in CardDB.STATUS_ORDER:
+		if backrow and s == "reveal":
+			continue   # a backrow card shows face up or face down by itself; no Reveal chip there
 		var n: int = view.get("statuses", {}).get(s, 0)
 		if n > 0:
-			out.append({"t": "%s%d" % [UIStyle.STATUS_SHORT[s], n], "c": Color("6fd38a") if CardDB.is_buff(s) else Color("e8605a"), "k": 1 if CardDB.is_buff(s) else -1})
+			out.append({"t": "%s %d" % [String(s).capitalize(), n], "c": Color("6fd38a") if CardDB.is_buff(s) else Color("e8605a"), "k": 1 if CardDB.is_buff(s) else -1})
 	return out
 
 
-func _chips(x0: float, x1: float, y: float, h: float, fs_base: float) -> void:
+## Full-name status chips laid out left to right over up to `rows` rows; whatever does not fit
+## collapses into a "+N" chip at the end of the last row.
+func _chips(x0: float, x1: float, y: float, h: float, fs_base: float, rows: int = 1) -> void:
 	var list := _status_list()
 	if list.is_empty():
 		return
 	var font := UIStyle.font_bold()
 	var fs := _fs(fs_base)
-	var x := x0 * _s
+	var left := x0 * _s
 	var xmax := x1 * _s
-	var shown := 0
-	for i in list.size():
+	var x := left
+	var row := 0
+	var i := 0
+	while i < list.size():
 		var e: Dictionary = list[i]
 		var w := font.get_string_size(e["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + (h * _s * 0.67 + 6.0 * _s if int(e["k"]) != 2 else 8.0 * _s)
 		var remaining := list.size() - i - 1
-		var reserve := (font.get_string_size("+%d" % remaining, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 7.0 * _s) if remaining > 0 else 0.0
-		if x + w + reserve > xmax and i > 0 or shown >= 3:
+		var last_row := row >= rows - 1
+		var reserve := (font.get_string_size("+%d" % remaining, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 7.0 * _s) if (remaining > 0 and last_row) else 0.0
+		if x + w + reserve > xmax and x > left:
+			if not last_row:
+				row += 1
+				x = left
+				continue
 			var more := list.size() - i
-			_chip_draw(x, y * _s, font.get_string_size("+%d" % more, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 7.0 * _s, h * _s, "+%d" % more, UIStyle.MUTED, font, fs)
+			_chip_draw(x, (y + float(row) * (h + 1.5)) * _s, font.get_string_size("+%d" % more, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 7.0 * _s, h * _s, "+%d" % more, UIStyle.MUTED, font, fs)
 			return
-		_chip_draw(x, y * _s, w, h * _s, e["t"], e["c"], font, fs, int(e["k"]))
+		_chip_draw(x, (y + float(row) * (h + 1.5)) * _s, w, h * _s, e["t"], e["c"], font, fs, int(e["k"]))
 		x += w + 2.0 * _s
-		shown += 1
+		i += 1
 
 
 ## `kind`: +1 buff (up triangle), -1 debuff (down triangle), 0 rune (diamond), 2 neutral (no mark).
@@ -763,27 +785,6 @@ func _chip_draw(x: float, y: float, w: float, h: float, text: String, col: Color
 			draw_colored_polygon(PackedVector2Array([m + Vector2(0, -a * 1.2), m + Vector2(a, 0), m + Vector2(0, a * 1.2), m + Vector2(-a, 0)]), lc)
 		tx = x + h * 0.67 + 2.0 * _s + (w - h * 0.67 - 2.0 * _s) / 2.0
 	_text_c(font, text, Vector2(tx, y + h / 2.0), fs, col.lightened(0.45))
-
-
-func _stance_tab(rect: Rect2) -> void:
-	if view.get("zone", "") != "unit":
-		return
-	var atk: bool = view.get("stance", "atk") == "atk"
-	var fill := Color("8a2f26") if atk else Color("2f5f8f")
-	var edge := Color("e0a040") if atk else Color("b8c4d4")
-	_round_rect(rect, fill, 3.0 * _s, edge, maxf(1.0, _s))
-	var c := rect.get_center()
-	var r := minf(rect.size.x, rect.size.y) * 0.34
-	if atk:
-		# Diagonal sword (neither an X, which reads as cancel, nor a +): blade, crossguard, grip.
-		var w := maxf(1.3, 1.6 * _s)
-		var d := Vector2(1, -1).normalized()
-		var n := Vector2(1, 1).normalized()
-		draw_line(c - d * r * 0.2, c + d * r * 1.3, Color.WHITE, w)
-		draw_line(c - d * r * 0.2 - n * r * 0.6, c - d * r * 0.2 + n * r * 0.6, Color("e0a040"), w)
-		draw_line(c - d * r * 0.2, c - d * r * 1.1, Color("e0a040"), w)
-	else:
-		draw_colored_polygon(_shield_pts(Rect2(c - Vector2(r * 0.9, r), Vector2(r * 1.8, r * 2.1))), Color("dfe7f2"))
 
 
 func _protected_icon(c: Vector2, r: float) -> void:
@@ -808,59 +809,22 @@ func _acted_marks(corner: Vector2) -> void:
 		draw_line(corner + Vector2(-2.2, 2.2) * _s, corner + Vector2(2.2, -2.2) * _s, Color(0, 0, 0, 0.7), maxf(1.0, 1.2 * _s))
 
 
-func _set_ribbon(rect: Rect2) -> void:
-	if view.get("zone", "") == "backrow" and not view.get("face_up", true):
-		_round_rect(rect, Color(0.1, 0.08, 0.2, 0.92), rect.size.y / 2.0, Color("b9a7e6"), maxf(1.0, _s))
-		_text_c(UIStyle.font_bold(), "SET", rect.get_center(), _fs(9), Color("d7c9ff"))
-
-
 # ---------------------------------------------------------------- layouts
 
 ## Compact 85x128 field unit card (no rules-text well).
 func _draw_square() -> void:
 	var is_unit: bool = String(view.get("category", "")) in UNIT_CATS
-	var in_play: bool = view.get("zone", "") == "unit"
 	_frame(6.0)
-	_draw_art(_r(4, 4, 77, 54))
+	_draw_art(_r(4, 4, 77, 64))
 	_type_pip(_p(69, 16), 7.0 * _s)
-	_protected_icon(_p(70, 36), 5.5 * _s)
-	_acted_marks(_p(11, 34))
-	_set_ribbon(_r(18, 33, 49, 12))
-	var has_tab: bool = in_play and view.has("stance")
-	_name_plate(_r(4, 46, 77, 20), 10.5, 0.0, 15.0 if has_tab else 0.0, 8.0)
-	if has_tab:
-		_stance_tab(_r(65, 49, 14, 14))
-	_chips(4, 81, 67.5, 11, 8.0)
+	_protected_icon(_p(70, 40), 5.5 * _s)
+	_acted_marks(_p(11, 38))
+	_name_plate(_r(4, 56, 77, 20), 10.5, 0.0, 0.0, 8.0)
+	_chips(4, 81, 77.5, 9.5, 7.5, 2)
 	if is_unit:
-		_stat_badge(_r(2, 80, 42, 46), true, 19.0)
-		_stat_badge(_r(46, 82, 37, 42), false, 19.0)
+		_stat_badge(_r(2, 96, 38, 30), true, 16.0)
+		_stat_badge(_r(46, 97, 34, 28), false, 16.0)
 	_gem(_p(13, 13), 9.0 * _s, _fs(12))
-
-
-## Landscape (rotated) card, 128x85 base: upright name plate along the top, upright badges in the
-## corners, type pip bottom centre. Art/frame were already drawn rotated by the caller.
-func _draw_landscape() -> void:
-	var is_unit: bool = String(view.get("category", "")) in UNIT_CATS
-	var has_tab: bool = view.get("zone", "") == "unit" and view.has("stance")
-	_vgrad(_r(4, 40, 120, 41), Color(0, 0, 0, 0), Color(0, 0, 0, 0.8))
-	_name_plate(_r(24, 4, 100, 20), 10.5, 0.0, 17.0 if has_tab else 0.0, 8.0)
-	if has_tab:
-		_stance_tab(_r(106, 7, 15, 14))
-	_gem(_p(13, 13), 9.0 * _s, _fs(12))
-	_set_ribbon(_r(74, 26, 48, 12))
-	_chips(26, 72, 26, 11, 8.0)
-	if is_unit:
-		_type_pip(_p(64, 65), 8.0 * _s)
-		_protected_icon(_p(78, 68), 5.5 * _s)
-		_acted_marks(_p(50, 68))
-		_stat_badge(_r(3, 42, 40, 40), true, 19.0)
-		_stat_badge(_r(88, 46, 37, 35), false, 19.0)
-	else:
-		_round_rect(_r(4, 40, 120, 41), Color(0, 0, 0, 0.55), 4.0 * _s)
-		var txt: String = view.get("text", "")
-		if txt != "":
-			var tp := _para(txt, UIStyle.font_body(), "ls", _fs(9.5), 112.0 * _s, 3)
-			tp.draw(get_canvas_item(), _p(8, 43), UIStyle.TEXT)
 
 
 ## Power / trap card: art, name, short rules text, chips. Same 85x128 portrait.
@@ -869,37 +833,31 @@ func _draw_power() -> void:
 	_draw_art(_r(4, 4, 77, 56))
 	_name_plate(_r(4, 48, 77, 20), 10.5, 0.0, 0.0, 8.0)
 	_gem(_p(13, 13), 9.0 * _s, _fs(12))
-	_set_ribbon(_r(18, 34, 49, 12))
-	var font := UIStyle.font_body()
-	var fs := _fs(9.5)
 	var txt: String = view.get("text", "")
 	if txt != "":
-		var tp := _para(txt, font, "b", fs, 77.0 * _s, 3)
-		tp.draw(get_canvas_item(), _p(4, 72), Color(UIStyle.TEXT, 0.9))
-	_chips(4, 81, 112, 12, 8.5)
+		var tp := _para(txt, UIStyle.font_body(), "b", _fs(9.0), 77.0 * _s, 4)
+		tp.draw(get_canvas_item(), _p(4, 70), Color(UIStyle.TEXT, 0.9))
+	_chips(4, 81, 115.0, 10.0, 7.5, 1)
 
 
 func _draw_tall(big: bool) -> void:
 	var is_unit: bool = String(view.get("category", "")) in UNIT_CATS
 	var g := {}
 	if big:
-		g = {"art": [10, 10, 204, 122], "plate": [10, 112, 204, 32], "line": 148.0, "text": [12, 170, 200, 72 if is_unit else 116],
-			"chip_y": 245.0, "chip_x": [12.0, 212.0], "atk": [6, 262, 76, 68], "def": [146, 264, 72, 64], "gem": [28, 28, 20],
-			"f_name": 19.0, "f_line": 13.0, "f_text": 15.0, "f_chip": 12.0, "f_stat": 36.0, "f_gem": 24.0, "chip_h": 17.0, "chip_y_nu": 292.0, "pip": 11.0}
+		g = {"art": [10, 10, 204, 122], "plate": [10, 112, 204, 32], "line": 148.0, "text": [12, 170, 200, 96 if is_unit else 122],
+			"chip_y": 270.0, "chip_x": [12.0, 212.0], "chip_rows": 1, "atk": [6, 290, 58, 46], "def": [160, 292, 54, 42], "gem": [28, 28, 20],
+			"f_name": 19.0, "f_line": 13.0, "f_text": 13.0, "f_chip": 11.0, "f_stat": 30.0, "f_gem": 24.0, "chip_h": 15.0, "chip_y_nu": 298.0, "chip_rows_nu": 2, "pip": 11.0}
 	else:
-		g = {"art": [6, 6, 108, 66], "plate": [6, 60, 108, 22], "line": 84.0, "text": [6, 99, 108, 31 if is_unit else 56],
-			"chip_y": 132.0, "chip_x": [6.0, 114.0], "atk": [3, 141, 41, 36], "def": [77, 143, 39, 33], "gem": [15, 15, 13],
-			"f_name": 12.5, "f_line": 11.0, "f_text": 12.0, "f_chip": 10.0, "f_stat": 21.0, "f_gem": 16.0, "chip_h": 12.0, "chip_y_nu": 159.0, "pip": 7.0}
+		g = {"art": [6, 6, 108, 66], "plate": [6, 60, 108, 22], "line": 84.0, "text": [6, 99, 108, 41 if is_unit else 62],
+			"chip_y": 142.0, "chip_x": [6.0, 114.0], "chip_rows": 1, "atk": [3, 148, 34, 29], "def": [84, 150, 32, 27], "gem": [15, 15, 13],
+			"f_name": 12.5, "f_line": 11.0, "f_text": 10.5, "f_chip": 8.5, "f_stat": 17.0, "f_gem": 16.0, "chip_h": 10.0, "chip_y_nu": 164.0, "chip_rows_nu": 1, "pip": 7.0}
 	_frame(8.0)
 	var a: Array = g["art"]
 	_draw_art(_r(a[0], a[1], a[2], a[3]))
 	_type_pip(_p(a[0] + a[2] - 11.0 * (_pipk(big)), a[1] + 11.0 * _pipk(big)), float(g["pip"]) * _s)
 	_protected_icon(_p(a[0] + a[2] - 11.0 * _pipk(big), a[1] + 30.0 * _pipk(big)), 7.0 * _s)
 	var pl: Array = g["plate"]
-	var has_tab: bool = view.get("zone", "") == "unit" and view.has("stance")
-	_name_plate(_r(pl[0], pl[1], pl[2], pl[3]), g["f_name"], 0.0, 26.0 if (has_tab and big) else (22.0 if has_tab else 0.0))
-	if has_tab:
-		_stance_tab(_r(pl[0] + pl[2] - (26 if big else 22), pl[1] + 3, 22 if big else 18, pl[3] - 6))
+	_name_plate(_r(pl[0], pl[1], pl[2], pl[3]), g["f_name"], 0.0, 0.0)
 	# Type / race line.
 	var line_fs := _fs(g["f_line"])
 	var ly: float = g["line"]
@@ -925,14 +883,13 @@ func _draw_tall(big: bool) -> void:
 	if is_unit:
 		var at: Array = g["atk"]
 		var df: Array = g["def"]
-		_chips(g["chip_x"][0], g["chip_x"][1], g["chip_y"], g["chip_h"], g["f_chip"])
+		_chips(g["chip_x"][0], g["chip_x"][1], g["chip_y"], g["chip_h"], g["f_chip"], g["chip_rows"])
 		_stat_badge(_r(at[0], at[1], at[2], at[3]), true, g["f_stat"])
 		_stat_badge(_r(df[0], df[1], df[2], df[3]), false, g["f_stat"])
 	else:
-		_chips(g["chip_x"][0], g["chip_x"][1], g["chip_y_nu"], g["chip_h"], g["f_chip"])
+		_chips(g["chip_x"][0], g["chip_x"][1], g["chip_y_nu"], g["chip_h"], g["f_chip"], g["chip_rows_nu"])
 	var gm: Array = g["gem"]
 	_gem(_p(gm[0], gm[1]), float(gm[2]) * _s, _fs(g["f_gem"]))
-	_set_ribbon(_r(pl[0] + pl[2] - 52, pl[1] - 18 if not big else pl[1] - 24, 44, 14))
 
 
 func _pipk(big: bool) -> float:
@@ -986,29 +943,37 @@ func _draw_back() -> void:
 	sb.shadow_size = roundi(6.0 * _s)
 	sb.shadow_offset = _shadow_off(3.0 * _s)
 	draw_style_box(sb, Rect2(Vector2.ZERO, _ps))
-	var inset := 5.0 * _s
-	var inner := Rect2(inset, inset, _ps.x - 2 * inset, _ps.y - 2 * inset)
-	_vgrad(inner, Color("2a2050"), Color("120c22"))
-	draw_rect(inner, Color(UIStyle.GOLD, 0.35), false, maxf(1.0, _s))
-	var c := _ps / 2.0
+	draw_back_art(self, Rect2(Vector2.ZERO, _ps), _s)
+
+
+## The one card-back design (every kind, both players, piles): inner gradient, gold frame, emblem.
+static func draw_back_art(ci: CanvasItem, card: Rect2, s: float) -> void:
+	var inner := card.grow(-5.0 * s)
+	var steps := 12
+	for i in steps:
+		var t := float(i) / float(steps - 1)
+		var band := Rect2(inner.position.x, inner.position.y + inner.size.y * float(i) / steps, inner.size.x, inner.size.y / steps + 1.0).intersection(inner)
+		ci.draw_rect(band, Color("2a2050").lerp(Color("120c22"), t))
+	ci.draw_rect(inner, Color(UIStyle.GOLD, 0.35), false, maxf(1.0, s))
+	var c := card.get_center()
 	var r := minf(inner.size.x, inner.size.y) * 0.34
 	var gold := Color(UIStyle.GOLD, 0.7)
-	var w := maxf(1.0, 1.4 * _s)
-	var sq0 := _poly(c, r * 1.2, 4, PI / 4.0)
-	var sq1 := _poly(c, r * 1.2, 4, 0.0)
-	sq0.append(sq0[0])
-	sq1.append(sq1[0])
-	draw_polyline(sq0, gold, w)
-	draw_polyline(sq1, gold, w)
-	draw_arc(c, r * 0.8, 0.0, TAU, 32, gold, w)
-	draw_circle(c, r * 0.16, gold)
+	var w := maxf(1.0, 1.4 * s)
+	for rot in [PI / 4.0, 0.0]:
+		var sq := PackedVector2Array()
+		for k in 5:
+			var a: float = rot + float(k) * TAU / 4.0
+			sq.append(c + Vector2(cos(a), sin(a)) * r * 1.2)
+		ci.draw_polyline(sq, gold, w)
+	ci.draw_arc(c, r * 0.8, 0.0, TAU, 32, gold, w)
+	ci.draw_circle(c, r * 0.16, gold)
 	for i in 24:
 		var a := float(i) * TAU / 24.0
 		var d := Vector2(cos(a), sin(a))
 		var r0 := r * 1.55
 		var p0 := c + d * r0
-		if inner.has_point(p0) and inner.has_point(c + d * (r0 + 3.0 * _s)):
-			draw_line(p0, c + d * (r0 + 3.0 * _s), Color(UIStyle.GOLD, 0.35), w)
+		if inner.has_point(p0) and inner.has_point(c + d * (r0 + 3.0 * s)):
+			ci.draw_line(p0, c + d * (r0 + 3.0 * s), Color(UIStyle.GOLD, 0.35), w)
 
 
 # ---------------------------------------------------------------- overlays (screen space, follow the drawn card rect)

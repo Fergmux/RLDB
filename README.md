@@ -56,7 +56,7 @@ logged into a different Steam account, the accounts being Steam friends. Copy th
 godot --headless --path rldb -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode -c
 ```
 
-394 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
+398 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
 summons, per-card behaviour (every effect card), series flow, review regressions, and
 two-client ENet integration tests (trap suspension, illegal input, payload redaction,
 reconnect during a pending prompt, duplicate-command replay, and complete best-of-3 /

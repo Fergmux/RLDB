@@ -16,6 +16,7 @@ var status_label: Label
 
 func _ready() -> void:
 	theme = UIStyle.make_theme()
+	Music.start()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if not ("--no-steam" in OS.get_cmdline_user_args()):
 		var cfg := Series.load_mode_config()
@@ -279,6 +280,7 @@ func _show_menu() -> void:
 	priv.toggled.connect(func(on): _privacy = on)
 	opts_row.add_child(priv)
 	cfg_box.add_child(UIStyle.label("Starter-deck series can also use your saved custom decks (pick one on the deck screen).", 14, M_DIM, true))
+	cfg_box.add_child(GameScreen.audio_controls(15))
 
 	# Collection
 	var coll := _section(box, "Collection")

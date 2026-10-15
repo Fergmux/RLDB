@@ -194,7 +194,8 @@ func _steps() -> void:
 	await _click_row("Sacrifice")
 	await _wait(0.6)
 	# Extra Deck: click-to-act inside the pile popup, then an ordered multi tray.
-	await _click((gs.plate_of(a).chips["extra"] as Control).get_global_rect().get_center())
+	_check("Extra pile stack shows the summon-ready ring", (gs._piles[1]["extra"] as PileStack).ready_mark)
+	await _click((gs._piles[1]["extra"] as Control).get_global_rect().get_center())
 	await _wait(0.4)
 	for cell in _pile_cells():
 		var cw: CardWidget = (cell as Node).get_child(0)
@@ -272,7 +273,7 @@ func _steps() -> void:
 		await _shot("16_waiting_on_opponent_response")
 		_view_seat(o)
 		await _wait(0.5)
-		_check("trap prompt is the opponent's sidebar choice (not a banner)", not gs.ctx_banner.visible and gs._pending()["mine"])
+		_check("trap response prompt is shown in the banner", gs.ctx_banner.visible and gs._pending()["mine"] and gs.banner_flow.visible)
 		await _shot("17_opponent_response_prompt")
 		var pass_i := -1
 		var labels := []

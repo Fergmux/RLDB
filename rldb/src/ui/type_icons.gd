@@ -13,7 +13,7 @@ const OUTLINE := Color(0.04, 0.03, 0.03, 0.92)
 ## Draws the icon for `type` ("" or an unknown name = typeless ring) onto any CanvasItem.
 static func draw_icon(ci: CanvasItem, type: String, center: Vector2, radius: float) -> void:
 	var col := UIStyle.type_color(type)
-	var ow := maxf(1.0, radius * 0.13)
+	var ow := maxf(0.8, radius * 0.07)
 	match type:
 		"Water": _water(ci, center, radius, col, ow)
 		"Fire": _fire(ci, center, radius, col, ow)
@@ -29,8 +29,8 @@ static func draw_icon(ci: CanvasItem, type: String, center: Vector2, radius: flo
 static func draw_pip(ci: CanvasItem, type: String, center: Vector2, radius: float) -> void:
 	# Near-opaque dark backing + light rim so every type (dark Earth, pale Heavenly, yellow Lightning)
 	# keeps contrast on any art.
-	ci.draw_circle(center, radius * 1.22, Color(0.04, 0.03, 0.03, 0.94))
-	ci.draw_arc(center, radius * 1.18, 0.0, TAU, 28, Color(0.96, 0.93, 0.84, 0.92), maxf(1.0, radius * 0.12), true)
+	ci.draw_circle(center, radius * 1.18, Color(0.04, 0.03, 0.03, 0.94))
+	ci.draw_arc(center, radius * 1.18, 0.0, TAU, 28, Color(0.96, 0.93, 0.84, 0.9), maxf(0.8, radius * 0.045), true)
 	draw_icon(ci, type, center, radius * 0.86)
 
 

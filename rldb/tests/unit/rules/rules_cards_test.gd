@@ -161,6 +161,7 @@ func test_hypnotised_unit_cannot_be_sacrificed_and_returns_at_end_of_turn() -> v
 	var victim := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
 	var spell := TB.card(m, 0, 180)
 	assert_str(m.submit(0, {"t": "cast", "uid": spell})).is_empty()
+	assert_str(TB.choose_uids(m, [victim])).is_empty()    # sole legal target is still chosen by the player
 	assert_int(m.cards[victim]["ctl"]).is_equal(0)
 	assert_str(m.validate(0, {"t": "sacrifice", "uid": victim})).contains("temporarily controlled")
 	TB.to_turn2(m)
@@ -169,11 +170,13 @@ func test_hypnotised_unit_cannot_be_sacrificed_and_returns_at_end_of_turn() -> v
 
 # ---------------------------------------------------------------- Sneaky Snunday
 
-func _cast(m: MatchEngine, p: int, id: int) -> int:
+func _cast(m: MatchEngine, p: int, id: int, target: int = -1) -> int:
 	var uid := TB.card(m, p, id)
 	m.players[p]["ap"] = 10
 	var e := m.submit(p, {"t": "cast", "uid": uid})
 	assert_str(e).is_empty()
+	if target != -1:
+		assert_str(TB.choose_uids(m, [target])).is_empty()   # the target is always the player's choice
 	return uid
 
 
@@ -181,7 +184,7 @@ func test_snunday_reverses_shimmer_serum_atk_but_not_blind() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
 	_cast(m, 0, 154)
-	_cast(m, 0, 182)
+	_cast(m, 0, 182, u)
 	assert_int(m.atk_of(u)).is_equal(0)
 	assert_int(m.status_count(u, "blind")).is_equal(1)
 
@@ -237,7 +240,7 @@ func test_snunday_flips_continuous_aura_while_active_and_restores_after() -> voi
 func test_snunday_does_not_flip_already_resolved_instant_bonus() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
-	_cast(m, 0, 182)                            # +16 before reversal
+	_cast(m, 0, 182, u)                         # +16 before reversal
 	assert_int(m.atk_of(u)).is_equal(26)
 	_cast(m, 0, 154)
 	assert_int(m.atk_of(u)).is_equal(26)

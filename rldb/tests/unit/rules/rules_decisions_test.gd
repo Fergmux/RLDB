@@ -117,14 +117,16 @@ func test_s01_two_snundays_cancel() -> void:
 	TB.cast(m, 0, 154)
 	TB.cast(m, 0, 154)
 	TB.cast(m, 0, 182)                                    # Shimmer Serum +16
+	TB.choose_uids(m, [u])                                # target is always the player's choice
 	assert_int(m.atk_of(u)).is_equal(26)
 
 
 func test_s04_shimmer_cost_change_reverses_but_never_below_zero() -> void:
 	var m := TB.make()
-	TB.unit(m, 0, TB.WATER, 0, "atk", 10)
+	var own := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
 	TB.cast(m, 0, 154)
 	var s := TB.cast(m, 0, 182)
+	TB.choose_uids(m, [own])
 	assert_int(m.current_cost(s)).is_equal(0)
 	assert_int(m.cards[s]["cost_p"]).is_equal(0)
 

@@ -40,10 +40,14 @@ func _preview_then_battle(m: MatchEngine, a: int, t: int) -> Array:
 	var q := 1 - p
 	var hp_p: int = m.players[p]["hp"]
 	var hp_q: int = m.players[q]["hp"]
+	# A direct attack with no other target resolves without a prompt (Attack Direct): preview first.
+	var pv := m.battle_preview(a, t) if t == -1 else {}
 	assert_str(m.submit(p, {"t": "attack", "uid": a})).is_empty()
-	var pv := _opt_preview(m, t)
+	if t != -1:
+		pv = _opt_preview(m, t)
 	assert_bool(pv.is_empty()).override_failure_message("no preview for target").is_false()
-	TB.choose_uids(m, [t])
+	if t != -1:
+		TB.choose_uids(m, [t])
 	assert_str(TB.pend_kind(m)).is_empty()
 	var actual := {"dmg_opp": hp_q - m.players[q]["hp"], "dmg_you": hp_p - m.players[p]["hp"],
 		"a_dies": m.cards[a]["zone"] != "unit", "t_dies": t != -1 and m.cards[t]["zone"] != "unit"}

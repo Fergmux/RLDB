@@ -379,6 +379,14 @@ func _ability_check(p: int, uid: int, idx: int, ab: Dictionary) -> String:
 			if select(f, op["sel"]).is_empty():
 				return "No legal target."
 			break
+	# A Fusion ability needs a Fusion unit it could actually summon (the paying unit itself
+	# leaves before the summon when the ability exhausts/destroys it).
+	var leaves := false
+	for op in ab["ops"]:
+		if op["op"] in ["move", "destroy"] and op.get("target", "") == "self":
+			leaves = true
+		if op["op"] == "fusion" and fusion_candidates(p, op["sources"], uid if leaves else -1).is_empty():
+			return "No Fusion unit can be summoned."
 	return ""
 
 
@@ -407,11 +415,11 @@ func _execute(p: int, cmd: Dictionary) -> void:
 				{"op": "set_card", "slot": "$slot"},
 			], "set a card"))
 		"cast":
-			push_frame(make_frame(uid, p, [{"op": "pay", "target": "self"}] + _spell_ops(uid), name_of(uid)))
+			var sp := _lead_choices(script_of(uid)["spell"])
+			push_frame(make_frame(uid, p, sp[0] + [{"op": "pay", "target": "self"}] + _spell_ops(uid, sp[1]), name_of(uid)))
 		"activate_set":
-			cards[uid]["face_up"] = true
-			push_frame(make_frame(uid, p, _spell_ops(uid), name_of(uid)))
-			add_log("%s activates set Spell %s." % [pname(p), name_of(uid)])
+			var sp2 := _lead_choices(script_of(uid)["spell"])
+			push_frame(make_frame(uid, p, sp2[0] + [{"op": "flip_set_spell"}] + _spell_ops(uid, sp2[1]), name_of(uid)))
 		"power":
 			push_frame(make_frame(uid, p, [
 				{"op": "pick_slot", "zone": "power", "as": "slot", "cancellable": true},
@@ -423,10 +431,20 @@ func _execute(p: int, cmd: Dictionary) -> void:
 		"ability":
 			var idx: int = int(cmd.get("idx", 0))
 			var ab: Dictionary = script_of(uid)["abilities"][idx]
-			var ops := [{"op": "ability_cost", "idx": idx}]
+			# Targets/modes first and cancellable; the cost is paid once they are confirmed.
+			var split := _lead_choices(ab["ops"])
+			# Fusion abilities: the Fusion unit is chosen (cancellable) before any cost is paid.
+			var leaves := false
+			for fo in ab["ops"]:
+				if fo["op"] in ["move", "destroy"] and fo.get("target", "") == "self":
+					leaves = true
+				if fo["op"] == "fusion" and split[0].is_empty():
+					split[0].append({"op": "fusion_pick", "sources": fo["sources"], "exclude_self": leaves})
+					break
+			var ops: Array = split[0] + [{"op": "ability_cost", "idx": idx}]
 			ops.append({"op": "window", "event": {"name": "activate", "player": p, "card": uid, "text": "%s activates %s" % [pname(p), name_of(uid)]}})
 			ops.append({"op": "check_negated"})
-			ops += ab["ops"]
+			ops += split[1]
 			push_frame(make_frame(uid, p, ops, "%s: %s" % [name_of(uid), ab.get("label", "ability")]))
 		"stance":
 			cards[uid]["stance_turn"] = turn
@@ -461,12 +479,33 @@ func _stance_op(cmd: Dictionary) -> Dictionary:
 	return {"op": "pick_stance", "as": "stance", "cancellable": true}
 
 
-func _spell_ops(uid: int) -> Array:
+## Splits an effect's ops into its leading target/mode choices (made cancellable, so they
+## can be chosen before any cost is paid) and the rest. User decision 2026-10-15.
+func _lead_choices(ops: Array) -> Array:
+	var lead := []
+	var i := 0
+	while i < ops.size() and ops[i]["op"] in ["choose", "mode"] and not ops[i].get("random", false):
+		var c: Dictionary = ops[i].duplicate()
+		c["cancellable"] = true
+		lead.append(c)
+		i += 1
+	return [lead, ops.slice(i)]
+
+
+## A set Spell turns face up when its activation is committed (after any target choice).
+func _op_flip_set_spell(f: Dictionary, op: Dictionary) -> int:
+	f["committed"] = true
+	cards[f["src"]]["face_up"] = true
+	add_log("%s activates set Spell %s." % [pname(f["ctl"]), name_of(f["src"])])
+	return R.CONT
+
+
+func _spell_ops(uid: int, body = null) -> Array:
 	var p: int = cards[uid]["owner"]
 	var ops := [{"op": "to_limbo"},
 		{"op": "window", "event": {"name": "activate", "player": p, "card": uid, "text": "%s casts %s" % [pname(p), name_of(uid)]}},
 		{"op": "check_negated"}]
-	ops += script_of(uid)["spell"]
+	ops += script_of(uid)["spell"] if body == null else body
 	ops.append({"op": "finish_card", "target": "self"})
 	return ops
 
@@ -500,9 +539,6 @@ func _op_pick_slot(f: Dictionary, op: Dictionary) -> int:
 	if slots.is_empty():
 		add_log("%s: no free zone." % f["label"])
 		return R.END
-	if slots.size() == 1 and not op.get("cancellable", false):
-		f["vars"][op["as"]] = slots[0]
-		return R.CONT
 	var opts := []
 	for s in slots:
 		var label := ""
@@ -802,6 +838,9 @@ func _op_attack_target(f: Dictionary, op: Dictionary) -> int:
 	if status_count(uid, "blind") > 0:
 		f["vars"][op["as"]] = targets[rng.randi_range(0, targets.size() - 1)]
 		f["vars"]["blind"] = true
+		return R.CONT
+	if targets == [-1]:
+		f["vars"][op["as"]] = -1          # "Attack Direct": nothing to choose
 		return R.CONT
 	var ans: Variant = take_answer(f)
 	if ans != null:

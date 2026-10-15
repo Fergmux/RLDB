@@ -319,7 +319,7 @@ func _attack(e: Dictionary) -> void:
 	var tw_item: Dictionary = {}
 	var direct: bool = to.get("direct", false)
 	if direct:
-		target_c = screen.plate_of(int(to["p"])).portrait_center()
+		target_c = screen.side_center(int(to["p"]))   # middle of the defender's side of the board
 	else:
 		tw_item = screen.fx_slot_item(int(to["p"]), "unit", int(to["slot"]))
 		target_c = screen.fx_slot_global_rect(int(to["p"]), "unit", int(to["slot"])).get_center()
@@ -384,8 +384,7 @@ func _ap(p: int, d: int) -> void:
 func _draw_opp(p: int, n: int) -> void:
 	if UIStyle.reduce_motion:
 		return
-	var pl: PlayerPlate = screen.plate_of(p)
-	var from: Vector2 = pl.deck_anchor()
+	var from: Vector2 = screen.pile_anchor(p, "draw")
 	var to: Vector2 = screen.hand_anchor(p)
 	for i in mini(n, 5):
 		var g := CardWidget.new().setup({"hidden": true, "zone": "hand"}, "back")

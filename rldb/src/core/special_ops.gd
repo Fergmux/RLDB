@@ -377,8 +377,8 @@ func _assignable(reqs: Array, pool: Array, chosen: Array) -> bool:
 	return false
 
 
-func fusion_candidates(p: int, sources: Array) -> Array:
-	var pool := _fusion_pool(p, sources)
+func fusion_candidates(p: int, sources: Array, exclude: int = -1) -> Array:
+	var pool := _fusion_pool(p, sources).filter(func(u): return u != exclude)
 	var out := []
 	for u in players[p]["extra"]:
 		if category(u) != "fusion" or _summon_blocked(p, unit_type(u)):
@@ -391,9 +391,30 @@ func fusion_candidates(p: int, sources: Array) -> Array:
 	return out
 
 
+## Chooses the Fusion unit before an ability's cost is paid (cancellable). `_op_fusion` then
+## uses this pick if it is still summonable.
+func _op_fusion_pick(f: Dictionary, op: Dictionary) -> int:
+	var ans: Variant = take_answer(f)
+	if ans != null:
+		f["vars"]["fusion_pre"] = ans[0]
+		return R.CONT
+	var cands := fusion_candidates(f["ctl"], op["sources"], f["src"] if op.get("exclude_self", false) else -1)
+	if cands.is_empty():
+		return R.END
+	var opts := []
+	for u in cands:
+		opts.append(card_option(u))
+	return ask(f, f["ctl"], "select", "Choose a Fusion unit to summon.", opts, 1, 1, true, {"reveal_pile": true})
+
+
 func _op_fusion(f: Dictionary, op: Dictionary) -> int:
 	var p: int = f["ctl"]
 	var ans: Variant = take_answer(f)
+	if ans == null and f["vars"].has("fusion_pre"):
+		var pre: int = f["vars"]["fusion_pre"]
+		f["vars"].erase("fusion_pre")
+		if pre in fusion_candidates(p, op["sources"]):
+			ans = [pre]
 	if ans == null:
 		var cands := fusion_candidates(p, op["sources"])
 		if cands.is_empty():
