@@ -1,0 +1,17 @@
+{
+ "_comment": "PROPOSAL P-03: preselected starter decks. 20 main-deck cards including 3 copies of one effectless basic unit, plus Extra Deck cards.",
+ "decks": [
+  {"name": "Tide & Storm", "theme": "Water / Lightning tempo and Divine Serpent",
+   "main": [1, 1, 1, 7, 9, 24, 25, 26, 99, 158, 159, 160, 74, 75, 82, 83, 81, 45, 50, 88],
+   "extra": [143, 59, 173]},
+  {"name": "Ember Legion", "theme": "Fire warriors, Burn and big swings",
+   "main": [112, 112, 112, 6, 33, 36, 37, 39, 73, 14, 27, 35, 15, 182, 84, 41, 154, 46, 51, 179],
+   "extra": [181, 98, 145]},
+  {"name": "Rune Order", "theme": "Rune counters into Ritual summons",
+   "main": [115, 115, 115, 16, 17, 18, 76, 77, 30, 28, 40, 155, 150, 83, 43, 138, 85, 86, 91, 92],
+   "extra": [96, 64, 62]},
+  {"name": "Earthbound Arcana", "theme": "Earth defence, movement and Arcane recursion",
+   "main": [122, 122, 122, 34, 29, 162, 100, 8, 78, 70, 71, 38, 69, 104, 80, 101, 49, 103, 54, 55],
+   "extra": [174, 170, 144]}
+ ]
+}
