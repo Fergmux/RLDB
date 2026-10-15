@@ -166,7 +166,10 @@ static func log_for(m: MatchEngine, viewer: int, since: int = 0) -> Array:
 			continue
 		var text: String = e["priv"].get(viewer, e["pub"])
 		if text != "":
-			out.append({"seq": e["seq"], "turn": e["turn"], "text": text})
+			out.append({"seq": e["seq"], "turn": e["turn"], "text": text, "fx": e.get("fx", [])})
+		elif not e.get("fx", []).is_empty():
+			# Presentation-only events carry public board positions/amounts, never identities.
+			out.append({"seq": e["seq"], "turn": e["turn"], "text": "", "fx": e["fx"]})
 	return out
 
 

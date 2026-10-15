@@ -74,13 +74,28 @@ func test_extra_deck_card_in_recycled_spent_returns_to_extra_deck() -> void:
 	assert_str(m.cards[basic]["zone"]).is_equal("hand")
 
 
-func test_empty_draw_and_spent_skips_draws_without_penalty() -> void:
+func test_empty_draw_and_spent_costs_fatigue_per_missed_draw() -> void:
 	var m := TB.make(3, 0)
 	var hp: int = m.players[0]["hp"]
 	var drawn := m.draw_cards(0, 4)
 	assert_int(drawn.size()).is_equal(0)
+	assert_int(m.players[0]["hp"]).is_equal(hp - 8)      # C-04: 2 HP per missed draw (default)
+
+
+func test_fatigue_can_be_disabled_by_config() -> void:
+	var m := TB.make(3, 0)
+	m.config["fatigue_damage"] = 0
+	var hp: int = m.players[0]["hp"]
+	m.draw_cards(0, 4)
 	assert_int(m.players[0]["hp"]).is_equal(hp)
-	assert_int(m.winner).is_equal(-1)
+
+
+func test_partial_draw_charges_fatigue_only_for_missing_cards() -> void:
+	var m := TB.make(3, 0)
+	TB.card(m, 0, TB.WATER, "draw")
+	var hp: int = m.players[0]["hp"]
+	m.draw_cards(0, 4)
+	assert_int(m.players[0]["hp"]).is_equal(hp - 6)
 
 
 func test_partial_draw_completes_as_far_as_cards_allow() -> void:

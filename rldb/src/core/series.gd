@@ -217,7 +217,7 @@ func _start_game() -> void:
 	game_no += 1
 	stage = STAGE_GAME
 	game = MatchEngine.new()
-	game.setup(decks.duplicate(true), first_player, rng.randi(), {"names": names, "start_hp": int(cfg["start_hp"]), "hidden_response_windows": cfg.get("hidden_response_windows", true)})
+	game.setup(decks.duplicate(true), first_player, rng.randi(), {"names": names, "start_hp": int(cfg["start_hp"]), "hidden_response_windows": cfg.get("hidden_response_windows", false), "fatigue_damage": int(cfg.get("fatigue_damage", 2))})
 	_log("Game %d begins. %s goes first." % [game_no, names[first_player]])
 
 

@@ -9,8 +9,9 @@ extends EffectEngine
 func summon_tail(uid: int, p: int = -1) -> Array:
 	if p == -1:
 		p = cards[uid]["owner"]
-	return [{"op": "window", "event": {"name": "summon", "player": p, "card": uid, "text": "%s summons %s" % [pname(p), name_of(uid)]}},
-		{"op": "summoned", "target": uid}]
+	# P-22: the unit's own On Summon effects resolve before summon-response Traps.
+	return [{"op": "summoned", "target": uid},
+		{"op": "window", "event": {"name": "summon", "player": p, "card": uid, "text": "%s summons %s" % [pname(p), name_of(uid)]}}]
 
 
 func _op_let(f: Dictionary, op: Dictionary) -> int:
@@ -30,8 +31,7 @@ func _op_cost_turn(f: Dictionary, op: Dictionary) -> int:
 ## Persistent cost change for the rest of this game (resets between games).
 func _op_cost_perm(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
-		cards[u]["cost_p"] += op["n"]
-		add_log("%s's cost changes by %+d for the rest of this game." % [name_of(u), op["n"]])
+		change_cost_perm(u, -op["n"] if f["reversed"] else op["n"])
 	return R.CONT
 
 
@@ -205,8 +205,14 @@ func _op_swap_all(f: Dictionary, op: Dictionary) -> int:
 ## Sneaky Snunday: until end of turn, numerical gains/losses from card effects are reversed.
 ## Applied per frame when a card is played, and to continuous auras while active.
 func _op_reversal(f: Dictionary, op: Dictionary) -> int:
-	reversal_turn = turn
-	add_log("Sneaky Snunday: gains and losses from card effects are reversed until end of turn.")
+	if reversal_turn != turn:
+		reversal_turn = turn
+		reversal_count = 0
+	reversal_count += 1
+	if reversal_active():
+		add_log("Sneaky Snunday: gains and losses from card effects are reversed until end of turn.")
+	else:
+		add_log("Sneaky Snunday: a second reversal cancels the first; gains and losses are normal again.")
 	return R.CONT
 
 
@@ -230,15 +236,33 @@ func _op_take_control(f: Dictionary, op: Dictionary) -> int:
 
 
 ## Plan B: destroy any number of your cards, gain 10 HP for each destroyed.
+## Plan B: targets were chosen together, in order. Each destruction and its whole
+## chain (own On Destruction effects, then listening Traps and their knock-ons)
+## resolves before the next target; healing for cards actually destroyed comes last.
 func _op_plan_b(f: Dictionary, op: Dictionary) -> int:
-	var count := 0
+	f["vars"]["planb_count"] = 0
+	var ops := []
 	for u in refs(f, "$u"):
-		if on_field(u) and destroy(u, "effect", f["src"], f["ctl"]):
-			count += 1
+		ops.append({"op": "planb_destroy", "target": u})
+	ops.append({"op": "planb_heal"})
+	_splice(f, ops)
+	return R.CONT
+
+
+func _op_planb_destroy(f: Dictionary, op: Dictionary) -> int:
+	var u: int = op["target"]
+	if cards.has(u) and on_field(u) and destroy(u, "effect", f["src"], f["ctl"]):
+		f["vars"]["planb_count"] += 1
+	return R.CONT
+
+
+func _op_planb_heal(f: Dictionary, op: Dictionary) -> int:
+	var count: int = f["vars"].get("planb_count", 0)
 	var gain := 10 * count
 	if f["reversed"]:
 		gain = -gain
-	change_hp(f["ctl"], gain, " (Plan B, %d destroyed)" % count)
+	if count > 0:
+		change_hp(f["ctl"], gain, " (Plan B, %d destroyed)" % count)
 	return R.CONT
 
 

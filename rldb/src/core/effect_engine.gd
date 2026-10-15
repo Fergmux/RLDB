@@ -37,12 +37,15 @@ func run() -> void:
 			add_log("[engine] resolution aborted: loop guard")
 			stack.clear()
 			break
-		if not window_queue.is_empty():
-			var ev: Dictionary = window_queue.pop_front()
-			push_frame(make_frame(-1, opp(active), [{"op": "window", "event": ev}], "response window", ev))
-			continue
-		if not trigger_queue.is_empty():
-			_flush_triggers()
+		if not window_queue.is_empty() or not trigger_queue.is_empty():
+			# Windows go underneath, triggers on top: a destroyed card's own effects
+			# (and other triggered effects) resolve before listening Traps respond.
+			var wins: Array = window_queue.duplicate()
+			window_queue.clear()
+			for i in range(wins.size() - 1, -1, -1):
+				push_frame(make_frame(-1, opp(active), [{"op": "window", "event": wins[i]}], "response window", wins[i]))
+			if not trigger_queue.is_empty():
+				_flush_triggers()
 			continue
 		if stack.is_empty():
 			break
@@ -506,7 +509,14 @@ func _op_trigger_group(f: Dictionary, op: Dictionary) -> int:
 	if items.is_empty():
 		return R.CONT
 	var pick := 0
-	if items.size() > 1:
+	var self_first := -1
+	for i in items.size():
+		if items[i]["event"].get("self", -1) == items[i]["uid"]:
+			self_first = i
+			break
+	if self_first != -1:
+		pick = self_first
+	elif items.size() > 1:
 		var ans: Variant = take_answer(f)
 		if ans == null:
 			var opts := []
@@ -515,7 +525,12 @@ func _op_trigger_group(f: Dictionary, op: Dictionary) -> int:
 			return ask(f, f["ctl"], "order", "Choose which of your triggered effects resolves next.", opts)
 		pick = ans[0]
 	var t: Dictionary = items.pop_at(pick)
-	var tf := make_frame(t["uid"], t["ctl"], t["ops"], t["label"], t["event"])
+	var tops: Array = t["ops"]
+	if t["ctl"] == active:
+		# P-24: triggered effects are effect activations; the opponent may respond (Energy Dispel etc.).
+		tops = [{"op": "window", "event": {"name": "activate", "player": t["ctl"], "card": t["uid"], "text": "%s's effect" % name_of(t["uid"])}},
+			{"op": "check_negated"}] + tops
+	var tf := make_frame(t["uid"], t["ctl"], tops, t["label"], t["event"])
 	add_log("Trigger: %s." % t["label"])
 	push_frame(tf)
 	return R.STAY if not items.is_empty() else R.CONT
@@ -549,7 +564,8 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 	# Opening the window only when a Trap is eligible would tell the opponent so.
 	# With hidden_response_windows the responder is asked whenever they hold a
 	# face-down card, and simply passes when nothing can respond.
-	var always: bool = config.get("hidden_response_windows", true)
+	# P-27 (user): prompt only when a legal response exists; dummy windows are off by default.
+	var always: bool = config.get("hidden_response_windows", false)
 	if eligible.is_empty() and (not always or not concealed or not used.is_empty()):
 		return R.CONT
 	var ans: Variant = take_answer(f)
@@ -583,6 +599,7 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 	match ev["name"]:
 		"attack":
 			if ev["player"] == p: return false
+			if tr.get("target_unit_only", false) and ev.get("target", -1) == -1: return false
 			if tr.get("column", false):
 				if ev["column"] != cards[uid]["slot"]: return false
 		"summon":
@@ -748,6 +765,7 @@ func _op_stat(f: Dictionary, op: Dictionary) -> int:
 			ud = mini(ud, 0)
 		cards[u]["mods"].append({"atk": ua, "def": ud, "until": op.get("until", "field"), "src": name_of(f["src"]) if f["src"] != -1 else "effect"})
 		add_log("%s %+d ATK / %+d DEF%s (now %d/%d)." % [name_of(u), ua, ud, " until end of turn" if op.get("until", "") == "turn" else "", atk_of(u), def_of(u)])
+		add_fx({"k": "stat", "at": fx_pos(u), "atk": ua, "def": ud})
 	return R.CONT
 
 
@@ -899,11 +917,13 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Di
 	var was_unit: bool = inst["zone"] == "unit"
 	var snap := snapshot(uid)
 	var debil := is_debilitated(uid)
+	var dpos := fx_pos(uid)
 	var dest := "spent"
 	if (has_flag_raw(uid, "exhaust_on_destroy") and not debil) or has_flag_raw(uid, "exhaust_on_spent"):
 		dest = "exhaust"
 	move_to_pile(uid, dest)
 	add_log("%s is destroyed%s." % [label, " by battle" if cause == "battle" else ""])
+	add_fx({"k": "destroy", "at": dpos, "cause": cause})
 	var ev := {"self": uid, "ctl": p, "cause": cause, "by": by_uid, "by_player": by_player,
 		"snapshot": snap, "debilitated": debil, "was_unit": was_unit, "player": active,
 		"text": "%s destroyed" % label, "type": snap.get("type_now", ""), "orig_slot": snap["slot"]}

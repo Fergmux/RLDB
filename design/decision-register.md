@@ -11,6 +11,10 @@ or by updating this file).
 |----|----------|
 | C-01 | The loser of the previous game chooses who goes first in the next game. |
 | C-02 | After every game, each player picks **4 rewards**, in any combination of: add a card, remove a card, change basic unit type. |
+| C-03 | Damage Conversion, like Magic Cylinder, triggers only on an attack on one of your units in its column; never on direct attacks. |
+| C-04 | Fatigue: each draw that cannot be made (Draw and Spent both empty) costs HP; amount configurable (`fatigue_damage`, default 2 — the value is a proposal). |
+
+> **2026-10-15:** `design/decision-register-answers.md` holds the user's answers to P-01–P-31 and S-01–S-04 and supersedes the proposals below wherever they differ. Proposal rows are kept for history only.
 
 ## Prototype proposals (file 06 open items)
 

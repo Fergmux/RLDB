@@ -434,12 +434,13 @@ func test_c097_legendary_swordsman_gains_cleanse_and_comeback_atk() -> void:
 	assert_int(m.atk_of(ls)).is_equal(56)
 
 
-func test_c183_yamata_has_eight_eternal_and_burns_opponent() -> void:
+func test_c183_yamata_has_eight_eternal_and_burns_opponent_each_start_of_turn() -> void:
 	var m := TB.make()
-	var y := TB.special(m, 0, 183, 0)
+	var y := TB.special(m, 1, 183, 0)
 	assert_int(m.status_count(y, "eternal")).is_equal(8)
-	TB.ability(m, y)
-	assert_int(m.players[1]["hp"]).is_equal(54)
+	assert_int(m.script_of(y).get("abilities", []).size()).is_equal(0)   # P-30: not a manual button
+	TB.to_turn2(m)
+	assert_int(m.players[0]["hp"]).is_equal(54)
 
 
 # ---------------------------------------------------------------- Arcane

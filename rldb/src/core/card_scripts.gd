@@ -262,9 +262,9 @@ static func _build() -> Dictionary:
 	t[85] = {"trap": {"when": "activate", "ops": [ch({"kind": "unit"}, "u", false, "Apply 1 Rune to a unit."), st("$u", "rune")]}}
 	t[86] = {"trap": {"when": "destroyed", "by_opponent": true, "ops": [ch({"kind": "unit"}, "u", false, "Apply 4 Medic to a unit."), st("$u", "medic", 4)]}}
 	t[87] = {"trap": {"when": "destroyed", "by_effect": true, "ops": [ch({"kind": "unit", "side": "opp"}, "u", false, "Destroy an opponent's unit."), {"op": "destroy", "target": "$u"}]}}
-	t[45] = {"flags": ["cost_up_on_activate"], "trap": {"when": "attack", "column": true, "ops": [{"op": "cost_perm", "target": "self", "n": 1}, hp("opp", {"stat": "atk", "of": "event.attacker", "mul": -1})]}}
+	t[45] = {"flags": ["cost_up_on_activate"], "trap": {"when": "attack", "column": true, "target_unit_only": true, "ops": [{"op": "cost_perm", "target": "self", "n": 1}, hp("opp", {"stat": "atk", "of": "event.attacker", "mul": -1})]}}
 	t[46] = {"trap": {"when": "attack", "cond": {"count": {"kind": "field_card", "side": "opp"}, "min": 4}, "ops": [all_({"kind": "unit", "side": "opp", "stance": "atk"}), {"op": "destroy", "target": "$all"}]}}
-	t[47] = {"flags": ["cost_up_on_activate"], "trap": {"when": "attack", "column": true, "ops": [{"op": "cost_perm", "target": "self", "n": 1}, hp("self", {"stat": "atk", "of": "event.attacker"})]}}
+	t[47] = {"flags": ["cost_up_on_activate"], "trap": {"when": "attack", "column": true, "target_unit_only": true, "ops": [{"op": "cost_perm", "target": "self", "n": 1}, hp("self", {"stat": "atk", "of": "event.attacker"})]}}
 	t[48] = {"trap": {"when": "summon", "cond": {"count": {"kind": "unit", "side": "opp"}, "min": 3}, "ops": [ch({"kind": "unit", "side": "opp", "max_atk": true}, "u", false, "Choose the opponent's highest-ATK unit."), {"op": "stat", "target": "$u", "atk": -20}]}}
 	t[49] = {"trap": {"when": "summon", "cond": {"event_cost_min": 2}, "ops": [st("event.card", "paralyse", 3)]}}
 	t[50] = {"trap": {"when": "attack", "ops": [ch({"kind": "unit", "side": "self", "column": true}, "u", false, "Apply 1 Eternal to a unit in this column."), st("$u", "eternal")]}}
@@ -299,7 +299,7 @@ static func _build() -> Dictionary:
 	t[167] = {"abilities": [abil("Gain 4 HP or your opponent loses 4 HP", [{"op": "mode", "options": [
 		{"label": "Gain 4 HP", "ops": [hp("self", 4)]}, {"label": "Opponent loses 4 HP", "ops": [hp("opp", -4)]}]}])]}
 	t[168] = {"abilities": [abil("Send a card from Hand to Spent, draw 1", [ch({"kind": "hand", "side": "self"}, "h"), {"op": "move", "target": "$h", "to": "spent"}, {"op": "draw", "n": 1}])]}
-	t[169] = {"flags": ["draw_five"]}
+	t[169] = {"flags": ["draw_extra"]}
 	t[178] = {"flags": ["units_cost_less_if_behind"]}
 	t[179] = {"aura": [{"to": "own_units", "filter": {"type": "Fire"}, "atk": 12}],
 		"on": [{"when": "unit_destroyed", "scope": "mine", "filter": {"event_type": "Fire"}, "text": "your Fire unit was destroyed", "ops": [hp("self", -6), hp("opp", -6)]}]}
@@ -368,8 +368,8 @@ static func _build() -> Dictionary:
 		"abilities": [abil("Apply 1 Infiltrate to this unit", [st("self", "infiltrate")])],
 		"aura": [{"to": "self", "atk": 30, "cond": {"hp_lower": true}}]}
 	t[183] = {"on": [trig("summoned", [st("self", "eternal", 8)]),
-		trig("destroyed", [ch({"kind": "spent_or_draw", "side": "self", "category": ["power"]}, "u", true, "Add a Power from Spent or Draw to Hand?"), {"op": "move", "target": "$u", "to": "hand"}])],
-		"abilities": [abil("Your opponent loses 6 HP", [hp("opp", -6)])]}
+		trig("start_turn", [hp("opp", -6)], "own_turn", "start of turn"),
+		trig("destroyed", [ch({"kind": "spent_or_draw", "side": "self", "category": ["power"]}, "u", true, "Add a Power from Spent or Draw to Hand?"), {"op": "move", "target": "$u", "to": "hand"}])]}
 	t[96] = {"on": [trig("summoned", [{"op": "roma"}])],
 		"abilities": [abil("Lose 10 HP: destroy a unit with lower ATK", [ch({"kind": "unit", "atk_below_self": true}, "u"), {"op": "destroy", "target": "$u"}], true, {"hp": 10})]}
 

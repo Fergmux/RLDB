@@ -26,7 +26,8 @@ var winner: int = -1
 var rng := RandomNumberGenerator.new()
 var log_entries: Array = []       # {seq, pub, priv:{player:text}}
 var config: Dictionary = {}
-var reversal_turn: int = -1       # Sneaky Snunday: reversal active during this turn
+var reversal_turn: int = -1       # Sneaky Snunday: turn during which reversals were played
+var reversal_count: int = 0       # S-01: copies played that turn; an even count cancels out
 var swap_turn: int = -1           # Freaky Funday: turn whose swapped units are listed in swap_uids
 var swap_uids: Array = []
 var _next_log_seq: int = 1
@@ -217,8 +218,27 @@ func free_power_slots(p: int) -> Array:
 ## Adds a log entry. `pub` is shown to both players; `priv` maps a player index to
 ## the text that player sees instead (used to keep hidden identities private).
 func add_log(pub: String, priv: Dictionary = {}) -> void:
-	log_entries.append({"seq": _next_log_seq, "turn": turn, "pub": pub, "priv": priv})
+	log_entries.append({"seq": _next_log_seq, "turn": turn, "pub": pub, "priv": priv, "fx": []})
 	_next_log_seq += 1
+
+
+## Attaches a presentation event to the latest log entry. Effects only reference
+## public information (players, board positions, amounts), never hidden identities,
+## so clients may animate them; they never affect rules state.
+func add_fx(fx: Dictionary) -> void:
+	if log_entries.is_empty():
+		add_log("")
+	log_entries[-1]["fx"].append(fx)
+
+
+## Board position of a field card for presentation events, or {}.
+func fx_pos(uid: int) -> Dictionary:
+	if not cards.has(uid):
+		return {}
+	var inst: Dictionary = cards[uid]
+	if not (inst["zone"] in ["unit", "backrow", "power"]):
+		return {}
+	return {"p": inst["ctl"], "zone": inst["zone"], "slot": inst["slot"]}
 
 
 func pname(p: int) -> String:
@@ -271,10 +291,16 @@ func has_flag(uid: int, flag: String) -> bool:
 
 ## True if any non-suppressed card controlled by p has the flag (Powers, units).
 func player_has_flag(p: int, flag: String) -> bool:
+	return count_flag(p, flag) > 0
+
+
+## Number of non-suppressed cards controlled by p with the flag (stacking effects).
+func count_flag(p: int, flag: String) -> int:
+	var n := 0
 	for uid in field_units(p) + power_cards(p):
 		if has_flag(uid, flag):
-			return true
-	return false
+			n += 1
+	return n
 
 
 # ---------------------------------------------------------------- types and stats
@@ -316,7 +342,7 @@ func base_def(uid: int) -> int:
 
 
 func reversal_active() -> bool:
-	return reversal_turn == turn
+	return reversal_turn == turn and reversal_count % 2 == 1
 
 
 ## Returns {"atk", "def", "parts": [explanations]} for a unit, recalculated live.
@@ -442,6 +468,9 @@ func apply_status(uid: int, s: String, n: int) -> int:
 	if s == "rune":
 		_set_status(uid, "rune", status_count(uid, "rune") + n)
 		card_log(uid, "§ gains %d Rune (now %d)." % [n, status_count(uid, "rune")])
+		var rpos := fx_pos(uid)
+		if not rpos.is_empty():
+			add_fx({"k": "status", "at": rpos, "s": "rune", "n": n})
 		return n
 	if CardDB.is_buff(s) and has_flag(uid, "no_buffs"):
 		card_log(uid, "§ cannot receive Buffs.")
@@ -464,6 +493,9 @@ func apply_status(uid: int, s: String, n: int) -> int:
 		return 0
 	_set_status(uid, s, status_count(uid, s) + n)
 	card_log(uid, "§ gains %d %s (now %d)." % [n, s.capitalize(), status_count(uid, s)])
+	var pos := fx_pos(uid)
+	if not pos.is_empty():
+		add_fx({"k": "status", "at": pos, "s": s, "n": n})
 	_after_status_gain(uid, s)
 	return n
 
@@ -481,6 +513,15 @@ func _after_status_gain(uid: int, s: String) -> void:
 		card_log(uid, "Curse removes %s from § (Curse -1)." % ", ".join(removed))
 
 
+## Persistent (this game) cost change; floored so the card's cost never goes below zero.
+func change_cost_perm(uid: int, n: int) -> void:
+	var df := d(uid)
+	var printed: int = df["cost"] if df["cost"] != null else 0
+	var before: int = cards[uid]["cost_p"]
+	cards[uid]["cost_p"] = maxi(before + n, -printed)
+	add_log("%s's cost changes by %+d for the rest of this game (now %d)." % [name_of(uid), cards[uid]["cost_p"] - before, maxi(printed + cards[uid]["cost_p"], 0)])
+
+
 func decrement_status(uid: int, s: String, n: int = 1) -> void:
 	_set_status(uid, s, status_count(uid, s) - n)
 
@@ -496,6 +537,7 @@ func change_hp(p: int, amount: int, reason: String) -> bool:
 		add_log("%s loses %d HP%s (HP %d)." % [pname(p), -amount, reason, players[p]["hp"]])
 	else:
 		add_log("%s gains %d HP%s (HP %d)." % [pname(p), amount, reason, players[p]["hp"]])
+	add_fx({"k": "hp", "p": p, "d": amount})
 	if players[p]["hp"] <= 0:
 		players[p]["hp"] = 0
 		end_game(opp(p), "%s reached 0 HP" % pname(p))
@@ -509,6 +551,7 @@ func end_game(win: int, reason: String) -> void:
 	winner = win
 	phase = PHASE_OVER
 	add_log("GAME OVER: %s wins (%s)." % [pname(win), reason])
+	add_fx({"k": "game_over", "winner": win})
 	_on_game_over()
 
 
@@ -521,6 +564,7 @@ func change_ap(p: int, amount: int, reason: String) -> void:
 		return
 	players[p]["ap"] = maxi(players[p]["ap"] + amount, 0)
 	add_log("%s %s %d AP%s (AP %d)." % [pname(p), "gains" if amount > 0 else "loses", absi(amount), reason, players[p]["ap"]])
+	add_fx({"k": "ap", "p": p, "d": amount})
 
 
 # ---------------------------------------------------------------- zone movement
@@ -623,7 +667,12 @@ func draw_cards(p: int, n: int) -> Array:
 		if players[p]["draw"].is_empty():
 			recycle_spent(p)
 		if players[p]["draw"].is_empty():
-			add_log("%s has no cards to draw; remaining draws skipped." % pname(p))
+			# C-04 (user): each draw that cannot be made costs fatigue HP (configurable).
+			var missing := n - i
+			var per: int = int(config.get("fatigue_damage", 2))
+			add_log("%s has no cards to draw (%d draw%s missed)." % [pname(p), missing, "" if missing == 1 else "s"])
+			if per > 0:
+				change_hp(p, -per * missing, " (fatigue)")
 			break
 		var uid: int = players[p]["draw"].pop_back()
 		cards[uid]["zone"] = "hand"
@@ -633,6 +682,7 @@ func draw_cards(p: int, n: int) -> Array:
 		var names := ", ".join(drawn.map(func(u): return name_of(u)))
 		add_log("%s draws %d card%s." % [pname(p), drawn.size(), "" if drawn.size() == 1 else "s"],
 			{p: "You draw %d: %s." % [drawn.size(), names]})
+		add_fx({"k": "draw", "p": p, "n": drawn.size()})
 	return drawn
 
 

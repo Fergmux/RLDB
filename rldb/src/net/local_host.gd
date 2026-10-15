@@ -11,11 +11,7 @@ var seats: Array = []
 
 func start(overrides: Dictionary) -> void:
 	series = Series.new()
-	# Hot-seat players share one screen, so hidden response windows (P-27) would only add
-	# privacy-screen hand-offs; they stay on for networked play.
 	var cfg := overrides.duplicate()
-	if not cfg.has("hidden_response_windows"):
-		cfg["hidden_response_windows"] = false
 	series.setup(cfg)
 	for p in 2:
 		var s := LocalSeat.new()

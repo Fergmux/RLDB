@@ -18,6 +18,8 @@
   "quota": {"basic": 1, "unit": 9, "spell": 3, "trap": 3, "power": 2, "extra": 3},
   "basic_copies": 3
  },
+ "fatigue_damage": 2,
+ "fatigue_note": "CONFIRMED C-04: each draw that cannot be made (Draw and Spent empty) costs this much HP. Default value 2 is a proposal.",
  "steam_app_id": 480,
  "steam_app_id_note": "480 = Valve Spacewar test app (development only). Replace with the real App ID."
 }

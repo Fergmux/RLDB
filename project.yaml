@@ -11,8 +11,30 @@ project:
   stage: Technical Setup
 
 modes:
-  rigor: standard
+  rigor: full
   automation: autonomous
+  # Explicit per user instruction rules/09 (2026-10-15).
+  review_mode: full
+
+docs:
+  density: balanced
+
+team:
+  size: studio
+
+qa:
+  level: full
+
+platform:
+  multiplayer: true
+
+testing:
+  strict:
+    logic: true
+    integration: true
+    visual: true
+    ui: true
+    config: true
 
 engine:
   name: Godot

@@ -48,6 +48,7 @@ func _start_turn(p: int) -> void:
 	active = p
 	phase = PHASE_MAIN1
 	add_log("— Turn %d: %s —" % [turn, pname(p)])
+	add_fx({"k": "turn", "p": p, "turn": turn})
 	# P-07: reset AP to base, then delayed modifiers, then draw, then start-of-turn effects.
 	var ap := BASE_AP
 	var notes := []
@@ -60,9 +61,8 @@ func _start_turn(p: int) -> void:
 		notes.append("+1 Marked by the Abyss")
 	players[p]["ap"] = maxi(ap, 0)
 	add_log("%s's AP is set to %d%s." % [pname(p), players[p]["ap"], (" (" + ", ".join(notes) + ")") if notes else ""])
-	var draw_n := BASE_DRAW
-	if player_has_flag(p, "draw_five"):
-		draw_n = 5
+	# P-19 (reworded Options): each active copy draws one additional card.
+	var draw_n := BASE_DRAW + count_flag(p, "draw_extra")
 	draw_cards(p, draw_n)
 	# Medic heals at the start of its controller's turn, then decrements.
 	for u in field_units(p):
@@ -90,9 +90,11 @@ func _advance_phase() -> void:
 			else:
 				phase = PHASE_BATTLE
 				add_log("Battle Phase.")
+			add_fx({"k": "phase", "phase": phase, "turn": turn})
 		PHASE_BATTLE:
 			phase = PHASE_MAIN2
 			add_log("Main Phase 2.")
+			add_fx({"k": "phase", "phase": phase, "turn": turn})
 		PHASE_MAIN2:
 			_end_turn()
 
@@ -303,7 +305,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 			return ""
 		"move":
 			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
-			if not own_turn_phase: return "Units move during your turn."
+			if not main: return "Nimble moves are only allowed in a Main Phase."
 			if status_count(uid, "nimble") <= 0: return "Requires Nimble."
 			if status_count(uid, "paralyse") > 0: return "Paralysed units cannot move."
 			if has_flag(uid, "cant_move"): return "This unit cannot move zone."
@@ -529,6 +531,7 @@ func _op_place(f: Dictionary, op: Dictionary) -> int:
 			return R.END
 		slot = free[0]
 	place_unit(uid, f["ctl"], slot, stance)
+	add_fx({"k": "summon", "p": f["ctl"], "slot": slot})
 	add_log("%s summons %s in %s stance (%s row, column %d)." % [pname(f["ctl"]), name_of(uid),
 		"Attack" if stance == "atk" else "Defense", "front" if slot_row(slot) == 0 else "back", slot_col(slot) + 1])
 	return R.CONT
@@ -554,6 +557,7 @@ func _op_set_card(f: Dictionary, op: Dictionary) -> int:
 	inst["set_turn"] = turn
 	players[f["ctl"]]["backrow"][slot] = uid
 	add_log("%s sets a card in column %d." % [pname(f["ctl"]), slot + 1], {f["ctl"]: "You set %s in column %d." % [name_of(uid), slot + 1]})
+	add_fx({"k": "play", "p": f["ctl"], "zone": "backrow", "slot": slot})
 	return R.CONT
 
 
@@ -568,6 +572,7 @@ func _op_place_power(f: Dictionary, op: Dictionary) -> int:
 	inst["face_up"] = true
 	players[f["ctl"]]["powers"][slot] = uid
 	add_log("%s plays Power %s." % [pname(f["ctl"]), name_of(uid)])
+	add_fx({"k": "play", "p": f["ctl"], "zone": "power", "slot": slot})
 	return R.CONT
 
 
@@ -580,8 +585,7 @@ func _op_to_limbo(f: Dictionary, op: Dictionary) -> int:
 		cards[uid]["zone"] = "limbo"
 		add_log("%s casts %s." % [pname(f["ctl"]), name_of(uid)])
 	if script_of(uid).get("flags", []).has("cost_up_on_activate"):
-		cards[uid]["cost_p"] += 1
-		add_log("%s's cost increases by 1 for the rest of this game." % name_of(uid))
+		change_cost_perm(uid, -1 if f["reversed"] else 1)
 	return R.CONT
 
 
@@ -798,17 +802,14 @@ func _op_attack_declare(f: Dictionary, op: Dictionary) -> int:
 	cards[uid]["attacked_turn"] = turn
 	var desc := "%s attacks %s" % [name_of(uid), pname(opp(p)) + " directly" if target == -1 else name_of(target)]
 	add_log("%s%s." % [desc, " (Blind: random target)" if f["vars"].get("blind", false) else ""])
+	add_fx({"k": "attack", "from": {"p": p, "slot": cards[uid]["slot"]},
+		"to": {"p": opp(p), "slot": cards[target]["slot"]} if target != -1 else {"p": opp(p), "direct": true}})
 	if f["vars"].get("blind", false):
 		decrement_status(uid, "blind")
 	if target != -1 and is_protected(target):
 		f["vars"]["infiltrated"] = true
 		decrement_status(uid, "infiltrate")
 		add_log("%s uses Infiltrate (Infiltrate -1)." % name_of(uid))
-	var burn := status_count(uid, "burn")
-	if burn > 0:
-		_set_status(uid, "burn", 0)
-		if change_hp(p, -burn, " (Burn on %s)" % name_of(uid)):
-			return R.END
 	f["vars"]["column"] = column_of(target) if target != -1 else column_of(uid)
 	return R.CONT
 
@@ -824,8 +825,21 @@ func _op_attack_window(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
+## Type advantage bonus: 6 normally; each active Elemental Mastery makes it 12 per
+## copy (one = 12, two = 24) per the user's P-19 answer.
 func type_bonus(p: int) -> int:
-	return 12 if player_has_flag(p, "elemental_mastery") else 6
+	var n := count_flag(p, "elemental_mastery")
+	return 6 if n == 0 else 12 * n
+
+
+## P-13: Burn resolves after a completed (not cancelled/negated) attack, win or lose.
+## The count is captured before battle so destruction resets cannot hide it.
+func _apply_burn(a: int, p: int, burn: int) -> void:
+	if burn <= 0 or winner != -1:
+		return
+	if unit_on_field(a):
+		_set_status(a, "burn", 0)
+	change_hp(p, -burn, " (Burn on %s after its attack)" % name_of(a))
 
 
 func _advantaged(a: int, b: int) -> bool:
@@ -846,11 +860,13 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 		if not field_units(q).is_empty() and not has_flag(a, "direct_attack"):
 			add_log("The direct attack is no longer legal.")
 			return R.END
+		var dburn := status_count(a, "burn")
 		var dmg := atk_of(a)
 		if has_flag(a, "no_battle_damage"):
 			add_log("%s's attacks do not inflict damage." % name_of(a))
 		else:
 			change_hp(q, -dmg, " (direct attack by %s)" % name_of(a))
+		_apply_burn(a, p, dburn)
 		return R.CONT
 	if not unit_on_field(target) or cards[target]["ctl"] != q:
 		add_log("The attack does not resolve (target left the Field).")
@@ -860,6 +876,8 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 		return R.END
 	# Snapshot both combatants first: destruction is simultaneous for immunity checks.
 	var snap_a := {"atk": atk_of(a), "type": unit_type(a), "debilitated": is_debilitated(a)}
+	var burn_before := status_count(a, "burn")
+	var pierce_before := status_count(a, "pierce")
 	var snap_t := {"atk": atk_of(target), "type": unit_type(target), "debilitated": is_debilitated(target)}
 	var av := atk_of(a)
 	var defending_atk: bool = cards[target]["stance"] == "atk"
@@ -894,14 +912,15 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 	else:
 		if av > dv:
 			destroy(target, "battle", a, p, snap_a)
-			var pierce: int = status_count(a, "pierce") if unit_on_field(a) else f["vars"].get("pierce_snapshot", 0)
-			if pierce > 0 and winner == -1:
-				if unit_on_field(a):
-					decrement_status(a, "pierce")
+			# P-12: Pierce is consumed only when excess damage is actually applied to HP.
+			if pierce_before > 0 and winner == -1:
 				if no_dmg:
-					add_log("%s's attacks do not inflict damage." % name_of(a))
+					add_log("%s's attacks do not inflict damage (Pierce not used)." % name_of(a))
 				else:
+					if unit_on_field(a):
+						decrement_status(a, "pierce")
 					change_hp(q, -(av - dv), " (Pierce)")
 		elif av < dv:
 			change_hp(p, -(dv - av), " (battle)")
+	_apply_burn(a, p, burn_before)
 	return R.CONT
