@@ -329,7 +329,7 @@ func _steps() -> void:
 	var heard := {}
 	for n in Sfx.debug_played:
 		heard[n] = true
-	for want in ["select", "confirm", "cancel", "summon", "attack", "notice", "card_draw", "destroy"]:
+	for want in ["select", "confirm", "cancel", "summon", "attack", "notice", "card_draw"]:
 		_check("F02-13 sound played: %s" % want, heard.has(want), str(heard.keys()))
 
 

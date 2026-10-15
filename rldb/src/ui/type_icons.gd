@@ -27,10 +27,11 @@ static func draw_icon(ci: CanvasItem, type: String, center: Vector2, radius: flo
 
 ## Icon on a dark disc with a type-colour rim: used where the icon sits on busy art.
 static func draw_pip(ci: CanvasItem, type: String, center: Vector2, radius: float) -> void:
-	ci.draw_circle(center, radius * 1.18, Color(0.05, 0.04, 0.04, 0.78))
-	var rim := UIStyle.type_color(type)
-	ci.draw_arc(center, radius * 1.18, 0.0, TAU, 28, Color(rim, 0.85), maxf(1.0, radius * 0.1), true)
-	draw_icon(ci, type, center, radius * 0.84)
+	# Near-opaque dark backing + light rim so every type (dark Earth, pale Heavenly, yellow Lightning)
+	# keeps contrast on any art.
+	ci.draw_circle(center, radius * 1.22, Color(0.04, 0.03, 0.03, 0.94))
+	ci.draw_arc(center, radius * 1.18, 0.0, TAU, 28, Color(0.96, 0.93, 0.84, 0.92), maxf(1.0, radius * 0.12), true)
+	draw_icon(ci, type, center, radius * 0.86)
 
 
 ## Small Control that shows one type icon (for panels, deck builder rows, etc).

@@ -251,7 +251,10 @@ func validate(p: int, cmd: Dictionary) -> String:
 	if cmd.has("stance"):
 		if not (t in ["summon", "ritual", "arcane"]) or not (cmd["stance"] in ["atk", "def"]):
 			return "Invalid stance."
-		if cmd["stance"] == "def" and has_flag_raw(uid, "no_defense"):
+		# Only judge the stance of a card the player may actually summon from its own pile, so
+		# the reply never reveals anything about a card they cannot see (QA-F02-03).
+		var own_src: bool = inst["owner"] == p and inst["zone"] == ("hand" if t == "summon" else "extra")
+		if own_src and cmd["stance"] == "def" and has_flag_raw(uid, "no_defense"):
 			return "This unit cannot be in Defense stance."
 	match t:
 		"summon":
@@ -903,7 +906,9 @@ func _battle_survives(uid: int, vs: Dictionary) -> String:
 	if unit_race(uid) == "Warrior":
 		for g in field_units(cards[uid]["ctl"]):
 			if g != uid and has_flag(g, "warrior_guard") and column_of(g) == column_of(uid):
-				return "%s is protected by %s" % [name_of(uid), name_of(g)]
+				# The guard's Eternal only saves a unit that can receive it (QA-F02-02).
+				if not has_flag(uid, "no_buffs") and status_count(uid, "curse") == 0:
+					return "%s is protected by %s" % [name_of(uid), name_of(g)]
 	if status_count(uid, "eternal") > 0:
 		return "Eternal saves %s" % name_of(uid)
 	return ""

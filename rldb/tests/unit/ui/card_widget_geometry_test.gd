@@ -108,3 +108,9 @@ func test_type_badge_minimum_size() -> void:
 	var b: TypeIcons.TypeBadge = auto_free(TypeIcons.TypeBadge.new("Fire"))
 	assert_vector(b.custom_minimum_size).is_equal(Vector2(22, 22))
 	assert_str(b.type_name).is_equal("Fire")
+
+
+func test_split_name_breaks_before_trailing_parenthetical() -> void:
+	var parts := CardWidget.split_name("Basic Mage (Water)")
+	assert_array(Array(parts)).is_equal(["Basic Mage", "(Water)"])
+	assert_int(CardWidget.split_name("Dragon").size()).is_equal(1)

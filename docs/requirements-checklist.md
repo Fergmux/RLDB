@@ -1,7 +1,7 @@
 # Requirements checklist
 
 Requirement-by-requirement status against `rules/` (01–08), from an independent QA audit plus
-the gaps closed after it. Evidence: GdUnit4 tests (309, all passing — see README for the
+the gaps closed after it. Evidence: GdUnit4 tests (392, all passing — see README for the
 command) and screenshots in `production/qa/evidence/2026-10-15-ui-v3/` (current) and `2026-10-15-final/` (before the production pass).
 
 Legend: **Done** = implemented and tested · **Done (manual)** = implemented, verified by
@@ -91,3 +91,9 @@ outside this repo.
 | Independent reviews (security, UX, adversarial QA) with fixes re-verified | Done | `production/agent-ledger.md`, `production/qa/qa-adversarial-2026-10-15.md` |
 | Steam in a real environment — single account | Done | `tests/steam/steam_probe.gd` → `production/qa/evidence/2026-10-15-steam/steam_probe_report.json`: init (App ID 480), friends-only lobby, lobby data, host socket, invite overlay call, public lobby found by search |
 | Steam friend join, P2P play and reconnect between two accounts | Blocked | Needs a second Steam account/PC (README checklist) |
+
+## Playtest feedback 02 (2026-10-15)
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| F02-01..F02-15 (click-selected actions, 2:3 cards, combat preview, sounds, icons, …) | Done (F02-13 balance awaiting listening test) | `production/stories/playtest-feedback-02.md` per-item checklist; live driver 65/65 in `production/qa/evidence/2026-10-15-f02/final/` |

@@ -292,6 +292,11 @@ func _page_states(p: Control) -> void:
 	pv_big.set_preview("def", 3, -5)
 	pv_big.set_ready(true)
 	pv_big.order_no = 3
+	var mn := _card(p, _view(d, "hand"), "mini", Vector2(1270, 374))
+	mn.set_marks(false, true)
+	mn.order_no = 2
+	var mn2 := _card(p, _view(d, "hand"), "mini", Vector2(1370, 374))
+	mn2.order_no = 1
 
 
 func _page_rotated_states(p: Control) -> void:

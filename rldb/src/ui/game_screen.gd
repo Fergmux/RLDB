@@ -27,7 +27,7 @@ const READY_KINDS := ["summon", "cast", "set", "power", "ritual", "arcane", "abi
 ## Prompt kinds answered by picking cards/zones directly (board, hand or the pile tray) with
 ## the context banner (F02-07 / F02-10); others (responses, ordering, yes/no) use the sidebar.
 const PICK_KINDS := ["select", "attack_target", "slot"]
-const VERDICT_COLORS := {"good": Color("5fd068"), "bad": Color("e5534b"), "neutral": Color("e0b84a")}
+const VERDICT_COLORS := {"good": Color("5fd068"), "bad": Color("e5534b"), "neutral": Color("b9a6e8")}
 
 var client: SeatClient
 var view: Dictionary = {}
@@ -73,6 +73,7 @@ var _preview_text: String = ""
 var _preview_verdict: String = ""
 var _tray_cards: Dictionary = {}   # uid -> card view shown only for the current choice
 var _seen_toast_seq: int = -1
+var _multi_pid: int = -1           # pending choice the current multi-pick belongs to
 
 # Layers / nodes
 var table: ColorRect
@@ -173,6 +174,8 @@ class ArrowLayer extends Control:
 	var on: bool = false
 	## Neutral gold, or the combat-preview verdict colour while hovering an attack target.
 	var col: Color = UIStyle.TARGET
+	## Combat-preview verdict shown as a shape at the arrowhead ("good" ✓, "bad" ✕, "neutral" =).
+	var verdict: String = ""
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -208,6 +211,21 @@ class ArrowLayer extends Control:
 		draw_polyline(outline, Color(0, 0, 0, 0.7), 2.0)
 		draw_circle(a, 6.0, Color(0, 0, 0, 0.6))
 		draw_circle(a, 4.0, col)
+		if verdict != "":
+			# Shape cue so the verdict does not rely on the arrow colour alone (UX D3).
+			var c := b - dir * (head + 20.0)
+			draw_circle(c, 15.0, Color(0, 0, 0, 0.8))
+			draw_circle(c, 13.0, col)
+			var ink := Color(0.06, 0.05, 0.04)
+			match verdict:
+				"good":
+					draw_polyline(PackedVector2Array([c + Vector2(-6, 0), c + Vector2(-1.5, 5), c + Vector2(7, -5)]), ink, 3.5)
+				"bad":
+					draw_line(c + Vector2(-5, -5), c + Vector2(5, 5), ink, 3.5)
+					draw_line(c + Vector2(5, -5), c + Vector2(-5, 5), ink, 3.5)
+				_:
+					draw_line(c + Vector2(-6, -3), c + Vector2(6, -3), ink, 3.0)
+					draw_line(c + Vector2(-6, 3), c + Vector2(6, 3), ink, 3.0)
 
 
 ## Cue shown under the details text while it continues below the fold.
@@ -563,6 +581,7 @@ func _build_side() -> void:
 	prompt_box = VBoxContainer.new()
 	prompt_box.add_theme_constant_override("separation", 4)
 	prompt_panel.add_child(prompt_box)
+	prompt_panel.custom_minimum_size = Vector2(0, 88)   # D8: short prompts don't shift the details panel
 	# Series summary (deck selection, rewards, between games, series over)
 	series_panel = _side_panel()
 	series_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -675,16 +694,19 @@ func _build_top_strip() -> void:
 	bh.add_child(bv)
 	banner_title = UIStyle.label("", 17, UIStyle.GOLD_HI, false, true)
 	banner_title.clip_text = true
+	banner_title.custom_minimum_size = Vector2(40, 0)
 	banner_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	bv.add_child(banner_title)
 	banner_sub = RichTextLabel.new()
 	banner_sub.bbcode_enabled = true
-	banner_sub.fit_content = true
+	banner_sub.fit_content = false
+	banner_sub.custom_minimum_size = Vector2(40, 21)
+	banner_sub.clip_contents = true
 	banner_sub.scroll_active = false
 	banner_sub.autowrap_mode = TextServer.AUTOWRAP_OFF
-	banner_sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	banner_sub.add_theme_font_size_override("normal_font_size", 14)
-	banner_sub.add_theme_font_size_override("bold_font_size", 14)
+	banner_sub.mouse_filter = Control.MOUSE_FILTER_PASS
+	banner_sub.add_theme_font_size_override("normal_font_size", 15)
+	banner_sub.add_theme_font_size_override("bold_font_size", 16)
 	banner_sub.add_theme_font_override("normal_font", UIStyle.font_body())
 	banner_sub.add_theme_font_override("bold_font", UIStyle.font_bold())
 	bv.add_child(banner_sub)
@@ -799,6 +821,16 @@ func _build_overlays() -> void:
 	toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	toast.add_theme_constant_override("outline_size", 4)
 	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tsb := UIStyle.flat(Color(0.06, 0.05, 0.045, 0.94), Color(UIStyle.GOLD, 0.7), 1, 8)
+	tsb.content_margin_left = 14
+	tsb.content_margin_right = 14
+	tsb.content_margin_top = 6
+	tsb.content_margin_bottom = 6
+	toast.add_theme_stylebox_override("normal", tsb)
+	toast.add_theme_font_size_override("font_size", 17)
+	toast.z_index = 80
+	toast.autowrap_mode = TextServer.AUTOWRAP_OFF
+	toast.visible = false
 	add_child(toast)
 
 
@@ -861,14 +893,12 @@ func _relayout() -> void:
 	top_strip.position = Vector2.ZERO
 	top_strip.size = Vector2(w - _sbw, TOP_H)
 	ctx_banner.position = Vector2(4, 2)
-	ctx_banner.size = Vector2(w - _sbw - 8.0, TOP_H - 4.0)
+	ctx_banner.size = Vector2(w - _sbw - 8.0 - 200.0, TOP_H - 4.0)   # Settings / Menu stay visible
 	_place_tray()
 	pause_dim.position = Vector2(0, TOP_H)
 	pause_dim.size = Vector2(w - _sbw, h - TOP_H)
 	pause_panel.position = (pause_dim.size - Vector2(440, 160)) / 2.0
 	settings_popup.position = Vector2(w - _sbw - 400.0, TOP_H + 4.0)
-	toast.position = Vector2(60, TOP_H + 4.0)
-	toast.size = Vector2(_area.size.x - 120.0, 24)
 	_layout_hand([], true)
 	_place_opp_hand()
 	_place_modals()
@@ -986,11 +1016,15 @@ func _on_status(text: String) -> void:
 ## Short non-blocking message over the board; it never waits for input.
 func _toast(text: String, col: Color, secs: float) -> void:
 	toast.text = text
+	toast.visible = text != ""
+	toast.size = Vector2.ZERO
+	toast.position = Vector2(_area.position.x + (_area.size.x - minf(_area.size.x - 120.0, toast.get_combined_minimum_size().x)) / 2.0, TOP_H + 8.0)
 	toast.add_theme_color_override("font_color", col)
 	var t := get_tree().create_timer(secs)
 	t.timeout.connect(func():
 		if toast.text == text:
-			toast.text = "")
+			toast.text = ""
+			toast.visible = false)
 
 
 var _toast_game: int = -99
@@ -1027,8 +1061,11 @@ func _on_view(v: Dictionary) -> void:
 	if v["stage"] != _last_stage:
 		_overlay_hidden_by_user = false
 		_last_stage = v["stage"]
-	if not mv.is_empty() and mv.get("pending", {}).is_empty():
+	# A multi-pick belongs to one prompt: clear it whenever the pending choice changes (QA-F02-01).
+	var pid: int = int(mv.get("pending", {}).get("id", -1)) if not mv.is_empty() else -1
+	if pid != _multi_pid:
 		multi = []
+		_multi_pid = pid
 	seat_label.text = "You are %s  ·  Series %d-%d (best of %d)" % [v["names"][v["you"]], v["scores"][0], v["scores"][1], v["best_of"]]
 	var events := _collect_fx()
 	_draws_me = 0
@@ -1535,7 +1572,9 @@ func _confirm_multi() -> void:
 	if pd.is_empty() or multi.size() < int(pd["min"]):
 		return
 	Sfx.play("confirm")
-	_send({"t": "choose", "id": pd["id"], "indices": multi.duplicate()})
+	var picks := multi.duplicate()
+	multi = []
+	_send({"t": "choose", "id": pd["id"], "indices": picks})
 
 
 ## Clicks on the bare table (not on a card, button or panel) clear the selection.
@@ -1552,6 +1591,7 @@ var debug_sent: int = 0
 func _send(cmd: Dictionary) -> void:
 	debug_sent += 1
 	toast.text = ""
+	toast.visible = false
 	if client != null:
 		client.send(cmd)
 
@@ -1845,7 +1885,7 @@ func _lift(it: Dictionary) -> void:
 		hand_layer.move_child(holder, -1)
 	var lp := _lift_params(it["kind"])
 	_kill_hv_tween(w)
-	var tw := create_tween()
+	var tw := w.create_tween()
 	w.set_meta("hv_tw", tw)
 	tw.set_parallel(true)
 	var d := UIStyle.dur(0.12 if it["kind"] == "hand" else 0.1)
@@ -1885,7 +1925,7 @@ func _unlift(it: Dictionary) -> void:
 		return
 	var holder: Control = it["holder"]
 	_kill_hv_tween(w)
-	var tw := create_tween()
+	var tw := w.create_tween()
 	w.set_meta("hv_tw", tw)
 	tw.set_parallel(true)
 	var d := UIStyle.dur(0.09)
@@ -1897,9 +1937,12 @@ func _unlift(it: Dictionary) -> void:
 		if is_instance_valid(holder):
 			holder.z_index = 0)
 	if it["kind"] == "hand":
-		for i in _hand_order.size():
-			var h: Control = _hand_items[_hand_order[i]]["holder"]
-			hand_layer.move_child(h, i + 1)
+		# _hand_order can still list cards removed in this same render; skip them.
+		var idx := 1
+		for huid in _hand_order:
+			if _hand_items.has(huid):
+				hand_layer.move_child(_hand_items[huid]["holder"], idx)
+				idx += 1
 
 
 func _clear_hover() -> void:
@@ -2197,12 +2240,14 @@ func _render_prompt() -> void:
 
 
 func _render_choice(pd: Dictionary) -> void:
-	prompt_box.add_child(UIStyle.label(pd["prompt"], 16, UIStyle.TARGET, true))
 	if _board_targeting():
+		# D13: the banner over the board carries the prompt; the sidebar only points to it.
+		prompt_box.add_child(UIStyle.label("▲ Choose on the board — see the banner at the top.", 14, UIStyle.TARGET, true))
+		return
+	prompt_box.add_child(UIStyle.label(pd["prompt"], 16, UIStyle.TARGET, true))
+	if false:
 		# F02-07: no list of field cards here — targets are picked on the board / tray, and
 		# the banner at the top says what is being chosen and holds Confirm / Cancel.
-		var where := "Click a highlighted card or zone." if _tray_options(pd).is_empty() else "Click a card in the selection tray."
-		prompt_box.add_child(UIStyle.label(where + " The banner above the board explains the choice.", 13, UIStyle.MUTED, true))
 		return
 	if pd["kind"] == "trap_response":
 		prompt_box.add_child(UIStyle.label("Your opponent is waiting. Activate a Trap or pass.", 13, UIStyle.MUTED, true))
@@ -2307,6 +2352,7 @@ func _update_banner_sub() -> void:
 		t = "[b][color=#%s]%s[/color][/b]" % [col.to_html(false), _preview_text.replace("[", "(")]
 	if banner_sub.text != t:
 		banner_sub.text = t
+		banner_sub.tooltip_text = _preview_text if _preview_text != "" else _banner_how
 
 
 func _place_tray() -> void:
@@ -2622,9 +2668,11 @@ func _update_arrow() -> void:
 			arrow.b = inv * dst.get_center()
 			on = true
 	var want_col: Color = VERDICT_COLORS.get(_preview_verdict, UIStyle.TARGET) if _preview_text != "" else UIStyle.TARGET
-	if on or arrow.on or arrow.col != want_col:
+	var want_v := _preview_verdict if _preview_text != "" else ""
+	if on or arrow.on or arrow.col != want_col or arrow.verdict != want_v:
 		arrow.on = on
 		arrow.col = want_col
+		arrow.verdict = want_v
 		arrow.queue_redraw()
 
 
@@ -3248,5 +3296,5 @@ static func preview_text(pv: Dictionary, a_name: String, t_name: String) -> Stri
 		if not String(n).begins_with("type advantage"):
 			parts.append(String(n))
 	if pv.get("hidden_risk", false):
-		parts.append("face-down cards may change this")
+		parts[0] = parts[0].replace(lead + ":", lead + " (face-down cards may change this):")
 	return " · ".join(parts)

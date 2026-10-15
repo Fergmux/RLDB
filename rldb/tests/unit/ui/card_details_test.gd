@@ -40,7 +40,9 @@ func test_unit_with_statuses_modifiers_and_abilities() -> void:
 		assert_bool(p.sections.has(s)).is_true()
 	_assert_rules_once(p, v)
 	for a in v["abilities"]:
-		assert_int(p.count_text(String(a["label"]))).is_equal(1)
+		# Never duplicated; omitted when the rules text already states it (it stays the tooltip).
+		assert_int(p.count_text(String(a["label"]))).is_less_equal(1)
+		assert_int(p.count_text(String(a["short"]))).is_greater_equal(1)
 	assert_bool(p.all_text().contains("Once per turn")).is_true()
 	assert_bool(p.all_text().contains("Burn ×3")).is_true()
 	assert_bool(p.all_text().contains("Retain ×1")).is_true()

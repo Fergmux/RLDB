@@ -20,3 +20,15 @@ model override is set.
 
 Earlier pass (rules/08) reviews, for reference: gameplay-programmer, security-engineer,
 network-programmer, systems-designer, qa-lead — all inherited Opus.
+
+## Playtest feedback 02 (F02-01..F02-15, 2026-10-15)
+
+| Task | Role | Model | Result |
+| --- | --- | --- | --- |
+| Rules side: stance summons, battle preview, AP start/peak, short labels, no-target toast; game_screen interaction integration; live driver | lead | Opus 5.5 | Done; 18 rules + 7 UI integration tests; live driver 65/65 |
+| Card rendering: 2:3 cards, rotated cards, ATK diamond, type icons, ready/selected/preview/order states | technical-artist | Sonnet (resumed twice) | Done; 11 geometry tests; galleries; UX D1/D2/D3/D4/D6/D9/D15-17 fixed |
+| Procedural SFX + Sfx module (rate limit, volume/mute) | godot-gdscript-specialist (audio brief by lead) | Sonnet | 20 WAVs, 7 tests; programmatic WAV analysis only |
+| Structured details pane + AP slots | ui-programmer | Sonnet (resumed twice) | Done; 17 tests; gallery |
+| Repeat live runs + evidence index | qa-tester | Haiku | Found flaky sound check + a script error → lead fixed stale hand-key bug (regression test seen failing) |
+| UX review of F02 screenshots | ux-designer | Sonnet | 8 MEETS / 7 PARTIAL, 18 defects; high + medium fixed |
+| Adversarial QA (privacy, rules, locks, two-client) | qa-lead | Opus (resumed twice) | 3 defects with failing tests (stale multi-pick, guard preview, stance probe) → fixed; 392/392 pass |

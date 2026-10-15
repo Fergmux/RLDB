@@ -124,3 +124,22 @@ func test_f02_12_preview_text_names_values_and_hidden_risk() -> void:
 		"t_dies": true, "a_dies": false, "dmg_opp": 4, "dmg_you": 0, "notes": [], "hidden_risk": true}
 	var t := GameScreen.preview_text(pv, "Water", "Fire")
 	assert_str(t).contains("Favourable").contains("14").contains("10").contains("Fire destroyed").contains("face-down")
+
+
+# Regression: two Hand cards leaving in one update while one is hovered used to abort the
+# hand render on a stale key (hover unlift walked the old order).
+func test_hand_render_survives_two_cards_leaving_while_one_is_hovered() -> void:
+	var p := m.active
+	var u1 := TB.card(m, p, TB.WATER)
+	var u2 := TB.card(m, p, TB.WATER)
+	host.broadcast()
+	await await_idle_frame()
+	gs.debug_hover_hand(gs._hand_order.find(u2))
+	for u in [u1, u2]:
+		m.players[p]["hand"].erase(u)
+		m.cards[u]["zone"] = "spent"
+		m.players[p]["spent"].append(u)
+	host.broadcast()
+	await await_idle_frame()
+	assert_array(gs._hand_order).is_equal(m.players[p]["hand"])
+	assert_bool(gs._hand_items.has(u1) or gs._hand_items.has(u2)).is_false()

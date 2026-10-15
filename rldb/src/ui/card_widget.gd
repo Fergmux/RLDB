@@ -319,7 +319,14 @@ func _draw() -> void:
 		draw_set_transform(Vector2(_cr.end.x, _cr.position.y), PI / 2.0, Vector2.ONE)
 	else:
 		draw_set_transform(_cr.position, 0.0, Vector2.ONE)
-	if view.get("hidden", false):
+	if rotated and not view.get("hidden", false) and _base().x == 85.0 and size_kind != "back":
+		# Landscape card: frame + art are the portrait card turned 90 degrees; every text, number and
+		# badge is laid out UPRIGHT in the 128x85 box (D1) so "8" never reads as an infinity sign.
+		_frame(6.0)
+		_draw_art(_r(4, 4, 77, 120))
+		draw_set_transform(_cr.position, 0.0, Vector2.ONE)
+		_draw_landscape()
+	elif view.get("hidden", false):
 		_draw_back()
 	else:
 		match size_kind:
@@ -453,20 +460,56 @@ func _fit_name(text: String, width: float, fs_max: float, fs_min: float, font: F
 	return fs
 
 
+## Splits a long name for a two-line plate: before a trailing "(...)" if present, else at the space
+## nearest the middle. Returns [name] when it cannot be split.
+static func split_name(nm: String) -> PackedStringArray:
+	var i := nm.rfind(" (")
+	if i <= 0:
+		var best := -1
+		for j in nm.length():
+			if nm[j] == " " and (best < 0 or absi(j - nm.length() / 2) < absi(best - nm.length() / 2)):
+				best = j
+		i = best
+	if i <= 0:
+		return PackedStringArray([nm])
+	return PackedStringArray([nm.substr(0, i), nm.substr(i + 1)])
+
+
+func _ellipsize(font: Font, text: String, fs: int, avail: float) -> String:
+	var shown := text
+	if font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > avail:
+		while shown.length() > 3 and font.get_string_size(shown + "\u2026", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > avail:
+			shown = shown.substr(0, shown.length() - 1)
+		shown += "\u2026"
+	return shown
+
+
+## Name plate. One line when the name fits at a legible size, otherwise two lines (split before a
+## trailing "(Type)") so "Basic Mage (Water)" and "(Fire)" stay distinguishable (D9).
 func _name_plate(rect: Rect2, fs_max: float, reserve_l: float, reserve_r: float, fs_min: float = 9.0) -> void:
 	_round_rect(rect, Color(0.102, 0.086, 0.075, 0.94), 4.0 * _s, Color(UIStyle.GOLD, 0.65), maxf(1.0, _s))
-	var acc := _accent()
-	draw_rect(Rect2(rect.position.x + 3 * _s, rect.end.y - 3.0 * _s, rect.size.x - 6 * _s, 2.0 * _s), acc)
+	draw_rect(Rect2(rect.position.x + 3 * _s, rect.end.y - 3.0 * _s, rect.size.x - 6 * _s, 2.0 * _s), _accent())
 	var font := UIStyle.font_display(600)
 	var avail := rect.size.x - (reserve_l + reserve_r) * _s - 6.0 * _s
 	var nm: String = view["name"]
+	var x := rect.position.x + (reserve_l + 3.0) * _s
 	var fs := _fit_name(nm, avail, fs_max, fs_min, font)
-	var shown := nm
-	if font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > avail:
-		while shown.length() > 3 and font.get_string_size(shown + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > avail:
-			shown = shown.substr(0, shown.length() - 1)
-		shown += "…"
-	_text_at(font, shown, Vector2(rect.position.x + (reserve_l + 3.0) * _s, rect.position.y), fs, UIStyle.TEXT, -1.0, HORIZONTAL_ALIGNMENT_LEFT, rect.size.y - 3.0 * _s)
+	if font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= avail:
+		_text_at(font, nm, Vector2(x, rect.position.y), fs, UIStyle.TEXT, -1.0, HORIZONTAL_ALIGNMENT_LEFT, rect.size.y - 3.0 * _s)
+		return
+	var parts := split_name(nm)
+	var inner_h := rect.size.y - 3.0 * _s
+	var fs2 := mini(roundi(fs_max * _s), floori(inner_h / 2.0 / 1.05))
+	if parts.size() == 2 and fs2 >= 7:
+		var longest := parts[0] if parts[0].length() >= parts[1].length() else parts[1]
+		while fs2 > 7 and font.get_string_size(longest, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x > avail:
+			fs2 -= 1
+		var lh := float(fs2) * 1.05
+		var y0 := rect.position.y + (inner_h - 2.0 * lh) / 2.0
+		for k in 2:
+			_text_at(font, _ellipsize(font, parts[k], fs2, avail), Vector2(x, y0 + float(k) * lh), fs2, UIStyle.TEXT if k == 0 else UIStyle.MUTED, -1.0, HORIZONTAL_ALIGNMENT_LEFT, lh)
+		return
+	_text_at(font, _ellipsize(font, nm, fs, avail), Vector2(x, rect.position.y), fs, UIStyle.TEXT, -1.0, HORIZONTAL_ALIGNMENT_LEFT, inner_h)
 
 
 func _cost_text() -> String:
@@ -567,7 +610,7 @@ func _fit_stat_fs(font: Font, txt: String, fs_max: float, rect: Rect2, diamond: 
 		var th := float(fs) * 0.74
 		if diamond:
 			# Text box must sit inside the rhombus: tw/w + th/h <= 1 (with a margin for the outline).
-			if tw / rect.size.x + th / rect.size.y <= 0.9:
+			if tw / rect.size.x + th / rect.size.y <= 0.8:
 				break
 		elif tw <= rect.size.x * 0.76 and th <= rect.size.y * 0.52:
 			break
@@ -626,12 +669,12 @@ func _stat_badge(rect: Rect2, is_atk: bool, fs_max: float) -> void:
 	var fs := _fit_stat_fs(font, txt, fs_max, rect, is_atk)
 	_text_c(font, txt, c + Vector2(0, -rect.size.y * (0.0 if is_atk else 0.04)), fs, tcol, maxf(1.5, 1.8 * _s))
 	if mod != 0:
-		var ac := Vector2(c.x, rect.position.y + rect.size.y * (0.2 if is_atk else 0.1))
+		var ac := Vector2(c.x, rect.position.y + rect.size.y * (0.15 if is_atk else 0.1))
 		var a := 3.0 * _s
 		if mod > 0:
 			draw_colored_polygon(PackedVector2Array([ac + Vector2(0, -a), ac + Vector2(a, a * 0.8), ac + Vector2(-a, a * 0.8)]), UIStyle.GOOD)
 		else:
-			ac.y = rect.position.y + rect.size.y * (0.8 if is_atk else 0.92)
+			ac.y = rect.position.y + rect.size.y * (0.85 if is_atk else 0.92)
 			draw_colored_polygon(PackedVector2Array([ac + Vector2(0, a), ac + Vector2(a, -a * 0.8), ac + Vector2(-a, -a * 0.8)]), Color("ff8a84"))
 	if previewing:
 		_preview_decor(rect, is_atk)
@@ -640,22 +683,23 @@ func _stat_badge(rect: Rect2, is_atk: bool, fs_max: float) -> void:
 func _preview_decor(rect: Rect2, is_atk: bool) -> void:
 	var c := rect.get_center()
 	var base := _diamond_pts(rect) if is_atk else _shield_pts(rect)
-	var glow := _grow_pts(base, c, 3.4 * _s)
-	var ring := _grow_pts(base, c, 2.2 * _s)
-	draw_polyline(_closed(glow), Color(UIStyle.PREVIEW, 0.32), 3.0 * _s, true)
+	var glow := _grow_pts(base, c, 3.6 * _s)
+	var ring := _grow_pts(base, c, 2.4 * _s)
+	draw_colored_polygon(base, Color(UIStyle.PREVIEW, 0.26))
+	draw_polyline(_closed(glow), Color(UIStyle.PREVIEW, 0.45), maxf(4.0, 4.5 * _s), true)
 	for i in ring.size():
-		draw_dashed_line(ring[i], ring[(i + 1) % ring.size()], UIStyle.PREVIEW, maxf(1.3, 1.7 * _s), 3.2 * _s, true, true)
+		draw_dashed_line(ring[i], ring[(i + 1) % ring.size()], Color.WHITE, maxf(2.2, 2.4 * _s), 4.0 * _s, true, true)
 	if _pv_bonus == 0:
 		return
 	var up := _pv_bonus > 0
 	var font := UIStyle.font_bold()
-	var fs := _fs(10.0)
+	var fs := maxi(11, _fs(11.5))
 	var minus := "−" if font.has_char(0x2212) else "-"
 	var tag := "%s%d" % ["+" if up else minus, absi(_pv_bonus)]
 	var tw := font.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	var pw := tw + 13.0 * _s
-	var ph := 12.5 * _s
-	var pc := Vector2(c.x, rect.position.y - 3.0 * _s)
+	var ph := maxf(15.0, 14.0 * _s)
+	var pw := tw + ph * 1.0
+	var pc := Vector2(c.x, rect.position.y - 2.0 * _s)
 	var pr := Rect2(pc - Vector2(pw / 2.0, ph / 2.0), Vector2(pw, ph))
 	_round_rect(pr, Color(0.03, 0.12, 0.16, 0.96), ph / 2.0, UIStyle.PREVIEW, maxf(1.0, _s))
 	var m := Vector2(pr.position.x + ph * 0.55, pc.y)
@@ -731,8 +775,13 @@ func _stance_tab(rect: Rect2) -> void:
 	var c := rect.get_center()
 	var r := minf(rect.size.x, rect.size.y) * 0.34
 	if atk:
-		draw_line(c + Vector2(-r, -r), c + Vector2(r, r), Color.WHITE, maxf(1.0, 1.3 * _s))
-		draw_line(c + Vector2(r, -r), c + Vector2(-r, r), Color.WHITE, maxf(1.0, 1.3 * _s))
+		# Diagonal sword (neither an X, which reads as cancel, nor a +): blade, crossguard, grip.
+		var w := maxf(1.3, 1.6 * _s)
+		var d := Vector2(1, -1).normalized()
+		var n := Vector2(1, 1).normalized()
+		draw_line(c - d * r * 0.2, c + d * r * 1.3, Color.WHITE, w)
+		draw_line(c - d * r * 0.2 - n * r * 0.6, c - d * r * 0.2 + n * r * 0.6, Color("e0a040"), w)
+		draw_line(c - d * r * 0.2, c - d * r * 1.1, Color("e0a040"), w)
 	else:
 		draw_colored_polygon(_shield_pts(Rect2(c - Vector2(r * 0.9, r), Vector2(r * 1.8, r * 2.1))), Color("dfe7f2"))
 
@@ -776,25 +825,51 @@ func _draw_square() -> void:
 	_type_pip(_p(69, 16), 7.0 * _s)
 	_protected_icon(_p(70, 36), 5.5 * _s)
 	_acted_marks(_p(11, 34))
-	_set_ribbon(_r(18, 35, 49, 12))
+	_set_ribbon(_r(18, 33, 49, 12))
 	var has_tab: bool = in_play and view.has("stance")
-	_name_plate(_r(4, 48, 77, 16), 10.5, 0.0, 15.0 if has_tab else 0.0, 7.5)
+	_name_plate(_r(4, 46, 77, 20), 10.5, 0.0, 15.0 if has_tab else 0.0, 8.0)
 	if has_tab:
-		_stance_tab(_r(65, 50, 14, 11))
-	_chips(4, 81, 67, 11, 8.0)
+		_stance_tab(_r(65, 49, 14, 14))
+	_chips(4, 81, 67.5, 11, 8.0)
 	if is_unit:
 		_stat_badge(_r(2, 80, 42, 46), true, 19.0)
 		_stat_badge(_r(46, 82, 37, 42), false, 19.0)
 	_gem(_p(13, 13), 9.0 * _s, _fs(12))
 
 
+## Landscape (rotated) card, 128x85 base: upright name plate along the top, upright badges in the
+## corners, type pip bottom centre. Art/frame were already drawn rotated by the caller.
+func _draw_landscape() -> void:
+	var is_unit: bool = String(view.get("category", "")) in UNIT_CATS
+	var has_tab: bool = view.get("zone", "") == "unit" and view.has("stance")
+	_vgrad(_r(4, 40, 120, 41), Color(0, 0, 0, 0), Color(0, 0, 0, 0.8))
+	_name_plate(_r(24, 4, 100, 20), 10.5, 0.0, 17.0 if has_tab else 0.0, 8.0)
+	if has_tab:
+		_stance_tab(_r(106, 7, 15, 14))
+	_gem(_p(13, 13), 9.0 * _s, _fs(12))
+	_set_ribbon(_r(74, 26, 48, 12))
+	_chips(26, 72, 26, 11, 8.0)
+	if is_unit:
+		_type_pip(_p(64, 65), 8.0 * _s)
+		_protected_icon(_p(78, 68), 5.5 * _s)
+		_acted_marks(_p(50, 68))
+		_stat_badge(_r(3, 42, 40, 40), true, 19.0)
+		_stat_badge(_r(88, 46, 37, 35), false, 19.0)
+	else:
+		_round_rect(_r(4, 40, 120, 41), Color(0, 0, 0, 0.55), 4.0 * _s)
+		var txt: String = view.get("text", "")
+		if txt != "":
+			var tp := _para(txt, UIStyle.font_body(), "ls", _fs(9.5), 112.0 * _s, 3)
+			tp.draw(get_canvas_item(), _p(8, 43), UIStyle.TEXT)
+
+
 ## Power / trap card: art, name, short rules text, chips. Same 85x128 portrait.
 func _draw_power() -> void:
 	_frame(6.0)
 	_draw_art(_r(4, 4, 77, 56))
-	_name_plate(_r(4, 50, 77, 18), 10.5, 0.0, 0.0, 7.5)
+	_name_plate(_r(4, 48, 77, 20), 10.5, 0.0, 0.0, 8.0)
 	_gem(_p(13, 13), 9.0 * _s, _fs(12))
-	_set_ribbon(_r(18, 36, 49, 12))
+	_set_ribbon(_r(18, 34, 49, 12))
 	var font := UIStyle.font_body()
 	var fs := _fs(9.5)
 	var txt: String = view.get("text", "")
@@ -948,15 +1023,19 @@ func _draw_overlays() -> void:
 		_ring(Color(fx_glow, fx_glow.a), 3.0 * _s, rect, rad)
 		_ring(Color(fx_glow, fx_glow.a * 0.35), 3.0 * _s, rect.grow(2.5 * _s), rad + 2.0 * _s)
 	if _is_ready:
-		_ring(Color(UIStyle.READY, 0.22), 6.0 * _s, rect.grow(3.0 * _s), rad + 3.0 * _s)
-		_ring(Color(UIStyle.READY, 0.95), 2.4 * _s, rect, rad)
+		# Double ring (thin outer + solid inner): a shape cue distinct from every single-ring state.
+		_ring(Color(UIStyle.READY, 0.95), maxf(1.5, 1.6 * _s), rect.grow(4.5 * _s), rad + 4.5 * _s)
+		_ring(Color(UIStyle.READY, 0.95), maxf(2.0, 2.4 * _s), rect, rad)
 	if hovered or _self_hover:
-		_ring(Color(UIStyle.HOVER, 0.9), 2.0 * _s, rect, rad)
-		_ring(Color(UIStyle.HOVER, 0.28), 3.0 * _s, rect.grow(2.5 * _s), rad + 2.0 * _s)
+		# Soft ivory glow, no fill: clearly not the pulsing yellow TARGET.
+		_ring(Color(UIStyle.HOVER_GLOW, 0.95), maxf(1.5, 1.8 * _s), rect, rad)
+		_ring(Color(UIStyle.HOVER_GLOW, 0.22), 6.0 * _s, rect.grow(3.0 * _s), rad + 3.0 * _s)
+		_ring(Color(UIStyle.HOVER_GLOW, 0.1), 5.0 * _s, rect.grow(7.0 * _s), rad + 7.0 * _s)
 	if selected:
+		_round_rect(rect, Color(UIStyle.SELECT, 0.14), rad)
 		_ring(Color(UIStyle.SELECT, 0.3), 5.0 * _s, rect.grow(3.5 * _s), rad + 3.5 * _s)
-		_ring(UIStyle.SELECT, 3.6 * _s, rect, rad)
-		_corner_brackets(rect.grow(5.5 * _s), 9.0 * _s, UIStyle.SELECT.lightened(0.3), 2.4 * _s)
+		_ring(UIStyle.SELECT, maxf(3.4, 3.6 * _s), rect, rad)
+		_corner_brackets(rect.grow(5.5 * _s), maxf(8.0, 9.0 * _s), UIStyle.SELECT.lightened(0.3), maxf(2.2, 2.4 * _s))
 	if highlighted:
 		var a := 1.0
 		if not UIStyle.reduce_motion:
@@ -971,16 +1050,17 @@ func _draw_overlays() -> void:
 		_order_badge(rect)
 
 
-## Emerald circle with a double up-chevron on the top edge: "can act now" without relying on colour.
+## Lime circle with a bold double up-chevron on the top edge: "can act now" by shape, not colour alone.
 func _ready_badge(rect: Rect2) -> void:
-	var rr := 7.5 * _s
-	var c := Vector2(rect.get_center().x, rect.position.y + 3.0 * _s)
-	draw_circle(c, rr + 1.6 * _s, Color(0.02, 0.1, 0.08, 0.92))
-	draw_circle(c, rr, UIStyle.READY.darkened(0.2))
-	draw_arc(c, rr, 0.0, TAU, 20, UIStyle.READY.lightened(0.5), maxf(1.0, 1.2 * _s), true)
-	var w := rr * 0.48
-	for y in [c.y + rr * 0.34, c.y - rr * 0.14]:
-		draw_polyline(PackedVector2Array([Vector2(c.x - w, y), Vector2(c.x, y - w * 0.85), Vector2(c.x + w, y)]), Color.WHITE, maxf(1.4, 1.7 * _s), true)
+	var rr := maxf(10.0, 10.5 * _s)
+	var c := Vector2(rect.get_center().x, rect.position.y - 5.0 * _s)
+	draw_circle(c, rr + 1.8 * _s, Color(0.05, 0.08, 0.02, 0.95))
+	draw_circle(c, rr, UIStyle.READY)
+	draw_arc(c, rr, 0.0, TAU, 24, Color.WHITE, maxf(1.2, 1.3 * _s), true)
+	var w := rr * 0.52
+	var dark := Color(0.08, 0.14, 0.02)
+	for y in [c.y + rr * 0.42, c.y - rr * 0.12]:
+		draw_polyline(PackedVector2Array([Vector2(c.x - w, y), Vector2(c.x, y - w * 0.9), Vector2(c.x + w, y)]), dark, maxf(2.2, 2.4 * _s), true)
 
 
 func _corner_brackets(r: Rect2, len_px: float, col: Color, w: float) -> void:
@@ -995,9 +1075,9 @@ func _corner_brackets(r: Rect2, len_px: float, col: Color, w: float) -> void:
 
 
 func _order_badge(rect: Rect2) -> void:
-	var rr := 8.5 * _s
+	var rr := maxf(9.5, 10.5 * _s)
 	var c := Vector2(rect.end.x - 3.0 * _s, rect.position.y + 3.0 * _s)
-	draw_circle(c, rr + 1.6 * _s, Color(0.04, 0.03, 0.03, 0.95))
-	draw_circle(c, rr, UIStyle.SELECT.darkened(0.15))
-	draw_arc(c, rr, 0.0, TAU, 20, Color.WHITE, maxf(1.0, 1.3 * _s), true)
-	_text_c(UIStyle.font_display(700), str(order_no), c, _fs(11.0 if order_no < 10 else 8.5), Color.WHITE, 1.0)
+	draw_circle(c, rr + 1.8 * _s, Color(0.04, 0.03, 0.03, 0.95))
+	draw_circle(c, rr, UIStyle.SELECT.darkened(0.1))
+	draw_arc(c, rr, 0.0, TAU, 24, Color.WHITE, maxf(1.3, 1.5 * _s), true)
+	_text_c(UIStyle.font_display(700), str(order_no), c, maxi(10 if order_no < 10 else 8, roundi(rr * (1.1 if order_no < 10 else 0.85))), Color.WHITE, 1.0)

@@ -1,6 +1,6 @@
 # Match Board Screen Spec
 
-Status: Draft v1, 2026-10-15. Implements I-01 (layout), I-02 (hover actions), UI half of I-03. Visual tokens: `design/art/art-bible.md`. Geometry reference: `design/references/field-layout.png`. Code-built Controls (no .tscn); this spec gives proportions, not node paths.
+Status: Draft v2, 2026-10-15. Implements I-01 (layout), F02-01..F02-15 (playtest feedback 02, which supersedes I-02 hover actions), UI half of I-03. Visual tokens: `design/art/art-bible.md`. Geometry reference: `design/references/field-layout.png`. Code-built Controls (no .tscn); this spec gives proportions, not node paths.
 
 ## 1. Window and scaling
 
@@ -60,40 +60,37 @@ Top to bottom:
 
 Top strip (44): left `You are Ben · Series 0-0 (best of 3)`, centre connection indicator, right Menu button. Toasts appear under the top strip, centred on the board.
 
-## 7. Hover actions on the card (I-02)
+## 7. Card inspection and click-selected actions (F02-01, supersedes I-02 hover actions)
 
-Applies to hand cards, own field cards, and any card with a legal action. Actions never appear in the details panel.
+Playtest feedback 02 (`design/playtest-feedback-02.md`) replaced hover actions: **hover shows details; action buttons appear only on a click-selected card.**
 
-**Content**: a vertical stack of buttons ("Summon", "Set", "Cast", "Attack", "Switch Stance", "Activate"...), only the currently legal ones, derived from engine legality (phase, turn, AP, targets, response/pending-choice lock). **Illegal actions are not shown.** If a card has no legal action, no stack appears (the card still lifts and details show). Exception: an action that is normally expected but blocked for a teachable reason (e.g. not enough AP) may show as a single greyed button labelled with the reason, non-clickable, `text_disabled`, so the player learns why; never styled like an enabled button.
+- **Hover** (pointer over a visible card): the card lifts (hand) or grows slightly (field) and its details appear in the sidebar after ~200 ms. No buttons, nothing sent. Face-down and hidden cards are not hoverable.
+- **Click** a visible card: it becomes *selected* (thick blue ring with corner brackets, distinct from the gold hover ring) and its details are pinned. For my own card, while nothing is pending or resolving and it is my turn, its **legal action buttons** appear against the card — above a lifted hand card, just below a field card (above it when there is no room) — never over the name plate, ATK/DEF or status chips. Clicking the selected card again, the bare table, Esc or right-click deselects.
+- **Buttons** use short labels (F02-04): Summon Attack, Summon Defense, Cast, Set, Play Power, Attack, To Defense / To Attack, Sacrifice, Move, Activate, Ritual/Arcane Attack/Defense, and short ability names ("Apply Pierce"). The full description is the tooltip and is listed in the details pane. When nothing is legal, one greyed button states the reason.
+- **Extra Deck**: the Extra chip shows a ▲ and an emerald border when a Ritual/Arcane summon is available; open the pile, click the card, and its buttons appear under it.
+- **Ready highlight** (F02-11): own cards that can play/summon/set, use a manual effect or attack show a steady emerald ring with a chevron badge. Stance changes and sacrifices do not count (they would light every unit).
+- **Locks**: no action buttons while any choice is pending (mine or the opponent's), the stack is resolving, the match is paused, or it is not my turn. A stale button press is ignored if the action is no longer legal for that card instance.
+- **Keyboard**: Tab / Shift+Tab click-select the next/previous ready card and open its buttons; arrows move the focused button, Enter/Space presses it; digits 1-9 pick prompt options; Enter confirms a multi-pick or ends the phase; Esc cancels/deselects. Game keys are handled before GUI focus so a focused button cannot swallow or double-handle them.
 
-**Placement**:
-- Anchored over the **art window** (centre of the card's upper 55%); buttons 28 high, width = card width - 16, 6px gap, centred vertically in the art window.
-- Never cover the bottom 38px (ATK/DEF shields, status chips), the cost gem (top-left 28x28), or the stance tab. If more than 2 buttons do not fit the art window (board cards: window ~64 high), overflow stack extends above the card (opening upward for bottom-row cards, downward for top-row) inside the hover region; they still must not enter the bottom reserved band.
-- Hand cards scale 1.25 and lift; buttons sit on the enlarged art window, so their on-screen height is larger and 3-4 buttons fit.
-- Button text Alegreya Bold 13; primary action first, gold border; icons optional.
-- Neighbouring cards: the hovered card goes to the top of z-order and its buttons are part of it, so overlapping hand neighbours cannot steal clicks.
+### 7a. Picking targets, zones and pile cards (F02-07, F02-10)
 
-**Hover stability (grace region)**:
-- Hover region = card rect expanded by 10px on all sides, unioned with the button stack rect. Pointer leaving the region starts a 150ms close timer; re-entering cancels it. Hand: expanded region also covers the lifted card's full height so the pointer can travel from the original position to the lifted card.
-- Hover target switches to another card only after pointer enters that card's own rect (not the grace margin) and the old stack is not under the pointer.
-- Buttons use `mouse_filter = STOP`; the card body uses `PASS`; clicking a button never triggers a card click/select. A click on the card body (not on a button) pins details and does nothing else.
-- Hover is cancelled and the stack hidden instantly while a drag-less modal/prompt/target-pick is active, or when the response lock is on.
+- Choices of kind select / attack target / zone are answered **directly**: valid cards and zones pulse yellow on the board or in the Hand; everything else dims. No sidebar list of field cards.
+- A **context banner** replaces the top strip (never the board): the prompt ("Choose a target for Apply Pierce"), how many to pick and that order counts, plus the non-card options (e.g. "Attack Ben directly", "Skip"), Confirm (multi-picks) and Cancel.
+- Ordered multi-picks (Plan B, Arcane materials) show **numbered badges** in click order; nothing commits until Confirm.
+- Cards offered from a pile (Spent, Draw, Extra, an opponent pile an effect allows) appear in a **tray** over the board: click a card to choose it; hover reads it. No per-card Choose buttons.
+- Responses (Trap windows), trigger ordering and yes/no confirmations stay in the sidebar prompt panel.
 
-**Action flow**: click button -> if it needs a target/zone/material, the card enters `selected`, the stack closes, legal targets highlight, prompt panel states the instruction, Esc/right-click/Cancel returns to idle. Otherwise the action is sent immediately and the stack closes. Buttons target the card instance id captured at show time; if state changes (card moves, phase ends) before click, the stack is rebuilt/removed on the next state update and a stale click is ignored.
+### 7b. Combat preview (F02-12)
 
-**Non-mouse fallback**: Tab/arrow keys move a focus ring across cards; Enter opens the same stack; number keys 1-4 pick actions; Esc closes. Touch: first tap = hover (shows stack and details), second tap on a button acts.
-
-**Response lock**: while the opponent's response is pending (or our own prompt must be resolved), all action stacks are suppressed except those the pending prompt explicitly offers (e.g. a response Trap/Spell appears on that card with "Activate"). The turn bar button disables with a "Waiting for opponent" label.
-
-**Hidden info**: opponent hand/face-down cards never show action stacks and details show only what is public. Own face-down cards show front details to the owner only.
+While choosing an attack target, hovering a target shows the values the battle will compare — computed by the authority, including type advantage (Elemental Mastery stacks), stance (ATK vs DEF), Eternal/immunities, Pierce and Burn — as dashed cyan "preview" badges with a +N tag on both cards, colours the arrow green (favourable), red (unfavourable) or amber (even: trade, stalemate, saved by Eternal), and writes the outcome line in the banner. If the opponent has face-down cards the line says they may change the result. Moving off or cancelling restores the cards; nothing is sent.
 
 ## 8. Interaction states
 
 | State | Visual | Input |
 |---|---|---|
 | Idle | normal frame; zones plain | hover available |
-| Hover | lift, `hl_hover` glow, action stack (if any) | click body pins details |
-| Selected | `hl_select` ring, lifted 4px, stack hidden | Esc/right-click cancels |
+| Hover | lift, `hl_hover` glow, details after ~200 ms; **no buttons** | click selects |
+| Selected | `hl_select` ring + corner brackets; own card shows its legal action buttons | buttons act; click again / Esc / right-click / bare table deselects |
 | Legal target | `hl_target` pulsing ring on every valid card/zone; invalid zones dim to 0.6 | click to confirm; invalid ignored with a small shake + `hl_danger` flash on prompt |
 | Pending choice | board dims 0.55 except choosable items; prompt panel gold pulse and choice list | only prompt choices are active; details still inspectable |
 | Waiting for opponent | board not dimmed but non-interactive for actions; turn bar shows "Opponent is acting..." with animated dots (static when reduced motion); inspect and log still work | hover shows details only |

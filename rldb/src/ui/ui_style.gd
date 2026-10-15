@@ -24,9 +24,12 @@ const TARGET := Color("ffd84a")
 const SELECT := Color("63b3ff")
 const HOVER := Color("f0cf7a")
 const RUNE_BLUE := Color("5aa2ff")
-## "This card can act now" highlight (F02-11): steady emerald, distinct from HOVER gold, SELECT blue, TARGET yellow.
-const READY := Color("2fd6a0")
+## "This card can act now" highlight (F02-11): lime/chartreuse. Not used by any CATEGORY_COLORS (Arcane is teal,
+## Spell is green), nor by SELECT blue, TARGET yellow or the GOOD mint. Always paired with a double ring + chevron badge.
+## Hover is a soft ivory glow (HOVER_GLOW), deliberately not gold so it cannot be mistaken for the pulsing TARGET.
+const READY := Color("b8f22c")
 ## Provisional combat-preview stat styling (F02-12): cyan, distinct from committed buff green / debuff red.
+const HOVER_GLOW := Color("fff6e4")
 const PREVIEW := Color("7fe6ff")
 const ZONE_TINT := {"unit": Color("3b2a1a"), "trap": Color("3a1c1c"), "power": Color("1c2a3d")}
 

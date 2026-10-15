@@ -151,3 +151,11 @@ Card art itself: user-supplied, dropped at `rldb/art/cards/<source image filenam
 ## 8. Naming (per project convention)
 
 `ui_panel_sidebar_9slice.png`, `ui_btn_primary_hover.png`, `env_table_wood_large.png`, `env_zone_glyph_unit.png`, `char_card_back_default_large.png`, `vfx_ember_loop_small.png`, `ui_frame_unit_large.png`.
+
+## 9. Playtest feedback 02 additions (2026-10-15)
+
+- **Card proportions:** every card face is 2:3 (hand 120x180, mini 90x135, big 224x336, field/power 85x128, back 60x90). Square unit slots and landscape Trap/Spell zones keep their shape; Defense units and Trap/Spell-zone cards are the same card turned 90° (3:2 box). Supplied art should therefore be portrait; the art window crops centred.
+- **Stat badges:** ATK is a red diamond with a gold rim; DEF stays the blue shield. Modified stats are green/red with ▲/▼ marks. Combat previews use a dashed cyan ring and a "+N" pill (`UIStyle.PREVIEW`).
+- **Highlights:** hover = warm gold ring; selected = thick blue ring with corner brackets; can-act-now = steady emerald ring with a double-chevron badge (`UIStyle.READY`); legal target = pulsing yellow. Shapes differ so none relies on colour alone.
+- **Damage-type icons** (`src/ui/type_icons.gd`): Water drop, Fire flame, Earth mountain, Lightning bolt, Heavenly radiant sun, Necrotic skull, Physical crossed blades; typeless = hollow ring. Race is always written as text, separate from Type.
+- **Audio:** 20 original sounds synthesised by `tools/gen_sfx.py` (stdlib only, deterministic) into `assets/audio/sfx/`: card draw/play/set, summon, select, confirm, cancel, deny, attack, impact, damage, heal, destroy, buff, debuff, turn, phase, notice, victory, defeat. Tone: muted tabletop foley with short dark tails, peak -6 dBFS. Played only from public events and local UI actions (no hidden-information cues), rate-limited (same sound ≥70 ms apart, ≤4 starts per 120 ms). Volume slider and mute are in Settings. Optional asset request: a recorded/produced replacement set with the same names (44.1 kHz mono WAV/OGG, under 1 s except the victory/defeat stingers, licence allowing redistribution).

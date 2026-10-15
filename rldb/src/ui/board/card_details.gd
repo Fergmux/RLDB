@@ -275,7 +275,9 @@ func _build_rules(c: Dictionary) -> void:
 
 func _build_abilities(c: Dictionary) -> void:
 	sections.append("abilities")
-	add_child(_heading("Abilities"))
+	# The full effect is already in the Rules blocks above; this section maps each on-card
+	# button name to its cost and limit, with the engine description as the tooltip (D10).
+	add_child(_heading("On-card buttons"))
 	for a in c["abilities"]:
 		var pc := PanelContainer.new()
 		var sb := UIStyle.flat(UIStyle.PANEL_LIGHT, Color(UIStyle.GOLD, 0.6), 1, 6)
@@ -299,8 +301,23 @@ func _build_abilities(c: Dictionary) -> void:
 			fl.add_child(_chip("%d HP" % int(a["hp"]), UIStyle.BAD, "down"))
 		if a.get("opt", false):
 			fl.add_child(_chip("Once per turn", UIStyle.MUTED))
-		vb.add_child(_lbl(String(a.get("label", "")), 14, UIStyle.TEXT))
+		pc.tooltip_text = String(a.get("label", ""))
+		if not _rules_mention(c, String(a.get("label", ""))):
+			vb.add_child(_lbl(String(a.get("label", "")), 14, UIStyle.TEXT))
 		add_child(pc)
+
+
+## Whether the card's rules text already states this ability (most of its words appear there).
+func _rules_mention(c: Dictionary, label: String) -> bool:
+	var rules := String(c.get("text", "")).to_lower()
+	var hit := 0
+	var long_words := 0
+	for w in label.to_lower().replace(":", " ").replace(",", " ").split(" ", false):
+		if w.length() > 3:
+			long_words += 1
+			if rules.contains(w):
+				hit += 1
+	return long_words > 0 and float(hit) / float(long_words) >= 0.6
 
 
 func _build_statuses(c: Dictionary) -> void:

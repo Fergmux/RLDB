@@ -42,7 +42,7 @@ If feedback changes a confirmed game mechanic, identify the affected rule and re
 
 ## I-02 — Show valid actions on the hovered card
 
-**Status:** Verified by build-agent evidence (synthetic and real-pointer hover, keyboard focus); awaiting user playtest confirmation.
+**Status:** Superseded by F02-01 in `playtest-feedback-02.md` (actions now appear on the click-selected card; hover shows details only). The on-card placement and the inspection-only details panel from I-02 are kept.
 
 **Area:** Card interaction, hover UI and right-hand card-details panel.
 
