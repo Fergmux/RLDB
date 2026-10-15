@@ -89,4 +89,5 @@ outside this repo.
 | I-03 visual direction, animation, reduced motion | Done (art pending) | ui-v3, art bible, perf probe |
 | Studio settings: rigor full, review full, team studio, QA full, multiplayer, strict evidence | Done | `project.yaml`, resolved via yaml-helper |
 | Independent reviews (security, UX, adversarial QA) with fixes re-verified | Done | `production/agent-ledger.md`, `production/qa/qa-adversarial-2026-10-15.md` |
-| Steam matchmaking/invites in a real environment | Blocked | Needs Steam client running + second account (README checklist) |
+| Steam in a real environment — single account | Done | `tests/steam/steam_probe.gd` → `production/qa/evidence/2026-10-15-steam/steam_probe_report.json`: init (App ID 480), friends-only lobby, lobby data, host socket, invite overlay call, public lobby found by search |
+| Steam friend join, P2P play and reconnect between two accounts | Blocked | Needs a second Steam account/PC (README checklist) |

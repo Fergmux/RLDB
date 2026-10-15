@@ -16,7 +16,7 @@ raise presentation, interaction and verification to production quality. Story ty
 | PQ-08 | I-03 art direction, frames, typography, animations, reduced motion | Visual | Before/after shots; mid-animation shot; reduced-motion toggle persists | Done (art pending from user) |
 | PQ-09 | Two-client full series incl. nested traps, reconnect during choice, save/resume | Integration | `net_full_series_test`, `net_two_client_test`, `tests/integration/qa` (16) pass | Done |
 | PQ-10 | Independent QA / UX / security review, fixes re-verified | Integration | Review findings resolved with regression tests | Done (security, UX, QA) |
-| PQ-11 | Steam verification in a real environment | Integration | README two-account checklist executed with evidence | Blocked: needs Steam client + second account |
+| PQ-11 | Steam verification in a real environment | Integration | README two-account checklist executed with evidence | Partial: single-account checks pass (steam_probe_report.json); two-account join blocked |
 
 Performance targets (chosen, not user-specified): ≥60 fps on the board at 1600x1000 on the dev
 machine during animations; command-to-view latency on localhost < 100 ms; network view payloads
