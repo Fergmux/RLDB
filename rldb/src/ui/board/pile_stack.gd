@@ -8,8 +8,14 @@ extends Control
 
 signal pressed(zone: String)
 
+## Most back layers drawn, the rise (px) per layer and how many cards one layer stands for.
 const MAX_LAYERS := 6
 const LAYER_STEP := 1.2
+const CARDS_PER_LAYER := 3.0
+## Card corner radius (px) of every layer and of the empty-pile outline.
+const RADIUS := 6
+## Base width the card-back art is authored at (CardWidget "back" kind).
+const BACK_BASE_W := 90.0
 ## Count font size; the count badge is sized once for "99" at this size.
 const COUNT_FS := 22
 ## Name-plate height and its largest / smallest label font size.
@@ -17,10 +23,14 @@ const PLATE_H := 17.0
 const TITLE_FS := 10
 const TITLE_FS_MIN := 8
 
+## Zone id emitted by `pressed` ("draw", "extra", "spent", "exhaust").
 var zone: String = "draw"
+## Label on the name plate and in the tooltip.
 var title: String = "Deck"
 var count: int = 0
+## Whether clicking opens the pile (local player's inspectable piles).
 var clickable: bool = false
+## Steady "summon ready" glow around the top card (same look as a ready CardWidget).
 var ready_mark: bool = false
 var _hover: bool = false
 ## 1 -> 0 after the count changes: the count badge pops a little (presentation only).
@@ -30,10 +40,11 @@ var _pop_tw: Tween
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	mouse_entered.connect(func(): _hover = true; queue_redraw())
-	mouse_exited.connect(func(): _hover = false; queue_redraw())
+	mouse_entered.connect(func() -> void: _hover = true; queue_redraw())
+	mouse_exited.connect(func() -> void: _hover = false; queue_redraw())
 
 
+## Updates the count, clickability and ready glow; a changed count pops the badge (unless reduce motion).
 func set_pile(n: int, can_open: bool, is_ready: bool = false) -> void:
 	if n == count and can_open == clickable and is_ready == ready_mark:
 		return
@@ -67,10 +78,11 @@ func top_center() -> Vector2:
 	return get_global_rect().get_center() - Vector2(0, maxi(_layers() - 1, 0) * LAYER_STEP)
 
 
+## Number of back layers drawn for the current count (0 = empty pile).
 func _layers() -> int:
 	if count <= 0:
 		return 0
-	return clampi(int(ceil(float(count) / 3.0)), 1, MAX_LAYERS)
+	return clampi(int(ceil(float(count) / CARDS_PER_LAYER)), 1, MAX_LAYERS)
 
 
 func _draw() -> void:
@@ -82,22 +94,22 @@ func _draw() -> void:
 		sb.bg_color = Color(0, 0, 0, 0.22)
 		sb.border_color = Color(UIStyle.BRONZE, 0.55)
 		sb.set_border_width_all(1)
-		sb.set_corner_radius_all(6)
+		sb.set_corner_radius_all(RADIUS)
 		draw_style_box(sb, card)
 	for i in n:
 		var r := card
 		r.position.y -= float(i) * LAYER_STEP
 		var b := StyleBoxFlat.new()
-		b.bg_color = Color("1d1630")
-		b.border_color = Color("6e5a9a")
+		b.bg_color = CardBack.BODY
+		b.border_color = CardBack.BORDER
 		b.set_border_width_all(1 if i < n - 1 else 2)
-		b.set_corner_radius_all(6)
+		b.set_corner_radius_all(RADIUS)
 		if i == 0:
 			b.shadow_color = Color(0, 0, 0, 0.45)
 			b.shadow_size = 4
 		draw_style_box(b, r)
 		if i == n - 1:
-			CardWidget.draw_back_art(self, r, r.size.x / 90.0)   # the same back as every card
+			CardBack.draw_art(self, r, r.size.x / BACK_BASE_W)   # the same back as every card
 	var top := card
 	top.position.y -= float(maxi(n - 1, 0)) * LAYER_STEP
 	if _hover and clickable:

@@ -1,15 +1,24 @@
 class_name TypeIcons
 extends RefCounted
 ## Vector damage-type icons (F02-14). One cohesive set: light ivory outline (so the icons read on the
-## dark card body, panels and pips — user feedback 2026-10-16), type-colour fill, a light gloss accent, drawn in a unit box of `radius` around `center`. Silhouettes differ so the type
-## reads by shape and not by colour alone:
+## dark card body, panels and pips — user feedback 2026-10-16), type-colour fill, a light gloss
+## accent, drawn in a unit box of `radius` around `center`. Silhouettes differ so the type reads by
+## shape and not by colour alone:
 ##   Water = drop, Fire = flame, Earth = mountain, Lightning = bolt, Heavenly = radiant sun,
 ##   Necrotic = skull, Physical = crossed blades, typeless = hollow neutral ring.
 ## Colours come from UIStyle.TYPE_COLORS; nothing here is baked into a texture.
 
+## Light ivory outline around every silhouette.
 const OUTLINE := Color(0.97, 0.93, 0.83, 0.95)
 ## Outer radius of a pip (disc + rim) relative to its `radius` argument.
 const PIP_K := 1.18
+## Near-opaque dark disc behind a pip's icon, and the icon size relative to the pip radius.
+const PIP_BACKING := Color(0.04, 0.03, 0.03, 0.94)
+const PIP_ICON_K := 0.86
+## Dark inner detail colour of the skull (eyes, nose, teeth).
+const SKULL_DARK := Color(0.06, 0.03, 0.1, 0.95)
+## Mountain silhouette (unit coordinates), filled and then outlined over its shading.
+const EARTH_PTS := [-1.0, 0.8, -0.58, -0.2, -0.36, 0.12, 0.08, -0.88, 1.0, 0.8]
 
 
 ## Draws the icon for `type` ("" or an unknown name = typeless ring) onto any CanvasItem.
@@ -31,13 +40,14 @@ static func draw_icon(ci: CanvasItem, type: String, center: Vector2, radius: flo
 static func draw_pip(ci: CanvasItem, type: String, center: Vector2, radius: float) -> void:
 	# Near-opaque dark backing + light rim so every type (dark Earth, pale Heavenly, yellow Lightning)
 	# keeps contrast on any art.
-	ci.draw_circle(center, radius * PIP_K, Color(0.04, 0.03, 0.03, 0.94))
+	ci.draw_circle(center, radius * PIP_K, PIP_BACKING)
 	ci.draw_arc(center, radius * PIP_K, 0.0, TAU, 28, UIStyle.type_color(type).lightened(0.25), maxf(0.7, radius * 0.04), true)
-	draw_icon(ci, type, center, radius * 0.86)
+	draw_icon(ci, type, center, radius * PIP_ICON_K)
 
 
 ## Small Control that shows one type icon (for panels, deck builder rows, etc).
 class TypeBadge extends Control:
+	## Damage type shown ("" = typeless ring); setting it redraws.
 	var type_name: String = "":
 		set(v):
 			type_name = v
@@ -62,6 +72,7 @@ static func _pts(c: Vector2, r: float, flat: Array) -> PackedVector2Array:
 	return out
 
 
+## Filled polygon with an OUTLINE border `ow` px wide (no border when ow is 0).
 static func _fill(ci: CanvasItem, p: PackedVector2Array, fill: Color, ow: float) -> void:
 	ci.draw_colored_polygon(p, fill)
 	if ow > 0.0:
@@ -88,10 +99,10 @@ static func _fire(ci: CanvasItem, c: Vector2, r: float, col: Color, ow: float) -
 
 
 static func _earth(ci: CanvasItem, c: Vector2, r: float, col: Color, ow: float) -> void:
-	_fill(ci, _pts(c, r, [-1.0, 0.8, -0.58, -0.2, -0.36, 0.12, 0.08, -0.88, 1.0, 0.8]), col, ow)
+	_fill(ci, _pts(c, r, EARTH_PTS), col, ow)
 	ci.draw_colored_polygon(_pts(c, r, [0.08, -0.88, 1.0, 0.8, 0.1, 0.8, 0.0, -0.2]), col.darkened(0.32))
 	ci.draw_colored_polygon(_pts(c, r, [0.08, -0.88, 0.34, -0.40, 0.18, -0.48, 0.06, -0.38, -0.06, -0.52]), col.lightened(0.6))
-	var o := _pts(c, r, [-1.0, 0.8, -0.58, -0.2, -0.36, 0.12, 0.08, -0.88, 1.0, 0.8])
+	var o := _pts(c, r, EARTH_PTS)
 	o.append(o[0])
 	ci.draw_polyline(o, OUTLINE, ow, true)
 
@@ -120,7 +131,7 @@ static func _skull(ci: CanvasItem, c: Vector2, r: float, col: Color, ow: float) 
 	p.append(c + Vector2(0.40, 0.88) * r)
 	p.append(c + Vector2(-0.40, 0.88) * r)
 	_fill(ci, p, col, ow)
-	var dark := Color(0.06, 0.03, 0.1, 0.95)
+	var dark := SKULL_DARK
 	ci.draw_circle(c + Vector2(-0.28, -0.14) * r, 0.2 * r, dark)
 	ci.draw_circle(c + Vector2(0.28, -0.14) * r, 0.2 * r, dark)
 	ci.draw_colored_polygon(_pts(c, r, [0.0, 0.08, 0.1, 0.3, -0.1, 0.3]), dark)
@@ -134,6 +145,7 @@ static func _blades(ci: CanvasItem, c: Vector2, r: float, col: Color, ow: float)
 	_sword(ci, c, r, Vector2(0.8, 0.8), Vector2(-0.86, -0.9), col, ow)
 
 
+## One blade from `hilt` to `tip` (unit coordinates): outlined handle and guard, then the blade.
 static func _sword(ci: CanvasItem, c: Vector2, r: float, hilt: Vector2, tip: Vector2, col: Color, ow: float) -> void:
 	var d := (tip - hilt).normalized()
 	var n := Vector2(-d.y, d.x)
@@ -151,6 +163,7 @@ static func _sword(ci: CanvasItem, c: Vector2, r: float, hilt: Vector2, tip: Vec
 	ci.draw_line(c + (g + d * 0.1) * r, c + (tip - d * 0.3) * r, Color(1, 1, 1, 0.45), maxf(1.0, r * 0.06))
 
 
+## Hollow neutral ring for typeless.
 static func _typeless(ci: CanvasItem, c: Vector2, r: float, ow: float) -> void:
 	var col := UIStyle.type_color("").lightened(0.2)
 	var rr := r * 0.66

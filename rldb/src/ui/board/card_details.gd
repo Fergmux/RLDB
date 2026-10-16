@@ -21,15 +21,18 @@ extends VBoxContainer
 ## Usage: put the panel (size_flags_horizontal = EXPAND_FILL) inside the sidebar ScrollContainer
 ## and call show_card(view, notes) / show_empty(hint) whenever the inspected card changes.
 
+## Text sizes (px, before compact scaling): body text, captions / chips, notes and the card name.
 const BODY := 15
 const SMALL := 13
+const NOTE := 14
+const TITLE := 21
+## Left accent-bar width (px) of rule / status blocks.
+const BLOCK_BAR_W := 3
 
 ## Compact rendering (pile list rows): every text size scaled down, tighter spacing.
 var compact: bool = false
 ## Section ids in the order they were built by the last show_* call (used by tests).
 var sections: Array[String] = []
-## Container inside the Type chip where the TypeIcons glyph can be added later.
-var type_icon_slot: HBoxContainer = null
 
 
 ## Shape marker drawn with primitives so it never depends on font glyph coverage.
@@ -79,11 +82,11 @@ func _init() -> void:
 func show_empty(hint: String) -> void:
 	_reset()
 	sections.append("empty")
-	add_child(_lbl(hint, 14, UIStyle.MUTED))
+	add_child(_lbl(hint, NOTE, UIStyle.MUTED))
 
 
 ## Renders a card view. `c` = redacted card view ({} -> generic empty hint); `notes` = reasons
-## actions are unavailable, e.g. "Cannot attack: ...".
+## actions are unavailable, e.g. "Cannot attack: ..." (accepted for callers, not displayed).
 func show_card(c: Dictionary, _notes: Array = []) -> void:
 	if c.is_empty():
 		show_empty("Hover a card to read it, or click it to pin it here.")
@@ -116,7 +119,6 @@ func count_text(needle: String) -> int:
 
 func _reset() -> void:
 	sections.clear()
-	type_icon_slot = null
 	for ch in get_children():
 		remove_child(ch)
 		ch.free()   # children are passive display nodes; freeing now keeps min-size and tests exact
@@ -126,12 +128,8 @@ func _build_identity(c: Dictionary) -> void:
 	sections.append("identity")
 	var cat: String = c.get("category", "unit")
 	var cat_col: Color = UIStyle.CATEGORY_COLORS.get(cat, UIStyle.MUTED)
-	var name_l := _lbl(String(c.get("name", "?")), 21, UIStyle.GOLD_HI, false, true)
-	add_child(name_l)
-	var badges := HFlowContainer.new()
-	badges.add_theme_constant_override("h_separation", 5)
-	badges.add_theme_constant_override("v_separation", 4)
-	badges.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_child(_lbl(String(c.get("name", "?")), TITLE, UIStyle.GOLD_HI, false, true))
+	var badges := _flow()
 	add_child(badges)
 	badges.add_child(_chip(String(UIStyle.CATEGORY_NAMES.get(cat, cat)), cat_col, "", true))
 	if String(c.get("cost_kind", "ap")) != "fusion":   # "Fusion Unit" already says how it is summoned
@@ -143,15 +141,16 @@ func _build_identity(c: Dictionary) -> void:
 		var ty_s: String = String(ty) if ty != null else ""
 		var tc: Color = UIStyle.type_color(ty_s)
 		var chip := _chip(ty_s if ty_s != "" else "No type", tc)
-		# TYPE ICON: the lead adds the TypeIcons glyph into this slot (HBox inside the Type chip).
-		type_icon_slot = HBoxContainer.new()
+		# The type icon leads the Type chip, in its own slot before the text.
+		var icon_slot := HBoxContainer.new()
 		var hb: HBoxContainer = chip.get_child(0)
-		hb.add_child(type_icon_slot)
-		hb.move_child(type_icon_slot, 0)
-		type_icon_slot.add_child(TypeIcons.TypeBadge.new(ty_s))
+		hb.add_child(icon_slot)
+		hb.move_child(icon_slot, 0)
+		icon_slot.add_child(TypeIcons.TypeBadge.new(ty_s))
 		badges.add_child(chip)
 
 
+## Cost badge: "N AP" (with the base cost and an up/down marker when changed) or the cost text.
 func _cost_chip(c: Dictionary) -> Control:
 	var kind: String = c.get("cost_kind", "ap")
 	var col: Color = UIStyle.COST_COLORS.get(kind, UIStyle.COST_COLORS["ap"])
@@ -176,10 +175,7 @@ func _build_stats(c: Dictionary) -> void:
 	add_child(row)
 	row.add_child(_stat_tile("ATK", c.get("atk"), c.get("printed_atk")))
 	row.add_child(_stat_tile("DEF", c.get("def"), c.get("printed_def")))
-	var flags := HFlowContainer.new()
-	flags.add_theme_constant_override("h_separation", 5)
-	flags.add_theme_constant_override("v_separation", 4)
-	flags.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var flags := _flow()
 	if c.get("zone", "") == "unit":
 		flags.add_child(_chip("Attack stance" if c.get("stance", "atk") == "atk" else "Defense stance", UIStyle.SELECT))
 		if c.get("protected", false):
@@ -199,12 +195,12 @@ func _build_stats(c: Dictionary) -> void:
 			var r := HBoxContainer.new()
 			r.add_theme_constant_override("separation", 6)
 			r.add_child(Mark.new("dot", UIStyle.MUTED, 10))
-			r.add_child(_lbl(String(p), 14, UIStyle.MUTED))
+			r.add_child(_lbl(String(p), NOTE, UIStyle.MUTED))
 			add_child(r)
 
 
 ## One stat tile: caption + trend line on the left, large current value on the right.
-func _stat_tile(cap: String, cur, printed) -> Control:
+func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	var pc := PanelContainer.new()
 	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var sb := UIStyle.flat(UIStyle.PANEL_INK, Color(UIStyle.BRONZE, 0.8), 1, 6)
@@ -260,17 +256,8 @@ func _build_rules(c: Dictionary) -> void:
 
 ## One timing block: coloured caption (e.g. ON SUMMON, ONCE PER TURN) over the effect text.
 func _rule_block(caption: String, body: String, col: Color) -> PanelContainer:
-	var pc := PanelContainer.new()
-	var sb := UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(col, 0.55), 0, 4)
-	sb.border_width_left = 3
-	sb.content_margin_left = 9
-	sb.content_margin_right = 6
-	sb.content_margin_top = 3
-	sb.content_margin_bottom = 4
-	pc.add_theme_stylebox_override("panel", sb)
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 0)
-	pc.add_child(vb)
+	var pc := _block(col, 0.55)
+	var vb: VBoxContainer = pc.get_child(0)
 	if caption != "":
 		vb.add_child(_lbl(caption.to_upper(), SMALL, col, true))
 	vb.add_child(_lbl(body, BODY, UIStyle.TEXT))
@@ -341,17 +328,8 @@ func _build_statuses(c: Dictionary) -> void:
 	for r in rows:
 		var kind: String = r[2]
 		var col: Color = UIStyle.GOOD if kind == "buff" else (UIStyle.BAD if kind == "debuff" else UIStyle.RUNE_BLUE)
-		var pc := PanelContainer.new()
-		var sb := UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(col, 0.6), 0, 4)
-		sb.border_width_left = 3
-		sb.content_margin_left = 9
-		sb.content_margin_right = 6
-		sb.content_margin_top = 3
-		sb.content_margin_bottom = 4
-		pc.add_theme_stylebox_override("panel", sb)
-		var vb := VBoxContainer.new()
-		vb.add_theme_constant_override("separation", 0)
-		pc.add_child(vb)
+		var pc := _block(col, 0.6)
+		var vb: VBoxContainer = pc.get_child(0)
 		var hb := HBoxContainer.new()
 		hb.add_theme_constant_override("separation", 5)
 		vb.add_child(hb)
@@ -360,7 +338,7 @@ func _build_statuses(c: Dictionary) -> void:
 		hb.add_child(_lbl("%s ×%d" % [r[0], r[1]], 15, col, true, false, false))
 		if kind != "counter":   # runes need no "Counter" tag (user feedback)
 			hb.add_child(_lbl(tag, SMALL, UIStyle.MUTED, false, false, false))
-		vb.add_child(_lbl(_strip_status_prefix(String(r[3])), 14, UIStyle.TEXT))
+		vb.add_child(_lbl(_strip_status_prefix(String(r[3])), NOTE, UIStyle.TEXT))
 		add_child(pc)
 
 
@@ -375,6 +353,7 @@ static func _strip_status_prefix(help: String) -> String:
 	return body.substr(0, 1).to_upper() + body.substr(1)
 
 
+## Caption colour of a rules timing ("On Summon", "Once per turn", ...).
 static func _timing_color(k: String) -> Color:
 	match k:
 		"Condition", "Materials", "Activates": return UIStyle.RUNE_BLUE
@@ -386,6 +365,7 @@ static func _timing_color(k: String) -> Color:
 	return UIStyle.MUTED
 
 
+## Appends the text of every non-empty Label under `n` (depth first) to `out`.
 func _collect(n: Node, out: PackedStringArray) -> void:
 	if n is Label and (n as Label).text != "":
 		out.append((n as Label).text)
@@ -405,6 +385,7 @@ func _lbl(text: String, size: int, color: Color, bold: bool = false, display: bo
 	return l
 
 
+## Section heading: gold caption followed by a bronze rule line.
 func _heading(text: String) -> Control:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 8)
@@ -418,6 +399,32 @@ func _heading(text: String) -> Control:
 	line.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hb.add_child(line)
 	return hb
+
+
+## Wrapping row for badges / flag chips, full width.
+func _flow() -> HFlowContainer:
+	var f := HFlowContainer.new()
+	f.add_theme_constant_override("h_separation", 5)
+	f.add_theme_constant_override("v_separation", 4)
+	f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return f
+
+
+## Rule / status block: dark panel with a left accent bar in `col` (bar alpha `bar_a`) holding an
+## empty zero-separation VBoxContainer (its first child) for the content.
+func _block(col: Color, bar_a: float) -> PanelContainer:
+	var pc := PanelContainer.new()
+	var sb := UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(col, bar_a), 0, 4)
+	sb.border_width_left = BLOCK_BAR_W
+	sb.content_margin_left = 9
+	sb.content_margin_right = 6
+	sb.content_margin_top = 3
+	sb.content_margin_bottom = 4
+	pc.add_theme_stylebox_override("panel", sb)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 0)
+	pc.add_child(vb)
+	return pc
 
 
 ## Small rounded badge: optional marker shape + text, tinted by `col`.
@@ -435,6 +442,5 @@ func _chip(text: String, col: Color, shape: String = "", strong: bool = false) -
 	pc.add_child(hb)
 	if shape != "":
 		hb.add_child(Mark.new(shape, col, 10))
-	var l := _lbl(text, SMALL, UIStyle.TEXT, true, false, false)
-	hb.add_child(l)
+	hb.add_child(_lbl(text, SMALL, UIStyle.TEXT, true, false, false))
 	return pc
