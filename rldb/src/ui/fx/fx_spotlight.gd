@@ -74,7 +74,7 @@ func _make_backdrop(centre: Vector2, area: Rect2) -> TextureRect:
 	bd.size = bsz
 	bd.position = centre - bsz / 2.0
 	bd.modulate.a = 0.0
-	bd.z_index = 95   # above lifted board cards, status glows and floating effect text
+	bd.z_index = UiLayers.SPOTLIGHT_DIM   # above lifted board cards, status glows and floating effect text
 	return bd
 
 
@@ -95,7 +95,7 @@ func _show(e: Dictionary) -> void:
 		if sr.size != Vector2.ZERO:
 			origin_g = sr.get_center()
 	var origin := inv * origin_g
-	var v: Dictionary = MatchView.summary_view(Series._card_summary(int(e["id"])))
+	var v: Dictionary = MatchView.summary_view(Series.card_summary(int(e["id"])))
 	var accent: Color = UIStyle.CATEGORY_COLORS.get(String(v.get("category", "spell")), UIStyle.GOLD)
 	var bd := _make_backdrop(centre, area)
 	_fx.add_node(bd, layer)
@@ -106,7 +106,7 @@ func _show(e: Dictionary) -> void:
 	c.setup(v, "big")
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.pivot_offset = c.size / 2.0
-	c.z_index = 96
+	c.z_index = UiLayers.SPOTLIGHT_CARD
 	_fx.add_node(c, layer)
 	var home := centre - c.size / 2.0
 	# Caption pill above the card.
@@ -119,7 +119,7 @@ func _show(e: Dictionary) -> void:
 	pill.pivot_offset = pill.size / 2.0
 	pill.position = Vector2(centre.x - pill.size.x / 2.0, home.y - pill.size.y - 12.0)
 	pill.modulate.a = 0.0
-	pill.z_index = 97
+	pill.z_index = UiLayers.SPOTLIGHT_PILL
 	var done := func():
 		_fx.free_node(bd)
 		_fx.free_node(c)

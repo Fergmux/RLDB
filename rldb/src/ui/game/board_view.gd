@@ -4,19 +4,16 @@ extends RefCounted
 ## player plates and the opponent's face-down hand. Renders the match view into them and
 ## answers where things are on screen (FxPlayer host contract).
 
-## Zone geometry (screen units): unit square, gap, Power width, Trap/Spell height, pile gap.
-const U := 128.0
-const G := 8.0
-const PW := 85.0
-const TH := 85.0
-const PGAP := 24.0
+## Zone geometry (screen units): unit square side, gap between slots, Power slot width,
+## Trap/Spell slot height, gap between the pile stacks and the zones.
+const UNIT_SIZE := 128.0
+const SLOT_GAP := 8.0
+const POWER_W := 85.0
+const TRAP_H := 85.0
+const PILE_GAP := 24.0
 const BOARD_H := 730.0
 const PLATE_W := 300.0
 const OPP_HAND_MAX := 10
-## Board zone -> key of the player view list it renders.
-const ZONE_KEY := {"unit": "units", "backrow": "backrow", "power": "powers"}
-## Board zone -> CardWidget kind.
-const ZONE_KIND := {"unit": "board", "backrow": "trap", "power": "power"}
 ## Slots per zone, in render order.
 const ZONE_SLOTS := {"unit": 6, "backrow": 3, "power": 4}
 ## Action kinds that mark a card as able to act now (F02-11).
@@ -73,7 +70,7 @@ func build() -> void:
 	deco = BoardDeco.new()
 	deco.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	gs.add_child(deco)
-	layer = gs._passive_layer()
+	layer = gs.passive_layer()
 	for side in 2:
 		for zone in ZONE_SLOTS:
 			for slot in ZONE_SLOTS[zone]:
@@ -112,7 +109,7 @@ func _make_slot(side: int, zone: String, slot: int) -> void:
 	var bg := CardWidget.new()
 	bg.auto_hover = false
 	bg.show_tooltip = false
-	bg.setup(null, ZONE_KIND[zone], label)
+	bg.setup(null, Zones.KIND[zone], label)
 	bg.pressed.connect(gs.selection.on_widget_pressed)
 	bg.right_pressed.connect(gs.selection.on_widget_right)
 	zone_node.add_child(bg)
@@ -122,7 +119,7 @@ func _make_slot(side: int, zone: String, slot: int) -> void:
 	var ring := ZoneRing.new()
 	var w := CardWidget.new()
 	w.auto_hover = false
-	w.setup(null, ZONE_KIND[zone], label)
+	w.setup(null, Zones.KIND[zone], label)
 	w.visible = false
 	w.pressed.connect(gs.selection.on_widget_pressed)
 	w.right_pressed.connect(gs.selection.on_widget_right)
@@ -164,12 +161,12 @@ func _slot_rect(side: int, zone: String, slot: int) -> Rect2:
 				ry = 229.0 if front else 93.0
 			else:
 				ry = 373.0 if front else 509.0
-			return Rect2(_ux + col * (U + G), _y0 + ry, U, U)
+			return Rect2(_ux + col * (UNIT_SIZE + SLOT_GAP), _y0 + ry, UNIT_SIZE, UNIT_SIZE)
 		"backrow":
-			return Rect2(_ux + slot * (U + G), _y0 + (0.0 if side == 0 else 645.0), U, TH)
-	var bx := _ux - PGAP - (2.0 * PW + G) if side == 0 else _ux + 3.0 * U + 2.0 * G + PGAP
+			return Rect2(_ux + slot * (UNIT_SIZE + SLOT_GAP), _y0 + (0.0 if side == 0 else 645.0), UNIT_SIZE, TRAP_H)
+	var bx := _ux - PILE_GAP - (2.0 * POWER_W + SLOT_GAP) if side == 0 else _ux + 3.0 * UNIT_SIZE + 2.0 * SLOT_GAP + PILE_GAP
 	var by := _y0 + (93.0 if side == 0 else 373.0)
-	return Rect2(bx + (slot % 2) * (PW + G), by + int(slot / 2) * (U + G), PW, U)
+	return Rect2(bx + (slot % 2) * (POWER_W + SLOT_GAP), by + int(slot / 2) * (UNIT_SIZE + SLOT_GAP), POWER_W, UNIT_SIZE)
 
 
 ## Lays the field out in the screen's play area (window size w x h).
@@ -178,7 +175,7 @@ func layout(w: float, h: float) -> void:
 	table.position = Vector2.ZERO
 	table.size = Vector2(w - gs.sidebar_w, h)   # the field only; the sidebar keeps the brown gradient
 	_y0 = area.position.y + maxf(0.0, (area.size.y - BOARD_H) / 2.0)
-	_ux = area.position.x + (area.size.x - (3.0 * U + 2.0 * G)) / 2.0
+	_ux = area.position.x + (area.size.x - (3.0 * UNIT_SIZE + 2.0 * SLOT_GAP)) / 2.0
 	for k in slots.keys():
 		var parts: PackedStringArray = (k as String).split(":")
 		var r := _slot_rect(int(parts[0]), parts[1], int(parts[2]))
@@ -191,12 +188,12 @@ func layout(w: float, h: float) -> void:
 	# Piles: a 2x2 grid beside the unit zones, mirroring the Power grid (Deck/Extra nearest the
 	# centre line, Spent/Exhaust behind them).
 	for side in 2:
-		var px := _ux - PGAP - (2.0 * PW + G) if side == 1 else _ux + 3.0 * U + 2.0 * G + PGAP
+		var px := _ux - PILE_GAP - (2.0 * POWER_W + SLOT_GAP) if side == 1 else _ux + 3.0 * UNIT_SIZE + 2.0 * SLOT_GAP + PILE_GAP
 		var rows := [373.0, 509.0] if side == 1 else [229.0, 93.0]
 		for i in PILE_ZONES.size():
 			var ps: PileStack = piles[side][PILE_ZONES[i][0]]
-			ps.position = Vector2(px + (i % 2) * (PW + G), _y0 + rows[int(i / 2)])
-			ps.size = Vector2(PW, U)
+			ps.position = Vector2(px + (i % 2) * (POWER_W + SLOT_GAP), _y0 + rows[int(i / 2)])
+			ps.size = Vector2(POWER_W, UNIT_SIZE)
 	(plates[0] as Control).position = Vector2(area.end.x - PLATE_W - 14.0, _y0 - 6.0)
 	(plates[0] as Control).size = Vector2(PLATE_W, 0)
 	var ph := (plates[1] as Control).get_combined_minimum_size().y
@@ -206,7 +203,7 @@ func layout(w: float, h: float) -> void:
 	opp_hand_box.position = Vector2(14.0, GameScreen.TOP_H + 26.0)
 	deco.mid_y = _y0 + 365.0
 	deco.x0 = _ux - 30.0
-	deco.x1 = _ux + 3.0 * U + 2.0 * G + 30.0
+	deco.x1 = _ux + 3.0 * UNIT_SIZE + 2.0 * SLOT_GAP + 30.0
 	deco.top_edge = _y0 - 8.0
 	deco.bottom_edge = _y0 + BOARD_H + 8.0
 	deco.queue_redraw()
@@ -248,7 +245,7 @@ func render() -> void:
 		var pl: PlayerPlate = plates[side]
 		pl.visible = have
 		if have:
-			var pv := gs._pv(pidx)
+			var pv := gs.pv(pidx)
 			var active: bool = mv["active"] == pidx and mv["winner"] == -1
 			var nxt := ""
 			if pidx == p and not pv.get("ap_next", []).is_empty():
@@ -261,7 +258,7 @@ func render() -> void:
 	deco.glow_side = -1   # active player is shown by the plate's turn marker, not a table band
 	deco.queue_redraw()
 	gs.hand.render(targeting)
-	var on: int = gs._pv(o)["counts"]["hand"] if have else -1
+	var on: int = gs.pv(o)["counts"]["hand"] if have else -1
 	if on != opp_hand_n:
 		opp_hand_n = on
 		place_opp_hand()
@@ -288,7 +285,7 @@ func _update_piles(side: int, pidx: int, pv: Dictionary) -> void:
 func _compute_ready() -> Dictionary:
 	var out := {}
 	var mv := gs.mv
-	if gs._locked() or mv["active"] != gs.me():
+	if gs.locked() or mv["active"] != gs.me():
 		return out
 	for a in mv.get("actions", []):
 		if a["ok"] and a.has("uid") and String(a["t"]) in READY_KINDS:
@@ -302,14 +299,14 @@ func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, target
 	var w: CardWidget = it["widget"]
 	var cv = null
 	if have:
-		cv = gs._pv(pidx)[ZONE_KEY[zone]][slot]
+		cv = gs.pv(pidx)[Zones.KEY[zone]][slot]
 	var hsh := hash(cv) if cv != null else 0
 	var bg: CardWidget = it["bg"]
 	if it["hash"] != hsh or it["pidx"] != pidx:
 		# Defense units and every Trap/Spell-zone card are the 2:3 card turned sideways.
 		var rot: bool = cv != null and (zone == "backrow" or (zone == "unit" and cv.get("stance", "atk") == "def"))
 		if cv != null:
-			w.setup(cv, ZONE_KIND[zone], it["label"], rot)
+			w.setup(cv, Zones.KIND[zone], it["label"], rot)
 		w.visible = cv != null
 		it["hash"] = hsh
 		it["pidx"] = pidx
@@ -322,7 +319,7 @@ func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, target
 	var is_sel: bool = vis and uid == gs.selected_uid
 	var chosen: bool = opt != -1 and opt in gs.multi
 	var dim: bool = targeting and opt == -1 and not (vis and uid == src_uid)
-	var pd := gs._pending()
+	var pd := gs.pending()
 	var zone_pick: bool = opt != -1 and String(pd.get("kind", "")) == "slot"
 	# The card whose summon / activation a Trap prompt responds to is outlined in red.
 	var cause_ref: Dictionary = pd.get("cause", {}).get("card", {}) if pd.get("mine", false) else {}
@@ -370,7 +367,7 @@ func hand_anchor(p: int) -> Vector2:
 ## Centre of a player's unit block (direct-attack animations aim here).
 func side_center(p: int) -> Vector2:
 	var y := _y0 + (229.0 + 128.0 if side_of(p) == 0 else 373.0 + 128.0)
-	return gs.get_global_transform() * Vector2(_ux + (3.0 * U + 2.0 * G) / 2.0, y - 64.0)
+	return gs.get_global_transform() * Vector2(_ux + (3.0 * UNIT_SIZE + 2.0 * SLOT_GAP) / 2.0, y - 64.0)
 
 
 ## Where cards fly to/from for a player's pile (draw animations).

@@ -97,7 +97,7 @@ static func def_view(id: int) -> Dictionary:
 	return v
 
 
-## Display view of a card summary (Series._card_summary) for menus, rewards, decks and the
+## Display view of a card summary (Series.card_summary) for menus, rewards, decks and the
 ## spotlight: a full card face with no game instance behind it.
 static func summary_view(c: Dictionary) -> Dictionary:
 	var kind := "ap"

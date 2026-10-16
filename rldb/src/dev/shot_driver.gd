@@ -63,7 +63,7 @@ func run(main_node: Node, dir: String) -> void:
 	# Details for a unit with statuses and an aura-modified stat.
 	var screen: GameScreen = main.screen
 	screen.selected_uid = m.players[m.active]["units"][1]
-	screen._render_all()
+	screen.render_all()
 	await _shot("03_card_details")
 	# Summon flow: zone selection prompt.
 	var hand_unit := -1

@@ -40,7 +40,7 @@ func items_under(m: Vector2, exclude_key: String) -> Dictionary:
 		# The card box is the displayed card (2:3, or 3:2 when turned), not the whole zone.
 		var h2: Control = sl["holder"]
 		if h2.get_global_rect().has_point(m):
-			return {"key": k, "w": w, "holder": h2, "uid": w.view.get("uid", -1), "kind": GameBoardView.ZONE_KIND[sl["zone"]], "own": (k as String).begins_with("1:")}
+			return {"key": k, "w": w, "holder": h2, "uid": w.view.get("uid", -1), "kind": Zones.KIND[sl["zone"]], "own": (k as String).begins_with("1:")}
 	return {}
 
 
@@ -107,7 +107,7 @@ func _keeps_lift(it: Dictionary) -> bool:
 func lift(it: Dictionary) -> void:
 	var w: CardWidget = it["w"]
 	var holder: Control = it["holder"]
-	holder.z_index = GameScreen.Z_LIFTED_CARD
+	holder.z_index = UiLayers.LIFTED_CARD
 	if it["kind"] == "hand":
 		gs.hand.layer.move_child(holder, -1)
 	var lp := lift_params(it["kind"])
@@ -213,7 +213,7 @@ func debug_hover_slot(p: int, zone: String, slot: int) -> void:
 		return
 	var w: CardWidget = it["widget"]
 	forced = false
-	set_hover({"key": GameBoardView.key(board.side_of(p), zone, slot), "w": w, "holder": it["holder"], "uid": w.view.get("uid", -1), "kind": GameBoardView.ZONE_KIND[zone], "own": p == gs.me()})
+	set_hover({"key": GameBoardView.key(board.side_of(p), zone, slot), "w": w, "holder": it["holder"], "uid": w.view.get("uid", -1), "kind": Zones.KIND[zone], "own": p == gs.me()})
 	forced = true
 	gs.peek_uid = w.view.get("uid", -1)
 	gs.details.render()

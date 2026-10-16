@@ -5,8 +5,6 @@ extends FxPart
 ## FxPlayer schedule; everything transient is undone by FxPlayer.finish_all() through the
 ## cleanups registered here.
 
-const ZONE_KEY := {"unit": "units", "backrow": "backrow", "power": "powers"}
-const ZONE_KIND := {"unit": "board", "backrow": "trap", "power": "power"}
 const DISSOLVE_SHADER := "res://assets/shaders/dissolve.gdshader"
 ## Glow colour meaning "no glow".
 const NO_GLOW := Color(1, 1, 1, 0)
@@ -34,7 +32,7 @@ func arrive(p: int, zone: String, slot: int) -> void:
 	w.position = origin - rect.get_center()
 	w.scale = Vector2(1.18, 1.18)
 	w.modulate.a = 0.0
-	holder.z_index = 20
+	holder.z_index = UiLayers.FX_CARD
 	var tw := _fx.new_tween()
 	tw.set_parallel(true)
 	tw.tween_property(w, "modulate:a", 1.0, UIStyle.dur(0.08))
@@ -97,7 +95,7 @@ func attack(e: Dictionary) -> void:
 		return
 	var wind := -dir.normalized() * 8.0
 	var lunge := dir * 0.6
-	holder.z_index = 30
+	holder.z_index = UiLayers.FX_CARD_FRONT
 	var tw := _fx.new_tween()
 	tw.tween_property(w, "position", wind, UIStyle.dur(0.08)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.tween_property(w, "position", lunge, UIStyle.dur(0.11)).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
@@ -115,8 +113,8 @@ func destroy(at: Dictionary, prev_mv: Dictionary) -> void:
 	var slot := int(at["slot"])
 	var rect: Rect2 = _fx.screen.fx_slot_global_rect(p, zone, slot)
 	var prev_view = null
-	if not prev_mv.is_empty() and ZONE_KEY.has(zone):
-		var arr: Array = prev_mv["players"][p][ZONE_KEY[zone]]
+	if not prev_mv.is_empty() and Zones.KEY.has(zone):
+		var arr: Array = prev_mv["players"][p][Zones.KEY[zone]]
 		if slot < arr.size():
 			prev_view = arr[slot]
 	_fx.burst(FxBurst.Kind.EMBER, rect.get_center(), Color("ff8a3a"), 8, 50.0, 0.5)
@@ -124,7 +122,7 @@ func destroy(at: Dictionary, prev_mv: Dictionary) -> void:
 		return
 	# The ghost is the same 2:3 card, turned like it was (Defense units, Trap/Spell zone).
 	var rot: bool = zone == "backrow" or (zone == "unit" and String(prev_view.get("stance", "atk")) == "def")
-	var g := CardWidget.new().setup(prev_view, ZONE_KIND[zone], "", rot)
+	var g := CardWidget.new().setup(prev_view, Zones.KIND[zone], "", rot)
 	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	g.auto_hover = false
 	g.position = _fx.fx_pos(rect.get_center() - g.size / 2.0)
@@ -191,7 +189,7 @@ func stance(p: int, slot: int, to: String) -> void:
 		return
 	w.pivot_offset = w.size / 2.0
 	w.rotation = -PI / 2.0 if to_def else PI / 2.0
-	holder.z_index = 20
+	holder.z_index = UiLayers.FX_CARD
 	var tw := _fx.new_tween()
 	tw.set_parallel(true)
 	tw.tween_property(w, "rotation", 0.0, UIStyle.dur(0.3)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -233,7 +231,7 @@ func trigger(at: Dictionary) -> void:
 	var rt := _fx.new_tween()
 	rt.tween_property(ring, "t", 1.0, UIStyle.dur(0.5))
 	rt.tween_callback(_fx.free_node.bind(ring))
-	holder.z_index = 20
+	holder.z_index = UiLayers.FX_CARD
 	w.pivot_offset = w.size / 2.0
 	# Opening glint on its own track so it does not hold up the sequence below.
 	var fl := _fx.new_tween()

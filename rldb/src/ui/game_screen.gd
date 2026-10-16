@@ -18,17 +18,6 @@ const HAND_H := 190.0
 const MAX_FX_ENTRIES := 25
 const VERDICT_COLORS := {"good": Color("5fd068"), "bad": Color("e5534b"), "neutral": Color("b9a6e8")}
 
-## Draw order of the screen's layers (z_index). Equal values fall back to child order.
-const Z_LIFTED_CARD := 40
-const Z_ARROW := 55
-const Z_FX := 60
-const Z_TRAY := 65
-const Z_WAIT := 66
-const Z_BANNER := 70
-const Z_TOAST := 80
-const Z_PILE_POPUP := 90
-const Z_GAME_MENU := 95
-const Z_HOVER := 100
 
 var client: SeatClient
 var view: Dictionary = {}
@@ -106,7 +95,7 @@ func _init() -> void:
 func _ready() -> void:
 	UIStyle.load_settings()
 	Sfx.load_settings()
-	Sfx._free_voice()          # create the voice pool now so the first game sounds are not dropped
+	Sfx.warm_up()          # create the voice pool now so the first game sounds are not dropped
 	theme = UIStyle.make_theme()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_PASS
@@ -117,18 +106,18 @@ func _ready() -> void:
 	sidebar.build()
 	menu.build_top_strip()
 	prompt.build()
-	hover_layer = _passive_layer()
-	hover_layer.z_index = Z_HOVER
+	hover_layer = passive_layer()
+	hover_layer.z_index = UiLayers.HOVER
 	arrow = ArrowLayer.new()
 	arrow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(arrow)
-	fx_layer = _passive_layer()
-	fx_layer.z_index = Z_FX
+	fx_layer = passive_layer()
+	fx_layer.z_index = UiLayers.FX
 	overlays.build_pause()
 	overlays.build_modals()
 	menu.build_popups()
 	prompt.build_notices()
-	banner_layer = _passive_layer()
+	banner_layer = passive_layer()
 	fx = FxPlayer.new()
 	fx.screen = self
 	add_child(fx)
@@ -178,7 +167,7 @@ func attach(c: SeatClient) -> void:
 
 
 ## A full-rect click-through layer added on top of the current children.
-func _passive_layer() -> Control:
+func passive_layer() -> Control:
 	var c := Control.new()
 	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -243,7 +232,7 @@ func _on_view(v: Dictionary) -> void:
 	if not spots.is_empty() and not prev_mv.is_empty():
 		_hold_for_spotlight(spots, events.filter(func(e): return e["k"] != "spotlight"))
 		return
-	_render_all()
+	render_all()
 	prompt.show_log_toasts()
 	_maybe_coin_flip()
 	if not events.is_empty():
@@ -265,7 +254,7 @@ func _hold_for_spotlight(spots: Array, rest: Array) -> void:
 	_held_gen += 1
 	var gen := _held_gen
 	mv = shown
-	_render_all()
+	render_all()
 	fx.play(spots, prev_mv)
 	get_tree().create_timer(UIStyle.dur(FxPlayer.SPOT_HOLD) * spots.size()).timeout.connect(func():
 		if gen == _held_gen and not _held.is_empty():
@@ -287,7 +276,7 @@ func _release_held() -> void:
 	_held_gen += 1
 	mv = h["mv"]
 	prev_mv = h["prev"]
-	_render_all()
+	render_all()
 	prompt.show_log_toasts()
 	if not (h["events"] as Array).is_empty():
 		fx.play(h["events"], h["prev"])
@@ -306,7 +295,7 @@ func _maybe_coin_flip() -> void:
 	coin.position = play_area.position
 	coin.size = play_area.size
 	add_child(coin)
-	coin.play(String(_pv(first)["name"]), String(_pv(1 - first)["name"]), first == me())
+	coin.play(String(pv(first)["name"]), String(pv(1 - first)["name"]), first == me())
 
 
 ## New presentation events since the last view; empty (skip animations) on first load,
@@ -334,7 +323,7 @@ func _collect_fx() -> Array:
 
 
 ## Renders every part of the screen from the current view (order matters).
-func _render_all() -> void:
+func render_all() -> void:
 	board.render()
 	sidebar.render_turnbar()
 	prompt.render()
@@ -357,19 +346,19 @@ func me() -> int:
 
 
 ## Player p's view in the current match.
-func _pv(p: int) -> Dictionary:
+func pv(p: int) -> Dictionary:
 	return mv["players"][p]
 
 
 ## The pending choice ({} when none).
-func _pending() -> Dictionary:
+func pending() -> Dictionary:
 	if mv.is_empty():
 		return {}
 	return mv.get("pending", {})
 
 
 ## Sends a command through the seat client (hides the toast).
-func _send(cmd: Dictionary) -> void:
+func send(cmd: Dictionary) -> void:
 	debug_sent += 1
 	prompt.hide_toast()
 	if client != null:
@@ -378,7 +367,7 @@ func _send(cmd: Dictionary) -> void:
 
 ## True while I cannot act on the board (spotlight held, no game, game over, a choice pending,
 ## resolving, or the network match paused).
-func _locked() -> bool:
+func locked() -> bool:
 	if not _held.is_empty():
 		return true   # a spotlight is showing; the board is not the current state yet
 	if mv.is_empty() or view.get("stage", "") != "game" or mv["winner"] != -1:
@@ -405,7 +394,7 @@ func has_live_series() -> bool:
 ## Clicks on the bare table (not on a card, button or panel) clear the selection.
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		if _pending().is_empty() or not _pending().get("mine", false):
+		if pending().is_empty() or not pending().get("mine", false):
 			selection.deselect()
 
 

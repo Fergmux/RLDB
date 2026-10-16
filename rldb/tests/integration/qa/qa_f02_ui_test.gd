@@ -84,12 +84,12 @@ func test_plan_b_second_multi_prompt_starts_with_no_stale_selection() -> void:
 	await await_idle_frame()
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
 	# Act 1: first Plan B, ordered picks slot 2 then slot 1, confirmed
-	gs._pick_option(_opt(gs._pending(), "Plan B"))
+	gs._pick_option(_opt(gs.pending(), "Plan B"))
 	gs.skip_effects()
 	await await_idle_frame()
-	assert_int(int(gs._pending()["max"])).is_greater(1)
-	gs._pick_option(_opt_slot(gs._pending(), d, 2))
-	gs._pick_option(_opt_slot(gs._pending(), d, 1))
+	assert_int(int(gs.pending()["max"])).is_greater(1)
+	gs._pick_option(_opt_slot(gs.pending(), d, 2))
+	gs._pick_option(_opt_slot(gs.pending(), d, 1))
 	gs._confirm_multi()
 	gs.skip_effects()
 	await await_idle_frame()
@@ -100,12 +100,12 @@ func test_plan_b_second_multi_prompt_starts_with_no_stale_selection() -> void:
 	assert_int(i_fire).is_greater(i_earth)
 	# Act 2: the window re-opens; activate the second Plan B
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
-	var second := _opt(gs._pending(), "Plan B")
+	var second := _opt(gs.pending(), "Plan B")
 	assert_int(second).is_not_equal(-1)
 	gs._pick_option(second)
 	gs.skip_effects()
 	await await_idle_frame()
-	assert_int(int(gs._pending().get("max", 1))).is_greater(1)
+	assert_int(int(gs.pending().get("max", 1))).is_greater(1)
 	# Assert 2: the new prompt has nothing pre-selected from the first Plan B
 	assert_array(gs.multi).is_empty()
 
@@ -118,7 +118,7 @@ func test_digits_and_enter_on_opponents_prompt_send_nothing() -> void:
 	host.handle(1 - d, {"t": "attack", "uid": board[0]})
 	gs.skip_effects()
 	await await_idle_frame()
-	assert_bool(gs._pending()["mine"]).is_false()
+	assert_bool(gs.pending()["mine"]).is_false()
 	var sent := gs.debug_sent
 	var pid: int = m.pending["id"]
 	# Act
@@ -140,10 +140,10 @@ func test_enter_with_focused_confirm_sends_one_command() -> void:
 	host.handle(1 - d, {"t": "choose", "id": pd["id"], "indices": [_opt_slot(pd, d, 0)]})
 	gs.skip_effects()
 	await await_idle_frame()
-	gs._pick_option(_opt(gs._pending(), "Plan B"))
+	gs._pick_option(_opt(gs.pending(), "Plan B"))
 	gs.skip_effects()
 	await await_idle_frame()
-	gs._pick_option(_opt_slot(gs._pending(), d, 2))
+	gs._pick_option(_opt_slot(gs.pending(), d, 2))
 	gs.skip_effects()
 	await await_idle_frame()
 	var confirm: Button = null

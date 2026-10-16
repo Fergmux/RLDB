@@ -24,7 +24,7 @@ static func mapped_zone(oz: String) -> String:
 ## True while one of my choices is answered by picking cards or zones directly (board, Hand or
 ## the pile tray) under the context banner, instead of from a list.
 func board_targeting() -> bool:
-	var pd := gs._pending()
+	var pd := gs.pending()
 	if pd.is_empty() or not pd["mine"] or not (String(pd["kind"]) in PICK_KINDS):
 		return false
 	for o in pd["options"]:
@@ -41,7 +41,7 @@ func tray_options(pd: Dictionary) -> Array:
 
 ## My pending option for player p's zone slot, or -1.
 func option_for_ref(p: int, zone: String, slot: int) -> int:
-	var pd := gs._pending()
+	var pd := gs.pending()
 	if pd.is_empty() or not pd["mine"]:
 		return -1
 	for o in pd["options"]:
@@ -55,7 +55,7 @@ func option_for_ref(p: int, zone: String, slot: int) -> int:
 
 ## My pending option for a card by uid, or -1.
 func option_for_uid(uid: int) -> int:
-	var pd := gs._pending()
+	var pd := gs.pending()
 	if pd.is_empty() or not pd["mine"]:
 		return -1
 	for o in pd["options"]:
@@ -66,7 +66,7 @@ func option_for_uid(uid: int) -> int:
 
 ## 1-based pick order of a prompt option in an ordered multi-selection, else 0.
 func order_no(opt: int) -> int:
-	var pd := gs._pending()
+	var pd := gs.pending()
 	if opt == -1 or pd.is_empty() or int(pd.get("max", 1)) <= 1:
 		return 0
 	return gs.multi.find(opt) + 1
@@ -166,13 +166,13 @@ func item_for_uid(uid: int) -> Dictionary:
 		var sl: Dictionary = slots[k]
 		var wd: CardWidget = sl["widget"]
 		if wd.visible and not wd.view.is_empty() and not wd.view.get("hidden", false) and wd.view.get("uid", -9) == uid:
-			return {"key": k, "w": wd, "holder": sl["holder"], "uid": uid, "kind": GameBoardView.ZONE_KIND[sl["zone"]], "own": (k as String).begins_with("1:")}
+			return {"key": k, "w": wd, "holder": sl["holder"], "uid": uid, "kind": Zones.KIND[sl["zone"]], "own": (k as String).begins_with("1:")}
 	return {}
 
 
 ## Picks option i of my choice: toggles it in a multi-selection, else answers at once.
 func pick_option(i: int) -> void:
-	var pd := gs._pending()
+	var pd := gs.pending()
 	if pd["max"] > 1:
 		if i in gs.multi:
 			gs.multi.erase(i)
@@ -180,21 +180,21 @@ func pick_option(i: int) -> void:
 		else:
 			gs.multi.append(i)
 			Sfx.play("select")
-		gs._render_all()
+		gs.render_all()
 		return
 	Sfx.play("confirm")
-	gs._send({"t": "choose", "id": pd["id"], "indices": [i]})
+	gs.send({"t": "choose", "id": pd["id"], "indices": [i]})
 
 
 ## Sends the multi-selection once it has at least the minimum number of picks.
 func confirm_multi() -> void:
-	var pd := gs._pending()
+	var pd := gs.pending()
 	if pd.is_empty() or gs.multi.size() < int(pd["min"]):
 		return
 	Sfx.play("confirm")
 	var picks := gs.multi.duplicate()
 	gs.multi = []
-	gs._send({"t": "choose", "id": pd["id"], "indices": picks})
+	gs.send({"t": "choose", "id": pd["id"], "indices": picks})
 
 
 ## Esc / right-click: close popups, cancel a cancellable prompt, otherwise unpin and clear the
@@ -210,18 +210,18 @@ func cancel() -> bool:
 	if gs.overlays.pile_popup.visible:
 		gs.overlays.pile_popup.visible = false
 		return true
-	if details.pile_zone != "" and gs._pending().is_empty():
+	if details.pile_zone != "" and gs.pending().is_empty():
 		details.close_pile()
 		return true
 	if menu.settings_popup.visible:
 		menu.settings_popup.visible = false
 		return true
 	var did := false
-	var pd := gs._pending()
+	var pd := gs.pending()
 	if not pd.is_empty() and pd["mine"] and pd["cancellable"]:
 		gs.multi = []
 		Sfx.play("cancel")
-		gs._send({"t": "cancel", "id": pd["id"]})
+		gs.send({"t": "cancel", "id": pd["id"]})
 		did = true
 	elif gs.selected_uid != -1 or gs.row_open:
 		deselect()

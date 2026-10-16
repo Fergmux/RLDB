@@ -36,7 +36,7 @@ func _ready() -> void:
 	flow.add_theme_constant_override("v_separation", GRID_GAP)
 	sc.add_child(flow)
 	for d in CardDB.all():
-		flow.add_child(CardWidget.new().setup(MatchView.summary_view(Series._card_summary(d["id"])), "big"))
+		flow.add_child(CardWidget.new().setup(MatchView.summary_view(Series.card_summary(d["id"])), "big"))
 
 
 ## Number of cards per CardScripts support status ("full", "partial", ...).

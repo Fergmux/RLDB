@@ -4,7 +4,6 @@ extends RefCounted
 ## fades back out (menu -> game, game -> menu and the collection screens). Input is blocked while
 ## the black rect is up. One transition at a time.
 
-const Z_INDEX := 300
 const OUT_TIME := 0.35
 const IN_TIME := 0.55
 const OUT_TIME_REDUCED := 0.2
@@ -25,7 +24,7 @@ func fade(host: Control, swap: Callable) -> void:
 	black.color = Color(0, 0, 0, 0)
 	black.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	black.mouse_filter = Control.MOUSE_FILTER_STOP
-	black.z_index = Z_INDEX
+	black.z_index = UiLayers.FADER
 	host.add_child(black)
 	var out_s := OUT_TIME_REDUCED if UIStyle.reduce_motion else OUT_TIME
 	var in_s := IN_TIME_REDUCED if UIStyle.reduce_motion else IN_TIME

@@ -29,7 +29,7 @@ func reset() -> void:
 
 ## Follows the pointer over attack targets (called every frame).
 func update() -> void:
-	var pd := gs._pending()
+	var pd := gs.pending()
 	var opt := -2
 	if not pd.is_empty() and pd.get("mine", false) and pd.get("kind", "") == "attack_target" and not gs.overlays.overlay.visible:
 		opt = gs.targeting.option_under_pointer()

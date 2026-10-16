@@ -126,7 +126,7 @@ func render_pause() -> void:
 		var claim := UIStyle.primary_button("Claim this game (opponent absent)" if wait == 0 else "Claim this game available in %d s" % wait, 14)
 		claim.disabled = wait > 0
 		claim.tooltip_text = "Wins the current game only; the series continues."
-		claim.pressed.connect(func(): gs._send({"t": "claim_game"}))
+		claim.pressed.connect(func(): gs.send({"t": "claim_game"}))
 		pause_box.add_child(claim)
 	pause_box.add_child(UIStyle.label("You can still use Menu or inspect the log.", 12, UIStyle.MUTED, true))
 	pause_panel.set_deferred("size", Vector2(PAUSE_W, 0))
@@ -169,7 +169,7 @@ func _show_deck() -> void:
 			var n := UIStyle.label("×%d" % int(counts[c["id"]]), 15, UIStyle.GOLD_HI, false, true)
 			n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			cell.add_child(n)
-	pile_popup.z_index = GameScreen.Z_PILE_POPUP
+	pile_popup.z_index = UiLayers.PILE_POPUP
 	pile_popup.visible = true
 
 
@@ -278,7 +278,7 @@ func _render_decks() -> void:
 		for i in view["starters"].size():
 			var s: Dictionary = view["starters"][i]
 			var idx: int = i
-			grid.add_child(_deck_tile("s%d" % i, s["name"], s["theme"], s["main"], s["extra"], "Choose %s" % s["name"], func(): gs._send({"t": "pick_starter", "index": idx})))
+			grid.add_child(_deck_tile("s%d" % i, s["name"], s["theme"], s["main"], s["extra"], "Choose %s" % s["name"], func(): gs.send({"t": "pick_starter", "index": idx})))
 		_render_custom_decks()
 		return
 	var dr: Dictionary = view["draft"]
@@ -290,7 +290,7 @@ func _render_decks() -> void:
 		var cell := VBoxContainer.new()
 		cell.add_child(CardWidget.new().setup(MatchView.summary_view(c), "big"))
 		var b2 := UIStyle.primary_button("Pick", 14)
-		b2.pressed.connect(func(): gs._send({"t": "draft_pick", "index": i}))
+		b2.pressed.connect(func(): gs.send({"t": "draft_pick", "index": i}))
 		cell.add_child(b2)
 		flow.add_child(cell)
 	overlay_box.add_child(UIStyle.label("Picked: " + ", ".join(dr["picked"].map(func(c): return c["name"])), 13, UIStyle.MUTED, true))
@@ -328,13 +328,13 @@ func _render_custom_decks() -> void:
 			var def := CardDB.get_def(int(id))
 			if def.is_empty():
 				continue
-			var sm := Series._card_summary(int(id))
+			var sm := Series.card_summary(int(id))
 			if CardDB.is_extra_category(def["category"]):
 				extra.append(sm)
 			else:
 				main.append(sm)
 		var deck: Dictionary = d
-		grid.add_child(_deck_tile("c%d" % n, d["name"], "Custom deck", main, extra, "Use this deck", func(): gs._send({"t": "custom_deck", "cards": deck["cards"], "name": deck["name"]})))
+		grid.add_child(_deck_tile("c%d" % n, d["name"], "Custom deck", main, extra, "Use this deck", func(): gs.send({"t": "custom_deck", "cards": deck["cards"], "name": deck["name"]})))
 		n += 1
 
 
@@ -462,10 +462,10 @@ func _render_first() -> void:
 		row.add_theme_constant_override("separation", 10)
 		overlay_box.add_child(row)
 		var b1 := UIStyle.primary_button("I go first", 17)
-		b1.pressed.connect(func(): gs._send({"t": "first_player", "who": gs.me()}))
+		b1.pressed.connect(func(): gs.send({"t": "first_player", "who": gs.me()}))
 		row.add_child(b1)
 		var b2 := UIStyle.button("My opponent goes first", 17)
-		b2.pressed.connect(func(): gs._send({"t": "first_player", "who": 1 - gs.me()}))
+		b2.pressed.connect(func(): gs.send({"t": "first_player", "who": 1 - gs.me()}))
 		row.add_child(b2)
 	else:
 		overlay_box.add_child(UIStyle.label("Your opponent lost the last game and is choosing who goes first…", 17, UIStyle.TEXT, true))

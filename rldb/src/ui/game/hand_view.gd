@@ -26,7 +26,7 @@ func _init(screen: GameScreen) -> void:
 
 ## Builds the hand layer and its empty-hand label.
 func build() -> void:
-	layer = gs._passive_layer()
+	layer = gs.passive_layer()
 	empty_label = UIStyle.label("Your hand is empty.", 14, UIStyle.MUTED)
 	empty_label.modulate.a = 0.6
 	empty_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -113,7 +113,7 @@ func render(targeting: bool) -> void:
 	var sel := gs.selection
 	var cards: Array = []
 	if not mv.is_empty():
-		cards = gs._pv(gs.me()).get("hand", [])
+		cards = gs.pv(gs.me()).get("hand", [])
 	var seen := {}
 	var new_ids := []
 	var new_order := []

@@ -489,13 +489,13 @@ func view_for(p: int) -> Dictionary:
 		STAGE_DECKS:
 			if cfg["deck_mode"] == "starter":
 				v["starters"] = starters.map(func(s): return {"name": s["name"], "theme": s["theme"],
-					"main": s["main"].map(func(i): return _card_summary(i)), "extra": s["extra"].map(func(i): return _card_summary(i))})
+					"main": s["main"].map(func(i): return card_summary(i)), "extra": s["extra"].map(func(i): return card_summary(i))})
 			else:
 				_ensure_offer(p)
 				var st: Dictionary = draft[p]
 				v["draft"] = {"step": st["step"], "total": st["order"].size(),
 					"category": st["order"][st["step"]] if st["step"] < st["order"].size() else "",
-					"offer": st["offer"].map(func(i): return _card_summary(i)), "picked": st["picked"].map(func(i): return _card_summary(i))}
+					"offer": st["offer"].map(func(i): return card_summary(i)), "picked": st["picked"].map(func(i): return card_summary(i))}
 		STAGE_REWARDS:
 			var r: Dictionary = rewards[p]
 			var types := []
@@ -507,15 +507,16 @@ func view_for(p: int) -> Dictionary:
 				if d["category"] == "basic_unit" and not (d["race"] in races):
 					races.append(d["race"])
 			v["rewards"] = {"left": r["left"], "done": r["done"], "taken": r["taken"].duplicate(),
-				"offer": r["offer"].map(func(i): return _card_summary(i)), "pending": r.get("pending", false),
+				"offer": r["offer"].map(func(i): return card_summary(i)), "pending": r.get("pending", false),
 				"offer_type": r.get("offer_type", ""), "types": types,
 				"opponent_done": rewards[1 - p]["done"], "basic_types": CardDB.ELEMENTS, "basic_races": races}
 	if stage in [STAGE_REWARDS, STAGE_FIRST, STAGE_OVER, STAGE_DECKS]:
-		v["deck"] = decks[p].map(func(i): return _card_summary(i))
+		v["deck"] = decks[p].map(func(i): return card_summary(i))
 	return v
 
 
-static func _card_summary(id: int) -> Dictionary:
+## Display summary of card `id` (name, cost, stats, rules text, support status) for menus and rewards.
+static func card_summary(id: int) -> Dictionary:
 	var d := CardDB.get_def(id)
 	return {"id": id, "name": d["name"], "category": d["category"], "cost_text": CardDB.cost_label(d),
 		"atk": d["atk"], "def": d["def"], "type": d["type"], "race": d["race"],

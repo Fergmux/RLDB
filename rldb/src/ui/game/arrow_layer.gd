@@ -17,7 +17,7 @@ const SAMPLES := 48
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	z_index = GameScreen.Z_ARROW
+	z_index = UiLayers.ARROW
 
 ## Point on the arc (quadratic Bézier bowing upward on screen) at t in [0, 1].
 func _at(t: float, c: Vector2) -> Vector2:

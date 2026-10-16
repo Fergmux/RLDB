@@ -28,7 +28,7 @@ var _panel: PanelContainer
 
 func _build(title: String, text: String, confirm: String, on_yes: Callable, cancel: String) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	z_index = 120
+	z_index = UiLayers.CONFIRM_DIALOG
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

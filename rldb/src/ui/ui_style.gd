@@ -291,9 +291,9 @@ static func primary_button(text: String, size: int = 15) -> Button:
 	p.content_margin_bottom = 4
 	n.border_width_bottom = 2
 	n.border_color = GOLD.darkened(0.35)
-	_lift(n, Color(0, 0, 0, 0.5), 4, 2)
-	_lift(h, Color(GOLD_HI, 0.45), 9, 0)          # warm glow on hover
-	_lift(p, Color(0, 0, 0, 0.45), 2, 1)
+	lift_style(n, Color(0, 0, 0, 0.5), 4, 2)
+	lift_style(h, Color(GOLD_HI, 0.45), 9, 0)          # warm glow on hover
+	lift_style(p, Color(0, 0, 0, 0.45), 2, 1)
 	b.add_theme_stylebox_override("normal", n)
 	b.add_theme_stylebox_override("hover", h)
 	b.add_theme_stylebox_override("pressed", p)
@@ -334,7 +334,7 @@ static func background(dim: float = 0.0, path: String = BACKGROUND) -> Control:
 
 
 ## Drop shadow / glow on a button style (depth instead of a flat slab).
-static func _lift(sb: StyleBoxFlat, col: Color, sz: int, dy: int) -> void:
+static func lift_style(sb: StyleBoxFlat, col: Color, sz: int, dy: int) -> void:
 	sb.shadow_color = col
 	sb.shadow_size = sz
 	sb.shadow_offset = Vector2(0, dy)
@@ -421,9 +421,9 @@ static func make_theme() -> Theme:
 	pressed.content_margin_bottom = 4
 	normal.border_width_bottom = 2
 	normal.border_color = BRONZE.darkened(0.25)
-	_lift(normal, Color(0, 0, 0, 0.5), 4, 2)
-	_lift(hover, Color(GOLD, 0.32), 8, 0)
-	_lift(pressed, Color(0, 0, 0, 0.45), 2, 1)
+	lift_style(normal, Color(0, 0, 0, 0.5), 4, 2)
+	lift_style(hover, Color(GOLD, 0.32), 8, 0)
+	lift_style(pressed, Color(0, 0, 0, 0.45), 2, 1)
 	th.set_stylebox("normal", "Button", normal)
 	th.set_stylebox("hover", "Button", hover)
 	th.set_stylebox("pressed", "Button", pressed)

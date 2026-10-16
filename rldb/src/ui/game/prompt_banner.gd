@@ -54,7 +54,7 @@ func build() -> void:
 	bs.shadow_offset = Vector2(0, 3)
 	ctx_banner.add_theme_stylebox_override("panel", bs)
 	ctx_banner.visible = false
-	ctx_banner.z_index = GameScreen.Z_BANNER
+	ctx_banner.z_index = UiLayers.BANNER
 	gs.add_child(ctx_banner)
 	var bcol := VBoxContainer.new()
 	bcol.add_theme_constant_override("separation", 4)
@@ -102,7 +102,7 @@ func build() -> void:
 	tsb.shadow_color = Color(0, 0, 0, 0.6)
 	tray.add_theme_stylebox_override("panel", tsb)
 	tray.visible = false
-	tray.z_index = GameScreen.Z_TRAY
+	tray.z_index = UiLayers.TRAY
 	gs.add_child(tray)
 	var tsc := ScrollContainer.new()
 	tsc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -127,7 +127,7 @@ func build_notices() -> void:
 	wsb.shadow_size = 8
 	wait_chip.add_theme_stylebox_override("panel", wsb)
 	wait_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wait_chip.z_index = GameScreen.Z_WAIT
+	wait_chip.z_index = UiLayers.WAIT
 	wait_chip.visible = false
 	wait_label = UIStyle.label("", 22, UIStyle.GOLD_HI, false, true)
 	wait_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -145,7 +145,7 @@ func build_notices() -> void:
 	tsb.content_margin_bottom = 6
 	toast.add_theme_stylebox_override("normal", tsb)
 	toast.add_theme_font_size_override("font_size", 17)
-	toast.z_index = GameScreen.Z_TOAST
+	toast.z_index = UiLayers.TOAST
 	toast.autowrap_mode = TextServer.AUTOWRAP_OFF
 	toast.visible = false
 	gs.add_child(toast)
@@ -155,7 +155,7 @@ func build_notices() -> void:
 func render() -> void:
 	var view := gs.view
 	var mv := gs.mv
-	var pd := gs._pending()
+	var pd := gs.pending()
 	var sig := hash([view.get("stage", ""), view.get("net", {}), pd, mv.get("active", -1), mv.get("winner", -1), mv.get("resolving", false),
 		gs.multi, view.get("deck_ready", []), view.get("you", 0)])
 	if sig == prompt_sig:
@@ -181,7 +181,7 @@ func _multi_status(pd: Dictionary) -> String:
 ## plus the non-card options (e.g. a direct attack), Confirm and Cancel. It covers only the top
 ## strip, never a target card.
 func _render_banner() -> void:
-	var pd := gs._pending()
+	var pd := gs.pending()
 	var on: bool = not pd.is_empty() and pd.get("mine", false) and not gs.overlays.overlay.visible and gs.view.get("stage", "") == "game"
 	ctx_banner.visible = on
 	GameUi.clear(banner_btns)
@@ -297,7 +297,7 @@ func place_tray() -> void:
 ## the effect allows it). Click a card to choose it; multi-choices keep their order and use
 ## the banner's Confirm. Hover shows the card's details; the tray never offers other cards.
 func _render_tray() -> void:
-	var pd := gs._pending()
+	var pd := gs.pending()
 	var opts: Array = gs.selection.tray_options(pd) if gs.selection.board_targeting() else []
 	tray_cards.clear()
 	GameUi.clear(tray_box)

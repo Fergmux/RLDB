@@ -283,7 +283,7 @@ func _steps() -> void:
 		await _shot("16_waiting_on_opponent_response")
 		_view_seat(o)
 		await _wait(0.5)
-		_check("trap response prompt is shown in the banner", gs.ctx_banner.visible and gs._pending()["mine"] and gs.banner_flow.visible)
+		_check("trap response prompt is shown in the banner", gs.ctx_banner.visible and gs.pending()["mine"] and gs.banner_flow.visible)
 		await _shot("17_opponent_response_prompt")
 		var pass_i := -1
 		var labels := []

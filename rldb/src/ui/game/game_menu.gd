@@ -54,7 +54,7 @@ func build_popups() -> void:
 	gms.shadow_color = Color(0, 0, 0, 0.6)
 	game_menu.add_theme_stylebox_override("panel", gms)
 	game_menu.visible = false
-	game_menu.z_index = GameScreen.Z_GAME_MENU
+	game_menu.z_index = UiLayers.GAME_MENU
 	gs.add_child(game_menu)
 	var gmv := VBoxContainer.new()
 	gmv.add_theme_constant_override("separation", 8)
@@ -80,7 +80,7 @@ func build_popups() -> void:
 	var rm := CheckBox.new()
 	rm.text = "Reduced motion (no travel, shake or particles)"
 	rm.button_pressed = UIStyle.reduce_motion
-	rm.toggled.connect(func(on): UIStyle.set_reduce_motion(on); gs.fx.finish_all(); gs._render_all())
+	rm.toggled.connect(func(on): UIStyle.set_reduce_motion(on); gs.fx.finish_all(); gs.render_all())
 	sv.add_child(rm)
 	var fa := CheckBox.new()
 	fa.text = "Fast animations (half duration)"
@@ -136,7 +136,7 @@ func confirm_forfeit(quit: bool) -> void:
 	var live := gs.has_live_series()
 	var go := func():
 		if live:
-			gs._send({"t": "forfeit_series"})
+			gs.send({"t": "forfeit_series"})
 		if quit:
 			# A couple of frames so a network forfeit is flushed before the peer closes.
 			await gs.get_tree().process_frame
@@ -168,7 +168,7 @@ func close_dialog() -> bool:
 
 
 func _confirm_concede() -> void:
-	_dialog("Concede this game?", "Your opponent wins this game; the series continues.", "Concede", func(): gs._send({"t": "concede"}))
+	_dialog("Concede this game?", "Your opponent wins this game; the series continues.", "Concede", func(): gs.send({"t": "concede"}))
 
 
 ## Music and sound-effect volume sliders with mute boxes (game settings and main menu).

@@ -114,7 +114,7 @@ func show_card_def(id: int) -> void:
 	if not gs.mv.is_empty():
 		for p in [gs.me(), 1 - gs.me()]:
 			for z in ["units", "backrow", "powers", "hand"]:
-				for c in gs._pv(p).get(z, []):
+				for c in gs.pv(p).get(z, []):
 					if c != null and not c.get("hidden", false) and int(c.get("id", -1)) == id and gs.selection.item_for_uid(int(c["uid"])).size() > 0:
 						gs.selection.select(int(c["uid"]))
 						return
@@ -193,7 +193,7 @@ func close_pile() -> void:
 
 ## Lists the open pile's cards (rebuilt only when the pile, selection or actions changed).
 func render_pile_list() -> void:
-	var pv := gs._pv(gs.me())
+	var pv := gs.pv(gs.me())
 	var key := "draw_inspect" if pile_zone == "draw" else pile_zone
 	var cards: Array = pv.get(key, [])
 	var acts := gs.action_row.actions_for_card(_pile_sel) if _pile_sel != -1 else []
@@ -276,7 +276,7 @@ func _pile_row(c: Dictionary) -> Control:
 	dp.show_card(c)
 	GameUi.ignore_mouse(dp)
 	vb.add_child(dp)
-	if sel and not gs._locked():
+	if sel and not gs.locked():
 		var af := HFlowContainer.new()
 		af.add_theme_constant_override("h_separation", 6)
 		af.add_theme_constant_override("v_separation", 4)

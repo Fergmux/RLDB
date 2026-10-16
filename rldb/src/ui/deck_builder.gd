@@ -81,7 +81,7 @@ static func matches(d: Dictionary, query: String, category: String, type: String
 				return false
 	var q := query.strip_edges().to_lower()
 	if q != "":
-		var hay := (String(d["name"]) + " " + String(Series._card_summary(int(d["id"]))["text"])).to_lower()
+		var hay := (String(d["name"]) + " " + String(Series.card_summary(int(d["id"]))["text"])).to_lower()
 		for word in q.split(" ", false):
 			if not hay.contains(word):
 				return false
@@ -400,7 +400,7 @@ func _build_deck(body: HBoxContainer) -> void:
 
 func _summary(id: int) -> Dictionary:
 	if not _summaries.has(id):
-		_summaries[id] = Series._card_summary(id)
+		_summaries[id] = Series.card_summary(id)
 	return _summaries[id]
 
 

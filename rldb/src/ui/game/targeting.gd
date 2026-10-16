@@ -32,7 +32,7 @@ func update_arrow() -> void:
 			on = true
 	elif arrow != null and not overlay_up:
 		# Deciding a Trap response to an attack: the enemy's attack arrow, attacker -> its target.
-		var cause: Dictionary = gs._pending().get("cause", {}) if gs._pending().get("mine", false) else {}
+		var cause: Dictionary = gs.pending().get("cause", {}) if gs.pending().get("mine", false) else {}
 		var at: Dictionary = cause.get("attacker", {})
 		if not at.is_empty():
 			var src2 := gs.fx_slot_global_rect(int(at["p"]), "unit", int(at["slot"]))
@@ -77,13 +77,13 @@ func source_uid() -> int:
 	var acting := gs.acting_uid
 	if acting != -1 and (gs.hand.items.has(acting) or not gs.selection.item_for_uid(acting).is_empty()):
 		return acting
-	var pd := gs._pending()
+	var pd := gs.pending()
 	var re := RegEx.new()
 	re.compile("for (.+?)[.?:]?$")
 	var m := re.search(String(pd.get("prompt", "")))
 	if m != null:
 		var nm := m.get_string(1)
-		for c in gs._pv(gs.me())["units"]:
+		for c in gs.pv(gs.me())["units"]:
 			if c != null and not c.get("hidden", false) and c.get("name", "") == nm:
 				return c["uid"]
 	if gs.selected_uid != -1 and _is_mine_card(gs.selected_uid):
@@ -92,7 +92,7 @@ func source_uid() -> int:
 
 
 func _is_mine_card(uid: int) -> bool:
-	var pv := gs._pv(gs.me())
+	var pv := gs.pv(gs.me())
 	for z in ["units", "backrow", "powers", "hand"]:
 		for c in pv.get(z, []):
 			if c != null and c.get("uid", -9) == uid:
@@ -121,7 +121,7 @@ func option_under_pointer() -> int:
 		if opt == -1:
 			continue
 		var w: CardWidget = sl["widget"]
-		var zone_pick: bool = String(gs._pending().get("kind", "")) == "slot"
+		var zone_pick: bool = String(gs.pending().get("kind", "")) == "slot"
 		var r: Rect2 = (sl["holder"] as Control).get_global_rect() if (w.visible and not zone_pick) else (sl["zone_node"] as Control).get_global_rect()
 		if r.has_point(m):
 			return opt
@@ -136,7 +136,7 @@ func option_under_pointer() -> int:
 
 
 func _option_rect(i: int) -> Rect2:
-	var pd := gs._pending()
+	var pd := gs.pending()
 	var items := gs.hand.items
 	for o in pd.get("options", []):
 		if o["i"] != i:

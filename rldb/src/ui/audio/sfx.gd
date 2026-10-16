@@ -175,6 +175,11 @@ static func _stream_for(name: String) -> AudioStream:
 	return s
 
 
+## Creates the voice pool now so the first sounds of a screen are not dropped.
+static func warm_up() -> void:
+	_free_voice()
+
+
 ## Returns an idle voice from the pool (creating the pool on first use), or null if all busy.
 static func _free_voice() -> AudioStreamPlayer:
 	if not is_instance_valid(_instance):

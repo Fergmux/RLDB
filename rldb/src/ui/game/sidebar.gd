@@ -55,7 +55,7 @@ func build() -> void:
 	phase_btn = UIStyle.primary_button("", 16)
 	phase_btn.custom_minimum_size = Vector2(0, 44)
 	phase_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	phase_btn.pressed.connect(func(): gs._send({"t": "next_phase"}))
+	phase_btn.pressed.connect(func(): gs.send({"t": "next_phase"}))
 	brow.add_child(phase_btn)
 	# Status chip (NOT a button): shown instead of the phase button while a choice is pending.
 	state_chip = PanelContainer.new()
@@ -116,11 +116,11 @@ func render_turnbar() -> void:
 		turn_title.text = gs.overlays.stage_title(stage) if stage != "" else "Series"
 		turn_note.visible = false
 		return
-	var owner_name: String = gs._pv(mv["active"])["name"]
+	var owner_name: String = gs.pv(mv["active"])["name"]
 	turn_title.text = "Turn %d · %s" % [mv["turn"], owner_name]
 	pips.phase = mv["phase"]
 	pips.queue_redraw()
-	var pd := gs._pending()
+	var pd := gs.pending()
 	var label := ""
 	var ok := false
 	var tip := ""

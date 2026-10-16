@@ -36,7 +36,7 @@ func handle_key(e: InputEventKey) -> bool:
 		return false
 	if mv.is_empty() or mv["winner"] != -1:
 		return false
-	var pd := gs._pending()
+	var pd := gs.pending()
 	if not pd.is_empty():
 		if not pd["mine"]:
 			return false
@@ -64,7 +64,7 @@ func handle_key(e: InputEventKey) -> bool:
 	if is_enter and mv["active"] == gs.me():
 		for a in mv.get("actions", []):
 			if a["t"] == "next_phase" and a["ok"]:
-				gs._send({"t": "next_phase"})
+				gs.send({"t": "next_phase"})
 				return true
 	return false
 
@@ -72,7 +72,7 @@ func handle_key(e: InputEventKey) -> bool:
 ## Cards of yours that currently have at least one legal action (hand first, then the field).
 func _kb_cards() -> Array:
 	var out := []
-	if gs._locked():
+	if gs.locked():
 		return out
 	var hand := gs.hand
 	for uid in hand.order:
@@ -89,7 +89,7 @@ func _kb_cards() -> Array:
 				continue
 			var uid2: int = wd.view.get("uid", -1)
 			if uid2 != -1 and _has_ok_action(uid2):
-				out.append({"key": key, "w": wd, "holder": sl["holder"], "uid": uid2, "kind": GameBoardView.ZONE_KIND[zone], "own": true})
+				out.append({"key": key, "w": wd, "holder": sl["holder"], "uid": uid2, "kind": Zones.KIND[zone], "own": true})
 	return out
 
 

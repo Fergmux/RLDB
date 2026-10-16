@@ -35,7 +35,7 @@ func stack_rect() -> Rect2:
 
 ## Legal actions of a card (only enabled ones; reasons stay in the details panel notes).
 func actions_for_card(uid: int) -> Array:
-	if gs._locked():
+	if gs.locked():
 		return []
 	var oks := []
 	for a in gs.mv.get("actions", []):
@@ -52,7 +52,7 @@ static func _act_sig(acts: Array) -> String:
 
 
 func _row_wanted() -> bool:
-	if not gs.row_open or gs.selected_uid == -1 or gs._locked():
+	if not gs.row_open or gs.selected_uid == -1 or gs.locked():
 		return false
 	var it := gs.selection.item_for_uid(gs.selected_uid)
 	return not it.is_empty() and it["own"]
@@ -136,8 +136,8 @@ func rebuild() -> void:
 			st.content_margin_bottom = 1
 			st.content_margin_left = 5
 			st.content_margin_right = 5
-		UIStyle._lift(nrm, Color(0, 0, 0, 0.55), 5, 2)
-		UIStyle._lift(hov, Color(UIStyle.GOLD, 0.4), 8, 0)
+		UIStyle.lift_style(nrm, Color(0, 0, 0, 0.55), 5, 2)
+		UIStyle.lift_style(hov, Color(UIStyle.GOLD, 0.4), 8, 0)
 		b.add_theme_stylebox_override("normal", nrm)
 		b.add_theme_stylebox_override("hover", hov)
 		b.add_theme_stylebox_override("pressed", hov)
@@ -164,7 +164,7 @@ func run_action(uid: int, a: Dictionary) -> void:
 	for b in gs.mv.get("actions", []):
 		if b.get("uid", -1) == uid and b["t"] == a["t"] and b.get("idx", -1) == a.get("idx", -1) and b.get("stance", "") == a.get("stance", "") and b["ok"]:
 			still = true
-	if not still or gs._locked():
+	if not still or gs.locked():
 		Sfx.play("deny")
 		return
 	var cmd := {"t": a["t"], "uid": uid}
@@ -182,4 +182,4 @@ func run_action(uid: int, a: Dictionary) -> void:
 	if not it.is_empty() and not (not hv.is_empty() and hv["uid"] == uid):
 		gs.hover.unlift(it)
 	Sfx.play("confirm")
-	gs._send(cmd)
+	gs.send(cmd)

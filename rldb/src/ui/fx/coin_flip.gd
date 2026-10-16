@@ -27,7 +27,7 @@ var result_a: float = 0.0: set = _set_result
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	z_index = 85
+	z_index = UiLayers.COIN_FLIP
 
 
 func _set_phase(v: float) -> void:

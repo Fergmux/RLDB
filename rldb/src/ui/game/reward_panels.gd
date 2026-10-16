@@ -82,7 +82,7 @@ func render() -> void:
 		_: box.add_child(UIStyle.label("Each pick is one of these three rewards. Choose one to see its options.", 14, UIStyle.MUTED, true))
 	var fin := UIStyle.primary_button("Finish rewards" if not r["taken"].is_empty() else "Skip remaining rewards", 16)
 	fin.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	fin.pressed.connect(func(): gs._send({"t": "reward_finish"}))
+	fin.pressed.connect(func(): gs.send({"t": "reward_finish"}))
 	box.add_child(fin)
 
 
@@ -104,13 +104,13 @@ func _render_offer(r: Dictionary) -> void:
 		var cw := CardWidget.new().setup(MatchView.summary_view(c), "big")
 		GameUi.resize_card(cw, Vector2(200, 300))
 		var idx: int = i
-		cw.pressed.connect(func(_w): gs._send({"t": "reward_add", "index": idx}))
+		cw.pressed.connect(func(_w): gs.send({"t": "reward_add", "index": idx}))
 		cell.add_child(cw)
 		var b := UIStyle.primary_button("Take %s" % c["name"], 14)
 		b.clip_text = true
 		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		b.custom_minimum_size = Vector2(200, 34)
-		b.pressed.connect(func(): gs._send({"t": "reward_add", "index": idx}))
+		b.pressed.connect(func(): gs.send({"t": "reward_add", "index": idx}))
 		cell.add_child(b)
 		flow.add_child(cell)
 
@@ -144,8 +144,8 @@ func _reward_add_panel(r: Dictionary) -> Control:
 		tb.custom_minimum_size = Vector2(124, 42)
 		var nrm := UIStyle.flat(Color(col.darkened(0.62), 0.97), col, 2, 8)
 		var hov := UIStyle.flat(Color(col.darkened(0.45), 0.99), col.lightened(0.3), 2, 8)
-		UIStyle._lift(nrm, Color(0, 0, 0, 0.5), 4, 2)
-		UIStyle._lift(hov, Color(col, 0.4), 9, 0)
+		UIStyle.lift_style(nrm, Color(0, 0, 0, 0.5), 4, 2)
+		UIStyle.lift_style(hov, Color(col, 0.4), 9, 0)
 		tb.add_theme_stylebox_override("normal", nrm)
 		tb.add_theme_stylebox_override("hover", hov)
 		tb.add_theme_stylebox_override("pressed", hov)
@@ -155,7 +155,7 @@ func _reward_add_panel(r: Dictionary) -> Control:
 		var c2: String = cat
 		tb.pressed.connect(func():
 			mode = ""
-			gs._send({"t": "reward_type", "category": c2}))
+			gs.send({"t": "reward_type", "category": c2}))
 		tf.add_child(tb)
 	return pv[0]
 
@@ -212,7 +212,7 @@ func _reward_remove_panel(order: Array, counts: Dictionary) -> Control:
 	ok.pressed.connect(func():
 		mode = ""
 		_remove_sel = -1
-		gs._send({"t": "reward_remove", "card_id": rid}))
+		gs.send({"t": "reward_remove", "card_id": rid}))
 	right.add_child(ok)
 	return pv[0]
 
@@ -274,6 +274,6 @@ func _basic_change_panel(r: Dictionary, order: Array, counts: Dictionary) -> Con
 		var cmd := {"t": "reward_basic", "from_id": fid, "to_type": _basic_type, "to_race": _basic_race}
 		_basic_sel = -1
 		mode = ""
-		gs._send(cmd))
+		gs.send(cmd))
 	right.add_child(ok)
 	return pv[0]
