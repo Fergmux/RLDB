@@ -13,6 +13,7 @@ const BANNER_MAX_W := 380.0
 ## Narrowest free column beside the board the banner may sit in (F03-25), and its margin to the zones.
 const BANNER_SIDE_MIN_W := 220.0
 const BANNER_SIDE_MAX_W := 300.0
+var _fit_gen := 0
 const BANNER_GAP := 12.0
 ## Breathing border period (s).
 const BANNER_BREATH := 1.4
@@ -255,7 +256,7 @@ func _render_banner() -> void:
 		c.disabled = MatchView.multi_pick_error(pd, gs.multi) != ""   # count and exact Arcane total (F03-04)
 		c.pressed.connect(gs.selection.confirm_multi)
 		banner_btns.add_child(c)
-	if pd["cancellable"]:
+	if pd["cancellable"] and not gs.view.has("tutorial"):   # a forced tutorial step has no Cancel button
 		var x := UIStyle.button("Cancel", 14)
 		x.custom_minimum_size = Vector2(0, OPTION_H)
 		x.pressed.connect(gs.selection.cancel)
@@ -303,6 +304,17 @@ func _size_banner(w: float) -> void:
 	ctx_banner.size = Vector2(w, 0)
 	ctx_banner.size = Vector2(w, ctx_banner.get_combined_minimum_size().y)
 	ctx_banner.pivot_offset = ctx_banner.size / 2.0
+	# Wrapped labels report their height for the width they had before this layout; measure again
+	# once they have been laid out at `w`, so the banner hugs its content instead of staying tall.
+	_fit_gen += 1
+	var gen := _fit_gen
+	if not ctx_banner.is_inside_tree():
+		return
+	ctx_banner.get_tree().process_frame.connect(func():
+		if gen == _fit_gen and is_instance_valid(ctx_banner):
+			ctx_banner.size = Vector2(w, 0)
+			ctx_banner.size = Vector2(w, ctx_banner.get_combined_minimum_size().y)
+			ctx_banner.pivot_offset = ctx_banner.size / 2.0, CONNECT_ONE_SHOT)
 
 
 ## Attention treatment (F03-25): a pop and gold flare when a new choice appears, then a gentle

@@ -209,6 +209,15 @@ func _process(_d: float) -> void:
 		var sr: Rect2 = inv * _rect_of(gs.action_row.stack)
 		var cr: Rect2 = inv * _card_rect(gs.selected_uid)
 		ring.arrow_from_below = (rects[0] as Rect2).is_equal_approx(sr) and cr.has_area() and sr.get_center().y > cr.get_center().y
+	# A button inside the prompt banner: a tight ring (its neighbours stay readable and clickable)
+	# and the arrow from below, so it never covers the banner's text.
+	ring.compact = false
+	var bn: Control = gs.prompt.ctx_banner
+	if not rects.is_empty() and bn != null and bn.is_visible_in_tree():
+		var br: Rect2 = inv * _rect_of(bn)
+		if br.encloses(rects[0] as Rect2):
+			ring.compact = true
+			ring.arrow_from_below = true
 	ring.visible = complete_card == null
 
 

@@ -5,6 +5,8 @@ extends Control
 ## bob) with UIStyle.reduce_motion.
 
 const RING_PAD := 6.0
+## Ring padding in compact mode (buttons in the prompt banner).
+const COMPACT_PAD := 2.0
 const RING_W := 4.0
 const PULSE_HZ := 1.1
 const ARROW_W := 34.0
@@ -18,6 +20,8 @@ var rects: Array = []
 var arrow: bool = true
 ## Point at the first rect from below instead of from above.
 var arrow_from_below: bool = false
+## Tight ring for small controls packed next to others (no outward pulse, thin glow).
+var compact: bool = false
 var _t: float = 0.0
 
 
@@ -35,9 +39,10 @@ func _draw() -> void:
 	var still := UIStyle.reduce_motion
 	var pulse := 0.5 if still else 0.5 + 0.5 * sin(_t * TAU * PULSE_HZ)
 	for r in rects:
-		var rr: Rect2 = (r as Rect2).grow(RING_PAD + (0.0 if still else 3.0 * pulse))
+		var rr: Rect2 = (r as Rect2).grow(COMPACT_PAD if compact else RING_PAD + (0.0 if still else 3.0 * pulse))
 		# Soft outer glow, then the ring itself.
-		draw_rect(rr.grow(5.0), Color(UIStyle.GOLD, 0.2 + 0.25 * pulse), false, RING_W + 8.0)
+		if not compact:
+			draw_rect(rr.grow(5.0), Color(UIStyle.GOLD, 0.2 + 0.25 * pulse), false, RING_W + 8.0)
 		draw_rect(rr.grow(1.5), Color(0.12, 0.07, 0.0, 0.85), false, RING_W + 3.0)     # dark edge: reads on gold zones
 		draw_rect(rr, Color(1.0, 0.93, 0.68).lerp(UIStyle.GOLD_HI, 1.0 - pulse), false, RING_W)
 	if arrow and not rects.is_empty():

@@ -264,7 +264,7 @@ static func _extra_deck() -> Dictionary:
 			_do("Choose its zone", "The materials will be tributed to Spent, freeing their zones. Click the highlighted zone.", [{"t": "choose", "opt": {"slot": 1}}]),
 			_do("Choose its stance", "Click Attack stance.", [{"t": "choose", "opt": {"label": "Attack"}}]),
 			_read("Tribute", "Beast and Dragon were tributed to Spent: tribute is neither destruction nor sacrifice and refunds no AP. Bastion Wyrm (36 ATK / 40 DEF) arrived and gained Eternal.", [{"slot": ["me", "unit", 1]}, {"pile": ["me", "spent"]}]),
-			_read("Ritual and Arcane", "Ritual units (like Raging Inferno) tribute one unit carrying enough Runes. Arcane units (like Grandmother Kaya) exhaust units from your Spent whose costs add up to their requirement.", [{"pile": ["me", "extra"]}]),
+			_read("Ritual and Arcane", "Ritual units (like Raging Inferno) tribute one unit carrying enough Runes. Arcane units (like Grandmother Kaya) exhaust units from your Spent whose current costs add up to exactly their requirement.", [{"pile": ["me", "extra"]}]),
 			_do("Enter the Battle Phase", "Newly summoned units may attack at once. Click Go to Battle Phase.", [{"t": "next_phase"}]),
 			_do("Attack with the Wyrm", "Click Bastion Wyrm and click Attack.", [{"t": "attack", "card": "p_wyrm"}]),
 			_do("Pick the target", "Click the Rival's Fire Monster (no Type advantage either way: 36 against 8).", [{"t": "choose", "opt": {"card": "o_monster"}}]),
