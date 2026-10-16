@@ -147,10 +147,11 @@ func start_steam_host(cfg: Dictionary) -> void:
 	_attach_net()
 
 
-## Searches public Steam lobbies; `on_lobbies(lobbies: Array)` receives the results.
+## Searches public Steam lobbies; `on_lobbies(lobbies: Array)` receives the results. No game
+## screen is made: the search runs behind the menu.
 func start_steam_browse(on_lobbies: Callable) -> void:
+	clear()
 	_new_net()
-	_attach_net()
 	net.lobbies_found.connect(on_lobbies)
 	net.browse_steam()
 

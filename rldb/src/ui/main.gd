@@ -206,7 +206,7 @@ func _show_menu() -> void:
 	m.lan_host_requested.connect(func(port: int): _go(func(): _start_lan_host(port, opts.duplicate(true))))
 	m.lan_join_requested.connect(func(host: String, port: int): _go(func(): _start_lan_join(host, port)))
 	m.steam_host_requested.connect(func(): _go(func(): _start_steam_host()))
-	m.steam_browse_requested.connect(func(): _go(_start_steam_browse))
+	m.steam_browse_requested.connect(_start_steam_browse)
 	m.resume_requested.connect(_resume)
 	m.delete_save_requested.connect(func(id: String): _confirm_leave("Delete save?", "Delete this saved series?", func():
 		SeriesStore.delete(id)
@@ -268,19 +268,19 @@ func _start_steam_host(cfg: Dictionary = {}) -> void:
 	_sessions.start_steam_host(cfg)
 
 
+## Searches public Steam lobbies over the menu (which stays as it is); the results open in a
+## LobbyListPanel. Back closes the panel and ends the search.
 func _start_steam_browse() -> void:
 	if not SteamBridge.available():
 		status_label.text = SteamBridge.describe()
 		return
-	_clear_screens()
-	_sessions.start_steam_browse(_show_lobbies)
-
-
-func _show_lobbies(lobbies: Array) -> void:
-	var panel := LobbyListPanel.new(lobbies)
+	var panel := LobbyListPanel.new()
 	add_child(panel)
-	panel.join_chosen.connect(join_steam_lobby)
-	panel.back_chosen.connect(_show_menu)
+	panel.join_chosen.connect(func(id: int): _go(func(): join_steam_lobby(id)))
+	panel.back_chosen.connect(_sessions.clear)
+	_sessions.start_steam_browse(func(lobbies: Array):
+		if is_instance_valid(panel):
+			panel.show_lobbies(lobbies))
 
 
 ## Joins Steam lobby `lobby_id`, replacing whatever is on screen.
