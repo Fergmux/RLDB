@@ -474,9 +474,11 @@ func _execute(p: int, cmd: Dictionary) -> void:
 			], "set a card"))
 		"cast":
 			var sp := _lead_choices(script_of(uid)["spell"])
+			sp[0] += _fusion_lead(script_of(uid)["spell"], sp[0], false)
 			push_frame(make_frame(uid, p, sp[0] + [{"op": "pay", "target": "self"}] + _spell_ops(uid, sp[1]), name_of(uid)))
 		"activate_set":
 			var sp2 := _lead_choices(script_of(uid)["spell"])
+			sp2[0] += _fusion_lead(script_of(uid)["spell"], sp2[0], false)
 			push_frame(make_frame(uid, p, sp2[0] + [{"op": "flip_set_spell"}] + _spell_ops(uid, sp2[1]), name_of(uid)))
 		"power":
 			push_frame(make_frame(uid, p, [
@@ -491,14 +493,7 @@ func _execute(p: int, cmd: Dictionary) -> void:
 			var ab: Dictionary = script_of(uid)["abilities"][idx]
 			# Targets/modes first and cancellable; the cost is paid once they are confirmed.
 			var split := _lead_choices(ab["ops"])
-			# Fusion abilities: the Fusion unit is chosen (cancellable) before any cost is paid.
-			var leaves := false
-			for fo in ab["ops"]:
-				if fo["op"] in ["move", "destroy"] and fo.get("target", "") == "self":
-					leaves = true
-				if fo["op"] == "fusion" and split[0].is_empty():
-					split[0].append({"op": "fusion_pick", "sources": fo["sources"], "exclude_self": leaves})
-					break
+			split[0] += _fusion_lead(ab["ops"], split[0], true)
 			var ops: Array = split[0] + [{"op": "ability_cost", "idx": idx}]
 			ops.append({"op": "window", "event": {"name": "activate", "player": p, "card": uid, "text": "%s activates %s" % [pname(p), name_of(uid)]}})
 			ops.append({"op": "check_negated"})
@@ -528,6 +523,22 @@ func _execute(p: int, cmd: Dictionary) -> void:
 				{"op": "tribute", "target": "$mats", "to": "exhaust"},
 				{"op": "place", "target": "self", "slot": "$slot", "stance": "$stance"}] + summon_tail(uid, p), "Arcane summon " + name_of(uid)))
 	run()
+
+
+## F04-22: a Fusion method's choices (Fusion unit, materials, zone, stance, Confirm) lead its
+## frame, cancellable, before any cost, self-destruction or response window. Empty when the
+## effect has other lead choices or no Fusion. `ability`: a "move/destroy self" cost before the
+## Fusion means the paying unit leaves (never a material; it frees its own zone).
+func _fusion_lead(ops: Array, lead: Array, ability: bool) -> Array:
+	if not lead.is_empty():
+		return []
+	var leaves := false
+	for fo in ops:
+		if ability and fo["op"] in ["move", "destroy"] and fo.get("target", "") == "self":
+			leaves = true
+		if fo["op"] == "fusion":
+			return [{"op": "fusion_pick", "sources": fo["sources"], "exclude_self": leaves, "cancellable": true}]
+	return []
 
 
 ## Stance step of a summon: fixed when the command chose it (F02-02), otherwise a prompt.

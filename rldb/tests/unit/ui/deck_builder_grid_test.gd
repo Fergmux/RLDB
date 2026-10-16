@@ -88,3 +88,54 @@ func test_save_load_rename_round_trip() -> void:
 	assert_int(DeckStore.list().size()).is_equal(1)
 	assert_str(DeckStore.list()[0]["name"]).is_equal("Renamed Deck")
 	assert_int(DeckStore.list()[0]["cards"].size()).is_equal(3)
+
+
+func test_unnamed_save_shows_inline_error_by_name_field() -> void:
+	var db := _builder()
+	db.add_card(int(CardDB.all()[0]["id"]))
+	assert_bool(db.save()).is_false()
+	assert_str(db.name_error()).contains("name")
+	assert_bool(db._name_err.is_visible_in_tree()).is_true()
+	assert_bool(db._status_panel.visible).is_false()
+	db.deck_name_edit.text_changed.emit("x")
+	assert_str(db.name_error()).is_equal("")
+
+
+func test_deck_grid_tile_click_removes_one_and_counts_show() -> void:
+	var db := _builder()
+	var id := int(CardDB.all()[0]["id"])
+	db.add_card(id, 2)
+	var w := db.deck_widget(id)
+	assert_object(w).is_not_null()
+	w.pressed.emit(w)
+	assert_int(int(db.counts[id])).is_equal(1)
+	assert_object(db.deck_widget(id)).is_not_null()
+	db.deck_widget(id).pressed.emit(db.deck_widget(id))
+	assert_object(db.deck_widget(id)).is_null()
+
+
+func test_main_and_extra_sections_and_catalogue_badge() -> void:
+	var db := _builder()
+	var extra := 0
+	var main := 0
+	for d in CardDB.all():
+		if CardDB.is_extra_category(d["category"]) and extra == 0:
+			extra = int(d["id"])
+		elif not CardDB.is_extra_category(d["category"]) and main == 0:
+			main = int(d["id"])
+	db.add_card(main)
+	db.add_card(extra, 3)
+	assert_int(db._deck_box.get_child_count()).is_equal(4)
+	assert_bool(db._cells[extra]["badge"].visible).is_true()
+	assert_bool(db._cells[main]["remove"].visible).is_true()
+
+
+func test_dominant_types_ranks_by_frequency() -> void:
+	var water := -1
+	var fire := -1
+	for d in CardDB.all():
+		if d["type"] == "Water" and water < 0:
+			water = int(d["id"])
+		if d["type"] == "Fire" and fire < 0:
+			fire = int(d["id"])
+	assert_array(DeckBuilder.dominant_types([fire, water, water])).is_equal(["Water", "Fire"])

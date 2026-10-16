@@ -79,8 +79,8 @@ static func draw_tall(pt: CardPainter, big: bool) -> void:
 	if is_unit:
 		CardFaceParts.race_type_line(pt, Vector2(lx * s, ly * s), (float(t[0]) + float(t[2]) - 4.0 - lx) * s, lh, line_fs)
 	else:
-		pt.round_rect(pt.r(lx, ly + 3, 8 if not big else 11, 8 if not big else 11), pt.accent(), 2.0 * s)
-		pt.text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(pt.view.get("category", ""), ""), pt.p(lx + (11 if not big else 15), ly), line_fs, UIStyle.MUTED, -1.0, HORIZONTAL_ALIGNMENT_LEFT, lh)
+		# F04-06: the kind is the text only; no colour square (the frame and art already carry the colour).
+		pt.text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(pt.view.get("category", ""), ""), pt.p(lx, ly), line_fs, UIStyle.MUTED, -1.0, HORIZONTAL_ALIGNMENT_LEFT, lh)
 	# Rules text well.
 	var rules := CardText.card_text(pt.view)
 	if pt.view.get("support", "full") == "unimplemented":

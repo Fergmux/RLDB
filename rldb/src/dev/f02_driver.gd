@@ -357,7 +357,7 @@ func _fusion_zone_steps() -> void:
 	m = host.series.game
 	gs = main.screen
 	var p := m.active
-	_put(p, 4, 3, "atk")                                 # Basic Beast (Water), back row column 1
+	var beast := _put(p, 4, 3, "atk")                    # Basic Beast (Water), back row column 1
 	var dragon := _put(p, 2, 1, "atk")                   # Basic Dragon (Water), front row column 2
 	var wyrm := _new(p, 93, "extra")
 	var tt := _new(p, 8, "hand")                         # Tag Team - S
@@ -372,6 +372,13 @@ func _fusion_zone_steps() -> void:
 	await _wait(0.3)
 	_answer(p, m.name_of(wyrm))
 	await _wait(0.6)
+	# F04-22: each Field material is picked on the board (no tray), source still on the Field.
+	_check("F04-22 Field materials picked on the board, source on the Field", gs.selection.board_targeting() and gs.selection.tray_options(gs.pending()).is_empty() and int(m.pending.get("source", -1)) == tt and m.cards[tt]["zone"] == "unit", str(m.pending.get("prompt", "")))
+	await _shot("22_fusion_material_pick")
+	await _click(_zone_rect(p, "unit", 3).get_center())
+	await _wait(0.4)
+	await _click(_zone_rect(p, "unit", 1).get_center())
+	await _wait(0.6)
 	_check("FB4-15 zone prompt names the Fusion unit", String(m.pending.get("prompt", "")).contains(m.name_of(wyrm)), String(m.pending.get("prompt", "")))
 	var it: Dictionary = gs.fx_slot_item(p, "unit", 1)
 	_check("FB4-16 occupied material zone outlined as a whole zone", (it["ring"] as ZoneRing).visible and not (it["widget"] as CardWidget).highlighted)
@@ -381,8 +388,11 @@ func _fusion_zone_steps() -> void:
 	_check("FB4-15 stance prompt names the Fusion unit", String(m.pending.get("prompt", "")) == "Choose a stance for %s." % m.name_of(wyrm), String(m.pending.get("prompt", "")))
 	await _shot("24_fusion_stance_banner")
 	_answer(p, "Defense")
+	await _wait(0.4)
+	await _shot("24b_fusion_confirm")
+	_answer(p, "Confirm")
 	await _wait(0.6)
-	_check("FB4-15 Fusion unit summoned into the material's zone", m.cards[wyrm]["zone"] == "unit" and m.cards[wyrm]["slot"] == 1 and m.cards[dragon]["zone"] != "unit")
+	_check("FB4-15 Fusion unit summoned into the material's zone", m.cards[wyrm]["zone"] == "unit" and m.cards[wyrm]["slot"] == 1 and m.cards[dragon]["zone"] != "unit" and m.cards[beast]["zone"] != "unit")
 	await _shot("25_after_fusion")
 	# FB4-21: end of turn sends the hand to Spent with an animation.
 	host.handle(p, {"t": "next_phase"})
