@@ -27,7 +27,9 @@ const W_AP := 0.6
 const MAX_OPTIONS := 12
 const MAX_RESOLVE_STEPS := 40
 
+## Seat this brain plays.
 var me: int = 1
+## Random source.
 var rng := RandomNumberGenerator.new()
 
 

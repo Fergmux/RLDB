@@ -8,6 +8,7 @@ const BUTTON_GAP := 3.0
 const ONE_COL_W := 150.0
 const TWO_COL_W := 236.0
 
+## The host screen this component works on.
 var gs: GameScreen
 ## The row's button box (in the hover layer), or null.
 var stack: Control

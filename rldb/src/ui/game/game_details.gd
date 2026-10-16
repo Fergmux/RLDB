@@ -7,15 +7,23 @@ extends RefCounted
 const PILE_NAMES := {"draw": "Draw pile", "spent": "Spent", "exhaust": "Exhaust", "extra": "Extra Deck"}
 const PILE_ROW_CARD := Vector2(64, 96)
 
+## The host screen this component works on.
 var gs: GameScreen
+## Title label of the details panel.
 var details_title: Label
+## Scroll area holding the card details.
 var details_scroll: ScrollContainer
+## Card details widget.
 var details_view: CardDetailsPanel
+## Fade cue shown when the details have more to scroll.
 var scroll_cue: ScrollCue
 ## Own pile shown as a scrollable list in the details panel (instead of a board overlay).
 var pile_scroll: ScrollContainer
+## Rows of the pile list.
 var pile_list: VBoxContainer
-var pile_head: HBoxContainer      # hint + Close: stays put while the list scrolls
+## Hint + Close: stays put while the list scrolls.
+var pile_head: HBoxContainer
+## Hint text above the pile list.
 var pile_hint: Label
 
 ## Signature of the details last rendered ("" forces a re-render).

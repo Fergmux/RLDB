@@ -3,6 +3,7 @@ extends Control
 ## "Card list" screen of the Decks menu: every card in the database as a big card widget, with
 ## a header counting the cards by implementation support status. Emits `closed` on Back.
 
+## Emitted when the screen is closed.
 signal closed
 
 const MARGIN := 16

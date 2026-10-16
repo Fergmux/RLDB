@@ -2,11 +2,17 @@ class_name BoardDeco
 extends Control
 ## Table decoration: centre line with ornament and the active player's underglow.
 
+## Y of the dividing line between the sides.
 var mid_y: float = 0.0
+## Left edge of the deco.
 var x0: float = 0.0
+## Right edge of the deco.
 var x1: float = 0.0
+## Side whose edge glows (-1 none).
 var glow_side: int = -1
+## Top edge of the field.
 var top_edge: float = 0.0
+## Bottom edge of the field.
 var bottom_edge: float = 0.0
 
 func _init() -> void:

@@ -4,8 +4,11 @@ extends Control
 ## a tapering body, chevrons flowing toward the target and a bevelled head. Everything is drawn
 ## anti-aliased (user feedback: the old straight dashed arrow was stiff and jagged).
 
+## Arrow start (global).
 var a: Vector2 = Vector2.ZERO
+## Arrow end (global).
 var b: Vector2 = Vector2.ZERO
+## Whether it is drawn.
 var on: bool = false
 ## Neutral gold, or the combat-preview verdict colour while hovering an attack target.
 var col: Color = UIStyle.TARGET

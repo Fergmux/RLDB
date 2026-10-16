@@ -8,6 +8,7 @@ extends Control
 ## This node is the coordinator: it owns the view, the shared selection state and the
 ## layers, and delegates building, layout and rendering to the components in src/ui/game/.
 
+## Emitted to return to the main menu (the menu confirms a live series).
 signal back_to_menu
 ## Leave without the main menu's own confirmation (the in-game menu already warned).
 signal leave_to_menu
@@ -19,14 +20,23 @@ const MAX_FX_ENTRIES := 25
 const VERDICT_COLORS := {"good": Color("5fd068"), "bad": Color("e5534b"), "neutral": Color("b9a6e8")}
 
 
+## Seat client this screen renders.
 var client: SeatClient
+## Latest redacted series view.
 var view: Dictionary = {}
-var mv: Dictionary = {}          # match view (may be the finished game between games)
+## Match view (may be the finished game between games).
+var mv: Dictionary = {}
+## Match view before the latest update.
 var prev_mv: Dictionary = {}
+## Effect player.
 var fx: FxPlayer
+## Layer effects are drawn on.
 var fx_layer: Control
+## Layer of phase banners.
 var banner_layer: Control
+## Layer of the hovered card.
 var hover_layer: Control
+## Targeting arrow layer.
 var arrow: ArrowLayer
 ## Hot-seat: the seat switch waits until this time (msec) so an animation that belongs to the
 ## current seat (end-of-turn discard) finishes on its own screen.
@@ -35,31 +45,52 @@ var fx_hold_until: int = 0
 var debug_sent: int = 0
 
 # Shared selection state (read and written by the components).
-var selected_uid: int = -1       # pinned in the details panel
-var multi: Array = []            # selected option indices for a multi-select prompt
-var peek_uid: int = -1           # hovered card whose details are shown
-var row_open: bool = false       # action row shown for the click-selected card (F02-01)
-var acting_uid: int = -1         # card whose action opened the current choice (arrow source)
+## Pinned in the details panel.
+var selected_uid: int = -1
+## Selected option indices for a multi-select prompt.
+var multi: Array = []
+## Hovered card whose details are shown.
+var peek_uid: int = -1
+## Action row shown for the click-selected card (F02-01).
+var row_open: bool = false
+## Card whose action opened the current choice (arrow source).
+var acting_uid: int = -1
 
 # Layout (set by _relayout).
+## The play field rect (set by layout).
 var play_area: Rect2 = Rect2()
-var sidebar_w: float = SIDEBAR_W   # effective sidebar width in screen units
-var side_k: float = 1.0            # sidebar scale on wide windows
+## Effective sidebar width in screen units.
+var sidebar_w: float = SIDEBAR_W
+## Sidebar scale on wide windows.
+var side_k: float = 1.0
 
 ## Components (each builds its own nodes on this screen, in the order _ready calls them).
 var board: GameBoardView
+## Hand component.
 var hand: GameHandView
+## Hover component.
 var hover: GameHoverController
+## Action row component.
 var action_row: GameActionRow
+## Selection component.
 var selection: GameSelection
+## Keyboard component.
 var keyboard: GameKeyboard
+## Prompt banner component.
 var prompt: GamePromptBanner
+## Combat preview component.
 var preview: GameCombatPreview
+## Targeting component.
 var targeting: GameTargeting
+## Sidebar component.
 var sidebar: GameSidebar
+## Details component.
 var details: GameDetails
+## Log component.
 var game_log: GameLog
+## In-game menu component.
 var menu: GameMenu
+## Series overlay component.
 var overlays: GameSeriesOverlay
 
 var _fx_seq: int = -1

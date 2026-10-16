@@ -5,15 +5,25 @@ extends Control
 ## resume, settings) centred on screen. Edits the shared SessionOptions; everything that leaves
 ## the menu is a signal handled by Main.
 
+## Emitted when a game against the bot is chosen.
 signal bot_requested
+## Emitted when a hot-seat game is chosen.
 signal hotseat_requested
+## Emitted to host a LAN game on a port.
 signal lan_host_requested(port: int)
+## Emitted to join a LAN game.
 signal lan_join_requested(host: String, port: int)
+## Emitted to host a Steam lobby.
 signal steam_host_requested
+## Emitted to browse Steam lobbies.
 signal steam_browse_requested
+## Emitted to resume a saved series.
 signal resume_requested(id: String, mode: String)
+## Emitted to delete a saved series.
 signal delete_save_requested(id: String)
+## Emitted to open the deck builder.
 signal deck_builder_requested
+## Emitted to open the card list.
 signal card_list_requested
 
 ## Menu tree: level -> items [label, target]. A target starting with "@" opens a sub-level;

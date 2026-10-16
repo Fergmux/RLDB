@@ -16,8 +16,11 @@ const STAGE_DELAY := 1.2
 ## Safety valve: a turn never takes more bot moves than this.
 const MAX_MOVES_PER_TURN := 40
 
+## Host the bot plays on.
 var host: LocalHost
+## Seat the bot plays.
 var seat: int = 1
+## Decision maker.
 var brain: BotBrain
 ## The screen whose animations the bot waits for (optional).
 var screen: GameScreen
@@ -31,6 +34,7 @@ var _refusals := 0
 var _thread: Thread
 
 
+## Starts the bot on host h at bot_seat, optionally driving the visible game_screen.
 func start(h: LocalHost, bot_seat: int, game_screen: GameScreen = null) -> void:
 	host = h
 	seat = bot_seat

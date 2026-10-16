@@ -7,17 +7,26 @@ extends RefCounted
 const DECK_SORT := ["basic_unit", "unit", "spell", "trap", "power", "fusion", "ritual", "arcane"]
 const PAUSE_W := 440.0
 
+## The host screen this component works on.
 var gs: GameScreen
 ## Reward sub-panels shown on the rewards stage.
 var rewards: GameRewardPanels
 
+## Dim shown while the match is paused.
 var pause_dim: ColorRect
+## Panel with the pause message.
 var pause_panel: PanelContainer
+## Content of the pause panel.
 var pause_box: VBoxContainer
+## Dim behind the series overlay.
 var overlay_dim: ColorRect
+## Series-stage modal (rewards, decks, results).
 var overlay: PanelContainer
+## Content of the series modal.
 var overlay_box: VBoxContainer
+## Popup listing a pile.
 var pile_popup: PanelContainer
+## Content of the pile popup.
 var pile_box: VBoxContainer
 
 ## Hash of the series view last rendered (0 forces a re-render).

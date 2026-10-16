@@ -3,7 +3,9 @@ extends PanelContainer
 ## Public Steam lobbies found by "Browse public lobbies": a Join button per lobby and Back to
 ## menu. Frees itself before emitting either choice.
 
+## Emitted when a lobby is chosen.
 signal join_chosen(lobby_id: int)
+## Emitted when Back is chosen.
 signal back_chosen
 
 const PANEL_SIZE := Vector2(520, 300)

@@ -9,10 +9,14 @@ enum R { CONT, WAIT, STAY, END }
 
 const HIDDEN_PILES := ["hand", "draw", "spent", "exhaust", "extra"]
 
-var stack: Array = []           # frames; back() is resolving
-var trigger_queue: Array = []   # {uid, ctl, ops, label, event}
-var window_queue: Array = []    # response-window events awaiting a frame
-var pending: Dictionary = {}    # current choice, empty when none
+## Frames; back() is resolving.
+var stack: Array = []
+## {uid, ctl, ops, label, event}.
+var trigger_queue: Array = []
+## Response-window events awaiting a frame.
+var window_queue: Array = []
+## Current choice, empty when none.
+var pending: Dictionary = {}
 var _next_choice_id: int = 1
 
 
@@ -27,11 +31,13 @@ func _on_game_over() -> void:
 
 # ---------------------------------------------------------------- frames
 
+## Builds an effect frame for card src controlled by ctl.
 func make_frame(src: int, ctl: int, ops: Array, label: String, event: Dictionary = {}) -> Dictionary:
 	return {"src": src, "ctl": ctl, "ops": ops, "pc": 0, "vars": {}, "label": label,
 		"event": event, "reversed": reversal_active(), "negated": false, "committed": false}
 
 
+## Pushes a frame to resolve.
 func push_frame(f: Dictionary) -> void:
 	stack.append(f)
 
@@ -160,12 +166,14 @@ func cancel_choice(player: int, choice_id: int) -> String:
 	return ""
 
 
+## Option dictionary selecting a card by uid.
 func card_option(uid: int, label: String = "") -> Dictionary:
 	return {"v": uid, "uid": uid, "label": label if label != "" else name_of(uid)}
 
 
 # ---------------------------------------------------------------- references and selectors
 
+## Resolves a player reference of a frame to a seat.
 func who(f: Dictionary, w) -> int:
 	if w is int:
 		return w
@@ -345,6 +353,7 @@ func _pile_def(uid: int) -> int:
 
 # ---------------------------------------------------------------- expressions and conditions
 
+## Evaluates a number expression in frame f.
 func eval_num(f: Dictionary, x) -> int:
 	if x is int:
 		return x
@@ -396,6 +405,7 @@ func eval_num(f: Dictionary, x) -> int:
 	return 0
 
 
+## Evaluates a condition in frame f.
 func eval_cond(f: Dictionary, cond: Dictionary) -> bool:
 	for key in cond:
 		var v = cond[key]
@@ -662,6 +672,7 @@ func column_summon_blocked(f: Dictionary, ops: Array) -> bool:
 	return false
 
 
+## Flips Trap uid face up for player p and queues its effect for event ev.
 func activate_trap(uid: int, p: int, ev: Dictionary) -> void:
 	cards[uid]["face_up"] = true
 	add_log("%s activates Trap %s." % [pname(p), name_of(uid)])

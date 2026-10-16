@@ -9,6 +9,7 @@ const PICK_KINDS := ["select", "attack_target", "slot"]
 ## Prompt zones that mean one of my unit zones.
 const UNIT_ZONES := ["unit", "adjacent", "column", "orig"]
 
+## The host screen this component works on.
 var gs: GameScreen
 
 

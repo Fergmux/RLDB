@@ -2,7 +2,9 @@ class_name PickPips
 extends Control
 ## Remaining reward picks as filled / empty gems.
 
+## Picks left.
 var left: int = 0
+## Total picks.
 var total: int = 0
 
 func _init() -> void:

@@ -5,6 +5,7 @@ extends RefCounted
 ## a verdict-coloured arrow and an outcome line in the banner. Presentation only: nothing is
 ## sent or changed.
 
+## The host screen this component works on.
 var gs: GameScreen
 ## Widgets currently showing a preview.
 var ws: Array = []

@@ -23,11 +23,17 @@ const RULE_ALPHA := 0.55
 ## Gold mix of the text colour while the item is the active one (not hovered).
 const ACTIVE_TINT := 0.85
 
+## Text shown.
 var label_text := ""
+## Font size.
 var fs := DEFAULT_SIZE
+## Drawn dimmed.
 var muted := false
+## Marked as the current choice.
 var active := false: set = _set_active
+## Slide-in offset (animated).
 var slide := 0.0: set = _set_slide
+## Highlight amount (animated).
 var hl := 0.0: set = _set_hl
 var _tw: Tween
 

@@ -11,6 +11,7 @@ const IN_TIME_REDUCED := 0.25
 ## Time spent fully black after the swap, so the new screen can lay itself out.
 const HOLD_TIME := 0.12
 
+## True while a transition runs.
 var busy: bool = false
 
 

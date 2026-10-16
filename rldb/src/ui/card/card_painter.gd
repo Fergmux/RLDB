@@ -19,18 +19,23 @@ static var _sb := StyleBoxFlat.new()
 var ci: CanvasItem
 ## Redacted card view being drawn (shared with the widget; never modified while drawing).
 var view: Dictionary = {}
+## Card size kind ("board", "hand", "big" ...).
 var size_kind: String = "board"
+## Drawn turned sideways (Defense).
 var rotated: bool = false
 ## Hover glow on (externally driven or self-managed hover).
 var hover: bool = false
 ## Combat preview: "atk" / "def" / "" (none), the value to show and its +/- bonus tag.
 var pv_stat: String = ""
+## Preview value shown.
 var pv_value: int = 0
+## Preview bonus tag.
 var pv_bonus: int = 0
 ## Scale of the base-unit geometry.
 var s: float = 1.0
 ## Drawn card rect in widget space and the unrotated portrait size.
 var cr := Rect2()
+## Unrotated portrait size.
 var ps := Vector2(85, 128)
 
 
@@ -87,6 +92,7 @@ func upright_begin(c: Vector2) -> void:
 		ci.draw_set_transform(face_xform() * c - c, 0.0, Vector2.ONE)
 
 
+## Ends an upright-drawing section started by upright_begin().
 func upright_end() -> void:
 	if rotated:
 		ci.draw_set_transform_matrix(face_xform())

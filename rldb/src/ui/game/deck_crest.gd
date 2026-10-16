@@ -2,6 +2,7 @@ class_name DeckCrest
 extends Control
 ## Deck crest: heater shield in the deck's dominant Type colour(s) with the Type initial.
 
+## Types shown in the crest.
 var types: Array = []
 
 func _init() -> void:

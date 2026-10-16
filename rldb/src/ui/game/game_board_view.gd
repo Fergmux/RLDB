@@ -21,9 +21,13 @@ const READY_KINDS := ["summon", "cast", "set", "power", "ritual", "arcane", "abi
 ## Pile stacks beside the unit zones: [zone, title] (Draw, Extra, Spent, Exhaust).
 const PILE_ZONES := [["draw", "Draw"], ["extra", "Extra"], ["spent", "Spent"], ["exhaust", "Exhaust"]]
 
+## The host screen this component works on.
 var gs: GameScreen
+## Table background root.
 var table: Control
+## Decorative lines and glow between the two sides.
 var deco: BoardDeco
+## Layer the cards of this view live on.
 var layer: Control
 ## [top plate, bottom plate]
 var plates: Array = []
@@ -31,8 +35,11 @@ var plates: Array = []
 var piles: Array = [{}, {}]
 ## "side:zone:slot" -> {zone_node, bg, holder, widget, hash, pidx, label, zone, rot, ring}
 var slots: Dictionary = {}
+## Row of face-down cards for the opponent hand.
 var opp_hand_box: Control
+## Opponent hand size label.
 var opp_hand_count_label: Label
+## Number of opponent hand cards currently shown (-1 until first render).
 var opp_hand_n: int = -1
 ## uid -> true for my cards that can act now (F02-11).
 var ready_uids: Dictionary = {}

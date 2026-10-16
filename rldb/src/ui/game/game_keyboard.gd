@@ -8,6 +8,7 @@ extends RefCounted
 ## Tab/arrows nor double-handle Enter (the board has its own keyboard scheme).
 const GAME_KEYS := [KEY_TAB, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE]
 
+## The host screen this component works on.
 var gs: GameScreen
 ## Keyboard-focused card (-1: none; the mouse takes over when it moves).
 var kb_uid: int = -1

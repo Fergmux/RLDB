@@ -12,16 +12,27 @@ const BANNER_MIN_W := 460.0
 const BANNER_MAX_W := 640.0
 const OPTION_H := 32
 
+## The host screen this component works on.
 var gs: GameScreen
+## Banner explaining the pending choice.
 var ctx_banner: PanelContainer
+## Banner headline.
 var banner_title: Label
+## Banner explanatory text.
 var banner_sub: RichTextLabel
+## Banner buttons (skip, confirm ...).
 var banner_btns: HBoxContainer
+## Banner flow of option buttons.
 var banner_flow: HFlowContainer
+## Tray offering pile cards for a choice.
 var tray: PanelContainer
+## Container of the tray cards.
 var tray_box: VBoxContainer
+## Notice that the opponent is responding.
 var wait_chip: PanelContainer
+## Text of the wait notice.
 var wait_label: Label
+## Short toast message over the board.
 var toast: Label
 ## uid -> card view shown only for the current choice (tray cards).
 var tray_cards: Dictionary = {}

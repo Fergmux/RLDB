@@ -6,6 +6,7 @@ extends RefCounted
 
 const HOSTILE_COLOR := Color("ff6b5e")
 
+## The host screen this component works on.
 var gs: GameScreen
 ## Banner option button under the mouse (-1: none).
 var hover_opt: int = -1

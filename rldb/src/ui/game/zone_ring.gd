@@ -3,7 +3,9 @@ extends Control
 ## Pulsing outline over a whole zone that is being chosen while a card already stands in it
 ## (e.g. a Fusion summon into a material's zone). Click-through.
 
+## Whether it is drawn.
 var on: bool = false
+## Colour.
 var col: Color = UIStyle.TARGET
 
 func _init() -> void:

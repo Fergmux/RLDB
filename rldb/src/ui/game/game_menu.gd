@@ -6,10 +6,15 @@ extends RefCounted
 
 const SETTINGS_W := 400.0
 
+## The host screen this component works on.
 var gs: GameScreen
+## Strip along the top edge (menu button, connection state).
 var top_strip: Control
+## Connection state text.
 var conn_label: Label
+## The in-game menu popup.
 var game_menu: PanelContainer
+## The settings popup.
 var settings_popup: PanelContainer
 var _dialog_root: ConfirmDialog
 

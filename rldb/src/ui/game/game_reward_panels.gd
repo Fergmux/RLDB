@@ -4,6 +4,7 @@ extends RefCounted
 ## change a basic unit) and the offer of new cards. Local choices that are not sent yet (which
 ## reward is open, the card to remove, the basic unit being changed) live here.
 
+## The host screen this component works on.
 var gs: GameScreen
 
 ## Reward being set up ("", "add", "remove", "basic").

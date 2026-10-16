@@ -7,8 +7,11 @@ extends RefCounted
 const SPAN_MAX := 1000.0
 const CARD_GAP := 8.0
 
+## The host screen this component works on.
 var gs: GameScreen
+## Layer the cards of this view live on.
 var layer: Control
+## Shown when the hand is empty.
 var empty_label: Label
 ## uid -> {holder, widget, hash, placed}
 var items: Dictionary = {}

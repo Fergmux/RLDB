@@ -10,9 +10,13 @@ signal menu_requested
 ## The game screen already confirmed leaving; go straight back to the menu.
 signal leave_requested
 
+## Host of the local play session.
 var local_host: LocalHost
+## Network session.
 var net: NetSession
+## The game screen of the running match.
 var screen: GameScreen
+## Hot-seat hand-over cover.
 var privacy_overlay: PanelContainer
 ## Seat currently shown on the hot-seat screen.
 var shown_seat: int = 0

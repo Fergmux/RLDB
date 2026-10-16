@@ -17,18 +17,31 @@ const PHASE_MAIN2 := "main2"
 const PHASE_END := "end"
 const PHASE_OVER := "over"
 
-var cards: Dictionary = {}        # uid -> instance Dictionary
-var players: Array = []           # 2 player Dictionaries
-var turn: int = 0                 # global turn counter, 1-based
-var active: int = 0               # active player index
+## Uid -> instance Dictionary.
+var cards: Dictionary = {}
+## 2 player Dictionaries.
+var players: Array = []
+## Global turn counter, 1-based.
+var turn: int = 0
+## Active player index.
+var active: int = 0
+## Current phase.
 var phase: String = PHASE_MAIN1
+## Winning seat, or -1.
 var winner: int = -1
+## Random source.
 var rng := RandomNumberGenerator.new()
-var log_entries: Array = []       # {seq, pub, priv:{player:text}}
+## {seq, pub, priv:{player:text}}.
+var log_entries: Array = []
+## Match configuration.
 var config: Dictionary = {}
-var reversal_turn: int = -1       # Sneaky Snunday: turn during which reversals were played
-var reversal_count: int = 0       # S-01: copies played that turn; an even count cancels out
-var swap_turn: int = -1           # Freaky Funday: turn whose swapped units are listed in swap_uids
+## Sneaky Snunday: turn during which reversals were played.
+var reversal_turn: int = -1
+## S-01: copies played that turn; an even count cancels out.
+var reversal_count: int = 0
+## Freaky Funday: turn whose swapped units are listed in swap_uids.
+var swap_turn: int = -1
+## Cards affected by the swap.
 var swap_uids: Array = []
 var _next_log_seq: int = 1
 
@@ -72,46 +85,57 @@ func _create_instance(def_id: int, owner: int) -> int:
 
 # ---------------------------------------------------------------- lookups
 
+## Instance dictionary of card uid.
 func c(uid: int) -> Dictionary:
 	return cards[uid]
 
 
+## Definition of card uid.
 func d(uid: int) -> Dictionary:
 	return CardDB.get_def(cards[uid]["id"])
 
 
+## The other player.
 func opp(p: int) -> int:
 	return 1 - p
 
 
+## Name of card uid.
 func name_of(uid: int) -> String:
 	return d(uid)["name"]
 
 
+## Category of card uid.
 func category(uid: int) -> String:
 	return d(uid)["category"]
 
 
+## True if uid is a unit card.
 func is_unit(uid: int) -> bool:
 	return CardDB.is_unit_category(category(uid))
 
 
+## True if uid is an Extra-pile card.
 func is_extra(uid: int) -> bool:
 	return CardDB.is_extra_category(category(uid))
 
 
+## True if uid is on the field.
 func on_field(uid: int) -> bool:
 	return cards.has(uid) and cards[uid]["zone"] in ["unit", "backrow", "power"]
 
 
+## True if uid is a unit on the field.
 func unit_on_field(uid: int) -> bool:
 	return cards.has(uid) and cards[uid]["zone"] == "unit"
 
 
+## Player p's pile / zone list.
 func pile(p: int, zone: String) -> Array:
 	return players[p][zone]
 
 
+## Unit uids on player p's field.
 func field_units(p: int) -> Array:
 	var out := []
 	for uid in players[p]["units"]:
@@ -120,30 +144,37 @@ func field_units(p: int) -> Array:
 	return out
 
 
+## All units on the field, active player first.
 func all_field_units() -> Array:
 	return field_units(active) + field_units(opp(active))
 
 
+## Trap/Spell uids on player p's field.
 func backrow_cards(p: int) -> Array:
 	return players[p]["backrow"].filter(func(u): return u != -1)
 
 
+## Power uids on player p's field.
 func power_cards(p: int) -> Array:
 	return players[p]["powers"].filter(func(u): return u != -1)
 
 
+## All cards on player p's field.
 func field_cards(p: int) -> Array:
 	return field_units(p) + backrow_cards(p) + power_cards(p)
 
 
+## Column of a unit slot.
 static func slot_col(slot: int) -> int:
 	return slot % 3
 
 
+## Row of a unit slot.
 static func slot_row(slot: int) -> int:
 	return slot / 3   # 0 = front, 1 = back
 
 
+## Slots touching `slot` (including diagonals).
 static func adjacent_slots(slot: int) -> Array:
 	var out := []
 	for s in range(UNIT_SLOTS):
@@ -152,6 +183,7 @@ static func adjacent_slots(slot: int) -> Array:
 	return out
 
 
+## Column of the card uid.
 func column_of(uid: int) -> int:
 	return slot_col(cards[uid]["slot"])
 
@@ -179,6 +211,7 @@ func protected_by(uid: int) -> int:
 	return players[inst["ctl"]]["units"][inst["slot"] + 3]
 
 
+## Units adjacent to unit uid.
 func adjacent_units(uid: int) -> Array:
 	var inst: Dictionary = cards[uid]
 	var out := []
@@ -189,6 +222,7 @@ func adjacent_units(uid: int) -> Array:
 	return out
 
 
+## Empty unit slots of player p.
 func free_unit_slots(p: int) -> Array:
 	var out := []
 	for s in range(UNIT_SLOTS):
@@ -197,6 +231,7 @@ func free_unit_slots(p: int) -> Array:
 	return out
 
 
+## Empty Trap/Spell slots of player p.
 func free_backrow_slots(p: int) -> Array:
 	var out := []
 	for s in range(BACKROW_SLOTS):
@@ -205,6 +240,7 @@ func free_backrow_slots(p: int) -> Array:
 	return out
 
 
+## Empty Power slots of player p.
 func free_power_slots(p: int) -> Array:
 	var out := []
 	for s in range(POWER_SLOTS):
@@ -242,6 +278,7 @@ func fx_pos(uid: int) -> Dictionary:
 	return {"p": inst["ctl"], "zone": inst["zone"], "slot": inst["slot"]}
 
 
+## Name of player p.
 func pname(p: int) -> String:
 	return players[p]["name"]
 
@@ -275,6 +312,7 @@ func is_public_card(uid: int) -> bool:
 	return z in ["unit", "power", "limbo"] or (z == "backrow" and is_face_up(uid))
 
 
+## True if card uid is face up.
 func is_face_up(uid: int) -> bool:
 	var inst: Dictionary = cards[uid]
 	return inst["face_up"] or inst["st"].get("reveal", 0) > 0
@@ -282,6 +320,7 @@ func is_face_up(uid: int) -> bool:
 
 # ---------------------------------------------------------------- abilities & suppression
 
+## True if unit uid is debilitated.
 func is_debilitated(uid: int) -> bool:
 	return cards[uid]["st"].get("debilitate", 0) > 0
 
@@ -314,6 +353,7 @@ func count_flag(p: int, flag: String) -> int:
 
 # ---------------------------------------------------------------- types and stats
 
+## Current type of unit uid.
 func unit_type(uid: int) -> String:
 	var inst: Dictionary = cards[uid]
 	# Chaos Witch aura: mage units become the declared type.
@@ -327,6 +367,7 @@ func unit_type(uid: int) -> String:
 	return d(uid)["type"]
 
 
+## Current race of unit uid.
 func unit_race(uid: int) -> String:
 	var inst: Dictionary = cards[uid]
 	if inst["race_o"] != null:
@@ -334,6 +375,7 @@ func unit_race(uid: int) -> String:
 	return d(uid)["race"]
 
 
+## ATK before buffs and statuses.
 func base_atk(uid: int) -> int:
 	var inst: Dictionary = cards[uid]
 	if inst["base_atk"] != null:
@@ -342,6 +384,7 @@ func base_atk(uid: int) -> int:
 	return 0 if v == null else v
 
 
+## DEF before buffs and statuses.
 func base_def(uid: int) -> int:
 	var inst: Dictionary = cards[uid]
 	if inst["base_def"] != null:
@@ -350,6 +393,7 @@ func base_def(uid: int) -> int:
 	return 0 if v == null else v
 
 
+## True while effects are reversed this turn.
 func reversal_active() -> bool:
 	return reversal_turn == turn and reversal_count % 2 == 1
 
@@ -393,10 +437,12 @@ func stat_breakdown(uid: int) -> Dictionary:
 	return {"atk": maxi(atk, 0), "def": maxi(def, 0), "parts": parts}
 
 
+## Current ATK of unit uid.
 func atk_of(uid: int) -> int:
 	return stat_breakdown(uid)["atk"]
 
 
+## Current DEF of unit uid.
 func def_of(uid: int) -> int:
 	return stat_breakdown(uid)["def"]
 
@@ -430,6 +476,7 @@ func cost_text(uid: int) -> String:
 
 # ---------------------------------------------------------------- statuses
 
+## True if uid has any buff.
 func has_any_buff(uid: int) -> bool:
 	for s in cards[uid]["st"]:
 		if CardDB.is_buff(s) and cards[uid]["st"][s] > 0:
@@ -437,6 +484,7 @@ func has_any_buff(uid: int) -> bool:
 	return false
 
 
+## True if uid has any debuff.
 func has_any_debuff(uid: int) -> bool:
 	for s in cards[uid]["st"]:
 		if CardDB.is_debuff(s) and cards[uid]["st"][s] > 0:
@@ -444,6 +492,7 @@ func has_any_debuff(uid: int) -> bool:
 	return false
 
 
+## Stacks of status s on uid.
 func status_count(uid: int, s: String) -> int:
 	if s == "rune":
 		return cards[uid]["runes"]
@@ -531,6 +580,7 @@ func change_cost_perm(uid: int, n: int) -> void:
 	add_log("%s's cost changes by %+d for the rest of this game (now %d)." % [name_of(uid), cards[uid]["cost_p"] - before, maxi(printed + cards[uid]["cost_p"], 0)])
 
 
+## Removes n stacks of status s from uid.
 func decrement_status(uid: int, s: String, n: int = 1) -> void:
 	_set_status(uid, s, status_count(uid, s) - n)
 
@@ -554,6 +604,7 @@ func change_hp(p: int, amount: int, reason: String) -> bool:
 	return false
 
 
+## Ends the game with winner win for the given reason.
 func end_game(win: int, reason: String) -> void:
 	if winner != -1:
 		return
@@ -568,6 +619,7 @@ func _on_game_over() -> void:
 	pass
 
 
+## Changes player p's AP by amount and logs the reason.
 func change_ap(p: int, amount: int, reason: String) -> void:
 	if amount == 0:
 		return
@@ -643,6 +695,7 @@ func move_to_pile(uid: int, dest: String) -> void:
 	inst["slot"] = -1
 
 
+## Puts unit uid in slot for player p with the given stance.
 func place_unit(uid: int, p: int, slot: int, stance: String) -> void:
 	_remove_from_zone(uid)
 	var inst: Dictionary = cards[uid]
@@ -655,6 +708,7 @@ func place_unit(uid: int, p: int, slot: int, stance: String) -> void:
 	players[p]["units"][slot] = uid
 
 
+## Moves unit uid to another slot.
 func move_unit_slot(uid: int, slot: int) -> void:
 	var inst: Dictionary = cards[uid]
 	players[inst["ctl"]]["units"][inst["slot"]] = -1
@@ -662,6 +716,7 @@ func move_unit_slot(uid: int, slot: int) -> void:
 	inst["slot"] = slot
 
 
+## Shuffles arr in place with the game rng.
 func shuffle_array(arr: Array) -> void:
 	for i in range(arr.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)

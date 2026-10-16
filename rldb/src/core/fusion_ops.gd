@@ -52,6 +52,7 @@ func _assignable(reqs: Array, pool: Array, chosen: Array) -> bool:
 	return false
 
 
+## Fusion materials player p could use among `sources`, optionally excluding one uid.
 func fusion_candidates(p: int, sources: Array, exclude: int = -1) -> Array:
 	var pool := _fusion_pool(p, sources).filter(func(u): return u != exclude)
 	var out := []

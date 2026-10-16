@@ -3,19 +3,31 @@ extends RefCounted
 ## Right-hand column of the match screen: game log (top), card details / own pile list
 ## (middle) and the turn panel (bottom), or the series summary between games.
 
+## The host screen this component works on.
 var gs: GameScreen
+## Root of the sidebar column.
 var side_root: Control
+## Whose turn it is.
 var turn_title: Label
+## Secondary turn text.
 var turn_note: Label
+## Phase indicator.
 var pips: PhasePips
 ## Turn-bar row: the phase button, or the state chip while a choice is pending.
 var brow: HBoxContainer
+## Advance-phase button.
 var phase_btn: Button
+## Chip showing the game state.
 var state_chip: PanelContainer
+## Text of the state chip.
 var state_label: Label
+## Series score panel.
 var series_panel: PanelContainer
+## Content of the series panel.
 var series_box: VBoxContainer
+## Panel holding the card details.
 var details_panel: PanelContainer
+## Panel holding the game log.
 var log_panel: PanelContainer
 ## Hash of the series summary last rendered (0 forces a re-render).
 var series_sig: int = 0

@@ -6,8 +6,11 @@ extends RefCounted
 ## Entries shown when (re)attaching; the full history is one click away.
 const LOG_BACKFILL := 100
 
+## The host screen this component works on.
 var gs: GameScreen
+## Panel holding the log.
 var panel: PanelContainer
+## Rich text label showing the game log.
 var label: RichTextLabel
 
 var _seq_shown: int = 0

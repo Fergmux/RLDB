@@ -9,6 +9,7 @@ const FIELD_SCALE := 1.08
 ## Seconds the pointer may leave a hovered card before it drops.
 const CLOSE_DELAY := 0.12
 
+## The host screen this component works on.
 var gs: GameScreen
 ## Hovered item {key, w, holder, uid, kind, own}, or {}.
 var hv: Dictionary = {}
