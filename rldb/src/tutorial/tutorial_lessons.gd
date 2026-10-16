@@ -37,6 +37,7 @@ const BASIC_BEAST_FIRE := 113
 const BASIC_WARRIOR_EARTH := 122
 const BASIC_BEAST_EARTH := 123
 const BASIC_MONSTER_NECROTIC := 129
+const BASIC_MONSTER_FIRE := 114
 const BASIC_WARRIOR_LIGHTNING := 132
 const BASIC_MONSTER_LIGHTNING := 134
 const FROST_WYVERN := 32
@@ -248,7 +249,7 @@ static func _extra_deck() -> Dictionary:
 		_c("p_wyrm", BASTION_WYRM, PLAYER, "extra"),
 		_c("p_inferno", RAGING_INFERNO, PLAYER, "extra"),
 		_c("p_kaya", GRANDMOTHER_KAYA, PLAYER, "extra"),
-		_c("o_monster", BASIC_MONSTER_NECROTIC, OPPONENT, "unit", 1),
+		_c("o_monster", BASIC_MONSTER_FIRE, OPPONENT, "unit", 1),
 	] + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) + _fill("o_fill", BASIC_MONSTER_NECROTIC, OPPONENT, 8)
 	return {
 		"id": "extra_deck",
@@ -266,7 +267,7 @@ static func _extra_deck() -> Dictionary:
 			_read("Ritual and Arcane", "Ritual units (like Raging Inferno) tribute one unit carrying enough Runes. Arcane units (like Grandmother Kaya) exhaust units from your Spent whose costs add up to their requirement.", [{"pile": ["me", "extra"]}]),
 			_do("Enter the Battle Phase", "Newly summoned units may attack at once. Click Go to Battle Phase.", [{"t": "next_phase"}]),
 			_do("Attack with the Wyrm", "Click Bastion Wyrm and click Attack.", [{"t": "attack", "card": "p_wyrm"}]),
-			_do("Pick the target", "Click the Rival's Necrotic Monster.", [{"t": "choose", "opt": {"card": "o_monster"}}]),
+			_do("Pick the target", "Click the Rival's Fire Monster (no Type advantage either way: 36 against 8).", [{"t": "choose", "opt": {"card": "o_monster"}}]),
 			_read("Tutorial complete", "36 ATK against 8: the Monster is destroyed and the Rival loses 28 HP. You have finished the tutorial. Good luck in your first series!", [{"plate": "opp"}]),
 		],
 		"opponent": [],
