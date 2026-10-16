@@ -23,12 +23,23 @@ const FIELD_SCALE := 1.08
 const MAX_FX_ENTRIES := 25
 const ZONE_KEY := {"unit": "units", "backrow": "backrow", "power": "powers"}
 const ZONE_KIND := {"unit": "board", "backrow": "trap", "power": "power"}
-const PHASE_ORDER := [["main1", "Setup"], ["battle", "Battle"], ["main2", "Recovery"]]
 const READY_KINDS := ["summon", "cast", "set", "power", "ritual", "arcane", "ability", "attack", "activate_set"]
 ## Prompt kinds answered by picking cards/zones directly (board, hand or the pile tray) with
 ## the context banner (F02-07 / F02-10); others (responses, ordering, yes/no) use the sidebar.
 const PICK_KINDS := ["select", "attack_target", "slot"]
 const VERDICT_COLORS := {"good": Color("5fd068"), "bad": Color("e5534b"), "neutral": Color("b9a6e8")}
+
+## Draw order of the screen's layers (z_index). Equal values fall back to child order.
+const Z_LIFTED_CARD := 40
+const Z_ARROW := 55
+const Z_FX := 60
+const Z_TRAY := 65
+const Z_WAIT := 66
+const Z_BANNER := 70
+const Z_TOAST := 80
+const Z_PILE_POPUP := 90
+const Z_GAME_MENU := 95
+const Z_HOVER := 100
 
 var client: SeatClient
 var view: Dictionary = {}
@@ -159,307 +170,6 @@ var _stack: Control
 var _stack_sig: String = ""
 
 
-## Table decoration: centre line with ornament and the active player's underglow.
-class BoardDeco extends Control:
-	var mid_y: float = 0.0
-	var x0: float = 0.0
-	var x1: float = 0.0
-	var glow_side: int = -1
-	var top_edge: float = 0.0
-	var bottom_edge: float = 0.0
-
-	func _init() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		# Plain centre line (no ornament) and a soft gradient under the active half (no hard gold line).
-		draw_line(Vector2(x0, mid_y), Vector2(x1, mid_y), Color(UIStyle.TABLE_INLAY.lightened(0.2), 0.9), 2.0)
-		if glow_side >= 0:
-			var y := top_edge if glow_side == 0 else bottom_edge
-			var dir := -1.0 if glow_side == 0 else 1.0
-			var gc := Color(UIStyle.GOLD, 0.0)
-			var gs := Color(UIStyle.GOLD, 0.2)
-			draw_polygon(PackedVector2Array([Vector2(x0, y), Vector2(x1, y), Vector2(x1, y + dir * 22.0), Vector2(x0, y + dir * 22.0)]), PackedColorArray([gs, gs, gc, gc]))
-
-
-## Pulsing outline over a whole zone that is being chosen while a card already stands in it
-## (e.g. a Fusion summon into a material's zone). Click-through.
-class ZoneRing extends Control:
-	var on: bool = false
-	var col: Color = UIStyle.TARGET
-
-	func _init() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		visible = false
-
-	func set_on(v: bool) -> void:
-		if v == on:
-			return
-		on = v
-		visible = v
-		set_process(v and not UIStyle.reduce_motion)
-		queue_redraw()
-
-	func _process(_d: float) -> void:
-		queue_redraw()
-
-	func _draw() -> void:
-		var a := 1.0
-		if not UIStyle.reduce_motion:
-			a = 0.55 + 0.45 * (0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 900.0 * TAU))
-		var r := Rect2(Vector2.ZERO, size)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(col, 0.10 + 0.10 * a)
-		sb.border_color = Color(col, a)
-		sb.set_border_width_all(4)
-		sb.set_corner_radius_all(9)
-		draw_style_box(sb, r)
-		var glow := StyleBoxFlat.new()
-		glow.draw_center = false
-		glow.border_color = Color(col, 0.3 * a)
-		glow.set_border_width_all(5)
-		glow.set_corner_radius_all(12)
-		draw_style_box(glow, r.grow(4))
-
-
-## Targeting arrow from the acting card to the hovered target: a smooth arc with a soft glow,
-## a tapering body, chevrons flowing toward the target and a bevelled head. Everything is drawn
-## anti-aliased (user feedback: the old straight dashed arrow was stiff and jagged).
-class ArrowLayer extends Control:
-	var a: Vector2 = Vector2.ZERO
-	var b: Vector2 = Vector2.ZERO
-	var on: bool = false
-	## Neutral gold, or the combat-preview verdict colour while hovering an attack target.
-	var col: Color = UIStyle.TARGET
-	## Combat-preview verdict shown as a shape at the arrowhead ("good" ✓, "bad" ✕, "neutral" =).
-	var verdict: String = ""
-
-	const HEAD := 22.0
-	const SAMPLES := 48
-
-	func _init() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		z_index = 55
-
-	## Point on the arc (quadratic Bézier bowing upward on screen) at t in [0, 1].
-	func _at(t: float, c: Vector2) -> Vector2:
-		var u := 1.0 - t
-		return a * u * u + c * 2.0 * u * t + b * t * t
-
-	func _draw() -> void:
-		if not on:
-			return
-		var d := b - a
-		var length := d.length()
-		if length < 24.0:
-			return
-		var n := Vector2(-d.y, d.x) / length
-		if n.y > 0.0:
-			n = -n                     # bow upward
-		var ctrl := (a + b) / 2.0 + n * clampf(length * 0.22, 24.0, 130.0)
-		# Sample the curve and its cumulative length.
-		var pts := PackedVector2Array()
-		var acc := PackedFloat32Array()
-		var total := 0.0
-		for i in SAMPLES + 1:
-			var q := _at(float(i) / SAMPLES, ctrl)
-			if i > 0:
-				total += q.distance_to(pts[i - 1])
-			pts.append(q)
-			acc.append(total)
-		# Body stops where the head begins.
-		var body := PackedVector2Array()
-		for i in pts.size():
-			if total - acc[i] >= HEAD * 0.75:
-				body.append(pts[i])
-		if body.size() < 2:
-			return
-		var tip := pts[pts.size() - 1]
-		var dir := (tip - body[body.size() - 1]).normalized()
-		# Glow, shadow, tapering core and a bright inner line.
-		draw_polyline(body, Color(col, 0.16), 16.0, true)
-		draw_polyline(body, Color(0, 0, 0, 0.5), 8.0, true)
-		for i in body.size() - 1:
-			var w := lerpf(2.5, 6.0, float(i) / float(body.size() - 2))
-			draw_line(body[i], body[i + 1], col, w, true)
-		draw_polyline(body, Color(1, 1, 1, 0.45), 1.4, true)
-		# Chevrons flowing from the source toward the target.
-		var spacing := 34.0
-		var phase := 0.0 if UIStyle.reduce_motion else fposmod(float(Time.get_ticks_msec()) / 1000.0 * 70.0, spacing)
-		var s0 := phase + 14.0
-		var j := 0
-		while s0 < total - HEAD * 1.6:
-			while j < acc.size() - 1 and acc[j + 1] < s0:
-				j += 1
-			var seg := maxf(acc[j + 1] - acc[j], 0.001)
-			var k := (s0 - acc[j]) / seg
-			var c := pts[j].lerp(pts[j + 1], k)
-			var t := (pts[j + 1] - pts[j]).normalized()
-			var nn := Vector2(-t.y, t.x)
-			var fade := clampf(minf(s0 / 40.0, (total - HEAD * 1.6 - s0) / 40.0), 0.0, 1.0)
-			draw_polyline(PackedVector2Array([c - t * 4.0 + nn * 4.5, c + t * 2.5, c - t * 4.0 - nn * 4.5]), Color(1, 1, 1, 0.85 * fade), 2.2, true)
-			s0 += spacing
-		# Head: shadow, fill, highlight facet and an anti-aliased rim.
-		var nh := Vector2(-dir.y, dir.x)
-		var base := tip - dir * HEAD
-		var head := PackedVector2Array([tip, base + nh * HEAD * 0.62, base + dir * HEAD * 0.22, base - nh * HEAD * 0.62])
-		var sh := PackedVector2Array()
-		for q in head:
-			sh.append(q + Vector2(0, 3))
-		draw_colored_polygon(sh, Color(0, 0, 0, 0.45))
-		draw_colored_polygon(head, col)
-		draw_colored_polygon(PackedVector2Array([tip, base + nh * HEAD * 0.62, base + dir * HEAD * 0.22]), Color(1, 1, 1, 0.22))
-		var rim := PackedVector2Array(head)
-		rim.append(head[0])
-		draw_polyline(rim, col.darkened(0.45), 1.6, true)
-		# Source: a soft pulsing socket.
-		var pulse := 0.0 if UIStyle.reduce_motion else 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 1000.0 * TAU * 1.2)
-		draw_circle(a, 9.0 + 2.0 * pulse, Color(col, 0.22), true, -1.0, true)
-		draw_circle(a, 6.0, Color(0, 0, 0, 0.6), true, -1.0, true)
-		draw_circle(a, 4.0, col, true, -1.0, true)
-		if verdict != "":
-			# Shape cue so the verdict does not rely on the arrow colour alone (UX D3).
-			var vc := tip - dir * (HEAD + 22.0)
-			draw_circle(vc, 16.0, Color(0, 0, 0, 0.8), true, -1.0, true)
-			draw_circle(vc, 13.5, col, true, -1.0, true)
-			var ink := Color(0.06, 0.05, 0.04)
-			match verdict:
-				"good":
-					draw_polyline(PackedVector2Array([vc + Vector2(-6, 0), vc + Vector2(-1.5, 5), vc + Vector2(7, -5)]), ink, 3.5, true)
-				"bad":
-					draw_line(vc + Vector2(-5, -5), vc + Vector2(5, 5), ink, 3.5, true)
-					draw_line(vc + Vector2(5, -5), vc + Vector2(-5, 5), ink, 3.5, true)
-				_:
-					draw_line(vc + Vector2(-6, -3), vc + Vector2(6, -3), ink, 3.0, true)
-					draw_line(vc + Vector2(-6, 3), vc + Vector2(6, 3), ink, 3.0, true)
-
-
-## Cue shown under the details text while it continues below the fold.
-class ScrollCue extends Control:
-	func _init() -> void:
-		custom_minimum_size = Vector2(0, 22)
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		visible = false
-
-	func _draw() -> void:
-		var font := UIStyle.font_bold()
-		var txt := "Scroll for more"
-		var sz := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13)
-		var cx := size.x / 2.0
-		draw_rect(Rect2(0, 0, size.x, size.y), Color(UIStyle.GOLD, 0.12))
-		draw_string(font, Vector2(cx - sz.x / 2.0, size.y / 2.0 + 4.5), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UIStyle.GOLD_HI)
-		for dx in [-sz.x / 2.0 - 14.0, sz.x / 2.0 + 14.0]:
-			var c := Vector2(cx + dx, size.y / 2.0)
-			draw_colored_polygon(PackedVector2Array([c + Vector2(-5, -3), c + Vector2(5, -3), c + Vector2(0, 4)]), UIStyle.GOLD_HI)
-
-
-## Deck crest: heater shield in the deck's dominant Type colour(s) with the Type initial.
-class DeckCrest extends Control:
-	var types: Array = []
-
-	func _init() -> void:
-		custom_minimum_size = Vector2(56, 68)
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _shield(r: Rect2) -> PackedVector2Array:
-		var x := r.position.x
-		var y := r.position.y
-		var w := r.size.x
-		var h := r.size.y
-		return PackedVector2Array([Vector2(x + 0.08 * w, y), Vector2(x + 0.92 * w, y), Vector2(x + w, y + 0.12 * h), Vector2(x + w, y + 0.56 * h),
-			Vector2(x + 0.5 * w, y + h), Vector2(x, y + 0.56 * h), Vector2(x, y + 0.12 * h)])
-
-	func _draw() -> void:
-		var outer := Rect2(2, 2, size.x - 4, size.y - 4)
-		draw_colored_polygon(_shield(outer), UIStyle.GOLD)
-		var inner := Rect2(outer.position + Vector2(3, 3), outer.size - Vector2(6, 6))
-		var ip := _shield(inner)
-		var c0 := UIStyle.type_color(types[0] if types.size() > 0 else "")
-		draw_colored_polygon(ip, c0.darkened(0.15))
-		if types.size() > 1:
-			var half := Geometry2D.intersect_polygons(ip, PackedVector2Array([Vector2(size.x / 2.0, 0), Vector2(size.x, 0), Vector2(size.x, size.y), Vector2(size.x / 2.0, size.y)]))
-			for poly in half:
-				draw_colored_polygon(poly, UIStyle.type_color(types[1]).darkened(0.15))
-		var letter := String(types[0]).substr(0, 1) if types.size() > 0 and String(types[0]) != "" else "?"
-		var font := UIStyle.font_display(700)
-		var sz := font.get_string_size(letter, HORIZONTAL_ALIGNMENT_LEFT, -1, 28)
-		var pos := Vector2((size.x - sz.x) / 2.0, size.y * 0.5 + 9.0)
-		draw_string_outline(font, pos, letter, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, 4, Color(0, 0, 0, 0.8))
-		draw_string(font, pos, letter, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color.WHITE)
-
-
-## Remaining reward picks as filled / empty gems.
-class PickPips extends Control:
-	var left: int = 0
-	var total: int = 0
-
-	func _init() -> void:
-		custom_minimum_size = Vector2(0, 28)
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		var amber: Color = UIStyle.COST_COLORS["ap"]
-		for i in total:
-			var c := Vector2(14.0 + i * 28.0, size.y / 2.0)
-			if i < left:
-				draw_circle(c, 11.0, amber.darkened(0.65))
-				draw_circle(c, 9.0, amber)
-				draw_circle(c + Vector2(-3, -3.5), 3.5, Color(1, 1, 1, 0.35))
-			else:
-				draw_circle(c, 11.0, Color(0.1, 0.08, 0.06))
-				draw_arc(c, 9.5, 0.0, TAU, 24, Color(amber, 0.4), 2.0)
-
-
-## Phase pips for the turn bar.
-class PhasePips extends Control:
-	var phase: String = ""
-
-	func _init() -> void:
-		custom_minimum_size = Vector2(0, 26)
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	## Pill tags with depth: inset dark pills for the other phases, a glowing gold pill with a
-	## gloss for the current one, joined by a thin track.
-	func _draw() -> void:
-		var n := GameScreen.PHASE_ORDER.size()
-		var gap := 8.0
-		var h := size.y - 4.0
-		var w := (size.x - gap * (n - 1)) / n
-		var font := UIStyle.font_bold()
-		draw_line(Vector2(w * 0.5, 2.0 + h / 2.0), Vector2(size.x - w * 0.5, 2.0 + h / 2.0), Color(UIStyle.BRONZE, 0.5), 2.0)
-		for i in n:
-			var r := Rect2(i * (w + gap), 2.0, w, h)
-			var on: bool = GameScreen.PHASE_ORDER[i][0] == phase
-			var sb := StyleBoxFlat.new()
-			sb.set_corner_radius_all(int(h / 2.0))
-			if on:
-				sb.bg_color = UIStyle.GOLD
-				sb.border_color = UIStyle.GOLD_HI
-				sb.set_border_width_all(1)
-				sb.shadow_color = Color(UIStyle.GOLD_HI, 0.45)
-				sb.shadow_size = 7
-			else:
-				sb.bg_color = Color(0.07, 0.06, 0.05, 0.98)
-				sb.border_color = Color(UIStyle.BRONZE, 0.75)
-				sb.set_border_width_all(1)
-				sb.shadow_color = Color(0, 0, 0, 0.5)
-				sb.shadow_size = 3
-				sb.shadow_offset = Vector2(0, 1)
-			draw_style_box(sb, r)
-			var gl := StyleBoxFlat.new()
-			gl.bg_color = Color(1, 1, 1, 0.22 if on else 0.05)
-			gl.corner_radius_top_left = int(h / 2.0) - 1
-			gl.corner_radius_top_right = int(h / 2.0) - 1
-			draw_style_box(gl, Rect2(r.position + Vector2(2, 1.5), Vector2(r.size.x - 4, r.size.y * 0.45)))
-			var txt: String = GameScreen.PHASE_ORDER[i][1]
-			var fs := 13
-			var sz := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
-			var pos := Vector2(r.position.x + (w - sz.x) / 2.0, r.position.y + h / 2.0 + 4.8)
-			if on:
-				draw_string(font, pos + Vector2(0, 1), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.35))
-			draw_string(font, pos, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UIStyle.ON_GOLD if on else UIStyle.MUTED)
-
-
 func _ready() -> void:
 	UIStyle.load_settings()
 	Sfx.load_settings()
@@ -473,12 +183,12 @@ func _ready() -> void:
 	_build_side()
 	_build_top_strip()
 	hover_layer = _passive_layer()
-	hover_layer.z_index = 100
+	hover_layer.z_index = Z_HOVER
 	arrow = ArrowLayer.new()
 	arrow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(arrow)
 	fx_layer = _passive_layer()
-	fx_layer.z_index = 60
+	fx_layer.z_index = Z_FX
 	_build_pause()
 	_build_overlays()
 	banner_layer = _passive_layer()
@@ -866,7 +576,7 @@ func _build_top_strip() -> void:
 	bs.shadow_offset = Vector2(0, 3)
 	ctx_banner.add_theme_stylebox_override("panel", bs)
 	ctx_banner.visible = false
-	ctx_banner.z_index = 70
+	ctx_banner.z_index = Z_BANNER
 	add_child(ctx_banner)
 	var bcol := VBoxContainer.new()
 	bcol.add_theme_constant_override("separation", 4)
@@ -914,7 +624,7 @@ func _build_top_strip() -> void:
 	tsb.shadow_color = Color(0, 0, 0, 0.6)
 	tray.add_theme_stylebox_override("panel", tsb)
 	tray.visible = false
-	tray.z_index = 65
+	tray.z_index = Z_TRAY
 	add_child(tray)
 	var tsc := ScrollContainer.new()
 	tsc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -977,7 +687,7 @@ func _build_overlays() -> void:
 	gms.shadow_color = Color(0, 0, 0, 0.6)
 	game_menu.add_theme_stylebox_override("panel", gms)
 	game_menu.visible = false
-	game_menu.z_index = 95
+	game_menu.z_index = Z_GAME_MENU
 	add_child(game_menu)
 	var gmv := VBoxContainer.new()
 	gmv.add_theme_constant_override("separation", 8)
@@ -1027,7 +737,7 @@ func _build_overlays() -> void:
 	wsb.shadow_size = 8
 	wait_chip.add_theme_stylebox_override("panel", wsb)
 	wait_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wait_chip.z_index = 66
+	wait_chip.z_index = Z_WAIT
 	wait_chip.visible = false
 	wait_label = UIStyle.label("", 22, UIStyle.GOLD_HI, false, true)
 	wait_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1045,7 +755,7 @@ func _build_overlays() -> void:
 	tsb.content_margin_bottom = 6
 	toast.add_theme_stylebox_override("normal", tsb)
 	toast.add_theme_font_size_override("font_size", 17)
-	toast.z_index = 80
+	toast.z_index = Z_TOAST
 	toast.autowrap_mode = TextServer.AUTOWRAP_OFF
 	toast.visible = false
 	add_child(toast)
@@ -2316,7 +2026,7 @@ func _keeps_lift(it: Dictionary) -> bool:
 func _lift(it: Dictionary) -> void:
 	var w: CardWidget = it["w"]
 	var holder: Control = it["holder"]
-	holder.z_index = 40
+	holder.z_index = Z_LIFTED_CARD
 	if it["kind"] == "hand":
 		hand_layer.move_child(holder, -1)
 	var lp := _lift_params(it["kind"])
@@ -3167,7 +2877,7 @@ func _show_deck() -> void:
 			var n := UIStyle.label("×%d" % int(counts[c["id"]]), 15, UIStyle.GOLD_HI, false, true)
 			n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			cell.add_child(n)
-	pile_popup.z_index = 90
+	pile_popup.z_index = Z_PILE_POPUP
 	pile_popup.visible = true
 
 

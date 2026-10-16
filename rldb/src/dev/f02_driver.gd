@@ -374,7 +374,7 @@ func _fusion_zone_steps() -> void:
 	await _wait(0.6)
 	_check("FB4-15 zone prompt names the Fusion unit", String(m.pending.get("prompt", "")).contains(m.name_of(wyrm)), String(m.pending.get("prompt", "")))
 	var it: Dictionary = gs.fx_slot_item(p, "unit", 1)
-	_check("FB4-16 occupied material zone outlined as a whole zone", (it["ring"] as GameScreen.ZoneRing).visible and not (it["widget"] as CardWidget).highlighted)
+	_check("FB4-16 occupied material zone outlined as a whole zone", (it["ring"] as ZoneRing).visible and not (it["widget"] as CardWidget).highlighted)
 	await _shot("23_fusion_zone_pick")
 	await _click(_zone_rect(p, "unit", 1).get_center())
 	await _wait(0.4)
