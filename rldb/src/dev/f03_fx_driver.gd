@@ -45,11 +45,12 @@ func _run() -> void:
 	host.handle(1, {"t": "pick_starter", "index": 3})
 	await _wait(0.4)
 	m = host.series.game
-	# Skip the coin flip of game 1.
-	main.screen._coin_shown[String(main.screen.view.get("save_id", "local"))] = true
-	for n in main.screen.get_children():
-		if n is CoinFlip:
-			n.queue_free()
+	# Skip the coin flip of game 1 (the "coin" mode keeps it).
+	if mode != "coin":
+		main.screen._coin_shown[String(main.screen.view.get("save_id", "local"))] = true
+		for n in main.screen.get_children():
+			if n is CoinFlip:
+				n.queue_free()
 	call("_mode_" + mode)
 
 
@@ -227,7 +228,7 @@ func _end_scene(viewer_wins: bool, series: bool) -> void:
 	var uid: int = m.players[a]["units"][0]
 	host.handle(a, {"t": "attack", "uid": uid})
 	_auto_answer()
-	await _seq("end", 24, 0.22)
+	await _seq("end", 60, 0.14)
 	_done()
 
 
@@ -245,3 +246,39 @@ func _mode_serieswin() -> void:
 
 func _mode_serieslose() -> void:
 	_end_scene(false, true)
+
+
+## F04-01: the game-1 coin flip over the starting board (frames from the first draw to the fade-out).
+func _mode_coin() -> void:
+	await _seq("coin", 36, 0.1)
+	_done()
+
+
+## F04-07: a non-lethal direct attack.
+func _mode_strike() -> void:
+	_turn2()
+	var a := m.active
+	var o := 1 - a
+	TB.unit(m, a, 36, 0)
+	TB.unit(m, o, 70, 1, "def")
+	host.handle(a, {"t": "next_phase"})
+	_fresh_view(a)
+	await _wait(0.5)
+	host.handle(a, {"t": "attack", "uid": m.players[a]["units"][0]})
+	_auto_answer()
+	await _seq("strike", 16, 0.07)
+	_done()
+
+
+## F04-07: lethal damage from an effect (no attack): the smaller final-blow flourish.
+func _mode_final() -> void:
+	_turn2()
+	var a := m.active
+	var o := 1 - a
+	m.players[o]["hp"] = 5
+	_fresh_view(a)
+	await _wait(0.5)
+	m.change_hp(o, -9, " (test)")
+	host.broadcast()
+	await _seq("final", 22, 0.1)
+	_done()

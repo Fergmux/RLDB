@@ -16,6 +16,9 @@ const WAIT := 66
 const BANNER := 70
 const TOAST := 80
 const COIN_FLIP := 85
+## Killing-blow white flash, then the full-screen victory / defeat look above it (F04-04 / F04-07).
+const SCREEN_FLASH := 87
+const GAME_END := 88
 const PILE_POPUP := 90
 const GAME_MENU := 95
 ## Spell/Trap spotlight: backdrop, card, caption pill (above lifted cards, status glows, floating text).

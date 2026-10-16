@@ -12,6 +12,7 @@ const NAMES: PackedStringArray = [
 	"card_draw", "card_play", "card_set", "summon", "select", "confirm", "cancel", "deny",
 	"attack", "impact", "damage", "heal", "destroy", "buff", "debuff", "turn", "phase",
 	"notice", "victory", "defeat", "exhaust", "fuse", "ritual", "arcane", "victory_big",
+	"boom", "charge",
 ]
 const POOL_SIZE := 8
 const MIN_INTERVAL_MS := 70

@@ -1,6 +1,7 @@
 class_name FxGameEnd
 extends FxPart
-## Victory / defeat presentation when a game ends (F03-13), shown over the play area before the
+## Victory / defeat presentation when a game ends (F03-13), shown over the whole window (F04-04: the
+## veil, rays and text cover the sidebar too) before the
 ## result modal. It is presentation only: the game is already over and the modal (held back through
 ## FxPlayer.game_end_hold) appears as soon as this finishes or any click skips it.
 ##
@@ -28,6 +29,11 @@ func reset() -> void:
 	_active = false
 
 
+## The rect the presentation covers: the whole screen node (field, sidebar and hand), in global coordinates.
+static func veil_rect(screen: Control) -> Rect2:
+	return screen.get_global_rect()
+
+
 ## The seconds the look for this outcome lasts.
 static func length_for(won: bool, series: bool) -> float:
 	if won:
@@ -44,7 +50,7 @@ func start(winner: int) -> void:
 	_active = true
 	var life := length_for(won, series)
 	var layer: Control = screen.banner_layer if screen.banner_layer != null else screen.fx_layer
-	var area: Rect2 = screen.board_global_rect()
+	var area: Rect2 = veil_rect(screen)
 	var inv := layer.get_global_transform().affine_inverse()
 	var top_left: Vector2 = inv * area.position
 	var col := WIN if won else LOSE
@@ -55,6 +61,7 @@ func start(winner: int) -> void:
 	root.position = top_left
 	root.size = area.size
 	root.clip_contents = true
+	root.z_index = UiLayers.GAME_END   # above the sidebar, the hand and every board overlay
 	_fx.add_node(root, layer)
 	var dim := ColorRect.new()
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -70,6 +77,8 @@ func start(winner: int) -> void:
 	fx_node.radius = (area.size.length() * (0.75 if series else 0.55)) if won else area.size.x * 0.45
 	fx_node.position = centre if won else Vector2(centre.x, centre.y)
 	root.add_child(fx_node)
+	var band := _band(area.size, won, col)
+	root.add_child(band)
 	var title := _title(won, series, col)
 	root.add_child(title)
 	var sub := _sub_label(won, series, view, col)
@@ -81,11 +90,15 @@ func start(winner: int) -> void:
 	title.pivot_offset = title.size / 2.0
 	title.modulate.a = 0.0
 	sub.modulate.a = 0.0
+	band.position = Vector2(0.0, title.position.y - 34.0)
+	band.size.y = title.size.y + sub.size.y + 80.0
+	band.modulate.a = 0.0
 	var home := title.position
 	var tw := _fx.new_tween()
 	if reduced:
 		tw.set_parallel(true)
 		tw.tween_property(dim, "modulate:a", 1.0, 0.15)
+		tw.tween_property(band, "modulate:a", 1.0, 0.15)
 		tw.tween_property(title, "modulate:a", 1.0, 0.15)
 		tw.tween_property(sub, "modulate:a", 1.0, 0.15)
 		tw.chain().tween_interval(minf(life, 1.4))
@@ -95,6 +108,7 @@ func start(winner: int) -> void:
 	var d := func(x: float) -> float: return UIStyle.dur(x)
 	tw.set_parallel(true)
 	tw.tween_property(dim, "modulate:a", 1.0, d.call(0.35))
+	tw.tween_property(band, "modulate:a", 1.0, d.call(0.5)).set_delay(d.call(0.1))
 	tw.tween_property(fx_node, "t", 1.0, d.call(life))
 	tw.tween_property(sub, "modulate:a", 1.0, d.call(0.3)).set_delay(d.call(0.45))
 	if won:
@@ -128,6 +142,47 @@ func _finish(root: Control) -> void:
 	_active = false
 	_fx.free_node(root)
 	_fx.release_game_end_hold()
+
+
+## Soft horizontal band behind the title and score line: dark in the middle, fading to nothing at both
+## edges, with thin accent lines top and bottom, so the text reads over any board.
+func _band(sz: Vector2, won: bool, col: Color) -> Control:
+	var g := Gradient.new()
+	g.set_color(0, Color(0, 0, 0, 0.0))
+	g.set_color(1, Color(0, 0, 0, 0.0))
+	g.add_point(0.5, Color(0.03, 0.02, 0.01, 0.62) if won else Color(0.03, 0.0, 0.0, 0.7))
+	var tr := TextureRect.new()
+	tr.texture = _hgrad(g, 4)
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_SCALE
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tr.size = Vector2(sz.x, 200.0)
+	for edge in 2:
+		var lg := Gradient.new()
+		lg.set_color(0, Color(col, 0.0))
+		lg.set_color(1, Color(col, 0.0))
+		lg.add_point(0.5, Color(col.lightened(0.2), 0.85))
+		var line := TextureRect.new()
+		line.texture = _hgrad(lg, 2)
+		line.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		line.stretch_mode = TextureRect.STRETCH_SCALE
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line.size = Vector2(sz.x * 0.8, 2.0)
+		line.position = Vector2(sz.x * 0.1, 0.0)
+		tr.add_child(line)
+		tr.resized.connect(func(): line.position.y = 0.0 if edge == 0 else tr.size.y - 2.0)
+	return tr
+
+
+func _hgrad(g: Gradient, h: int) -> GradientTexture2D:
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_LINEAR
+	gt.fill_from = Vector2(0.0, 0.5)
+	gt.fill_to = Vector2(1.0, 0.5)
+	gt.width = 256
+	gt.height = h
+	return gt
 
 
 func _title(won: bool, series: bool, col: Color) -> Label:

@@ -9,13 +9,15 @@ const MAX_DRAW_GHOSTS := 5
 const MAX_DISCARD_GHOSTS := 6
 
 
-## HP change `d` for player `p`: a floating number, a plate pulse and, for damage, a shake.
-func hp(p: int, d: int) -> void:
+## HP change `d` for player `p`: a floating number, a plate pulse and, for damage, a shake. `quiet` drops
+## the number (a direct attack already showed the damage as its own big number).
+func hp(p: int, d: int, quiet: bool = false) -> void:
 	if d == 0:
 		return
 	var pl: PlayerPlate = _fx.screen.plate_of(p)
 	var heal := d > 0
-	_fx.float_text(("+%d" % d) if heal else ("%d" % d), UIStyle.GOOD if heal else Color("ff6b5e"), pl.hp_anchor(), 28, 22.0, 0.7)
+	if not quiet:
+		_fx.float_text(("+%d" % d) if heal else ("%d" % d), UIStyle.GOOD if heal else Color("ff6b5e"), pl.hp_anchor(), 28, 22.0, 0.7)
 	pl.pulse()
 	if not heal:
 		_fx.shake(pl, 5.0)

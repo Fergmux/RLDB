@@ -386,6 +386,25 @@ def s_victory_big(r):
     return finish(mix(*parts), tail_kw=dict(wet=0.45, extra_s=0.5, delay_s=0.05))
 
 
+def s_boom(r):
+    """F04-07 killing-blow explosion: a deep sub drop, a crack and a long rumbling tail."""
+    sub = mul(sweep(110, 26, 1.1), env_exp(n_samples(1.1), 0.38, 0.002))
+    crack = mul(lowpass(noise(r, 0.25), 3500), env_exp(n_samples(0.25), 0.05, 0.0005))
+    rumble = mul(lowpass2(noise(r, 1.2), 380), env_exp(n_samples(1.2), 0.42, 0.01))
+    x = softclip(mix(scale(sub, 1.2), scale(crack, 0.8), scale(rumble, 1.4)), 2.6)
+    return finish(lowpass(x, 5000), tail_kw=dict(wet=0.4, extra_s=0.3, delay_s=0.06))
+
+
+def s_charge(r):
+    """F04-07 killing-blow wind-up: a rising swell that peaks at the impact."""
+    n = n_samples(1.25)
+    rise = [(i / n) ** 2.2 for i in range(n)]
+    sw = mul(sweep(110, 880, 1.25, expo=True), rise)
+    air = mul(bandpass_sweep(noise(r, 1.25), 300, 4200, q=1.6), rise)
+    x = mix(scale(sw, 0.8), scale(air, 0.6))
+    return finish(x, tail_kw=dict(wet=0.25, extra_s=0.05))
+
+
 SOUNDS = [
     ("card_draw", s_card_draw), ("card_play", s_card_play), ("card_set", s_card_set),
     ("summon", s_summon), ("select", s_select), ("confirm", s_confirm),
@@ -395,11 +414,12 @@ SOUNDS = [
     ("turn", s_turn), ("phase", s_phase), ("notice", s_notice),
     ("victory", s_victory), ("defeat", s_defeat),
     ("exhaust", s_exhaust), ("fuse", s_fuse), ("ritual", s_ritual), ("arcane", s_arcane), ("victory_big", s_victory_big),
+    ("boom", s_boom), ("charge", s_charge),
 ]
 
 
 # Hard duration caps (seconds); longer renders are trimmed and re-faded.
-MAX_LEN = {"victory_big": 2.6, "exhaust": 1.3, "fuse": 1.3, "ritual": 1.4, "arcane": 1.3, "victory": 1.4, "defeat": 1.4, "turn": 0.9, "heal": 0.9, "summon": 0.8}
+MAX_LEN = {"boom": 1.6, "charge": 1.4, "victory_big": 2.6, "exhaust": 1.3, "fuse": 1.3, "ritual": 1.4, "arcane": 1.3, "victory": 1.4, "defeat": 1.4, "turn": 0.9, "heal": 0.9, "summon": 0.8}
 
 
 def write_wav(path, x):
