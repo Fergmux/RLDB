@@ -8,8 +8,14 @@ const TRAY_GAP := 10.0
 const TRAY_PAD := 14.0
 const TRAY_MAX_COLS := 8
 const TRAY_MIN_W := 280.0
-const BANNER_MIN_W := 460.0
-const BANNER_MAX_W := 640.0
+const BANNER_MIN_W := 300.0
+const BANNER_MAX_W := 380.0
+## Narrowest free column beside the board the banner may sit in (F03-25), and its margin to the zones.
+const BANNER_SIDE_MIN_W := 220.0
+const BANNER_SIDE_MAX_W := 300.0
+const BANNER_GAP := 12.0
+## Breathing border period (s).
+const BANNER_BREATH := 1.4
 const OPTION_H := 32
 
 ## The host screen this component works on.
@@ -21,7 +27,7 @@ var banner_title: Label
 ## Banner explanatory text.
 var banner_sub: RichTextLabel
 ## Banner buttons (skip, confirm ...).
-var banner_btns: HBoxContainer
+var banner_btns: HFlowContainer
 ## Banner flow of option buttons.
 var banner_flow: HFlowContainer
 ## Tray offering pile cards for a choice.
@@ -42,6 +48,11 @@ var prompt_sig: int = 0
 var seen_toast_seq: int = -1
 
 var _banner_how: String = ""
+## Who must act and that input is needed (small caps line above the headline).
+var banner_tag: Label
+var _banner_style: StyleBoxFlat
+var _banner_tween: Tween
+var _banner_pid: int = -2
 var _wait_tween: Tween
 var _toast_game: int = -99
 
@@ -52,58 +63,53 @@ func _init(screen: GameScreen) -> void:
 
 ## Builds the context banner and the pile tray (hidden).
 func build() -> void:
-	# F02-07 context banner: covers the top strip (never the board) while I pick targets.
+	# F02-07 / F03-25 context banner: a tall, narrow card with a gold pulse. It sits in the free
+	# column beside the board (or the top strip when there is none) so it never covers a target.
 	ctx_banner = PanelContainer.new()
-	var bs := UIStyle.flat(Color(0.09, 0.07, 0.045, 0.97), UIStyle.GOLD, 2, 12)
-	bs.border_width_left = 6
-	bs.content_margin_left = 16
-	bs.content_margin_right = 10
-	bs.content_margin_top = 6
-	bs.content_margin_bottom = 6
-	bs.shadow_color = Color(0, 0, 0, 0.55)
-	bs.shadow_size = 10
-	bs.shadow_offset = Vector2(0, 3)
+	var bs := UIStyle.flat(Color(0.1, 0.075, 0.04, 0.98), UIStyle.GOLD, 3, 12)
+	bs.border_width_left = 8
+	bs.content_margin_left = 18
+	bs.content_margin_right = 14
+	bs.content_margin_top = 12
+	bs.content_margin_bottom = 12
+	bs.shadow_color = Color(UIStyle.GOLD, 0.35)
+	bs.shadow_size = 14
+	bs.shadow_offset = Vector2(0, 2)
+	_banner_style = bs
 	ctx_banner.add_theme_stylebox_override("panel", bs)
 	ctx_banner.visible = false
 	ctx_banner.z_index = UiLayers.BANNER
 	gs.add_child(ctx_banner)
 	var bcol := VBoxContainer.new()
-	bcol.add_theme_constant_override("separation", 4)
+	bcol.add_theme_constant_override("separation", 6)
 	ctx_banner.add_child(bcol)
-	var bh := HBoxContainer.new()
-	bh.add_theme_constant_override("separation", 10)
-	bcol.add_child(bh)
-	banner_flow = HFlowContainer.new()
-	banner_flow.add_theme_constant_override("h_separation", 6)
-	banner_flow.add_theme_constant_override("v_separation", 4)
-	bcol.add_child(banner_flow)
-	var bv := VBoxContainer.new()
-	bv.add_theme_constant_override("separation", 0)
-	bv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bv.alignment = BoxContainer.ALIGNMENT_CENTER
-	bh.add_child(bv)
-	banner_title = UIStyle.label("", 17, UIStyle.GOLD_HI, false, true)
-	banner_title.clip_text = true
+	banner_tag = UIStyle.label("", 12, UIStyle.GOLD, false, true)
+	banner_tag.clip_text = true
+	banner_tag.custom_minimum_size = Vector2(40, 0)
+	bcol.add_child(banner_tag)
+	banner_title = UIStyle.label("", 21, UIStyle.GOLD_HI, true, true)
 	banner_title.custom_minimum_size = Vector2(40, 0)
-	banner_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	bv.add_child(banner_title)
+	bcol.add_child(banner_title)
 	banner_sub = RichTextLabel.new()
 	banner_sub.bbcode_enabled = true
-	banner_sub.fit_content = false
+	banner_sub.fit_content = true
 	banner_sub.custom_minimum_size = Vector2(40, 21)
-	banner_sub.clip_contents = true
 	banner_sub.scroll_active = false
-	banner_sub.autowrap_mode = TextServer.AUTOWRAP_OFF
+	banner_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	banner_sub.mouse_filter = Control.MOUSE_FILTER_PASS
-	banner_sub.add_theme_font_size_override("normal_font_size", 15)
-	banner_sub.add_theme_font_size_override("bold_font_size", 16)
+	banner_sub.add_theme_font_size_override("normal_font_size", 16)
+	banner_sub.add_theme_font_size_override("bold_font_size", 17)
 	banner_sub.add_theme_font_override("normal_font", UIStyle.font_body())
 	banner_sub.add_theme_font_override("bold_font", UIStyle.font_bold())
-	bv.add_child(banner_sub)
-	banner_btns = HBoxContainer.new()
-	banner_btns.add_theme_constant_override("separation", 6)
-	banner_btns.alignment = BoxContainer.ALIGNMENT_END
-	bh.add_child(banner_btns)
+	bcol.add_child(banner_sub)
+	banner_flow = HFlowContainer.new()
+	banner_flow.add_theme_constant_override("h_separation", 6)
+	banner_flow.add_theme_constant_override("v_separation", 6)
+	bcol.add_child(banner_flow)
+	banner_btns = HFlowContainer.new()
+	banner_btns.add_theme_constant_override("h_separation", 6)
+	banner_btns.add_theme_constant_override("v_separation", 6)
+	bcol.add_child(banner_btns)
 	# F02-10 pile tray: cards offered only for this choice; click a card to choose it.
 	tray = PanelContainer.new()
 	var tsb := UIStyle.panel_style(Color(0.07, 0.062, 0.056, 0.97), UIStyle.GOLD, 12)
@@ -195,12 +201,14 @@ func _render_banner() -> void:
 	var pd := gs.pending()
 	var on: bool = not pd.is_empty() and pd.get("mine", false) and not gs.overlays.overlay.visible and gs.view.get("stage", "") == "game"
 	ctx_banner.visible = on
+	_animate_banner(on, int(pd.get("id", -1)) if on else -1)
 	GameUi.clear(banner_btns)
 	GameUi.clear(banner_flow)
 	banner_flow.visible = false
 	if not on:
 		return
 	banner_title.text = String(pd["prompt"])
+	banner_tag.text = ("%s · your decision" % String(gs.pv(gs.me())["name"])).to_upper()
 	var pick := gs.selection.board_targeting()
 	var how := ""
 	if pick:
@@ -219,14 +227,22 @@ func _render_banner() -> void:
 	update_banner_sub()
 	# Card/zone options are picked on the board; every other option is a button here.
 	var row: Control = banner_btns if pick else banner_flow
+	var type_choice := is_type_choice(pd)
 	for o in pd["options"]:
 		if pick and (o.has("ref") or o.has("slot") or o.has("card")):
 			continue
 		var idx: int = o["i"]
 		var chosen: bool = idx in gs.multi
 		var label := ("✓ " if chosen else "") + String(o["label"])
-		var b := UIStyle.primary_button(label, 14) if (pd["kind"] == "attack_target" or (not pick and String(o["label"]).begins_with("Activate"))) else UIStyle.button(label, 14)
-		b.custom_minimum_size = Vector2(0, OPTION_H)
+		var b: Button
+		if type_choice:
+			b = type_button(String(o["label"]), 15)
+			b.set_meta("type_choice", String(o["label"]))
+		elif pd["kind"] == "attack_target" or (not pick and String(o["label"]).begins_with("Activate")):
+			b = UIStyle.primary_button(label, 14)
+		else:
+			b = UIStyle.button(label, 14)
+		b.custom_minimum_size = Vector2(0, OPTION_H + (6 if type_choice else 0))
 		b.pressed.connect(gs.selection.pick_option.bind(idx))
 		b.mouse_entered.connect(func(): gs.targeting.hover_opt = idx)
 		b.mouse_exited.connect(func(): if gs.targeting.hover_opt == idx: gs.targeting.hover_opt = -1)
@@ -247,19 +263,152 @@ func _render_banner() -> void:
 	place_banner()
 
 
-## The choice banner: centred over the play area like a toast, a margin below the window top,
-## narrower than the board column so the seat label and Settings / Menu stay visible.
+## Where the banner goes (F03-25). Preferred: the free column left of the board below the
+## opponent's hand (tall and narrow, clear of every zone, pile and plate). If that column is too
+## narrow (small window) it falls back to the top strip, centred between the seat label and the
+## opponent's plate.
 func place_banner() -> void:
 	if ctx_banner == null:
 		return
 	var area := gs.play_area
-	# Centred between the seat label (left) and the opponent's plate (right).
+	var board := gs.board
+	var col_left := 14.0
+	var col_right := area.end.x
+	var top := area.position.y + 6.0
+	var have_zones := not board.slots.is_empty()
+	if have_zones:
+		# Left edge of the leftmost zone or pile.
+		var edge := area.end.x
+		for k in board.slots:
+			edge = minf(edge, (board.slots[k]["zone_node"] as Control).position.x)
+		for side in 2:
+			for z in board.piles[side]:
+				edge = minf(edge, (board.piles[side][z] as Control).position.x)
+		col_right = edge - BANNER_GAP
+		top = board.opp_hand_box.position.y + CardWidget.SIZES["back"].y + BANNER_GAP
+	var side_w := minf(BANNER_SIDE_MAX_W, col_right - col_left)
+	if have_zones and side_w >= BANNER_SIDE_MIN_W:
+		_size_banner(side_w)
+		ctx_banner.position = Vector2(col_left, top)
+		return
 	var left := area.position.x + 230.0
-	var plates := gs.board.plates
+	var plates := board.plates
 	var right := (plates[0] as Control).position.x - 10.0 if not plates.is_empty() else area.end.x - 230.0
 	var bw := clampf(right - left, BANNER_MIN_W, BANNER_MAX_W)
-	ctx_banner.size = Vector2(bw, 0)
+	_size_banner(bw)
 	ctx_banner.position = Vector2(maxf(area.position.x + 8.0, (left + right) / 2.0 - bw / 2.0), 10.0)
+
+
+func _size_banner(w: float) -> void:
+	ctx_banner.size = Vector2(w, 0)
+	ctx_banner.size = Vector2(w, ctx_banner.get_combined_minimum_size().y)
+	ctx_banner.pivot_offset = ctx_banner.size / 2.0
+
+
+## Attention treatment (F03-25): a pop and gold flare when a new choice appears, then a gentle
+## breathing border and glow. Static (bright border, no motion) with UIStyle.reduce_motion.
+func _animate_banner(on: bool, pid: int) -> void:
+	if _banner_tween != null and _banner_tween.is_valid():
+		_banner_tween.kill()
+	if not on:
+		_banner_pid = -2
+		return
+	_banner_style.border_color = UIStyle.GOLD_HI
+	_banner_style.shadow_color = Color(UIStyle.GOLD, 0.45)
+	_banner_style.shadow_size = 14
+	ctx_banner.scale = Vector2.ONE
+	if UIStyle.reduce_motion:
+		return
+	var fresh := pid != _banner_pid
+	_banner_pid = pid
+	if not fresh:
+		_breathe()
+		return
+	ctx_banner.scale = Vector2(0.92, 0.92)
+	_banner_style.shadow_color = Color(UIStyle.GOLD_HI, 0.95)
+	_banner_style.shadow_size = 34
+	_banner_tween = gs.create_tween()
+	_banner_tween.set_parallel(true)
+	_banner_tween.tween_property(ctx_banner, "scale", Vector2.ONE, UIStyle.dur(0.35)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_banner_tween.tween_property(_banner_style, "shadow_size", 14, UIStyle.dur(0.7)).set_trans(Tween.TRANS_SINE)
+	_banner_tween.tween_property(_banner_style, "shadow_color", Color(UIStyle.GOLD, 0.45), UIStyle.dur(0.7)).set_trans(Tween.TRANS_SINE)
+	_banner_tween.chain().tween_callback(_breathe)
+
+
+func _breathe() -> void:
+	if _banner_tween != null and _banner_tween.is_valid():
+		_banner_tween.kill()
+	_banner_tween = gs.create_tween().set_loops()
+	var half := UIStyle.dur(BANNER_BREATH) / 2.0
+	_banner_tween.tween_property(_banner_style, "border_color", UIStyle.GOLD.darkened(0.25), half).set_trans(Tween.TRANS_SINE)
+	_banner_tween.parallel().tween_property(_banner_style, "shadow_color", Color(UIStyle.GOLD, 0.12), half).set_trans(Tween.TRANS_SINE)
+	_banner_tween.tween_property(_banner_style, "border_color", UIStyle.GOLD_HI, half).set_trans(Tween.TRANS_SINE)
+	_banner_tween.parallel().tween_property(_banner_style, "shadow_color", Color(UIStyle.GOLD, 0.5), half).set_trans(Tween.TRANS_SINE)
+
+
+## True when every option of a choice is a Type name (Waang, Chaos Witch, ...): those render as
+## Type-coloured buttons with the Type icon (F03-27). Only the offered options are shown.
+static func is_type_choice(pd: Dictionary) -> bool:
+	if pd.is_empty() or String(pd.get("kind", "")) != "mode":
+		return false
+	var opts: Array = pd.get("options", [])
+	if opts.is_empty():
+		return false
+	for o in opts:
+		var l := String(o.get("label", ""))
+		if l == "No type":
+			continue
+		if l == "" or not UIStyle.TYPE_COLORS.has(l):
+			return false
+	return true
+
+
+## Readable text colour (white or near-black, whichever contrasts more) on a fill.
+static func type_text_color(fill: Color) -> Color:
+	var dark := Color(0.06, 0.05, 0.05)
+	return dark if _contrast(fill, dark) >= _contrast(fill, Color.WHITE) else Color.WHITE
+
+
+static func _lum(c: Color) -> float:
+	var f := func(v: float) -> float: return v / 12.92 if v <= 0.03928 else pow((v + 0.055) / 1.055, 2.4)
+	return 0.2126 * f.call(c.r) + 0.7152 * f.call(c.g) + 0.0722 * f.call(c.b)
+
+
+## WCAG contrast ratio of two colours.
+static func _contrast(a: Color, b: Color) -> float:
+	var la := _lum(a)
+	var lb := _lum(b)
+	return (maxf(la, lb) + 0.05) / (minf(la, lb) + 0.05)
+
+
+## A Type declaration button: filled in the Type's colour (hover lighter with a glow, pressed
+## darker), the Type icon on the left and the Type name as text, so the Type is never told by
+## colour alone.
+static func type_button(type_name: String, size: int = 15) -> Button:
+	var ty := "" if type_name == "No type" else type_name
+	var col := UIStyle.type_color(ty)
+	var b := UIStyle.button(type_name, size)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var fills := {"normal": col, "hover": col.lightened(0.18), "pressed": col.darkened(0.2)}
+	for k in fills:
+		var fill: Color = fills[k]
+		var sb := UIStyle.flat(fill, col.lightened(0.45) if k != "pressed" else col.lightened(0.2), 2, 8)
+		sb.content_margin_left = 42
+		sb.content_margin_right = 14
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
+		if k == "hover":
+			UIStyle.lift_style(sb, Color(fill, 0.55), 9, 0)
+		b.add_theme_stylebox_override(k, sb)
+		b.add_theme_color_override("font_color" if k == "normal" else "font_%s_color" % k, type_text_color(fill))
+	b.add_theme_color_override("font_focus_color", type_text_color(col))
+	var badge := TypeIcons.TypeBadge.new(ty)
+	badge.set_anchor_and_offset(SIDE_TOP, 0.5, -13.0)
+	badge.set_anchor_and_offset(SIDE_BOTTOM, 0.5, 13.0)
+	badge.set_anchor_and_offset(SIDE_LEFT, 0.0, 9.0)
+	badge.set_anchor_and_offset(SIDE_RIGHT, 0.0, 35.0)
+	b.add_child(badge)
+	return b
 
 
 ## Banner sub-line: how to answer the choice, or the hovered battle target coloured by the
@@ -277,6 +426,8 @@ func update_banner_sub() -> void:
 	if banner_sub.text != t:
 		banner_sub.text = t
 		banner_sub.tooltip_text = pv.text if pv.text != "" else _banner_how
+		if ctx_banner != null and ctx_banner.visible:
+			place_banner()
 
 
 ## Columns of the pile tray: as many as fit the play area (max 8), never more than the cards.
