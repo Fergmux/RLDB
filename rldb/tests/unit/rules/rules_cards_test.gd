@@ -168,6 +168,69 @@ func test_hypnotised_unit_cannot_be_sacrificed_and_returns_at_end_of_turn() -> v
 	assert_int(m.cards[victim]["ctl"]).is_equal(1)
 
 
+## Takes control of `victim` for player 0 with Hypnotise.
+func _hypnotise(m: MatchEngine, victim: int) -> void:
+	var spell := TB.card(m, 0, 180)
+	m.players[0]["ap"] = 10
+	assert_str(m.submit(0, {"t": "cast", "uid": spell})).is_empty()
+	assert_str(TB.choose_uids(m, [victim])).is_empty()
+
+
+func test_hypnotise_cannot_be_cast_without_a_free_zone() -> void:
+	# Ruling 2026-10-16: no target zone, so the Spell cannot be played at all.
+	var m := TB.make()
+	TB.unit(m, 1, TB.WATER, 0, "atk", 10)
+	for s in 6:
+		TB.unit(m, 0, TB.WATER, s)
+	var spell := TB.card(m, 0, 180)
+	m.players[0]["ap"] = 10
+	assert_str(m.validate(0, {"t": "cast", "uid": spell})).contains("free zone")
+
+
+func test_hypnotised_unit_returns_to_its_original_zone() -> void:
+	var m := TB.make()
+	var victim := TB.unit(m, 1, TB.WATER, 4, "atk", 10)
+	_hypnotise(m, victim)
+	TB.to_turn2(m)
+	assert_int(m.cards[victim]["ctl"]).is_equal(1)
+	assert_int(m.cards[victim]["slot"]).is_equal(4)
+	assert_int(m.players[1]["units"][4]).is_equal(victim)
+
+
+func test_hypnotised_unit_goes_to_spent_when_its_zone_was_filled() -> void:
+	var m := TB.make()
+	var victim := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
+	_hypnotise(m, victim)
+	TB.unit(m, 1, TB.WATER, 0)
+	TB.to_turn2(m)
+	assert_str(m.cards[victim]["zone"]).is_equal("spent")
+	assert_bool(victim in m.players[1]["spent"]).is_true()
+
+
+func test_hypnotised_unit_keeps_its_statuses_when_it_returns() -> void:
+	var m := TB.make()
+	var victim := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
+	_hypnotise(m, victim)
+	m.apply_status(victim, "rune", 2)
+	TB.to_turn2(m)
+	assert_int(m.status_count(victim, "rune")).is_equal(2)
+
+
+func test_hypnotised_unit_can_be_ritual_material_and_goes_to_its_owners_spent() -> void:
+	# Ruling 2026-10-16: it cannot be sacrificed, but it can be tributed (Ritual, Fusion).
+	var m := TB.make()
+	var victim := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
+	m.apply_status(victim, "rune", 3)
+	_hypnotise(m, victim)
+	var roma := TB.card(m, 0, 96, "extra")
+	assert_str(m.submit(0, {"t": "ritual", "uid": roma})).is_empty()
+	assert_str(TB.choose_uids(m, [victim])).is_empty()
+	TB.choose(m, ["Front row, column 1"])
+	TB.choose(m, ["Attack"])
+	assert_int(m.atk_of(roma)).is_equal(36)
+	assert_bool(victim in m.players[1]["spent"]).is_true()
+
+
 # ---------------------------------------------------------------- Sneaky Snunday
 
 func _cast(m: MatchEngine, p: int, id: int, target: int = -1) -> int:

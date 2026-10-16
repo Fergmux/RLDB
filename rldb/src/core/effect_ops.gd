@@ -160,13 +160,18 @@ func _op_status(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Gain/loss of ATK/DEF from a card effect. Reversible by Sneaky Snunday.
+## Gain/loss of ATK/DEF from a card effect. Reversible by Sneaky Snunday; while Freaky Funday
+## lasts, ATK and DEF are switched.
 func _op_stat(f: Dictionary, op: Dictionary) -> int:
 	var a := eval_num(f, op.get("atk", 0))
 	var df := eval_num(f, op.get("def", 0))
 	if f["reversed"]:
 		a = -a
 		df = -df
+	if swap_active():
+		var t := a
+		a = df
+		df = t
 	for u in refs(f, op["target"]):
 		if not unit_on_field(u):
 			continue

@@ -156,7 +156,7 @@ func _ritual_materials(p: int, uid: int) -> Array:
 	var need = d(uid)["cost"]
 	var out := []
 	for u in field_units(p):
-		if is_debilitated(u) or cards[u]["control_until"] != -1:
+		if is_debilitated(u):
 			continue
 		var r := status_count(u, "rune")
 		if (need == null and r >= 1) or (need != null and r >= need):

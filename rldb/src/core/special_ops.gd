@@ -193,11 +193,28 @@ func _op_ambush(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Freaky Funday: until end of turn, switch ATK/DEF of all units currently on the Field.
+## Freaky Funday: until end of turn, switch ATK/DEF of all units currently on the Field, and the
+## ATK/DEF in card effects (ruling 2026-10-16). A second copy switches everything back.
 func _op_swap_all(f: Dictionary, op: Dictionary) -> int:
-	swap_turn = turn
-	swap_uids = all_field_units()
-	add_log("Freaky Funday: ATK and DEF of %d unit(s) are switched until end of turn." % swap_uids.size())
+	if swap_turn != turn:
+		swap_turn = turn
+		swap_count = 0
+		swapped = {}
+	swap_count += 1
+	var units := all_field_units()
+	for u in units:
+		if swapped.has(u):
+			swapped.erase(u)
+			for m in cards[u]["mods"]:
+				m.erase("pre_swap")
+		else:
+			swapped[u] = true
+			for m in cards[u]["mods"]:
+				m["pre_swap"] = true
+	if swap_active():
+		add_log("Freaky Funday: ATK and DEF of %d unit(s), and in card effects, are switched until end of turn." % units.size())
+	else:
+		add_log("Freaky Funday: a second switch cancels the first; ATK and DEF are back to normal.")
 	return R.CONT
 
 
@@ -225,6 +242,7 @@ func _op_take_control(f: Dictionary, op: Dictionary) -> int:
 			add_log("No free zone: control of %s cannot be taken." % name_of(u))
 			continue
 		var prev: int = cards[u]["ctl"]
+		cards[u]["control_slot"] = cards[u]["slot"]
 		players[prev]["units"][cards[u]["slot"]] = -1
 		cards[u]["ctl"] = f["ctl"]
 		cards[u]["slot"] = free[0]

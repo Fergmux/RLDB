@@ -39,10 +39,13 @@ var config: Dictionary = {}
 var reversal_turn: int = -1
 ## S-01: copies played that turn; an even count cancels out.
 var reversal_count: int = 0
-## Freaky Funday: turn whose swapped units are listed in swap_uids.
+## Freaky Funday: turn during which it was played.
 var swap_turn: int = -1
-## Cards affected by the swap.
-var swap_uids: Array = []
+## Copies played that turn; an even count cancels out (also for card effects, see swap_active).
+var swap_count: int = 0
+## Units whose ATK/DEF are switched this turn (uid -> true). Their modifiers from before the
+## switch carry "pre_swap"; later ones were already switched as they were applied.
+var swapped: Dictionary = {}
 var _next_log_seq: int = 1
 
 
@@ -398,27 +401,57 @@ func reversal_active() -> bool:
 	return reversal_turn == turn and reversal_count % 2 == 1
 
 
-## Returns {"atk", "def", "parts": [explanations]} for a unit, recalculated live.
+## True while Freaky Funday switches ATK and DEF in card effects this turn.
+func swap_active() -> bool:
+	return swap_turn == turn and swap_count % 2 == 1
+
+
+## Returns {"atk", "def", "parts": [explanations]} for a unit, recalculated live. A unit switched
+## by Freaky Funday shows base + earlier modifiers switched; modifiers applied since were switched
+## when applied and auras are switched while Funday lasts, so they are added as they are.
 func stat_breakdown(uid: int) -> Dictionary:
 	var inst: Dictionary = cards[uid]
 	var atk := base_atk(uid)
 	var def := base_def(uid)
 	var parts := ["Base %d/%d" % [atk, def]]
 	var no_gain := has_flag(uid, "no_gain")
+	var sw: bool = swapped.has(uid) and inst["zone"] == "unit"
+	var later_atk := 0
+	var later_def := 0
+	var later_parts := []
 	for m in inst["mods"]:
 		var ma: int = m["atk"]
 		var md: int = m["def"]
 		if no_gain:
 			ma = mini(ma, 0)
 			md = mini(md, 0)
+		var part := "%s %+d/%+d%s" % [m.get("src", "effect"), ma, md, " (this turn)" if m["until"] == "turn" else ""]
+		if sw and not m.get("pre_swap", false):
+			later_atk += ma
+			later_def += md
+			if ma != 0 or md != 0:
+				later_parts.append(part)
+			continue
 		atk += ma
 		def += md
 		if ma != 0 or md != 0:
-			parts.append("%s %+d/%+d%s" % [m.get("src", "effect"), ma, md, " (this turn)" if m["until"] == "turn" else ""])
+			parts.append(part)
+	if sw:
+		var t := atk
+		atk = def
+		def = t
+		parts.append("Freaky Funday: ATK/DEF switched")
+	atk += later_atk
+	def += later_def
+	parts += later_parts
 	if inst["zone"] == "unit":
 		for aura in CardScripts.auras_for(self, uid):
 			var aa: int = aura["atk"]
 			var ad: int = aura["def"]
+			if swap_active():
+				var ta := aa
+				aa = ad
+				ad = ta
 			if reversal_active():
 				aa = -aa
 				ad = -ad
@@ -429,11 +462,6 @@ func stat_breakdown(uid: int) -> Dictionary:
 			def += ad
 			if aa != 0 or ad != 0:
 				parts.append("%s %+d/%+d%s" % [aura["src"], aa, ad, " (reversed)" if reversal_active() else ""])
-	if swap_turn == turn and uid in swap_uids and inst["zone"] == "unit":
-		var t := atk
-		atk = def
-		def = t
-		parts.append("Freaky Funday: ATK/DEF switched")
 	return {"atk": maxi(atk, 0), "def": maxi(def, 0), "parts": parts}
 
 
@@ -649,6 +677,7 @@ func _remove_from_zone(uid: int) -> void:
 ## Resets field-only state when a card leaves Field. Persistent cost changes survive.
 func _reset_field_state(uid: int) -> void:
 	var inst: Dictionary = cards[uid]
+	swapped.erase(uid)                 # back on the Field later it is a new card
 	inst["st"] = {}
 	inst["runes"] = 0
 	inst["mods"] = []
@@ -661,6 +690,7 @@ func _reset_field_state(uid: int) -> void:
 	inst["face_up"] = false
 	inst["ctl"] = inst["owner"]
 	inst["control_until"] = -1
+	inst.erase("control_slot")
 	inst.erase("declared_type")
 	inst.erase("runes_used")
 

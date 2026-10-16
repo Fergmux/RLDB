@@ -152,7 +152,10 @@ func _op_next_turn(f: Dictionary, op: Dictionary) -> int:
 	for u in cards:
 		var inst: Dictionary = cards[u]
 		inst["mods"] = inst["mods"].filter(func(m): return m["until"] != "turn")
-	swap_uids = []
+	swapped = {}
+	for u in cards:
+		for m in cards[u]["mods"]:
+			m.erase("pre_swap")
 	# Return temporarily controlled units.
 	for u in all_field_units():
 		if cards[u]["control_until"] == turn:
@@ -166,15 +169,16 @@ func _return_control(u: int) -> void:
 	var inst: Dictionary = cards[u]
 	var owner: int = inst["owner"]
 	inst["control_until"] = -1
-	var free := free_unit_slots(owner)
-	if free.is_empty():
-		add_log("%s cannot return to its owner (board full) and is sent to Spent." % name_of(u))
+	var home: int = inst.get("control_slot", -1)
+	inst.erase("control_slot")
+	if home == -1 or players[owner]["units"][home] != -1:
+		add_log("%s cannot return to its zone (now occupied) and is sent to Spent." % name_of(u))
 		_leave_field(u, "spent", "control")
 		return
 	players[inst["ctl"]]["units"][inst["slot"]] = -1
 	inst["ctl"] = owner
-	inst["slot"] = free[0]
-	players[owner]["units"][free[0]] = u
+	inst["slot"] = home
+	players[owner]["units"][home] = u
 	add_log("%s returns to %s's control." % [name_of(u), pname(owner)])
 
 
@@ -369,6 +373,10 @@ func _spell_target_check(p: int, uid: int) -> String:
 			return "Condition not met."
 	if column_summon_blocked(f, entry["spell"]):
 		return "No free zone in this column."
+	# Hypnotise needs a zone on your side to put the unit in (ruling 2026-10-16).
+	for op in entry["spell"]:
+		if op["op"] == "take_control" and free_unit_slots(p).is_empty():
+			return "No free zone on your side."
 	# A Fusion Spell (Polymerization) needs a Fusion unit it could actually summon.
 	for op in entry["spell"]:
 		if op["op"] == "fusion" and fusion_candidates(p, op["sources"]).is_empty():
@@ -627,7 +635,8 @@ func clone_for_sim() -> MatchEngine:
 	m.reversal_turn = reversal_turn
 	m.reversal_count = reversal_count
 	m.swap_turn = swap_turn
-	m.swap_uids = swap_uids.duplicate(true)
+	m.swap_count = swap_count
+	m.swapped = swapped.duplicate()
 	m._next_log_seq = _next_log_seq
 	m.stack = stack.duplicate(true)
 	m.trigger_queue = trigger_queue.duplicate(true)

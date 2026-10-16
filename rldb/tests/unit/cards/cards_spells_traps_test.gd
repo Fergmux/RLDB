@@ -53,6 +53,50 @@ func test_c043_freaky_funday_switches_atk_and_def_until_end_of_turn() -> void:
 	assert_int(m.atk_of(u)).is_equal(10)
 
 
+func test_c043_freaky_funday_also_switches_atk_and_def_in_card_effects() -> void:
+	# Ruling 2026-10-16: while it lasts, "+ATK" from a card effect gives DEF and vice versa.
+	var m := TB.make()
+	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10, 20)
+	TB.cast(m, 0, 43)
+	TB.cast(m, 0, 182)                                      # Shimmer Serum: +16 ATK this turn
+	TB.choose_uids(m, [u])
+	assert_int(m.atk_of(u)).is_equal(20)
+	assert_int(m.def_of(u)).is_equal(26)
+	var late := TB.unit(m, 0, TB.WATER, 1, "atk", 10, 20)   # arrives after Funday: not switched
+	TB.cast(m, 0, 182)
+	TB.choose_uids(m, [late])
+	assert_int(m.atk_of(late)).is_equal(10)
+	assert_int(m.def_of(late)).is_equal(36)
+	TB.to_turn2(m)
+	assert_int(m.atk_of(u)).is_equal(10)
+	assert_int(m.def_of(u)).is_equal(20)
+
+
+func test_c043_two_freaky_fundays_cancel_out() -> void:
+	var m := TB.make()
+	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10, 20)
+	TB.cast(m, 0, 43)
+	TB.cast(m, 0, 43)
+	assert_int(m.atk_of(u)).is_equal(10)
+	assert_int(m.def_of(u)).is_equal(20)
+	TB.cast(m, 0, 182)
+	TB.choose_uids(m, [u])
+	assert_int(m.atk_of(u)).is_equal(26)                    # effects are back to normal too
+	assert_int(m.def_of(u)).is_equal(20)
+
+
+func test_c043_unit_that_leaves_and_returns_is_a_new_card() -> void:
+	var m := TB.make()
+	var u := TB.unit(m, 0, 162, 0)                          # Diggie 2/0
+	TB.cast(m, 0, 43)
+	assert_int(m.atk_of(u)).is_equal(0)
+	m._leave_field(u, "spent", "test")
+	m.players[0]["spent"].erase(u)
+	m.place_unit(u, 0, 0, "atk")
+	assert_int(m.atk_of(u)).is_equal(2)
+	assert_int(m.def_of(u)).is_equal(0)
+
+
 func test_c083_sacred_offerings_adds_a_rune() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0)
