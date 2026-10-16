@@ -10,6 +10,8 @@ signal pressed(zone: String)
 
 const MAX_LAYERS := 6
 const LAYER_STEP := 1.2
+## Count font size; the count badge is sized once for "99" at this size.
+const COUNT_FS := 26
 
 var zone: String = "draw"
 var title: String = "Deck"
@@ -17,6 +19,9 @@ var count: int = 0
 var clickable: bool = false
 var ready_mark: bool = false
 var _hover: bool = false
+## 1 -> 0 after the count changes: the count badge pops a little (presentation only).
+var _pop: float = 0.0: set = _set_pop
+var _pop_tw: Tween
 
 
 func _init() -> void:
@@ -28,11 +33,22 @@ func _init() -> void:
 func set_pile(n: int, can_open: bool, is_ready: bool = false) -> void:
 	if n == count and can_open == clickable and is_ready == ready_mark:
 		return
+	if n != count and is_inside_tree() and not UIStyle.reduce_motion:
+		if _pop_tw != null and _pop_tw.is_valid():
+			_pop_tw.kill()
+		_pop = 1.0
+		_pop_tw = create_tween()
+		_pop_tw.tween_property(self, "_pop", 0.0, UIStyle.dur(0.35)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	count = n
 	clickable = can_open
 	ready_mark = is_ready
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if clickable else Control.CURSOR_ARROW
 	tooltip_text = "%s: %d card%s%s" % [title, n, "" if n == 1 else "s", " — click to look through it" if clickable else ""]
+	queue_redraw()
+
+
+func _set_pop(v: float) -> void:
+	_pop = v
 	queue_redraw()
 
 
@@ -94,16 +110,24 @@ func _draw() -> void:
 		rb.set_border_width_all(3)
 		rb.set_corner_radius_all(9)
 		draw_style_box(rb, top.grow(4))
-	# Count overlaid in the middle of the top card.
+	# Count overlaid in the middle of the top card: one fixed badge sized for "99" and one fixed font
+	# size, so the badge never grows when the count gains a digit (user feedback). 100+ steps down.
 	var font := UIStyle.font_display(700)
 	var num := str(count)
-	var fs := 30
 	var c := top.get_center() + Vector2(0, -6)
+	var badge_r := font.get_string_size("99", HORIZONTAL_ALIGNMENT_LEFT, -1, COUNT_FS).x / 2.0 + 9.0
+	var fs := COUNT_FS
+	while fs > 12 and font.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > badge_r * 2.0 - 12.0:
+		fs -= 1
 	var tsz := font.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
-	draw_circle(c, maxf(tsz.x, tsz.y * 0.7) / 2.0 + 10.0, Color(0.05, 0.04, 0.08, 0.82 if n > 0 else 0.5))
+	draw_set_transform(c, 0.0, Vector2.ONE * (1.0 + 0.16 * _pop))
+	c = Vector2.ZERO
+	draw_circle(c, badge_r, Color(0.05, 0.04, 0.08, 0.82 if n > 0 else 0.5), true, -1.0, true)
+	draw_arc(c, badge_r - 0.75, 0.0, TAU, 40, Color(UIStyle.GOLD, 0.45 if n > 0 else 0.25), 1.5, true)
 	var pos := Vector2(c.x - tsz.x / 2.0, c.y + (font.get_ascent(fs) - font.get_descent(fs)) / 2.0)
 	draw_string_outline(font, pos, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.85))
 	draw_string(font, pos, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UIStyle.GOLD_HI if n > 0 else UIStyle.MUTED)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# Name plate at the foot of the top card.
 	var plate_h := 20.0
 	var pr := Rect2(Vector2(top.position.x + 5.0, top.end.y - plate_h - 6.0), Vector2(top.size.x - 10.0, plate_h))

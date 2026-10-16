@@ -20,6 +20,10 @@ var _nodes: Array = []
 var _banner_q: Array = []
 var _banner_active: bool = false
 var _banner_node: Control = null
+## Spell/Trap spotlights run one at a time from their own queue (never overlapping, never compressed
+## by play()'s 3 s batch rule).
+var _spot_q: Array = []
+var _spot_active: bool = false
 
 
 ## Inner particle node: kind "dust" ring, "ember" rising sparks or "spark" streaks.
@@ -47,14 +51,44 @@ class Burst extends Control:
 			match kind:
 				"dust":
 					var e := 1.0 - pow(1.0 - t, 2.0)
-					draw_circle(d * radius * e * Vector2(1.0, 0.45), 3.2 * (1.0 - t) + 0.5, Color(col, 0.6 * (1.0 - t)))
+					draw_circle(d * radius * e * Vector2(1.0, 0.45), 3.2 * (1.0 - t) + 0.5, Color(col, 0.6 * (1.0 - t)), true, -1.0, true)
 				"ember":
 					var e2 := 1.0 - pow(1.0 - t, 2.0)
 					var p := d * radius * 0.5 * e2 * (0.5 + seeds[i % 12]) + Vector2(0, -t * radius * (0.6 + seeds[(i + 3) % 12]))
-					draw_circle(p, 2.6 * (1.0 - t) + 0.4, Color(col, 1.0 - t))
+					draw_circle(p, 2.6 * (1.0 - t) + 0.4, Color(col, 1.0 - t), true, -1.0, true)
 				"spark":
 					var e3 := 1.0 - pow(1.0 - t, 3.0)
-					draw_line(d * radius * (0.25 + e3 * 0.5), d * radius * (0.35 + e3 * 0.75), Color(col, 1.0 - t), 2.5 * (1.0 - t) + 0.5)
+					draw_line(d * radius * (0.25 + e3 * 0.5), d * radius * (0.35 + e3 * 0.75), Color(col, 1.0 - t), 2.5 * (1.0 - t) + 0.5, true)
+
+
+## Inner rune-ring burst for a triggered effect: two expanding rings carrying a turning circle of
+## rune marks, fading out as `t` goes 0 -> 1. Drawn centred on the node position.
+class RuneRing extends Control:
+	var col: Color = Color.WHITE
+	var radius: float = 70.0
+	var t: float = 0.0: set = _set_t
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _set_t(v: float) -> void:
+		t = v
+		queue_redraw()
+
+	func _draw() -> void:
+		var e := 1.0 - pow(1.0 - t, 3.0)
+		var a := 1.0 - t
+		var r := radius * (0.45 + 0.75 * e)
+		draw_circle(Vector2.ZERO, r * 0.95, Color(col, 0.16 * a * a), true, -1.0, true)
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 64, Color(col.lightened(0.4), 0.95 * a), 1.0 + 3.0 * a, true)
+		draw_arc(Vector2.ZERO, r * 0.8, 0.0, TAU, 56, Color(col, 0.55 * a), 1.0 + 1.2 * a, true)
+		var rr := r * 0.9
+		for i in 12:
+			var ang := float(i) * TAU / 12.0 + t * 1.4
+			var c := Vector2(cos(ang), sin(ang)) * rr
+			var u := Vector2(cos(ang), sin(ang)) * (2.0 + 3.0 * a)
+			var v := Vector2(-u.y, u.x) * 0.6
+			draw_colored_polygon(PackedVector2Array([c + u, c + v, c - u, c - v]), Color(col.lightened(0.5), a))
 
 
 func _tw() -> Tween:
@@ -67,7 +101,7 @@ func busy() -> bool:
 	for t in _tweens:
 		if t is Tween and t.is_valid() and t.is_running():
 			return true
-	return _banner_active
+	return _banner_active or _spot_active
 
 
 ## Skips everything running: kills tweens, runs cleanups (resets transient offsets) and
@@ -92,6 +126,8 @@ func finish_all() -> void:
 	_banner_q.clear()
 	_banner_active = false
 	_banner_node = null
+	_spot_q.clear()
+	_spot_active = false
 
 
 func _later(delay: float, fn: Callable) -> void:
@@ -175,6 +211,16 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 				t += 0.06
 			"stat":
 				sched.append([t, _stat.bind(e["at"])])
+			"stance":
+				var sat: Dictionary = e["at"]
+				sched.append([t, _stance.bind(int(sat["p"]), int(sat["slot"]), String(e.get("to", "def")))])
+				t += 0.12
+			"trigger":
+				sched.append([t, _trigger.bind(e["at"])])
+				t += 0.1
+			"spotlight":
+				sched.append([t, _spotlight.bind(e)])
+				t += 0.05
 			"turn":
 				var mine: bool = int(e["p"]) == screen.me()
 				sched.append([t, _banner.bind("YOUR TURN" if mine else "OPPONENT'S TURN", "Turn %d" % int(e["turn"]), UIStyle.GOLD_HI if mine else Color("d8c9a8"), mine)])
@@ -513,6 +559,231 @@ func _stat(at: Dictionary) -> void:
 	_cleanups.append(func(): if is_instance_valid(w): w.fx_glow = Color(1, 1, 1, 0))
 	var tw := _tw()
 	tw.tween_property(w, "fx_glow", Color(UIStyle.GOLD_HI, 0.0), UIStyle.dur(0.3))
+
+
+## Stance change (`to` = "def" | "atk"): the widget is already drawn in its final orientation, so it
+## turns from the old orientation (-/+90 degrees about its centre) into place with a small scale
+## bounce, a glint and a short label.
+func _stance(p: int, slot: int, to: String) -> void:
+	var it: Dictionary = screen.fx_slot_item(p, "unit", slot)
+	if it.is_empty():
+		return
+	var w: CardWidget = it["widget"]
+	var holder: Control = it["holder"]
+	var to_def := to == "def"
+	var col := Color("8ec5ff") if to_def else Color("ff9a7a")
+	_cleanups.append(_reset_widget.bind(w, holder))
+	var rect: Rect2 = holder.get_global_rect()
+	_float_text("Defense" if to_def else "Attack", col, rect.get_center() + Vector2(0, -rect.size.y * 0.32), 15, 20.0, 0.7, false, false)
+	if UIStyle.reduce_motion:
+		w.fx_glow = Color(col, 0.8)
+		var tr := _tw()
+		tr.tween_property(w, "fx_glow", Color(col, 0.0), 0.25)
+		tr.tween_callback(_reset_widget.bind(w, holder))
+		return
+	w.pivot_offset = w.size / 2.0
+	w.rotation = -PI / 2.0 if to_def else PI / 2.0
+	holder.z_index = 20
+	var tw := _tw()
+	tw.set_parallel(true)
+	tw.tween_property(w, "rotation", 0.0, UIStyle.dur(0.3)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "scale", Vector2(1.1, 1.1), UIStyle.dur(0.14)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.18)).set_delay(UIStyle.dur(0.14)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "fx_flash", 0.45, UIStyle.dur(0.08)).set_delay(UIStyle.dur(0.2))
+	tw.tween_property(w, "fx_flash", 0.0, UIStyle.dur(0.18)).set_delay(UIStyle.dur(0.28))
+	tw.tween_property(w, "fx_glow", Color(col, 0.75), UIStyle.dur(0.1)).set_delay(UIStyle.dur(0.2))
+	tw.tween_property(w, "fx_glow", Color(col, 0.0), UIStyle.dur(0.25)).set_delay(UIStyle.dur(0.3))
+	tw.chain().tween_callback(_reset_widget.bind(w, holder))
+
+
+## A unit / Power effect starts (triggered effect or activated ability): a gold rune ring bursts out of
+## the card, the card glows and pops. Short (~0.5 s) and unlike a status gain (no label, no colour code).
+func _trigger(at: Dictionary) -> void:
+	var it: Dictionary = screen.fx_slot_item(int(at["p"]), String(at["zone"]), int(at["slot"]))
+	if it.is_empty():
+		return
+	var w: CardWidget = it["widget"]
+	var holder: Control = it["holder"]
+	var col := UIStyle.GOLD_HI
+	_cleanups.append(_reset_widget.bind(w, holder))
+	var tw := _tw()
+	if UIStyle.reduce_motion:
+		w.fx_glow = Color(col, 0.9)
+		tw.tween_property(w, "fx_glow", Color(col, 0.0), 0.3)
+		tw.tween_callback(_reset_widget.bind(w, holder))
+		return
+	var grect := w.get_global_rect()
+	var ring := RuneRing.new()
+	ring.col = col
+	ring.radius = grect.size.length() * 0.5
+	ring.position = _fx_pos(grect.get_center())
+	_add_node(ring)
+	var rt := _tw()
+	rt.tween_property(ring, "t", 1.0, UIStyle.dur(0.5))
+	rt.tween_callback(_free_node.bind(ring))
+	_burst("spark", grect.get_center(), col, 10, grect.size.length() * 0.45, 0.35)
+	holder.z_index = 20
+	w.pivot_offset = w.size / 2.0
+	tw.set_parallel(true)
+	tw.tween_property(w, "scale", Vector2(1.12, 1.12), UIStyle.dur(0.09)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.26)).set_delay(UIStyle.dur(0.09)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "fx_flash", 0.55, UIStyle.dur(0.06))
+	tw.tween_property(w, "fx_flash", 0.0, UIStyle.dur(0.2)).set_delay(UIStyle.dur(0.06))
+	tw.tween_property(w, "fx_glow", Color(col, 1.0), UIStyle.dur(0.08))
+	tw.tween_property(w, "fx_glow", Color(col, 0.0), UIStyle.dur(0.35)).set_delay(UIStyle.dur(0.12))
+	tw.chain().tween_callback(_reset_widget.bind(w, holder))
+
+
+# ---------------------------------------------------------------- spell / trap spotlight
+
+## Queues a big centred view of a Spell/Trap that was cast or activated (fx event "spotlight").
+func _spotlight(e: Dictionary) -> void:
+	if _spot_q.size() >= 4:
+		_spot_q.pop_front()
+	_spot_q.append(e)
+	if not _spot_active:
+		_next_spotlight()
+
+
+func _next_spotlight() -> void:
+	if _spot_q.is_empty():
+		_spot_active = false
+		return
+	_spot_active = true
+	_show_spotlight(_spot_q.pop_front())
+
+
+func _spot_caption(e: Dictionary) -> String:
+	match String(e.get("how", "cast")):
+		"activate": return "Spell activated"
+		"trap": return "Trap activated"
+	var p := int(e.get("p", -1))
+	var players: Array = screen.mv.get("players", [])
+	if p >= 0 and p < players.size() and players[p] is Dictionary and String(players[p].get("name", "")) != "":
+		return "%s casts" % String(players[p]["name"])
+	return "Spell cast"
+
+
+## Flies a big card from its origin (hand for a cast, else its slot) to the centre of the board over a
+## soft dark backdrop, holds ~1 s with a caption pill above it, then shrinks and fades. Click-through;
+## everything is removed by finish_all().
+func _show_spotlight(e: Dictionary) -> void:
+	var layer: Control = screen.banner_layer if screen.banner_layer != null else screen.fx_layer
+	var inv := layer.get_global_transform().affine_inverse()
+	var area: Rect2 = screen.board_global_rect()
+	var centre := inv * area.get_center()
+	var p := int(e.get("p", 0))
+	var origin_g: Vector2 = screen.hand_anchor(p)
+	if e.get("at") is Dictionary:
+		var at: Dictionary = e["at"]
+		var sr: Rect2 = screen.fx_slot_global_rect(int(at.get("p", p)), String(at.get("zone", "backrow")), int(at.get("slot", 0)))
+		if sr.size != Vector2.ZERO:
+			origin_g = sr.get_center()
+	var origin := inv * origin_g
+	var v: Dictionary = screen._summary_view(Series._card_summary(int(e["id"])))
+	var accent: Color = UIStyle.CATEGORY_COLORS.get(String(v.get("category", "spell")), UIStyle.GOLD)
+	# Backdrop: soft radial dark vignette over the board.
+	var g := Gradient.new()
+	g.set_color(0, Color(0, 0, 0, 0.62))
+	g.set_color(1, Color(0, 0, 0, 0.0))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.0, 0.5)
+	gt.width = 128
+	gt.height = 128
+	var bd := TextureRect.new()
+	bd.texture = gt
+	bd.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bd.stretch_mode = TextureRect.STRETCH_SCALE
+	bd.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bsz := Vector2(area.size.x * 1.1, area.size.y * 1.2)
+	bd.size = bsz
+	bd.position = centre - bsz / 2.0
+	bd.modulate.a = 0.0
+	_add_node(bd, layer)
+	# The card.
+	var c := CardWidget.new()
+	c.show_tooltip = false
+	c.auto_hover = false
+	c.setup(v, "big")
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.pivot_offset = c.size / 2.0
+	_add_node(c, layer)
+	var home := centre - c.size / 2.0
+	# Caption pill above the card.
+	var pill := PanelContainer.new()
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := UIStyle.flat(Color(0.05, 0.04, 0.035, 0.94), accent.lightened(0.15), 2, 16)
+	sb.content_margin_left = 18
+	sb.content_margin_right = 18
+	sb.content_margin_top = 3
+	sb.content_margin_bottom = 3
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 6
+	pill.add_theme_stylebox_override("panel", sb)
+	var lbl := UIStyle.label(_spot_caption(e), 18, UIStyle.TEXT, false, true)
+	lbl.add_theme_font_override("font", UIStyle.font_display(700))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	lbl.add_theme_constant_override("outline_size", 4)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pill.add_child(lbl)
+	_add_node(pill, layer)
+	pill.size = pill.get_combined_minimum_size()
+	pill.pivot_offset = pill.size / 2.0
+	pill.position = Vector2(centre.x - pill.size.x / 2.0, home.y - pill.size.y - 12.0)
+	pill.modulate.a = 0.0
+	var done := func():
+		_free_node(bd)
+		_free_node(c)
+		_free_node(pill)
+		_next_spotlight()
+	var tw := _tw()
+	if UIStyle.reduce_motion:
+		c.position = home
+		c.modulate.a = 0.0
+		tw.set_parallel(true)
+		tw.tween_property(c, "modulate:a", 1.0, 0.12)
+		tw.tween_property(bd, "modulate:a", 1.0, 0.12)
+		tw.tween_property(pill, "modulate:a", 1.0, 0.12)
+		tw.chain().tween_interval(1.0)
+		tw.chain().tween_property(c, "modulate:a", 0.0, 0.12)
+		tw.parallel().tween_property(bd, "modulate:a", 0.0, 0.12)
+		tw.parallel().tween_property(pill, "modulate:a", 0.0, 0.12)
+		tw.chain().tween_callback(done)
+		return
+	c.position = origin - c.size / 2.0
+	c.scale = Vector2(0.32, 0.32)
+	c.rotation = deg_to_rad(-10.0 if origin.x < centre.x else 10.0)
+	c.modulate.a = 0.0
+	pill.scale = Vector2(0.7, 0.7)
+	# Fly in.
+	tw.set_parallel(true)
+	tw.tween_property(bd, "modulate:a", 1.0, UIStyle.dur(0.22))
+	tw.tween_property(c, "modulate:a", 1.0, UIStyle.dur(0.1))
+	tw.tween_property(c, "position", home, UIStyle.dur(0.34)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "scale", Vector2.ONE, UIStyle.dur(0.34)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "rotation", 0.0, UIStyle.dur(0.34)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	# Arrival: glint, accent glow, sparks; the caption pops in.
+	tw.chain().tween_callback(func():
+		_burst("spark", area.get_center(), accent.lightened(0.4), 12, 170.0, 0.45)
+		c.fx_flash = 0.5
+		c.fx_glow = Color(accent.lightened(0.2), 0.9))
+	tw.parallel().tween_property(c, "fx_flash", 0.0, UIStyle.dur(0.25))
+	tw.parallel().tween_property(c, "fx_glow", Color(accent.lightened(0.2), 0.35), UIStyle.dur(0.4))
+	tw.parallel().tween_property(pill, "modulate:a", 1.0, UIStyle.dur(0.14))
+	tw.parallel().tween_property(pill, "scale", Vector2.ONE, UIStyle.dur(0.2)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# Hold ~1 s with a slow breath so it never sits static.
+	tw.chain().tween_property(c, "scale", Vector2(1.03, 1.03), UIStyle.dur(0.5)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.chain().tween_property(c, "scale", Vector2.ONE, UIStyle.dur(0.5)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	# Out: shrink, drop slightly and fade.
+	tw.chain().tween_property(c, "scale", Vector2(0.6, 0.6), UIStyle.dur(0.24)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(c, "modulate:a", 0.0, UIStyle.dur(0.24))
+	tw.parallel().tween_property(c, "position:y", home.y + 24.0, UIStyle.dur(0.24)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(bd, "modulate:a", 0.0, UIStyle.dur(0.24))
+	tw.parallel().tween_property(pill, "modulate:a", 0.0, UIStyle.dur(0.16))
+	tw.chain().tween_callback(done)
 
 
 # ---------------------------------------------------------------- banners

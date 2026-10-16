@@ -162,3 +162,29 @@ func test_fusion_zone_and_stance_prompts_name_the_fusion_unit() -> void:
 	TB.choose(m, ["Defense"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 	assert_str(m.cards[wyrm]["stance"]).is_equal("def")
+
+
+## Feedback 06 bug: Dante's "Apply 1 Cleanse to this unit or an adjacent unit" was never offered
+## (the legality check read the adjacent-unit list before it was computed).
+func test_dante_cleanse_ability_is_usable() -> void:
+	var m := TB.make()
+	var dante := TB.unit(m, 0, 36, 0)
+	TB.unit(m, 0, TB.WATER, 1)
+	assert_str(m.validate(0, {"t": "ability", "uid": dante, "idx": 0})).is_empty()
+	assert_str(TB.ability(m, dante)).is_empty()
+	assert_str(TB.pend_kind(m)).is_equal("select")
+	assert_int(m.pending["options"].size()).is_equal(2)          # Dante itself and the adjacent unit
+	TB.choose_uids(m, [dante])
+	assert_int(m.status_count(dante, "cleanse")).is_equal(1)
+
+
+## Feedback 06: Polymerization cannot be cast without a Fusion unit it could summon.
+func test_polymerization_needs_a_summonable_fusion() -> void:
+	var m := TB.make()
+	var poly := TB.card(m, 0, 82)
+	m.players[0]["ap"] = 5
+	assert_str(m.validate(0, {"t": "cast", "uid": poly})).is_equal("No Fusion unit can be summoned.")
+	TB.unit(m, 0, 4, 3)                                  # Basic Beast + Basic Dragon: Bastion Wyrm materials
+	TB.unit(m, 0, 2, 1)
+	TB.card(m, 0, 93, "extra")
+	assert_str(m.validate(0, {"t": "cast", "uid": poly})).is_empty()

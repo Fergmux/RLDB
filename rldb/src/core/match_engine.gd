@@ -359,12 +359,18 @@ func _spell_target_check(p: int, uid: int) -> String:
 		return "This card's effect is not implemented yet."
 	var f := make_frame(uid, p, [], "")
 	for op in entry["spell"]:
+		if op["op"] == "near_self":
+			_op_near_self(f, op)              # its list feeds the choice that follows
 		if op["op"] == "choose" and not op.get("optional", false):
 			if select(f, op["sel"]).is_empty():
 				return "No legal target."
 			break
 		if op["op"] == "require" and op.has("cond") and not eval_cond(f, op["cond"]):
 			return "Condition not met."
+	# A Fusion Spell (Polymerization) needs a Fusion unit it could actually summon.
+	for op in entry["spell"]:
+		if op["op"] == "fusion" and fusion_candidates(p, op["sources"]).is_empty():
+			return "No Fusion unit can be summoned."
 	return ""
 
 
@@ -378,6 +384,8 @@ func _ability_check(p: int, uid: int, idx: int, ab: Dictionary) -> String:
 	if ab.has("cond") and not eval_cond(f, ab["cond"]):
 		return "Condition not met."
 	for op in ab["ops"]:
+		if op["op"] == "near_self":
+			_op_near_self(f, op)              # e.g. Dante: "this unit or an adjacent unit"
 		if op["op"] == "choose" and not op.get("optional", false):
 			if select(f, op["sel"]).is_empty():
 				return "No legal target."
@@ -487,9 +495,10 @@ func _stance_op(cmd: Dictionary) -> Dictionary:
 func _lead_choices(ops: Array) -> Array:
 	var lead := []
 	var i := 0
-	while i < ops.size() and ops[i]["op"] in ["choose", "mode"] and not ops[i].get("random", false):
+	while i < ops.size() and ops[i]["op"] in ["choose", "mode", "near_self"] and not ops[i].get("random", false):
 		var c: Dictionary = ops[i].duplicate()
-		c["cancellable"] = true
+		if c["op"] != "near_self":       # near_self only lists the units a following choice may pick
+			c["cancellable"] = true
 		lead.append(c)
 		i += 1
 	return [lead, ops.slice(i)]
@@ -500,6 +509,7 @@ func _op_flip_set_spell(f: Dictionary, op: Dictionary) -> int:
 	f["committed"] = true
 	cards[f["src"]]["face_up"] = true
 	add_log("%s activates set Spell %s." % [pname(f["ctl"]), name_of(f["src"])])
+	add_fx({"k": "spotlight", "p": f["ctl"], "id": d(f["src"])["id"], "how": "activate", "at": fx_pos(f["src"])})
 	return R.CONT
 
 
@@ -649,6 +659,7 @@ func _op_to_limbo(f: Dictionary, op: Dictionary) -> int:
 		_remove_from_zone(uid)
 		cards[uid]["zone"] = "limbo"
 		add_log("%s casts %s." % [pname(f["ctl"]), name_of(uid)])
+		add_fx({"k": "spotlight", "p": f["ctl"], "id": d(uid)["id"], "how": "cast"})   # the Spell is public now
 	if script_of(uid).get("flags", []).has("cost_up_on_activate"):
 		change_cost_perm(uid, -1 if f["reversed"] else 1)
 	return R.CONT
@@ -681,6 +692,8 @@ func _op_ability_cost(f: Dictionary, op: Dictionary) -> int:
 		if change_hp(f["ctl"], -cost["hp"], " (cost of %s)" % name_of(uid)):
 			return R.END
 	add_log("%s activates %s: %s." % [pname(f["ctl"]), name_of(uid), ab.get("label", "ability")])
+	if not fx_pos(uid).is_empty():
+		add_fx({"k": "trigger", "at": fx_pos(uid)})
 	return R.CONT
 
 

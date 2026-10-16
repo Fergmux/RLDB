@@ -244,7 +244,7 @@ func _show_menu() -> void:
 	var local_b := _hero_button("Hot-seat match", false, "Two players, one screen.")
 	local_b.pressed.connect(func(): _start_local(opts.duplicate(true)))
 	row_b.add_child(local_b)
-	var resume_b := _hero_button("Resume saved series (%d)" % saves.size() if not saves.is_empty() else "Resume saved series", false, "Continue an unfinished series.")
+	var resume_b := _hero_button("Resume saved series", false, ("%d saved series. " % saves.size() if not saves.is_empty() else "") + "Continue an unfinished series.")
 	resume_b.disabled = saves.is_empty()
 	row_b.add_child(resume_b)
 	status_label = UIStyle.label(SteamBridge.describe(), 14, M_DIM, true)

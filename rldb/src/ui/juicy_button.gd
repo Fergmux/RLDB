@@ -23,6 +23,7 @@ func _init() -> void:
 
 
 func _settle() -> void:
+	pivot_offset = size / 2.0   # scale from the centre (a size set before entering the tree emits no resize)
 	var want := 1.0
 	if not disabled:
 		want = PRESS_SCALE if _down else (HOVER_SCALE if _hover else 1.0)

@@ -356,7 +356,8 @@ func _build_statuses(c: Dictionary) -> void:
 		hb.add_child(Mark.new("up" if kind == "buff" else ("down" if kind == "debuff" else "diamond"), col, 11))
 		var tag := "Buff" if kind == "buff" else ("Debuff" if kind == "debuff" else "Counter")
 		hb.add_child(_lbl("%s ×%d" % [r[0], r[1]], 15, col, true, false, false))
-		hb.add_child(_lbl(tag, SMALL, UIStyle.MUTED, false, false, false))
+		if kind != "counter":   # runes need no "Counter" tag (user feedback)
+			hb.add_child(_lbl(tag, SMALL, UIStyle.MUTED, false, false, false))
 		vb.add_child(_lbl(_strip_status_prefix(String(r[3])), 14, UIStyle.TEXT))
 		add_child(pc)
 

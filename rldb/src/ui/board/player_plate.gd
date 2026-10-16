@@ -10,9 +10,17 @@ const CHIP_TIPS := {"hand": "Hand", "draw": "Draw pile (Deck)", "spent": "Spent 
 
 
 class HpBar extends Control:
+	## `hp` is the real value; `shown` is what is drawn and tweens towards it (number counts up/down).
+	## Damage leaves a pale ghost segment that drains after a beat; healing shows the gained segment in
+	## green that the fill grows into. `tint` flashes the number red (damage) or green (heal).
 	var hp: int = 0
 	var max_hp: int = 60
 	var flash: float = 0.0: set = _set_flash
+	var shown: float = 0.0: set = _set_shown
+	var ghost: float = 0.0: set = _set_ghost
+	var tint: Color = Color(1, 1, 1, 0): set = _set_tint
+	var _tw: Tween
+	var _heal: bool = false
 
 	func _init() -> void:
 		custom_minimum_size = Vector2(0, 30)
@@ -22,13 +30,63 @@ class HpBar extends Control:
 		flash = v
 		queue_redraw()
 
+	func _set_shown(v: float) -> void:
+		shown = v
+		queue_redraw()
+
+	func _set_ghost(v: float) -> void:
+		ghost = v
+		queue_redraw()
+
+	func _set_tint(v: Color) -> void:
+		tint = v
+		queue_redraw()
+
+	## Sets the real HP and animates the bar and number to it (~0.4 s). `snap` = no animation
+	## (first update, a different player on this plate, reduce motion, not in the tree).
+	func set_hp(v: int, snap: bool = false) -> void:
+		var old := shown
+		hp = v
+		if _tw != null and _tw.is_valid():
+			_tw.kill()
+		if snap or not is_inside_tree() or UIStyle.reduce_motion or is_equal_approx(old, float(v)):
+			shown = float(v)
+			ghost = float(v)
+			tint = Color(1, 1, 1, 0)
+			return
+		var dmg := float(v) < old
+		_heal = not dmg
+		var col := Color("ff5a48") if dmg else UIStyle.GOOD
+		tint = Color(col, 1.0)
+		ghost = maxf(ghost, old) if dmg else float(v)
+		_tw = create_tween().set_parallel(true)
+		_tw.tween_property(self, "shown", float(v), UIStyle.dur(0.4)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+		_tw.tween_property(self, "tint", Color(col, 0.0), UIStyle.dur(0.6)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		if dmg:
+			_tw.tween_property(self, "ghost", float(v), UIStyle.dur(0.35)).set_delay(UIStyle.dur(0.35)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+
+	func _seg(r: Rect2, a: float, b: float, col: Color) -> void:
+		var m := float(maxi(1, max_hp))
+		var x0 := r.position.x + r.size.x * clampf(minf(a, b) / m, 0.0, 1.0)
+		var x1 := r.position.x + r.size.x * clampf(maxf(a, b) / m, 0.0, 1.0)
+		if x1 - x0 < 0.5:
+			return
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = col
+		sb.set_corner_radius_all(mini(5, int((x1 - r.position.x) / 2.0)))
+		draw_style_box(sb, Rect2(x0, r.position.y, x1 - x0, r.size.y))
+
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
 		var sb := UIStyle.flat(Color("120c0b"), Color(UIStyle.BRONZE, 0.8), 1, 6)
 		draw_style_box(sb, r)
-		var frac := clampf(float(hp) / float(maxi(1, max_hp)), 0.0, 1.0)
+		var frac := clampf(shown / float(maxi(1, max_hp)), 0.0, 1.0)
 		var fill := r.grow(-2.0)
+		var inner := fill
 		fill.size.x *= frac
+		# Ghost segment: damage drains pale red behind the fill; a heal shows the gain in green ahead of it.
+		if ghost > shown + 0.01:
+			_seg(inner, shown, ghost, Color(UIStyle.GOOD, 0.55) if _heal else Color("ffb08a", 0.75))
 		if fill.size.x > 1.0:
 			var rad := mini(5, int(fill.size.x / 2.0))
 			var fb := StyleBoxFlat.new()
@@ -42,10 +100,13 @@ class HpBar extends Control:
 			draw_style_box(hi, Rect2(fill.position, Vector2(fill.size.x, fill.size.y * 0.45)))
 		if flash > 0.001:
 			draw_style_box(UIStyle.flat(Color(1, 1, 1, flash * 0.5), Color.TRANSPARENT, 0, 6), r)
+		if tint.a > 0.001:
+			draw_style_box(UIStyle.flat(Color(tint, tint.a * 0.18), Color(tint, tint.a * 0.7), 1, 6), r)
 		var col := UIStyle.TEXT if frac > 0.25 else UIStyle.BAD
+		col = col.lerp(Color(tint, 1.0).lightened(0.25), tint.a * 0.85)
 		var font := UIStyle.font_display(700)
 		var fs := 22
-		var txt := "%d" % hp
+		var txt := "%d" % roundi(shown)
 		var sz := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
 		var pos := Vector2(8, size.y / 2.0 + (font.get_ascent(fs) - font.get_descent(fs)) / 2.0)
 		draw_string_outline(font, pos, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0, 0, 0, 0.7))
@@ -69,10 +130,72 @@ class ApGems extends Control:
 	var ap_peak: int = 0
 
 	const MAX_ROW_W := 190.0   # width budget for the gem row on a 300 px plate
+	const GAIN_T := 0.32       # gem pop when AP is gained (s, before UIStyle.dur)
+	const SPEND_T := 0.3       # gem dims and shrinks into its socket when spent
+	const STAGGER := 0.06      # delay between gems changing in one update
+
+	## Presentation only: per-gem animations, index -> seconds remaining (delay + duration), and the
+	## AP number shown in the label, which counts towards `ap`.
+	var _gain: Dictionary = {}
+	var _spend: Dictionary = {}
+	var _shown_ap: float = 0.0
+	var _txt_pop: float = 0.0
 
 	func _init() -> void:
 		custom_minimum_size = Vector2(0, 20)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _ready() -> void:
+		set_process(not _gain.is_empty() or not _spend.is_empty())
+
+	## Sets the AP fields and animates the change: gained gems pop in, spent gems dim with a small
+	## shrink, the "AP x/y" number counts. `snap` (or reduce motion / not in tree) = no animation.
+	func set_values(p_ap: int, p_start: int, p_peak: int, snap: bool = false) -> void:
+		var old_filled := filled()
+		var old_ap := ap
+		ap = p_ap
+		ap_start = p_start
+		ap_peak = p_peak
+		var new_filled := filled()
+		if snap or not is_inside_tree() or UIStyle.reduce_motion:
+			_gain.clear()
+			_spend.clear()
+			_shown_ap = float(ap)
+			_txt_pop = 0.0
+			set_process(false)
+			queue_redraw()
+			return
+		var k := 0
+		for i in range(old_filled, new_filled):
+			_spend.erase(i)
+			_gain[i] = UIStyle.dur(GAIN_T + STAGGER * k)
+			k += 1
+		k = 0
+		for i in range(old_filled - 1, new_filled - 1, -1):
+			_gain.erase(i)
+			_spend[i] = UIStyle.dur(SPEND_T + STAGGER * k)
+			k += 1
+		if ap != old_ap:
+			_txt_pop = 1.0
+		set_process(true)
+		queue_redraw()
+
+	func _process(d: float) -> void:
+		for dict in [_gain, _spend]:
+			for i in dict.keys():
+				dict[i] -= d
+				if dict[i] <= 0.0:
+					dict.erase(i)
+		var step := d * maxf(6.0, absf(float(ap) - _shown_ap) * 4.0) / UIStyle.dur(1.0)
+		_shown_ap = move_toward(_shown_ap, float(ap), step)
+		_txt_pop = maxf(0.0, _txt_pop - d / UIStyle.dur(0.3))
+		if _gain.is_empty() and _spend.is_empty() and is_equal_approx(_shown_ap, float(ap)) and _txt_pop <= 0.0:
+			set_process(false)
+		queue_redraw()
+
+	## 0 -> 1 progress of a gem animation (0 while still waiting for its stagger delay).
+	func _prog(rem: float, total: float) -> float:
+		return clampf(1.0 - rem / UIStyle.dur(total), 0.0, 1.0)
 
 	static func capacity_for(p_ap: int, p_start: int, p_peak: int) -> int:
 		return maxi(0, maxi(p_ap, maxi(p_start, p_peak)))
@@ -106,22 +229,50 @@ class ApGems extends Control:
 		for i in cap:
 			var c := Vector2(x + pitch / 2.0, size.y / 2.0)
 			if i < n:
-				draw_circle(c, rad, amber.darkened(0.65))
-				draw_circle(c, rad * 0.8, amber)
-				draw_circle(c + Vector2(-0.25, -0.3) * rad, rad * 0.32, Color(1, 1, 1, 0.35))
+				var g := _prog(_gain[i], GAIN_T) if _gain.has(i) else 1.0
+				if g < 1.0:
+					_socket(c, rad, amber)
+				if g > 0.0:
+					# Pop: overshoots to ~1.35x, then settles; a bright ring expands and fades.
+					var sc := 1.0 + 0.35 * sin(g * PI) if g < 1.0 else 1.0
+					_gem(c, rad * sc * minf(1.0, g * 2.5), amber, minf(1.0, g * 3.0))
+					if g < 1.0:
+						draw_arc(c, rad * (1.0 + 0.9 * g), 0.0, TAU, 24, Color(UIStyle.GOLD_HI, 0.8 * (1.0 - g)), 1.6, true)
 			else:
-				# Spent: dark socket, thin outline and a crack so it never reads as "unfilled".
-				draw_circle(c, rad, Color(0.07, 0.05, 0.04))
-				draw_arc(c, rad - 0.5, 0.0, TAU, 20, Color(amber, 0.4), 1.2)
-				if rad >= 4.5:
-					draw_polyline(PackedVector2Array([c + Vector2(-0.1, -0.7) * rad, c + Vector2(0.15, -0.1) * rad,
-						c + Vector2(-0.2, 0.25) * rad, c + Vector2(0.1, 0.75) * rad]), Color(amber, 0.55), 1.0)
+				_socket(c, rad, amber)
+				if _spend.has(i):
+					# Spent this update: the gem dims and shrinks into the socket.
+					var k := _prog(_spend[i], SPEND_T)
+					_gem(c, rad * lerpf(1.0, 0.45, k), amber.lerp(amber.darkened(0.6), k), 1.0 - k)
 			x += pitch
 		var font := UIStyle.font_display(700)
-		var txt := ap_text()
+		var shown := roundi(_shown_ap)
+		var txt := "AP %d/%d" % [shown, cap] if cap > 0 else "AP %d" % shown
+		var fs := 16
 		var tp := Vector2(x + 8.0, size.y / 2.0 + 6)
-		draw_string_outline(font, tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 3, Color(0, 0, 0, 0.7))
-		draw_string(font, tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, amber)
+		if _txt_pop > 0.0:
+			var sc2 := 1.0 + 0.18 * sin(_txt_pop * PI)
+			draw_set_transform(tp, 0.0, Vector2(sc2, sc2))
+			tp = Vector2.ZERO
+		var tcol := amber.lerp(UIStyle.GOLD_HI.lightened(0.3), _txt_pop * 0.8)
+		draw_string_outline(font, tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0, 0, 0, 0.7))
+		draw_string(font, tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, tcol)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	func _gem(c: Vector2, r: float, amber: Color, a: float) -> void:
+		if r <= 0.2 or a <= 0.0:
+			return
+		draw_circle(c, r, Color(amber.darkened(0.65), a), true, -1.0, true)
+		draw_circle(c, r * 0.8, Color(amber, a), true, -1.0, true)
+		draw_circle(c + Vector2(-0.25, -0.3) * r, r * 0.32, Color(1, 1, 1, 0.35 * a), true, -1.0, true)
+
+	## Spent: dark socket, thin outline and a crack so it never reads as "unfilled".
+	func _socket(c: Vector2, rad: float, amber: Color) -> void:
+		draw_circle(c, rad, Color(0.07, 0.05, 0.04), true, -1.0, true)
+		draw_arc(c, rad - 0.5, 0.0, TAU, 20, Color(amber, 0.4), 1.2, true)
+		if rad >= 4.5:
+			draw_polyline(PackedVector2Array([c + Vector2(-0.1, -0.7) * rad, c + Vector2(0.15, -0.1) * rad,
+				c + Vector2(-0.2, 0.25) * rad, c + Vector2(0.1, 0.75) * rad]), Color(amber, 0.55), 1.0, true)
 
 
 class TurnMark extends Control:
@@ -134,6 +285,7 @@ class TurnMark extends Control:
 	func _draw() -> void:
 		if on:
 			draw_colored_polygon(PackedVector2Array([Vector2(2, 4), Vector2(12, 10), Vector2(2, 16)]), UIStyle.GOLD)
+			draw_polyline(PackedVector2Array([Vector2(2, 4), Vector2(12, 10), Vector2(2, 16), Vector2(2, 4)]), UIStyle.GOLD, 1.0, true)
 
 
 var name_label: Label
@@ -145,6 +297,8 @@ var chips: Dictionary = {}
 var _max_hp: int = 60
 var _active: bool = false
 var _tween: Tween
+## Player shown on this plate at the last update; a different one (seat switch) snaps instead of animating.
+var _who: String = ""
 
 
 func _init() -> void:
@@ -201,14 +355,17 @@ func update_from(pv: Dictionary, active: bool, mine: bool, label_suffix: String,
 	name_label.add_theme_color_override("font_color", UIStyle.GOLD_HI if active else UIStyle.TEXT)
 	turn_mark.on = active
 	turn_mark.queue_redraw()
+	# HP and AP animate from the previous values (HpBar.set_hp / ApGems.set_values); a different
+	# player on this plate (hot-seat seat switch, new match) snaps instead.
+	var who := String(pv["name"])
+	var snap := who != _who
+	_who = who
 	_max_hp = maxi(_max_hp, maxi(int(pv["hp"]), 60))
-	hp_bar.hp = pv["hp"]
 	hp_bar.max_hp = _max_hp
+	hp_bar.set_hp(int(pv["hp"]), snap)
 	hp_bar.queue_redraw()
-	ap_gems.ap = int(pv["ap"])
-	ap_gems.ap_start = int(pv.get("ap_start", ap_gems.ap))
-	ap_gems.ap_peak = int(pv.get("ap_peak", ap_gems.ap))
-	ap_gems.queue_redraw()
+	var ap := int(pv["ap"])
+	ap_gems.set_values(ap, int(pv.get("ap_start", ap)), int(pv.get("ap_peak", ap)), snap)
 	next_label.text = next_text
 	var counts: Dictionary = pv["counts"]
 	for z in CHIP_ZONES:

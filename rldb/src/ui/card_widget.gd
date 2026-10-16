@@ -75,6 +75,8 @@ func _init() -> void:
 func _ready() -> void:
 	mouse_entered.connect(func(): _self_hover = auto_hover; queue_redraw())
 	mouse_exited.connect(func(): _self_hover = false; queue_redraw())
+	# Godot turns processing on at ready because _process exists: only redraw per frame while animating.
+	_update_process()
 
 
 ## `is_rotated` turns the portrait card 90 degrees clockwise (size becomes SIZES[kind] swapped).
@@ -129,7 +131,7 @@ func set_marks(is_target: bool, is_selected: bool, is_dimmed: bool = false, soft
 		self_modulate = Color(0.8, 0.8, 0.8, 1.0)
 	else:
 		self_modulate = Color.WHITE
-	set_process(highlighted and not UIStyle.reduce_motion)
+	_update_process()
 	queue_redraw()
 
 
@@ -203,6 +205,12 @@ func _set_order(v: int) -> void:
 	if v != order_no:
 		order_no = v
 		queue_redraw()
+
+
+## Per-frame redraw only while something animates: the pulsing target ring or the breathing
+## selection brackets. Static under reduce_motion.
+func _update_process() -> void:
+	set_process((highlighted or selected) and not UIStyle.reduce_motion)
 
 
 func _process(_d: float) -> void:
@@ -337,10 +345,7 @@ func _draw() -> void:
 	_cr = card_rect()
 	_ps = Vector2(_cr.size.y, _cr.size.x) if rotated else _cr.size
 	_s = maxf(0.2, _ps.x / _base().x)
-	if rotated:
-		draw_set_transform(Vector2(_cr.end.x, _cr.position.y), PI / 2.0, Vector2.ONE)
-	else:
-		draw_set_transform(_cr.position, 0.0, Vector2.ONE)
+	draw_set_transform_matrix(_face_xform())
 	if view.get("hidden", false):
 		_draw_back()
 	elif _is_own_set_card():
@@ -357,6 +362,25 @@ func _draw() -> void:
 			_: _draw_square()
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_overlays()
+
+
+## Card-face (portrait) space -> widget space: the face is turned 90 degrees clockwise when `rotated`.
+func _face_xform() -> Transform2D:
+	if rotated:
+		return Transform2D(PI / 2.0, Vector2(_cr.end.x, _cr.position.y))
+	return Transform2D(0.0, _cr.position)
+
+
+## While a rotated face is drawn, the parts drawn next (centred on face point `c`) stay upright in
+## screen space at the same spot on the card: ATK/DEF badges, cost gem, type pip. Pair with _upright_end().
+func _upright_begin(c: Vector2) -> void:
+	if rotated:
+		draw_set_transform(_face_xform() * c - c, 0.0, Vector2.ONE)
+
+
+func _upright_end() -> void:
+	if rotated:
+		draw_set_transform_matrix(_face_xform())
 
 
 ## True for a backrow card the viewer can see but that is still face down: it is drawn as a card
@@ -388,7 +412,7 @@ func _frame(radius: float) -> void:
 	draw_style_box(sb, Rect2(Vector2.ZERO, _ps))
 	var inset := 3.0 * _s
 	_vgrad(Rect2(inset, inset, _ps.x - 2 * inset, _ps.y - 2 * inset), Color(_accent().darkened(0.7), 0.45), Color(0, 0, 0, 0.45))
-	draw_line(Vector2(radius * _s, 3.5 * _s), Vector2(_ps.x - radius * _s, 3.5 * _s), Color(UIStyle.GOLD_HI, 0.4), 1.0)
+	draw_line(Vector2(radius * _s, 3.5 * _s), Vector2(_ps.x - radius * _s, 3.5 * _s), Color(UIStyle.GOLD_HI, 0.4), maxf(1.0, _s), true)
 
 
 func _art_texture() -> Texture2D:
@@ -452,16 +476,16 @@ func _draw_art(rect: Rect2) -> void:
 	var sh := 7.0 * _s
 	draw_polygon(PackedVector2Array([rect.position, Vector2(rect.end.x, rect.position.y), Vector2(rect.end.x, rect.position.y + sh), Vector2(rect.position.x, rect.position.y + sh)]),
 		PackedColorArray([Color(0, 0, 0, 0.4), Color(0, 0, 0, 0.4), Color(0, 0, 0, 0), Color(0, 0, 0, 0)]))
-	draw_rect(rect, Color(UIStyle.BRONZE, 0.95), false, maxf(1.0, 2.0 * _s))
+	draw_rect(rect, Color(UIStyle.BRONZE, 0.95), false, maxf(1.0, 2.0 * _s), true)
 
 
 func _draw_glyph(kind: String, c: Vector2, r: float, col: Color) -> void:
 	var w := maxf(1.5, 0.12 * r)
 	match kind:
 		"sword":
-			draw_line(c + Vector2(0, -r), c + Vector2(0, r * 0.55), col, w * 1.3)
-			draw_line(c + Vector2(-r * 0.5, r * 0.05), c + Vector2(r * 0.5, r * 0.05), col, w)
-			draw_circle(c + Vector2(0, r * 0.75), r * 0.14, col)
+			draw_line(c + Vector2(0, -r), c + Vector2(0, r * 0.55), col, w * 1.3, true)
+			draw_line(c + Vector2(-r * 0.5, r * 0.05), c + Vector2(r * 0.5, r * 0.05), col, w, true)
+			draw_circle(c + Vector2(0, r * 0.75), r * 0.14, col, true, -1.0, true)
 		"star":
 			var pts := PackedVector2Array()
 			for i in 16:
@@ -479,10 +503,10 @@ func _draw_glyph(kind: String, c: Vector2, r: float, col: Color) -> void:
 				var x := lerpf(-1.0, 1.0, float(i) / 12.0)
 				lens.append(c + Vector2(x * r, 0.5 * r * (1.0 - x * x)))
 			draw_colored_polygon(lens, col)
-			draw_circle(c, r * 0.26, Color(0, 0, 0, col.a * 1.2))
+			draw_circle(c, r * 0.26, Color(0, 0, 0, col.a * 1.2), true, -1.0, true)
 		"crown":
 			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r * 0.8, 0), c + Vector2(0, r), c + Vector2(-r * 0.8, 0)]), col)
-			draw_circle(c, r * 0.3, Color(0, 0, 0, col.a * 1.2))
+			draw_circle(c, r * 0.3, Color(0, 0, 0, col.a * 1.2), true, -1.0, true)
 
 
 # ---------------------------------------------------------------- shared card parts
@@ -572,6 +596,7 @@ func _cost_color() -> Color:
 
 
 func _gem(c: Vector2, r: float, fs: int) -> void:
+	_upright_begin(c)
 	var kind := String(view.get("cost_kind", "ap"))
 	var col: Color = UIStyle.COST_COLORS.get(kind, UIStyle.COST_COLORS["ap"])
 	var dark := col.darkened(0.7)
@@ -588,17 +613,18 @@ func _gem(c: Vector2, r: float, fs: int) -> void:
 			draw_colored_polygon(_poly(c, rh - bw, 6, 0.0), col)
 			draw_colored_polygon(PackedVector2Array([c + Vector2(-(rh - bw), 0), c + Vector2(-(rh - bw) / 2.0, -(rh - bw) * 0.866), c + Vector2((rh - bw) / 2.0, -(rh - bw) * 0.866), c + Vector2(rh - bw, 0)]), col.lightened(0.25))
 		"fusion":
-			draw_circle(c, r, dark)
-			draw_circle(c, r - bw, col)
-			draw_arc(c, r * 0.68, 0.0, TAU, 28, dark, maxf(1.0, 1.5 * _s))
-			draw_circle(c + Vector2(-r * 0.25, -r * 0.3), r * 0.28, Color(1, 1, 1, 0.25))
+			draw_circle(c, r, dark, true, -1.0, true)
+			draw_circle(c, r - bw, col, true, -1.0, true)
+			draw_arc(c, r * 0.68, 0.0, TAU, 28, dark, maxf(1.0, 1.5 * _s), true)
+			draw_circle(c + Vector2(-r * 0.25, -r * 0.3), r * 0.28, Color(1, 1, 1, 0.25), true, -1.0, true)
 		_:
-			draw_circle(c, r, dark)
-			draw_circle(c, r - bw, col)
-			draw_circle(c + Vector2(-r * 0.22, -r * 0.3), r * 0.38, Color(1, 1, 1, 0.28))
+			draw_circle(c, r, dark, true, -1.0, true)
+			draw_circle(c, r - bw, col, true, -1.0, true)
+			draw_circle(c + Vector2(-r * 0.22, -r * 0.3), r * 0.38, Color(1, 1, 1, 0.28), true, -1.0, true)
 	var txt := _cost_text()
 	var tc := _cost_color()
 	_text_c(UIStyle.font_display(700), txt, c + Vector2(0, 0.5 * _s), fs, tc, 0.0 if tc == UIStyle.ON_GOLD else 1.5)
+	_upright_end()
 
 
 func _poly(c: Vector2, r: float, n: int, rot: float) -> PackedVector2Array:
@@ -661,6 +687,7 @@ func _stat_badge(rect: Rect2, is_atk: bool, fs_max: float) -> void:
 	var printed = view.get("printed_atk" if is_atk else "printed_def")
 	var previewing := _pv_stat == ("atk" if is_atk else "def")
 	var c := rect.get_center()
+	_upright_begin(c)   # a Defense (rotated) card still shows its numbers the right way up
 	var top := Color("c9453a") if is_atk else Color("3f7ab5")
 	var bot := Color("4d1713") if is_atk else Color("1b3a5a")
 	if is_atk:
@@ -677,8 +704,8 @@ func _stat_badge(rect: Rect2, is_atk: bool, fs_max: float) -> void:
 		draw_polygon(inner, PackedColorArray([top.lightened(0.15), top.lerp(bot, 0.45), bot, top.lerp(bot, 0.45)]))
 		# Upper facet highlight + rim glint (reads as cut metal).
 		draw_colored_polygon(PackedVector2Array([inner[0], inner[1], c + Vector2(0, hh * 0.02), inner[3]]), Color(1, 1, 1, 0.09))
-		draw_polyline(PackedVector2Array([pts[3], pts[0], pts[1]]), Color(UIStyle.GOLD_HI, 0.9), maxf(1.0, 0.9 * _s))
-		draw_polyline(_closed(inner), Color(0, 0, 0, 0.35), maxf(1.0, 0.8 * _s))
+		draw_polyline(PackedVector2Array([pts[3], pts[0], pts[1]]), Color(UIStyle.GOLD_HI, 0.9), maxf(1.0, 0.9 * _s), true)
+		draw_polyline(_closed(inner), Color(0, 0, 0, 0.35), maxf(1.0, 0.8 * _s), true)
 	else:
 		draw_colored_polygon(_shield_pts(rect), Color(UIStyle.GOLD, 0.95))
 		var ins := Rect2(rect.position + Vector2(1.8, 1.8) * _s, rect.size - Vector2(3.6, 3.6) * _s)
@@ -714,6 +741,7 @@ func _stat_badge(rect: Rect2, is_atk: bool, fs_max: float) -> void:
 			draw_colored_polygon(PackedVector2Array([ac + Vector2(0, a), ac + Vector2(a, -a * 0.8), ac + Vector2(-a, -a * 0.8)]), Color("ff8a84"))
 	if previewing:
 		_preview_decor(rect, is_atk)
+	_upright_end()
 
 
 func _preview_decor(rect: Rect2, is_atk: bool) -> void:
@@ -721,7 +749,6 @@ func _preview_decor(rect: Rect2, is_atk: bool) -> void:
 	var base := _diamond_pts(rect) if is_atk else _shield_pts(rect)
 	var glow := _grow_pts(base, c, 3.6 * _s)
 	var ring := _grow_pts(base, c, 2.4 * _s)
-	draw_colored_polygon(base, Color(UIStyle.PREVIEW, 0.26))
 	draw_polyline(_closed(glow), Color(UIStyle.PREVIEW, 0.45), maxf(4.0, 4.5 * _s), true)
 	for i in ring.size():
 		draw_dashed_line(ring[i], ring[(i + 1) % ring.size()], Color.WHITE, maxf(2.2, 2.4 * _s), 4.0 * _s, true, true)
@@ -849,7 +876,9 @@ func _type_pip(c: Vector2, r: float) -> void:
 	if not view.has("type") or view.get("type") == null or String(view.get("type")) == "":
 		return
 	var t = view.get("type")
+	_upright_begin(c)
 	TypeIcons.draw_pip(self, "" if t == null else str(t), c, r)
+	_upright_end()
 
 
 # ---------------------------------------------------------------- layouts
@@ -906,7 +935,8 @@ func _draw_tall(big: bool) -> void:
 	var lx: float = float(pl[0]) + 4.0
 	var lh := float(g["f_line"] + 3) * _s
 	if is_unit:
-		_race_type_line(Vector2(lx * _s, ly * _s), lh, line_fs)
+		var t_well: Array = g["text"]
+		_race_type_line(Vector2(lx * _s, ly * _s), (float(t_well[0]) + float(t_well[2]) - 4.0 - lx) * _s, lh, line_fs)
 	else:
 		_round_rect(_r(lx, ly + 3, 8 if not big else 11, 8 if not big else 11), _accent(), 2.0 * _s)
 		_text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(view.get("category", ""), ""), _p(lx + (11 if not big else 15), ly), line_fs, UIStyle.MUTED, -1.0, HORIZONTAL_ALIGNMENT_LEFT, lh)
@@ -932,26 +962,20 @@ func _draw_tall(big: bool) -> void:
 	_gem(_p(gm[0], gm[1]), float(gm[2]) * _s, _fs(g["f_gem"]))
 
 
-## "Race · [icon] Type": race text and damage Type stay separate; the icon is read from view.type now.
-func _race_type_line(pos: Vector2, line_h: float, fs: int) -> void:
+## Race left-aligned and damage Type right-aligned on one line `width` wide (no icon: the type pip
+## on the art already shows it). Read from view.race / view.type at draw time.
+func _race_type_line(pos: Vector2, width: float, line_h: float, fs: int) -> void:
 	var font := UIStyle.font_italic()
 	var rv = view.get("race")
 	var tv = view.get("type")
 	var race: String = "No race" if (rv == null or str(rv) == "") else str(rv)
-	var typ: String = "" if tv == null else str(tv)
-	var x := pos.x
-	var cy := pos.y + line_h / 2.0
+	var typ: String = "No type" if (tv == null or str(tv) == "") else str(tv)
 	var col := UIStyle.MUTED
-	var rw := font.get_string_size(race, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	_text_at(font, race, pos, fs, col, -1.0, HORIZONTAL_ALIGNMENT_LEFT, line_h)
-	x += rw
-	var sep := "  ·  "
-	_text_at(font, sep, Vector2(x, pos.y), fs, Color(col, 0.6), -1.0, HORIZONTAL_ALIGNMENT_LEFT, line_h)
-	x += font.get_string_size(sep, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	var ir := line_h * 0.46
-	TypeIcons.draw_icon(self, typ, Vector2(x + ir, cy), ir)
-	x += ir * 2.0 + 3.0 * _s
-	_text_at(font, typ if typ != "" else "No type", Vector2(x, pos.y), fs, col, -1.0, HORIZONTAL_ALIGNMENT_LEFT, line_h)
+	var tw := minf(font.get_string_size(typ, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x, width * 0.5)
+	typ = _ellipsize(font, typ, fs, tw + 0.5)
+	var race_w := width - tw - 6.0 * _s
+	_text_at(font, _ellipsize(font, race, fs, race_w), pos, fs, col, race_w, HORIZONTAL_ALIGNMENT_LEFT, line_h)
+	_text_at(font, typ, pos, fs, col, width, HORIZONTAL_ALIGNMENT_RIGHT, line_h)
 
 
 func _draw_empty() -> void:
@@ -990,7 +1014,7 @@ static func draw_back_art(ci: CanvasItem, card: Rect2, s: float) -> void:
 		var t := float(i) / float(steps - 1)
 		var band := Rect2(inner.position.x, inner.position.y + inner.size.y * float(i) / steps, inner.size.x, inner.size.y / steps + 1.0).intersection(inner)
 		ci.draw_rect(band, Color("2a2050").lerp(Color("120c22"), t))
-	ci.draw_rect(inner, Color(UIStyle.GOLD, 0.35), false, maxf(1.0, s))
+	ci.draw_rect(inner, Color(UIStyle.GOLD, 0.35), false, maxf(1.0, s), true)
 	var c := card.get_center()
 	var r := minf(inner.size.x, inner.size.y) * 0.34
 	var gold := Color(UIStyle.GOLD, 0.7)
@@ -1000,16 +1024,16 @@ static func draw_back_art(ci: CanvasItem, card: Rect2, s: float) -> void:
 		for k in 5:
 			var a: float = rot + float(k) * TAU / 4.0
 			sq.append(c + Vector2(cos(a), sin(a)) * r * 1.2)
-		ci.draw_polyline(sq, gold, w)
-	ci.draw_arc(c, r * 0.8, 0.0, TAU, 32, gold, w)
-	ci.draw_circle(c, r * 0.16, gold)
+		ci.draw_polyline(sq, gold, w, true)
+	ci.draw_arc(c, r * 0.8, 0.0, TAU, 32, gold, w, true)
+	ci.draw_circle(c, r * 0.16, gold, true, -1.0, true)
 	for i in 24:
 		var a := float(i) * TAU / 24.0
 		var d := Vector2(cos(a), sin(a))
 		var r0 := r * 1.55
 		var p0 := c + d * r0
 		if inner.has_point(p0) and inner.has_point(c + d * (r0 + 3.0 * s)):
-			ci.draw_line(p0, c + d * (r0 + 3.0 * s), Color(UIStyle.GOLD, 0.35), w)
+			ci.draw_line(p0, c + d * (r0 + 3.0 * s), Color(UIStyle.GOLD, 0.35), w, true)
 
 
 # ---------------------------------------------------------------- overlays (screen space, follow the drawn card rect)
@@ -1027,15 +1051,16 @@ func _draw_overlays() -> void:
 		# One ring OUTSIDE the card (its own frame colour stays visible) plus the chevron badge.
 		_ring(Color(UIStyle.READY, 0.95), maxf(2.0, 2.4 * _s), rect.grow(4.0 * _s), rad + 4.0 * _s)
 	if hovered or _self_hover:
-		# Soft ivory glow, no fill: clearly not the pulsing yellow TARGET.
-		_ring(Color(UIStyle.HOVER_GLOW, 0.95), maxf(1.5, 1.8 * _s), rect, rad)
-		_ring(Color(UIStyle.HOVER_GLOW, 0.22), 6.0 * _s, rect.grow(3.0 * _s), rad + 3.0 * _s)
-		_ring(Color(UIStyle.HOVER_GLOW, 0.1), 5.0 * _s, rect.grow(7.0 * _s), rad + 7.0 * _s)
+		# Soft ivory glow entirely OUTSIDE the card, no ring on it: the kind-coloured frame stays visible.
+		_outer_glow(rect, rad, UIStyle.HOVER_GLOW, 1.0)
 	if selected:
-		_round_rect(rect, Color(UIStyle.SELECT, 0.14), rad)
-		_ring(Color(UIStyle.SELECT, 0.3), 5.0 * _s, rect.grow(3.5 * _s), rad + 3.5 * _s)
-		_ring(UIStyle.SELECT, maxf(3.4, 3.6 * _s), rect, rad)
-		_corner_brackets(rect.grow(5.5 * _s), maxf(8.0, 9.0 * _s), UIStyle.SELECT.lightened(0.3), maxf(2.2, 2.4 * _s))
+		# No ring or fill on the card: a slight blue glow outside it plus corner brackets that breathe
+		# slowly in and out (~1.6 s period).
+		var ph := 0.0
+		if not UIStyle.reduce_motion:
+			ph = sin(float(Time.get_ticks_msec()) / 1600.0 * TAU)
+		_outer_glow(rect, rad, UIStyle.SELECT, 0.9 + 0.15 * ph)
+		_corner_brackets(rect.grow((6.0 + 2.2 * ph) * _s), maxf(8.0, 9.0 * _s), UIStyle.SELECT.lightened(0.3), maxf(2.2, 2.4 * _s))
 	if highlighted:
 		var a := 1.0
 		if not UIStyle.reduce_motion:
@@ -1050,12 +1075,19 @@ func _draw_overlays() -> void:
 		_order_badge(rect)
 
 
+## Soft glow in three bands just outside `rect` (never over the card frame). `k` scales the alpha.
+func _outer_glow(rect: Rect2, rad: float, col: Color, k: float) -> void:
+	_ring(Color(col, 0.34 * k), maxf(1.5, 2.0 * _s), rect.grow(2.0 * _s), rad + 2.0 * _s)
+	_ring(Color(col, 0.16 * k), 3.5 * _s, rect.grow(5.5 * _s), rad + 5.5 * _s)
+	_ring(Color(col, 0.06 * k), 4.0 * _s, rect.grow(9.5 * _s), rad + 9.5 * _s)
+
+
 ## Lime circle with a bold double up-chevron on the top edge: "can act now" by shape, not colour alone.
 func _ready_badge(rect: Rect2) -> void:
 	var rr := maxf(10.0, 10.5 * _s)
 	var c := Vector2(rect.get_center().x, rect.position.y - 5.0 * _s)
-	draw_circle(c, rr + 1.8 * _s, Color(0.05, 0.08, 0.02, 0.95))
-	draw_circle(c, rr, UIStyle.READY)
+	draw_circle(c, rr + 1.8 * _s, Color(0.05, 0.08, 0.02, 0.95), true, -1.0, true)
+	draw_circle(c, rr, UIStyle.READY, true, -1.0, true)
 	draw_arc(c, rr, 0.0, TAU, 24, Color.WHITE, maxf(1.2, 1.3 * _s), true)
 	var w := rr * 0.52
 	var dark := Color(0.08, 0.14, 0.02)
@@ -1071,13 +1103,13 @@ func _corner_brackets(r: Rect2, len_px: float, col: Color, w: float) -> void:
 			var p := Vector2(xs[i], ys[j])
 			var dx := len_px if i == 0 else -len_px
 			var dy := len_px if j == 0 else -len_px
-			draw_polyline(PackedVector2Array([p + Vector2(dx, 0), p, p + Vector2(0, dy)]), col, w)
+			draw_polyline(PackedVector2Array([p + Vector2(dx, 0), p, p + Vector2(0, dy)]), col, w, true)
 
 
 func _order_badge(rect: Rect2) -> void:
 	var rr := maxf(9.5, 10.5 * _s)
 	var c := Vector2(rect.end.x - 3.0 * _s, rect.position.y + 3.0 * _s)
-	draw_circle(c, rr + 1.8 * _s, Color(0.04, 0.03, 0.03, 0.95))
-	draw_circle(c, rr, UIStyle.SELECT.darkened(0.1))
+	draw_circle(c, rr + 1.8 * _s, Color(0.04, 0.03, 0.03, 0.95), true, -1.0, true)
+	draw_circle(c, rr, UIStyle.SELECT.darkened(0.1), true, -1.0, true)
 	draw_arc(c, rr, 0.0, TAU, 24, Color.WHITE, maxf(1.3, 1.5 * _s), true)
 	_text_c(UIStyle.font_display(700), str(order_no), c, maxi(10 if order_no < 10 else 8, roundi(rr * (1.1 if order_no < 10 else 0.85))), Color.WHITE, 1.0)

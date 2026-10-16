@@ -541,6 +541,8 @@ func _op_trigger_group(f: Dictionary, op: Dictionary) -> int:
 			{"op": "check_negated"}] + tops
 	var tf := make_frame(t["uid"], t["ctl"], tops, t["label"], t["event"])
 	add_log("Trigger: %s." % t["label"])
+	if not fx_pos(t["uid"]).is_empty():
+		add_fx({"k": "trigger", "at": fx_pos(t["uid"])})
 	push_frame(tf)
 	return R.STAY if not items.is_empty() else R.CONT
 
@@ -632,6 +634,7 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 func activate_trap(uid: int, p: int, ev: Dictionary) -> void:
 	cards[uid]["face_up"] = true
 	add_log("%s activates Trap %s." % [pname(p), name_of(uid)])
+	add_fx({"k": "spotlight", "p": p, "id": d(uid)["id"], "how": "trap", "at": fx_pos(uid)})
 	emit("trap_activated", {"player": p, "card": uid})
 	var tr: Dictionary = script_of(uid)["trap"]
 	var ops: Array = tr["ops"].duplicate()
@@ -868,6 +871,7 @@ func _flip_stance(u: int) -> void:
 		return
 	cards[u]["stance"] = "def" if cards[u]["stance"] == "atk" else "atk"
 	add_log("%s changes to %s stance." % [name_of(u), "Defense" if cards[u]["stance"] == "def" else "Attack"])
+	add_fx({"k": "stance", "at": fx_pos(u), "to": cards[u]["stance"]})
 
 
 ## Ends a used Spell/Trap: to Spent (or Exhaust if it says so).
