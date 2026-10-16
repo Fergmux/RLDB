@@ -247,11 +247,10 @@ func _build_rules(c: Dictionary) -> void:
 	var parts: Array = c.get("text_parts", [])
 	if parts.is_empty() and String(c.get("text", "")) != "":
 		parts = [{"k": "", "t": String(c["text"])}]
+	if parts.is_empty():
+		return   # no effect: no Rules section at all (user feedback)
 	sections.append("rules")
 	add_child(_heading("Rules"))
-	if parts.is_empty():
-		add_child(_lbl("No effect text.", BODY, UIStyle.MUTED))
-		return
 	for p0 in parts:
 		var p := split_once_per_turn(p0)
 		var k: String = String(p.get("k", ""))
