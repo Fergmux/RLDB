@@ -9,7 +9,7 @@ extends Control
 
 const DEFAULT_STEAM_APP_ID := 480
 const DEV_SAVES_DIR := "user://dev_saves"
-const DECKBUILDER_SHOT_DRIVER := "res://src/ui/menu/deck_builder_shot_driver.gd"
+const DECKBUILDER_SHOT_DRIVER := "res://src/dev/deck_builder_shot_driver.gd"
 
 ## Current non-game screen: the MainMenu, DeckBuilder or CardListScreen (null during a game).
 var menu: Control
@@ -181,9 +181,10 @@ func _go(fn: Callable) -> void:
 # ---------------------------------------------------------------- confirmations
 
 ## Asks before leaving the current series (or another destructive step); `on_yes` runs on confirm.
-func _confirm_leave(title: String, text: String, on_yes: Callable) -> void:
+func _confirm_leave(title: String, text: String, on_yes: Callable, confirm: String = "Leave and continue",
+		cancel: String = "Stay") -> void:
 	_close_confirm()
-	_confirm_panel = ConfirmDialog.open(self, title, text, "Leave and continue", on_yes, "Stay")
+	_confirm_panel = ConfirmDialog.open(self, title, text, confirm, on_yes, cancel)
 
 
 func _close_confirm() -> void:
@@ -210,7 +211,7 @@ func _show_menu() -> void:
 	m.resume_requested.connect(_resume)
 	m.delete_save_requested.connect(func(id: String): _confirm_leave("Delete save?", "Delete this saved series?", func():
 		SeriesStore.delete(id)
-		_show_menu()))
+		_show_menu(), "Delete", "Cancel"))
 	m.deck_builder_requested.connect(func(): _go(_show_deck_builder))
 	m.card_list_requested.connect(func(): _go(_show_card_list))
 
