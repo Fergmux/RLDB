@@ -11,6 +11,8 @@ const ROW_FONT_SIZE := 14
 const SWATCH_W := 5
 ## Catalogue grid cell: a "hand" card (120x180) plus a caption row, with a little padding.
 const CELL_MIN_W := 132
+## Smallest gap between catalogue columns (the rest of the width is shared out between them).
+const GRID_MIN_GAP := 8
 
 const COST_OPTIONS := [
 	["Any cost", ""], ["0 AP", "ap:0"], ["1 AP", "ap:1"], ["2 AP", "ap:2"], ["3 AP", "ap:3"],
@@ -365,6 +367,7 @@ func _build_catalogue(body: HBoxContainer) -> void:
 	_grid.add_theme_constant_override("h_separation", 8)
 	_grid.add_theme_constant_override("v_separation", 8)
 	sc.add_child(_grid)
+	_grid.resized.connect(_spread_grid)
 	_no_match = UIStyle.label("No cards match these filters. Try Clear filters.", 14, UIStyle.TEXT_DIM)
 	v.add_child(_no_match)
 
@@ -482,6 +485,19 @@ func _sel(o: OptionButton) -> String:
 func _build_cells() -> void:
 	for d in CardDB.all():
 		_grid.add_child(_make_cell(d))
+
+
+## Spreads the catalogue columns across the full width: the leftover space becomes the gap
+## between columns instead of a dead strip at the right edge.
+func _spread_grid() -> void:
+	var w := _grid.size.x
+	var cw := float(CELL_MIN_W)
+	if _grid.get_child_count() > 0:
+		cw = maxf(cw, (_grid.get_child(0) as Control).get_combined_minimum_size().x)
+	var cols := maxi(1, int(floor((w + GRID_MIN_GAP) / (cw + GRID_MIN_GAP))))
+	var gap := GRID_MIN_GAP if cols == 1 else int(floor((w - cols * cw) / float(cols - 1)))
+	if _grid.get_theme_constant("h_separation") != gap:
+		_grid.add_theme_constant_override("h_separation", gap)
 
 
 func _make_cell(d: Dictionary) -> Control:
