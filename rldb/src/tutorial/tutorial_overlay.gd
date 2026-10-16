@@ -72,8 +72,10 @@ func _build_panel() -> void:
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_panel_style = UIStyle.flat(Color(0.075, 0.06, 0.04, 0.98), UIStyle.GOLD, 2, 10)
 	_panel_style.border_width_left = 6
-	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		_panel_style.set_content_margin(side, 0)
+	# Children sit inside the border, so the bands never paint over the frame's rounded corners.
+	_panel_style.content_margin_left = 6
+	for side in [SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		_panel_style.set_content_margin(side, 2)
 	_panel_style.shadow_color = Color(0, 0, 0, 0.6)
 	_panel_style.shadow_size = 12
 	panel.add_theme_stylebox_override("panel", _panel_style)
@@ -84,6 +86,9 @@ func _build_panel() -> void:
 	# Header band: lesson name and the step counter pill.
 	var head_p := PanelContainer.new()
 	var hs := UIStyle.flat(Color(0.15, 0.11, 0.05, 1.0), Color(UIStyle.GOLD, 0.55), 0, 8)
+	# Inner radius = frame radius (10) minus the border it sits inside.
+	hs.corner_radius_top_left = 4
+	hs.corner_radius_top_right = 8
 	hs.corner_radius_bottom_left = 0
 	hs.corner_radius_bottom_right = 0
 	hs.border_width_bottom = 1
@@ -150,6 +155,8 @@ func _build_panel() -> void:
 	var fs := UIStyle.flat(Color(0.045, 0.036, 0.026, 1.0), Color(UIStyle.BRONZE, 0.8), 0, 8)
 	fs.corner_radius_top_left = 0
 	fs.corner_radius_top_right = 0
+	fs.corner_radius_bottom_left = 4
+	fs.corner_radius_bottom_right = 8
 	fs.border_width_top = 1
 	fs.content_margin_left = PANEL_PAD
 	fs.content_margin_right = 10
@@ -470,8 +477,10 @@ func _show_complete() -> void:
 	# Outer frame: gold border and a warm glow.
 	var p := PanelContainer.new()
 	var sb := UIStyle.flat(Color(0.06, 0.05, 0.035, 0.99), UIStyle.GOLD_HI, 2, 12)
+	# Children sit inside the 2 px border (inner radius 10), so the header band never squares off
+	# the frame's rounded corners.
 	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		sb.set_content_margin(side, 0)
+		sb.set_content_margin(side, 2)
 	sb.shadow_color = Color(UIStyle.GOLD, 0.35)
 	sb.shadow_size = 28
 	p.add_theme_stylebox_override("panel", sb)
@@ -491,9 +500,6 @@ func _show_complete() -> void:
 	hs.content_margin_right = 30
 	hs.content_margin_top = 18
 	hs.content_margin_bottom = 14
-	hs.shadow_color = Color(0, 0, 0, 0.5)
-	hs.shadow_size = 6
-	hs.shadow_offset = Vector2(0, 3)
 	hb.add_theme_stylebox_override("panel", hs)
 	outer.add_child(hb)
 	var hv := VBoxContainer.new()
