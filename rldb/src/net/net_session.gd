@@ -23,6 +23,7 @@ const CONNECT_WATCHDOG := 10.0
 const MAX_RECONNECT_ATTEMPTS := 150      # ~5 minutes of retries, then report the host as gone
 const SESSION_FILE := "user://rldb_sessions.cfg"
 const VIEW_SIZE_WARNING := 400000        # Steam reliable messages are limited to 512 KB
+const MAX_LOG_RESEND := 400              # full log resends are capped to keep views small
 
 var is_host := false
 var series: Series
@@ -58,7 +59,6 @@ var raw_received: Array = []    # client: decoded payloads, kept for redaction t
 var _disconnected_at := 0       # host: when the client dropped (msec)
 var claim_wait_seconds := 60    # P-02: host may claim the current game after this wait
 var _resume_token := ""         # host: seat-1 token from a resumed save
-const MAX_LOG_RESEND := 400     # full log resends are capped to keep views small
 
 
 ## Seconds until the host may claim the current game (0 = available now).
@@ -641,6 +641,7 @@ func _send_view(seat: int) -> void:
 
 # ---------------------------------------------------------------- client sending
 
+## Sends a local command: applied directly on the host, forwarded over RPC on a client.
 func send_from_local(cmd: Dictionary) -> void:
 	if is_host:
 		_apply(HOST_SEAT, last_seq[HOST_SEAT] + 1, cmd)
@@ -666,11 +667,3 @@ func _status(text: String) -> void:
 	session_status.emit(text)
 	if text.begins_with("Could not") or text.begins_with("Lost"):
 		local_seat.status_changed.emit(text)
-
-
-class NetSeat:
-	extends SeatClient
-	var session: NetSession
-
-	func send(cmd: Dictionary) -> void:
-		session.send_from_local(cmd)
