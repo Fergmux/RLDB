@@ -32,7 +32,7 @@ func test_reconnect_during_optional_start_of_turn_trigger_applies_once() -> void
 	# Act
 	await _drop_and_return()
 	assert_bool(await _wait(func(): return cpend().get("id", -1) == pid)).is_true()
-	_client_choose(["your Basic Mage (Water)"])
+	_client_choose(["your Basic Mage"])
 	assert_bool(await _await_idle(m)).is_true()
 	var seq := client._seq
 	client.send_raw(seq, {"t": "choose", "id": pid, "indices": [1]})   # replayed command

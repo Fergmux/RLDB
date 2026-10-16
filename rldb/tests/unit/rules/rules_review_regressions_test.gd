@@ -24,9 +24,11 @@ func test_fusion_on_full_board_with_hand_materials_consumes_nothing() -> void:
 	var beast := TB.card(m, 0, 4)
 	var dragon := TB.card(m, 0, 2)
 	var wyrm := TB.card(m, 0, 93, "extra")
-	TB.cast(m, 0, 82)
-	if m.pending.get("kind", "") == "select":
-		TB.choose_uids(m, [wyrm])
+	var poly := TB.card(m, 0, 82)
+	m.players[0]["ap"] = 20
+	# F03-08: Hand materials free no zone, so Polymerization cannot be cast at all.
+	assert_str(m.submit(0, {"t": "cast", "uid": poly})).contains("No Fusion unit")
+	assert_str(m.cards[poly]["zone"]).is_equal("hand")
 	assert_str(m.cards[beast]["zone"]).is_equal("hand")
 	assert_str(m.cards[dragon]["zone"]).is_equal("hand")
 	assert_str(m.cards[wyrm]["zone"]).is_equal("extra")

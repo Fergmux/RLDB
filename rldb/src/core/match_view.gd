@@ -199,8 +199,10 @@ static func _pending_view(m: MatchEngine, viewer: int) -> Dictionary:
 	if pd.is_empty():
 		return {}
 	if pd["player"] != viewer:
-		return {"id": pd["id"], "mine": false, "player": pd["player"], "kind": pd["kind"],
+		var wait := {"id": pd["id"], "mine": false, "player": pd["player"], "kind": pd["kind"],
 			"prompt": "Waiting for %s: %s" % [m.pname(pd["player"]), _public_kind(pd["kind"])]}
+		_add_source(m, pd, viewer, wait)
+		return wait
 	var opts := []
 	for i in pd["options"].size():
 		var o: Dictionary = pd["options"][i]
@@ -225,12 +227,29 @@ static func _pending_view(m: MatchEngine, viewer: int) -> Dictionary:
 	var out := {"id": pd["id"], "mine": true, "player": viewer, "kind": pd["kind"], "prompt": pd["prompt"],
 		"options": opts, "min": pd["min"], "max": pd["max"], "cancellable": pd["cancellable"],
 		"min_total": pd.get("min_total", 0)}
+	_add_source(m, pd, viewer, out)
 	if pd.has("total_required"):
 		out["total_required"] = pd["total_required"]
 		out["total_exact"] = pd.get("total_exact", false)
 	if pd["kind"] == "trap_response" and pd.has("event"):
 		out["cause"] = _cause_refs(m, pd["event"])
 	return out
+
+
+## F03-18: the card whose effect asks for this choice, so its targeting arrow starts there (e.g.
+## Overextend in its Trap zone) rather than at a selected or attacking unit. `source` is the
+## board position (public); `source_uid` is given only when the viewer may see that card.
+## Trap-response prompts carry no source: which face-down card may respond is not revealed.
+static func _add_source(m: MatchEngine, pd: Dictionary, viewer: int, out: Dictionary) -> void:
+	var src: int = int(pd.get("source", -1))
+	if pd["kind"] == "trap_response" or not m.cards.has(src):
+		return
+	if not can_see(m, src, viewer):
+		return
+	var pos := m.fx_pos(src)
+	if not pos.is_empty():
+		out["source"] = pos
+	out["source_uid"] = src
 
 
 ## Why picking option indices `picks` would be rejected for the viewer's pending choice `pd`

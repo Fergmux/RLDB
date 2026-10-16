@@ -2,7 +2,7 @@
  "cards": [
   {
    "id": 1,
-   "name": "Basic Mage (Water)",
+   "name": "Basic Mage",
    "category": "basic_unit",
    "race": "Mage",
    "type": "Water",
@@ -29,7 +29,7 @@
   },
   {
    "id": 2,
-   "name": "Basic Dragon (Water)",
+   "name": "Basic Dragon",
    "category": "basic_unit",
    "race": "Dragon",
    "type": "Water",
@@ -56,7 +56,7 @@
   },
   {
    "id": 3,
-   "name": "Basic Warrior (Water)",
+   "name": "Basic Warrior",
    "category": "basic_unit",
    "race": "Warrior",
    "type": "Water",
@@ -83,7 +83,7 @@
   },
   {
    "id": 4,
-   "name": "Basic Beast (Water)",
+   "name": "Basic Beast",
    "category": "basic_unit",
    "race": "Beast",
    "type": "Water",
@@ -110,7 +110,7 @@
   },
   {
    "id": 5,
-   "name": "Basic Monster (Water)",
+   "name": "Basic Monster",
    "category": "basic_unit",
    "race": "Monster",
    "type": "Water",
@@ -137,7 +137,7 @@
   },
   {
    "id": 105,
-   "name": "Basic Mage (Heavenly)",
+   "name": "Basic Mage",
    "category": "basic_unit",
    "race": "Mage",
    "type": "Heavenly",
@@ -164,7 +164,7 @@
   },
   {
    "id": 106,
-   "name": "Basic Dragon (Heavenly)",
+   "name": "Basic Dragon",
    "category": "basic_unit",
    "race": "Dragon",
    "type": "Heavenly",
@@ -191,7 +191,7 @@
   },
   {
    "id": 107,
-   "name": "Basic Warrior (Heavenly)",
+   "name": "Basic Warrior",
    "category": "basic_unit",
    "race": "Warrior",
    "type": "Heavenly",
@@ -218,7 +218,7 @@
   },
   {
    "id": 108,
-   "name": "Basic Beast (Heavenly)",
+   "name": "Basic Beast",
    "category": "basic_unit",
    "race": "Beast",
    "type": "Heavenly",
@@ -245,7 +245,7 @@
   },
   {
    "id": 109,
-   "name": "Basic Monster (Heavenly)",
+   "name": "Basic Monster",
    "category": "basic_unit",
    "race": "Monster",
    "type": "Heavenly",
@@ -272,7 +272,7 @@
   },
   {
    "id": 110,
-   "name": "Basic Mage (Fire)",
+   "name": "Basic Mage",
    "category": "basic_unit",
    "race": "Mage",
    "type": "Fire",
@@ -299,7 +299,7 @@
   },
   {
    "id": 111,
-   "name": "Basic Dragon (Fire)",
+   "name": "Basic Dragon",
    "category": "basic_unit",
    "race": "Dragon",
    "type": "Fire",
@@ -326,7 +326,7 @@
   },
   {
    "id": 112,
-   "name": "Basic Warrior (Fire)",
+   "name": "Basic Warrior",
    "category": "basic_unit",
    "race": "Warrior",
    "type": "Fire",
@@ -353,7 +353,7 @@
   },
   {
    "id": 113,
-   "name": "Basic Beast (Fire)",
+   "name": "Basic Beast",
    "category": "basic_unit",
    "race": "Beast",
    "type": "Fire",
@@ -380,7 +380,7 @@
   },
   {
    "id": 114,
-   "name": "Basic Monster (Fire)",
+   "name": "Basic Monster",
    "category": "basic_unit",
    "race": "Monster",
    "type": "Fire",
@@ -407,7 +407,7 @@
   },
   {
    "id": 115,
-   "name": "Basic Mage (Physical)",
+   "name": "Basic Mage",
    "category": "basic_unit",
    "race": "Mage",
    "type": "Physical",
@@ -434,7 +434,7 @@
   },
   {
    "id": 116,
-   "name": "Basic Dragon (Physical)",
+   "name": "Basic Dragon",
    "category": "basic_unit",
    "race": "Dragon",
    "type": "Physical",
@@ -461,7 +461,7 @@
   },
   {
    "id": 117,
-   "name": "Basic Warrior (Physical)",
+   "name": "Basic Warrior",
    "category": "basic_unit",
    "race": "Warrior",
    "type": "Physical",
@@ -488,7 +488,7 @@
   },
   {
    "id": 118,
-   "name": "Basic Beast (Physical)",
+   "name": "Basic Beast",
    "category": "basic_unit",
    "race": "Beast",
    "type": "Physical",
@@ -515,7 +515,7 @@
   },
   {
    "id": 119,
-   "name": "Basic Monster (Physical)",
+   "name": "Basic Monster",
    "category": "basic_unit",
    "race": "Monster",
    "type": "Physical",
@@ -542,7 +542,7 @@
   },
   {
    "id": 120,
-   "name": "Basic Mage (Earth)",
+   "name": "Basic Mage",
    "category": "basic_unit",
    "race": "Mage",
    "type": "Earth",
@@ -569,7 +569,7 @@
   },
   {
    "id": 121,
-   "name": "Basic Dragon (Earth)",
+   "name": "Basic Dragon",
    "category": "basic_unit",
    "race": "Dragon",
    "type": "Earth",
@@ -596,7 +596,7 @@
   },
   {
    "id": 122,
-   "name": "Basic Warrior (Earth)",
+   "name": "Basic Warrior",
    "category": "basic_unit",
    "race": "Warrior",
    "type": "Earth",
@@ -623,7 +623,7 @@
   },
   {
    "id": 123,
-   "name": "Basic Beast (Earth)",
+   "name": "Basic Beast",
    "category": "basic_unit",
    "race": "Beast",
    "type": "Earth",
@@ -650,7 +650,7 @@
   },
   {
    "id": 124,
-   "name": "Basic Monster (Earth)",
+   "name": "Basic Monster",
    "category": "basic_unit",
    "race": "Monster",
    "type": "Earth",
@@ -677,7 +677,7 @@
   },
   {
    "id": 125,
-   "name": "Basic Mage (Necrotic)",
+   "name": "Basic Mage",
    "category": "basic_unit",
    "race": "Mage",
    "type": "Necrotic",
@@ -704,7 +704,7 @@
   },
   {
    "id": 126,
-   "name": "Basic Dragon (Necrotic)",
+   "name": "Basic Dragon",
    "category": "basic_unit",
    "race": "Dragon",
    "type": "Necrotic",
@@ -731,7 +731,7 @@
   },
   {
    "id": 127,
-   "name": "Basic Warrior (Necrotic)",
+   "name": "Basic Warrior",
    "category": "basic_unit",
    "race": "Warrior",
    "type": "Necrotic",
@@ -758,7 +758,7 @@
   },
   {
    "id": 128,
-   "name": "Basic Beast (Necrotic)",
+   "name": "Basic Beast",
    "category": "basic_unit",
    "race": "Beast",
    "type": "Necrotic",
@@ -785,7 +785,7 @@
   },
   {
    "id": 129,
-   "name": "Basic Monster (Necrotic)",
+   "name": "Basic Monster",
    "category": "basic_unit",
    "race": "Monster",
    "type": "Necrotic",
@@ -812,7 +812,7 @@
   },
   {
    "id": 130,
-   "name": "Basic Mage (Lightning)",
+   "name": "Basic Mage",
    "category": "basic_unit",
    "race": "Mage",
    "type": "Lightning",
@@ -839,7 +839,7 @@
   },
   {
    "id": 131,
-   "name": "Basic Dragon (Lightning)",
+   "name": "Basic Dragon",
    "category": "basic_unit",
    "race": "Dragon",
    "type": "Lightning",
@@ -866,7 +866,7 @@
   },
   {
    "id": 132,
-   "name": "Basic Warrior (Lightning)",
+   "name": "Basic Warrior",
    "category": "basic_unit",
    "race": "Warrior",
    "type": "Lightning",
@@ -893,7 +893,7 @@
   },
   {
    "id": 133,
-   "name": "Basic Beast (Lightning)",
+   "name": "Basic Beast",
    "category": "basic_unit",
    "race": "Beast",
    "type": "Lightning",
@@ -920,7 +920,7 @@
   },
   {
    "id": 134,
-   "name": "Basic Monster (Lightning)",
+   "name": "Basic Monster",
    "category": "basic_unit",
    "race": "Monster",
    "type": "Lightning",
@@ -3281,12 +3281,12 @@
    "atk": null,
    "def": null,
    "keywords": [],
-   "condition": "If your opponent Summons a Unit (and now has 3 or more Units on the Field):",
-   "on_summon": "Your opponents Unit with the highest ATK loses -20 ATK.",
+   "condition": "If your opponent Summons a Unit and now has 3 or more Units on the Field:",
+   "on_summon": "Choose an opponent's Unit; it loses 20 ATK.",
    "on_field": "",
    "on_destruction": "",
    "material": "",
-   "description": "If your opponent Summons a Unit (and now has 3 or more Units on the Field): Your opponents Unit with the highest ATK loses -20 ATK.",
+   "description": "If your opponent Summons a Unit and now has 3 or more Units on the Field: On Summon: Choose an opponent's Unit; it loses 20 ATK.",
    "art": {
     "image": "48.png",
     "card_img": "118.png",

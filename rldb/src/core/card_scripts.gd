@@ -335,7 +335,8 @@ static func _build() -> Dictionary:
 	t[45] = {"flags": ["cost_up_on_activate"], "trap": {"when": "attack", "column": true, "target_unit_only": true, "ops": [{"op": "cost_perm", "target": "self", "n": 1}, hp("opp", {"stat": "atk", "of": "event.attacker", "mul": -1})]}}
 	t[46] = {"trap": {"when": "attack", "cond": {"count": {"kind": "field_card", "side": "opp"}, "min": 4}, "ops": [all_({"kind": "unit", "side": "opp", "stance": "atk"}), {"op": "destroy", "target": "$all"}]}}
 	t[47] = {"flags": ["cost_up_on_activate"], "trap": {"when": "attack", "column": true, "target_unit_only": true, "ops": [{"op": "cost_perm", "target": "self", "n": 1}, hp("self", {"stat": "atk", "of": "event.attacker"})]}}
-	t[48] = {"trap": {"when": "summon", "cond": {"count": {"kind": "unit", "side": "opp"}, "min": 3}, "ops": [ch({"kind": "unit", "side": "opp", "max_atk": true}, "u", false, "Choose the opponent's highest-ATK unit."), {"op": "stat", "target": "$u", "atk": -20}]}}
+	# F03-19 (user-confirmed 2026-10-16): the controller chooses any opposing unit; no highest-ATK rule.
+	t[48] = {"trap": {"when": "summon", "cond": {"count": {"kind": "unit", "side": "opp"}, "min": 3}, "ops": [ch({"kind": "unit", "side": "opp"}, "u", false, "Choose an opponent's unit; it loses 20 ATK."), {"op": "stat", "target": "$u", "atk": -20}]}}
 	t[49] = {"trap": {"when": "summon", "cond": {"event_cost_min": 2}, "ops": [st("event.card", "paralyse", 3)]}}
 	t[50] = {"trap": {"when": "attack", "ops": [ch({"kind": "unit", "side": "self", "column": true}, "u", false, "Apply 1 Eternal to a unit in this column."), st("$u", "eternal")]}}
 	t[51] = {"trap": {"when": "attack", "ops": [all_({"kind": "unit", "side": "self", "column": true}), {"op": "stat", "target": "$all", "def": 8, "until": "turn"}]}}

@@ -160,7 +160,7 @@ func test_p20_plan_b_resolves_each_destruction_chain_before_the_next() -> void:
 	TB.choose_uids(m, [foe]) if m.pending.get("kind", "") == "select" else null
 	var i_sym := TB.log_index(m, "Symbiote - Black is destroyed")
 	var i_fate := TB.log_index(m, "activates Trap Shared Fate")
-	var i_d1 := TB.log_index(m, "Basic Mage (Water) is destroyed")
+	var i_d1 := TB.log_index(m, "Basic Mage is destroyed")
 	var i_heal := TB.log_index(m, "(Plan B, 2 destroyed)")
 	assert_bool(i_sym < i_fate and i_fate < i_d1 and i_d1 < i_heal).is_true()
 	assert_int(m.players[0]["hp"]).is_equal(80)

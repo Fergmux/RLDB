@@ -126,7 +126,12 @@ func _idx(pd: Dictionary, texts: Array) -> Array:
 	for t in texts:
 		var found := -1
 		for o in pd.get("options", []):
-			if String(o["label"]).contains(t) and not (int(o["i"]) in out):
+			# Basic-unit names no longer carry their Type (F03-09): also match "Name (Type)".
+			var hay := String(o["label"])
+			var c: Dictionary = o.get("card", {})
+			if String(c.get("type", "")) != "":
+				hay += " | %s (%s)" % [String(c["name"]), String(c["type"])]
+			if hay.contains(t) and not (int(o["i"]) in out):
 				found = int(o["i"])
 				break
 		assert_int(found).override_failure_message("option '%s' not in %s" % [t, str(_labels(pd))]).is_not_equal(-1)

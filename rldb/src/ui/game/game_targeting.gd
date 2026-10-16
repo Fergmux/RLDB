@@ -57,6 +57,12 @@ func update_arrow() -> void:
 
 
 func _source_rect() -> Rect2:
+	# F03-18: an effect's arrow starts at the card whose effect asks (its board zone, from the
+	# pending choice), never at an unrelated selected or attacking unit.
+	var pd := gs.pending()
+	var at: Dictionary = pd.get("source", {})
+	if not at.is_empty():
+		return gs.fx_slot_global_rect(int(at["p"]), String(at["zone"]), int(at["slot"]))
 	var uid := source_uid()
 	if uid == -1:
 		return Rect2()
@@ -75,6 +81,9 @@ func _source_rect() -> Rect2:
 ## The card my current choice belongs to: the card whose action opened it, else the unit the
 ## prompt names ("... for X"), else my selected card; -1 when unknown.
 func source_uid() -> int:
+	var pd0 := gs.pending()
+	if pd0.has("source_uid"):
+		return int(pd0["source_uid"])      # the effect's own card (F03-18)
 	var acting := gs.acting_uid
 	if acting != -1 and (gs.hand.items.has(acting) or not gs.selection.item_for_uid(acting).is_empty()):
 		return acting

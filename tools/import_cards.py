@@ -35,7 +35,13 @@ TEXT_CORRECTIONS = {
     90: {"on_field": "Once per turn, you can Apply 1 Paralyse to a Unit."},
     169: {"on_field": "At the start of your turn, draw one additional card."},
     183: {"on_field": "At the start of your turn, your opponent loses 6 HP."},
+    # F03-19 (design/playtest-feedback-03.md, user-confirmed 2026-10-16): chosen target.
+    48: {"condition": "If your opponent Summons a Unit and now has 3 or more Units on the Field:",
+         "on_summon": "Choose an opponent's Unit; it loses 20 ATK."},
 }
+
+# F03-09: basic-unit display names drop the redundant "(Type)" suffix; Type stays in `type`.
+BASIC_TYPE_SUFFIX = " ("
 
 
 def nullable_type(value):
@@ -81,6 +87,8 @@ def main():
         if row["id"].strip() in CONDITION_TO_SUMMON:
             on_summon = (condition + " " + on_summon).strip()
             condition = ""
+        if category == "basic_unit" and name.endswith(")") and BASIC_TYPE_SUFFIX in name:
+            name = name[:name.rindex(BASIC_TYPE_SUFFIX)]
         cards.append({
             "id": int(row["id"]),
             "name": name,

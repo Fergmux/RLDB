@@ -82,13 +82,23 @@ static func choose(m: MatchEngine, texts: Array) -> String:
 	for t in texts:
 		var found := -1
 		for i in pd["options"].size():
-			if String(pd["options"][i]["label"]).contains(t) and not (i in idx):
+			if _option_text(m, pd["options"][i]).contains(t) and not (i in idx):
 				found = i
 				break
 		if found == -1:
 			return "option not found: %s in %s" % [t, pd["options"].map(func(o): return o["label"])]
 		idx.append(found)
 	return m.submit(pd["player"], {"t": "choose", "id": pd["id"], "indices": idx})
+
+
+## An option's label plus, for a card, "Name (Type)": basic-unit names no longer carry their
+## Type (F03-09), so tests can still say which variant they mean.
+static func _option_text(m: MatchEngine, o: Dictionary) -> String:
+	var s := String(o["label"])
+	var u: int = int(o.get("uid", -1))
+	if m.cards.has(u) and m.is_unit(u) and m.unit_type(u) != "":
+		s += " | %s (%s)" % [m.name_of(u), m.unit_type(u)]
+	return s
 
 
 ## Answers the pending choice with specific uids (values).
