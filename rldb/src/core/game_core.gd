@@ -271,6 +271,12 @@ func add_fx(fx: Dictionary) -> void:
 	log_entries[-1]["fx"].append(fx)
 
 
+## Card identity for a presentation event: `id` is kept only for the seats in `seen_by`
+## (MatchView.log_for strips both fields for every other viewer), so hidden cards stay hidden.
+func fx_identity(uid: int, seen_by: Array) -> Dictionary:
+	return {"id": d(uid)["id"], "seen_by": seen_by}
+
+
 ## Board position of a field card for presentation events, or {}.
 func fx_pos(uid: int) -> Dictionary:
 	if not cards.has(uid):

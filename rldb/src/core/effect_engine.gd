@@ -744,7 +744,7 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Di
 		dest = "exhaust"
 	move_to_pile(uid, dest)
 	add_log("%s is destroyed%s." % [label, " by battle" if cause == "battle" else ""])
-	add_fx({"k": "destroy", "at": dpos, "cause": cause})
+	add_fx({"k": "destroy", "at": dpos, "cause": cause, "dest": dest})
 	var ev := {"self": uid, "ctl": p, "cause": cause, "by": by_uid, "by_player": by_player,
 		"snapshot": snap, "debilitated": debil, "was_unit": was_unit, "player": active,
 		"text": "%s destroyed" % label, "type": snap.get("type_now", ""), "orig_slot": snap["slot"]}
