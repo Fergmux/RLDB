@@ -102,7 +102,7 @@ static var fast_anim: bool = false
 static var window_mode: String = "windowed"
 ## 2D anti-aliasing (MSAA) level: 0 off, 2, 4 or 8 samples. Needs the Mobile/Forward renderer; on
 ## the OpenGL fallback it has no effect (lines and shapes are still drawn anti-aliased).
-static var aa_level: int = 4
+static var aa_level: int = 8
 const AA_LEVELS := [[0, "Off"], [2, "2x"], [4, "4x"], [8, "8x"]]
 const WINDOW_MODES := [["windowed", "Windowed"], ["borderless", "Borderless"], ["fullscreen", "Fullscreen"]]
 static var _settings_loaded: bool = false
@@ -117,7 +117,7 @@ static func load_settings() -> void:
 		reduce_motion = bool(cf.get_value("ui", "reduce_motion", false))
 		fast_anim = bool(cf.get_value("ui", "fast_anim", false))
 		window_mode = String(cf.get_value("ui", "window_mode", "windowed"))
-		aa_level = int(cf.get_value("ui", "aa_level", 4))
+		aa_level = int(cf.get_value("ui", "aa_level", 8))
 
 
 static func save_settings() -> void:
@@ -335,6 +335,38 @@ static func type_color(t) -> Color:
 	return TYPE_COLORS.get(t if t != null else "", TYPE_COLORS[""])
 
 
+## Check box icon (22 px), drawn at 4x and downsampled so its edges are smooth.
+static func _check_icon(on: bool) -> ImageTexture:
+	var n := 88
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var rim := GOLD if on else Color(BRONZE, 1.0).lightened(0.15)
+	var fill := Color(0.12, 0.09, 0.04, 1.0) if on else Color(0.05, 0.045, 0.04, 0.95)
+	var r := 14.0
+	for y in n:
+		for x in n:
+			# Rounded square: distance to the inner rect.
+			var dx := maxf(maxf(8.0 + r - x, x - (n - 8.0 - r)), 0.0)
+			var dy := maxf(maxf(8.0 + r - y, y - (n - 8.0 - r)), 0.0)
+			var d := sqrt(dx * dx + dy * dy)
+			if d <= r:
+				img.set_pixel(x, y, rim if d > r - 7.0 else fill)
+	if on:
+		# Tick: two thick strokes.
+		var pts := [Vector2(24, 46), Vector2(39, 61), Vector2(66, 29)]
+		for i in 2:
+			var a: Vector2 = pts[i]
+			var b: Vector2 = pts[i + 1]
+			for y in n:
+				for x in n:
+					var p := Vector2(x, y)
+					var t := clampf((p - a).dot(b - a) / (b - a).length_squared(), 0.0, 1.0)
+					if p.distance_to(a + (b - a) * t) <= 6.5:
+						img.set_pixel(x, y, GOLD_HI)
+	img.resize(22, 22, Image.INTERPOLATE_LANCZOS)
+	return ImageTexture.create_from_image(img)
+
+
 static func make_theme() -> Theme:
 	load_settings()
 	var th := Theme.new()
@@ -391,8 +423,25 @@ static func make_theme() -> Theme:
 	th.set_color("font_pressed_color", "Button", GOLD_HI)
 	th.set_color("font_disabled_color", "Button", DISABLED)
 	th.set_color("font_color", "Label", TEXT)
+	# Check boxes: no button frame (it made ticked boxes look like stuck buttons), just a custom
+	# gold-rimmed box with a gold tick, and the label beside it.
+	for st in ["normal", "hover", "pressed", "hover_pressed", "focus", "disabled"]:
+		var e := StyleBoxEmpty.new()
+		e.content_margin_left = 2
+		e.content_margin_right = 6
+		e.content_margin_top = 3
+		e.content_margin_bottom = 3
+		th.set_stylebox(st, "CheckBox", e)
+	th.set_icon("unchecked", "CheckBox", _check_icon(false))
+	th.set_icon("checked", "CheckBox", _check_icon(true))
+	th.set_icon("unchecked_disabled", "CheckBox", _check_icon(false))
+	th.set_icon("checked_disabled", "CheckBox", _check_icon(true))
+	th.set_constant("h_separation", "CheckBox", 10)
 	th.set_color("font_color", "CheckBox", TEXT)
+	th.set_color("font_pressed_color", "CheckBox", TEXT)
 	th.set_color("font_hover_color", "CheckBox", GOLD_HI)
+	th.set_color("font_hover_pressed_color", "CheckBox", GOLD_HI)
+	th.set_color("font_focus_color", "CheckBox", TEXT)
 	th.set_color("default_color", "RichTextLabel", TEXT)
 	th.set_font("normal_font", "RichTextLabel", font_body())
 	th.set_font("bold_font", "RichTextLabel", font_bold())

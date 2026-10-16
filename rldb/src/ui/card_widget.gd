@@ -707,13 +707,23 @@ func _stat_badge(rect: Rect2, is_atk: bool, fs_max: float) -> void:
 		draw_polyline(PackedVector2Array([pts[3], pts[0], pts[1]]), Color(UIStyle.GOLD_HI, 0.9), maxf(1.0, 0.9 * _s), true)
 		draw_polyline(_closed(inner), Color(0, 0, 0, 0.35), maxf(1.0, 0.8 * _s), true)
 	else:
-		draw_colored_polygon(_shield_pts(rect), Color(UIStyle.GOLD, 0.95))
-		var ins := Rect2(rect.position + Vector2(1.8, 1.8) * _s, rect.size - Vector2(3.6, 3.6) * _s)
+		# Same cut-metal treatment as the ATK diamond: gold rim, light falling from the upper left,
+		# a bright upper facet, a glint along the top edges and a dark inner line.
+		var outer := _shield_pts(rect)
+		draw_colored_polygon(outer, Color(UIStyle.GOLD, 0.98))
+		var ins := Rect2(rect.position + Vector2(2.4, 2.4) * _s, rect.size - Vector2(4.8, 4.8) * _s)
 		var spts := _shield_pts(ins)
 		var cols := PackedColorArray()
 		for p in spts:
-			cols.append(top.lerp(bot, clampf((p.y - ins.position.y) / ins.size.y, 0.0, 1.0)))
+			var ty := clampf((p.y - ins.position.y) / ins.size.y, 0.0, 1.0)
+			var tx := clampf((p.x - ins.position.x) / ins.size.x, 0.0, 1.0)
+			cols.append(top.lightened(0.15).lerp(bot, clampf(ty * 0.8 + tx * 0.35, 0.0, 1.0)))
 		draw_polygon(spts, cols)
+		# Upper facet: the band above the shield's waist, slightly brighter.
+		var waist := ins.position.y + ins.size.y * 0.5
+		draw_colored_polygon(PackedVector2Array([spts[0], spts[1], spts[2], Vector2(spts[3].x, waist), c + Vector2(0, ins.size.y * 0.02 + waist - c.y), Vector2(spts[5].x, waist), spts[6]]), Color(1, 1, 1, 0.09))
+		draw_polyline(PackedVector2Array([outer[5], outer[6], outer[0], outer[1], outer[2], outer[3]]), Color(UIStyle.GOLD_HI, 0.9), maxf(1.0, 0.9 * _s), true)
+		draw_polyline(_closed(spts), Color(0, 0, 0, 0.35), maxf(1.0, 0.8 * _s), true)
 	var tcol := Color.WHITE
 	var mod := 0
 	var shown_v = value
