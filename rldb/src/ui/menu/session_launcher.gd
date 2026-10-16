@@ -69,6 +69,25 @@ func start_bot(cfg: Dictionary) -> void:
 	bot.start(local_host, 1, screen)
 
 
+## Guided tutorial (F03-15): a TutorialHost runs the scripted lesson; the game screen and its
+## TutorialOverlay are rebuilt for every lesson (start, restart, next lesson).
+func start_tutorial(lesson: int = 0) -> void:
+	var host := TutorialHost.new()
+	local_host = host
+	_root.add_child(host)
+	host.lesson_loaded.connect(func(_i): _tutorial_screen(host))
+	host.start({"lesson": lesson})
+
+
+func _tutorial_screen(host: TutorialHost) -> void:
+	if screen != null and is_instance_valid(screen):
+		screen.queue_free()
+	_new_screen()
+	shown_seat = 0
+	TutorialOverlay.attach_to(screen, host)
+	screen.attach(host.seats[0])
+
+
 func _start_local_host(cfg: Dictionary) -> void:
 	local_host = LocalHost.new()
 	_root.add_child(local_host)
