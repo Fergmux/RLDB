@@ -92,6 +92,8 @@ var game_log: GameLog
 var menu: GameMenu
 ## Series overlay component.
 var overlays: GameSeriesOverlay
+## Right-click card inspection and pile browser component (F03-01 / F03-02).
+var inspect: GameInspect
 
 var _fx_seq: int = -1
 var _fx_game: int = -99
@@ -120,6 +122,7 @@ func _init() -> void:
 	game_log = GameLog.new(self)
 	menu = GameMenu.new(self)
 	overlays = GameSeriesOverlay.new(self)
+	inspect = GameInspect.new(self)
 
 
 func _ready() -> void:
@@ -132,6 +135,7 @@ func _ready() -> void:
 	# Child order is draw order among equal z_index values: keep it.
 	board.build_table()
 	board.build()
+	inspect.build()
 	hand.build()
 	sidebar.build()
 	menu.build_top_strip()
@@ -165,6 +169,7 @@ func attach(c: SeatClient) -> void:
 	client = c
 	client.view_changed.connect(_on_view)
 	client.status_changed.connect(_on_status)
+	inspect.close_all()
 	selected_uid = -1
 	peek_uid = -1
 	keyboard.kb_uid = -1
@@ -368,6 +373,7 @@ func render_all() -> void:
 			details.close_pile()
 		else:
 			details.render_pile_list()
+	inspect.refresh()
 
 
 ## My seat index in the match.
@@ -411,7 +417,7 @@ func locked() -> bool:
 ## True while a modal, popup, menu or pause covers the board (no hover).
 func hover_blocked() -> bool:
 	return overlays.overlay.visible or overlays.pile_popup.visible or menu.settings_popup.visible or menu.game_menu.visible \
-		or overlays.pause_dim.visible or mv.is_empty()
+		or overlays.pause_dim.visible or mv.is_empty() or inspect.is_open()
 
 
 ## True while a series is being played on this screen (leaving it would forfeit).
@@ -421,9 +427,11 @@ func has_live_series() -> bool:
 
 # ---------------------------------------------------------------- input
 
-## Clicks on the bare table (not on a card, button or panel) clear the selection.
+## Clicks on the bare table (not on a card, button or panel) clear the selection and close the
+## passive right-pane pile list / log card (F03-26); a pending choice of mine is never cancelled.
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		details.dismiss_passive()
 		if pending().is_empty() or not pending().get("mine", false):
 			selection.deselect()
 

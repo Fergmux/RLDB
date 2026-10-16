@@ -53,9 +53,12 @@ class TypeBadge extends Control:
 			type_name = v
 			queue_redraw()
 
-	func _init(t: String = "") -> void:
+	## `px` is the square side; tags pass their text line height so the icon never makes the tag taller
+	## than its text-only peers (F03-03). The icon is drawn from vectors into this box and scales to it.
+	func _init(t: String = "", px: float = 22.0) -> void:
 		type_name = t
-		custom_minimum_size = Vector2(22, 22)
+		custom_minimum_size = Vector2(px, px)
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _draw() -> void:

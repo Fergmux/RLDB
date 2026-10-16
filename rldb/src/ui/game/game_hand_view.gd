@@ -11,8 +11,6 @@ const CARD_GAP := 8.0
 var gs: GameScreen
 ## Layer the cards of this view live on.
 var layer: Control
-## Shown when the hand is empty.
-var empty_label: Label
 ## uid -> {holder, widget, hash, placed}
 var items: Dictionary = {}
 ## Hand uids in display order.
@@ -27,13 +25,9 @@ func _init(screen: GameScreen) -> void:
 	gs = screen
 
 
-## Builds the hand layer and its empty-hand label.
+## Builds the hand layer (an empty hand shows nothing, F03-12).
 func build() -> void:
 	layer = gs.passive_layer()
-	empty_label = UIStyle.label("Your hand is empty.", 14, UIStyle.MUTED)
-	empty_label.modulate.a = 0.6
-	empty_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(empty_label)
 
 
 ## Frees every hand widget (a new seat attached).
@@ -54,8 +48,6 @@ func layout(new_ids: Array, instant: bool) -> void:
 	var n := order.size()
 	var area := gs.play_area
 	var sy := gs.size.y
-	empty_label.visible = n == 0 and not gs.mv.is_empty()
-	empty_label.position = Vector2(area.size.x / 2.0 - 60.0, sy - GameScreen.HAND_H / 2.0 - 10.0)
 	if n == 0:
 		return
 	var hv := gs.hover.hv
@@ -107,7 +99,7 @@ func layout(new_ids: Array, instant: bool) -> void:
 					tw2.parallel().tween_property(holder, "rotation", rot, UIStyle.dur(0.15))
 		it["placed"] = true
 		if not is_hv:
-			layer.move_child(holder, i + 1)   # keep the empty-hand label at index 0
+			layer.move_child(holder, i)
 
 
 ## Syncs the hand widgets with my hand in the view and marks options / playable cards.

@@ -103,9 +103,15 @@ func on_widget_pressed(w: CardWidget) -> void:
 	select(uid)
 
 
-## Right click on a card: same as Esc.
-func on_widget_right(_w: CardWidget) -> void:
+## Right click on a card opens the read-only inspection (F03-01); it never selects, targets,
+## plays or cancels. A hidden/face-down card does nothing; an empty zone is empty space and
+## cancels like Esc.
+func on_widget_right(w: CardWidget) -> void:
 	gs.fx.finish_all()
+	if gs.inspect.inspect_widget(w):
+		return
+	if w.view.get("hidden", false):
+		return
 	cancel()
 
 
@@ -203,6 +209,8 @@ func confirm_multi() -> void:
 func cancel() -> bool:
 	var menu := gs.menu
 	var details := gs.details
+	if gs.inspect.close_top():
+		return true
 	if menu.close_dialog():
 		return true
 	if menu.game_menu.visible:

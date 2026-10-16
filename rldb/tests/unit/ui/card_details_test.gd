@@ -70,7 +70,7 @@ func test_unit_modifiers_listed_once() -> void:
 	p.show_card(v, [])
 	assert_bool(v.get("stat_parts", []).is_empty()).is_false()
 	assert_bool(p.all_text().contains("Modifiers")).is_true()
-	for part in v["stat_parts"]:
+	for part in CardDetailsPanel.modifier_parts(v):
 		assert_int(p.count_text(String(part))).is_equal(1)
 	assert_bool(p.all_text().contains(str(v["atk"]))).is_true()
 

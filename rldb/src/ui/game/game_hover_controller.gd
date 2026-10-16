@@ -178,7 +178,7 @@ func unlift(it: Dictionary) -> void:
 	if it["kind"] == "hand":
 		# The hand order can still list cards removed in this same render; skip them.
 		var hand := gs.hand
-		var idx := 1
+		var idx := 0
 		for huid in hand.order:
 			if hand.items.has(huid):
 				hand.layer.move_child(hand.items[huid]["holder"], idx)
