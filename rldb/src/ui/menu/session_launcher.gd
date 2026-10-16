@@ -20,6 +20,8 @@ var screen: GameScreen
 var privacy_overlay: PanelContainer
 ## Seat currently shown on the hot-seat screen.
 var shown_seat: int = 0
+## Seconds between hot-seat hand-over checks while the game-end presentation runs.
+const GAME_END_RECHECK := 0.25
 
 var _root: Control
 var _options: SessionOptions
@@ -94,6 +96,10 @@ func _check_hotseat() -> void:
 	var wait_ms: int = screen.fx_hold_until - Time.get_ticks_msec()
 	if wait_ms > 0:
 		_root.get_tree().create_timer(float(wait_ms) / 1000.0).timeout.connect(_check_hotseat, CONNECT_ONE_SHOT)
+		return
+	# Likewise the victory / defeat presentation (a click skips it, which ends the hold).
+	if screen.fx != null and screen.fx.game_end_hold:
+		_root.get_tree().create_timer(GAME_END_RECHECK).timeout.connect(_check_hotseat, CONNECT_ONE_SHOT)
 		return
 	if _options.privacy:
 		show_privacy(want)
