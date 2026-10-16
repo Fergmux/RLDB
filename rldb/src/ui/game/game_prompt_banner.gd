@@ -485,6 +485,7 @@ func _render_tray() -> void:
 		w.set_marks(true, idx in gs.multi)
 		w.order_no = gs.selection.order_no(idx)
 		w.pressed.connect(func(_w): gs.selection.pick_option(idx))
+		w.right_pressed.connect(gs.inspect.inspect_widget)
 		w.mouse_entered.connect(func():
 			gs.peek_uid = uid
 			gs.details.render())

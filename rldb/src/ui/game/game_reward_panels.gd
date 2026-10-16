@@ -106,6 +106,7 @@ func _render_offer(r: Dictionary) -> void:
 		GameUi.resize_card(cw, Vector2(200, 300))
 		var idx: int = i
 		cw.pressed.connect(func(_w): gs.send({"t": "reward_add", "index": idx}))
+		cw.right_pressed.connect(gs.inspect.inspect_widget)
 		cell.add_child(cw)
 		var b := UIStyle.primary_button("Take %s" % c["name"], 14)
 		b.clip_text = true
