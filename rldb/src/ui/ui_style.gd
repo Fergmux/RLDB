@@ -14,6 +14,8 @@ const BRONZE := Color("7a5a30")
 const GOLD := Color("d4a64a")
 const GOLD_HI := Color("f0cf7a")
 const TEXT := Color("ece4d2")
+## Dimmer parchment for subtitles, notes and captions (menu, deck builder).
+const TEXT_DIM := Color("a79c88")
 const MUTED := Color("c2b8a2")
 const DISABLED := Color("918874")
 const ON_GOLD := Color("1a1208")
@@ -83,6 +85,11 @@ static func font_italic() -> Font:
 	return _font(FONT_ITALIC)
 
 
+## Cinzel at its default weight, unvaried (menu items and screen titles).
+static func font_title() -> Font:
+	return _font(FONT_DISPLAY)
+
+
 ## Cinzel at a given weight (600 names/titles, 700 numbers).
 static func font_display(weight: int = 600) -> Font:
 	var key := "cinzel%d" % weight
@@ -108,6 +115,7 @@ const WINDOW_MODES := [["windowed", "Windowed"], ["borderless", "Borderless"], [
 static var _settings_loaded: bool = false
 
 
+## Loads the persisted UI settings once (later calls are no-ops).
 static func load_settings() -> void:
 	if _settings_loaded:
 		return
@@ -120,6 +128,7 @@ static func load_settings() -> void:
 		aa_level = int(cf.get_value("ui", "aa_level", 8))
 
 
+## Writes the UI settings to SETTINGS_PATH.
 static func save_settings() -> void:
 	var cf := ConfigFile.new()
 	cf.set_value("ui", "reduce_motion", reduce_motion)
@@ -129,11 +138,13 @@ static func save_settings() -> void:
 	cf.save(SETTINGS_PATH)
 
 
+## Sets and saves the "reduced motion" option.
 static func set_reduce_motion(on: bool) -> void:
 	reduce_motion = on
 	save_settings()
 
 
+## Sets and saves the "fast animations" option.
 static func set_fast_anim(on: bool) -> void:
 	fast_anim = on
 	save_settings()
@@ -146,6 +157,7 @@ static func set_window_mode(mode: String) -> void:
 	apply_window_mode()
 
 
+## Applies `window_mode` to the main window.
 static func apply_window_mode() -> void:
 	match window_mode:
 		"fullscreen":
@@ -157,6 +169,7 @@ static func apply_window_mode() -> void:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 
 
+## Sets, saves and applies the MSAA level (0, 2, 4 or 8).
 static func set_aa_level(n: int) -> void:
 	aa_level = n
 	save_settings()
@@ -208,6 +221,7 @@ static func dur(sec: float) -> float:
 
 
 # ---- factories ----
+## Flat rounded StyleBox with an optional border and small content margins.
 static func flat(color: Color, border: Color = Color.TRANSPARENT, width: int = 0, radius: int = 6) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = color
@@ -221,6 +235,7 @@ static func flat(color: Color, border: Color = Color.TRANSPARENT, width: int = 0
 	return sb
 
 
+## Label at `size` px in `color`; `wrap` word-wraps, `display` uses Cinzel 600.
 static func label(text: String, size: int = 14, color: Color = TEXT, wrap: bool = false, display: bool = false) -> Label:
 	var l := Label.new()
 	l.text = text
@@ -233,6 +248,24 @@ static func label(text: String, size: int = 14, color: Color = TEXT, wrap: bool 
 	return l
 
 
+## Title label in the Cinzel display face at its default weight (menu and deck-builder headings).
+## Unlike `label(..., display = true)`, which uses the 600-weight variation.
+static func title_label(text: String, size: int, color: Color = GOLD) -> Label:
+	var l := label(text, size, color)
+	l.add_theme_font_override("font", font_title())
+	return l
+
+
+## Full-rect MarginContainer with the same margin on every side (screen-level layouts).
+static func full_rect_margin(px: int) -> MarginContainer:
+	var m := MarginContainer.new()
+	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right", "top", "bottom"]:
+		m.add_theme_constant_override("margin_" + side, px)
+	return m
+
+
+## The game's standard (JuicyButton) button in the bold body face.
 static func button(text: String, size: int = 14) -> Button:
 	var b := JuicyButton.new()
 	b.text = text
@@ -319,6 +352,7 @@ static func panel_style(color: Color = PANEL, border: Color = BRONZE, radius: in
 	return sb
 
 
+## PanelContainer with `panel_style(color)`.
 static func panel(color: Color = PANEL) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", panel_style(color))
@@ -331,6 +365,7 @@ static func category_text_color(cat: String) -> Color:
 	return c.lightened(0.45) if c.get_luminance() < 0.3 else c.lightened(0.1)
 
 
+## Colour of element type `t` (null or unknown -> neutral grey).
 static func type_color(t) -> Color:
 	return TYPE_COLORS.get(t if t != null else "", TYPE_COLORS[""])
 
@@ -367,6 +402,7 @@ static func _check_icon(on: bool) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
+## Builds the game-wide Theme (buttons, scrollbars, tooltips, check boxes, labels).
 static func make_theme() -> Theme:
 	load_settings()
 	var th := Theme.new()

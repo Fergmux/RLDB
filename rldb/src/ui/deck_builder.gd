@@ -6,15 +6,9 @@ extends Control
 
 signal closed
 
-const TABLE := Color("2a211a")
-const SLATE := Color("1f1c1a")
-const INK := Color("12100f")
-const BRONZE := Color("7a5a30")
-const GOLD := Color("d4a64a")
-const GOLD_HI := Color("f0cf7a")
-const PARCH := Color("ece4d2")
-const PARCH_DIM := Color("a79c88")
-const FONT_TITLE := preload("res://assets/fonts/Cinzel-Variable.ttf")
+const MARGIN := 16
+const ROW_FONT_SIZE := 14
+const SWATCH_W := 5
 
 const COST_OPTIONS := [
 	["Any cost", ""], ["0 AP", "ap:0"], ["1 AP", "ap:1"], ["2 AP", "ap:2"], ["3 AP", "ap:3"],
@@ -45,7 +39,7 @@ var _status: Label
 var _starters: Array = []
 var _summaries: Dictionary = {}
 var _preview_id: int = -1
-var _overlay: Control
+var _overlay: ConfirmDialog
 
 
 func _ready() -> void:
@@ -105,6 +99,7 @@ static func counts_to_cards(c: Dictionary) -> Array:
 	return out
 
 
+## Collapses a DeckStore id list into card id -> copies.
 static func cards_to_counts(cards: Array) -> Dictionary:
 	var c := {}
 	for id in cards:
@@ -114,6 +109,7 @@ static func cards_to_counts(cards: Array) -> Dictionary:
 
 # ------------------------------------------------------------ public editing API
 
+## Adds `n` copies of card `id` to the working deck.
 func add_card(id: int, n: int = 1) -> void:
 	counts[id] = int(counts.get(id, 0)) + n
 	dirty = true
@@ -121,6 +117,7 @@ func add_card(id: int, n: int = 1) -> void:
 	_refresh_catalogue_counts()
 
 
+## Removes one copy of card `id` (no-op when absent).
 func remove_card(id: int) -> void:
 	if not counts.has(id):
 		return
@@ -132,11 +129,13 @@ func remove_card(id: int) -> void:
 	_refresh_catalogue_counts()
 
 
+## Sets the search text and refreshes the catalogue.
 func set_filters(query: String) -> void:
 	_search.text = query
 	_refresh_catalogue()
 
 
+## Starts an empty, unnamed deck.
 func new_deck() -> void:
 	counts = {}
 	deck_name_edit.text = ""
@@ -146,6 +145,7 @@ func new_deck() -> void:
 	_refresh_catalogue_counts()
 
 
+## Replaces the working deck with `cards` under `name` (not dirty).
 func load_cards(name: String, cards: Array) -> void:
 	counts = cards_to_counts(cards)
 	deck_name_edit.text = name
@@ -154,6 +154,7 @@ func load_cards(name: String, cards: Array) -> void:
 	_refresh_catalogue_counts()
 
 
+## Saves the working deck under its name; false (with a message) when unnamed.
 func save() -> bool:
 	var n := deck_name_edit.text.strip_edges()
 	if n == "":
@@ -166,6 +167,7 @@ func save() -> bool:
 	return true
 
 
+## Shows card `id` big in the preview column with its details and rules text.
 func show_preview(id: int) -> void:
 	_preview_id = id
 	for c in _preview_holder.get_children():
@@ -194,15 +196,10 @@ func show_preview(id: int) -> void:
 
 # ------------------------------------------------------------ construction
 
-func _title(text: String, size: int, color: Color = GOLD) -> Label:
-	var l := UIStyle.label(text, size, color)
-	l.add_theme_font_override("font", FONT_TITLE)
-	return l
-
-
-func _plate(color: Color = SLATE) -> PanelContainer:
+## A bronze-trimmed plate for one of the three columns.
+static func _plate(color: Color = UIStyle.PANEL) -> PanelContainer:
 	var p := PanelContainer.new()
-	var sb := UIStyle.flat(color, BRONZE, 1, 6)
+	var sb := UIStyle.flat(color, UIStyle.BRONZE, 1, 6)
 	sb.content_margin_left = 10
 	sb.content_margin_right = 10
 	sb.content_margin_top = 8
@@ -213,13 +210,10 @@ func _plate(color: Color = SLATE) -> PanelContainer:
 
 func _build() -> void:
 	var bg := ColorRect.new()
-	bg.color = TABLE
+	bg.color = UIStyle.TABLE_WOOD
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for s in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + s, 16)
+	var margin := UIStyle.full_rect_margin(MARGIN)
 	add_child(margin)
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 10)
@@ -227,10 +221,10 @@ func _build() -> void:
 
 	var head := HBoxContainer.new()
 	root.add_child(head)
-	var t := _title("DECK BUILDER", 30)
+	var t := UIStyle.title_label("DECK BUILDER", 30, UIStyle.GOLD)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
-	head.add_child(UIStyle.label("No limits on size, mix or duplicates. Fusion, Ritual and Arcane cards go to the Extra Deck automatically.", 13, PARCH_DIM))
+	head.add_child(UIStyle.label("No limits on size, mix or duplicates. Fusion, Ritual and Arcane cards go to the Extra Deck automatically.", 13, UIStyle.TEXT_DIM))
 	var back := UIStyle.button("Back", 15)
 	back.pressed.connect(_on_back)
 	head.add_child(back)
@@ -243,7 +237,7 @@ func _build() -> void:
 	_build_preview(body)
 	_build_deck(body)
 
-	_status = UIStyle.label("", 13, PARCH_DIM)
+	_status = UIStyle.label("", 13, UIStyle.TEXT_DIM)
 	root.add_child(_status)
 
 
@@ -266,7 +260,7 @@ func _build_catalogue(body: HBoxContainer) -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	plate.add_child(v)
-	v.add_child(_title("Card catalogue", 18, PARCH))
+	v.add_child(UIStyle.title_label("Card catalogue", 18, UIStyle.TEXT))
 	_search = LineEdit.new()
 	_search.placeholder_text = "Search name or rules text..."
 	_search.clear_button_enabled = true
@@ -300,7 +294,7 @@ func _build_catalogue(body: HBoxContainer) -> void:
 			o.select(0)
 		_refresh_catalogue())
 	filters.add_child(reset)
-	_result_label = UIStyle.label("", 12, PARCH_DIM)
+	_result_label = UIStyle.label("", 12, UIStyle.TEXT_DIM)
 	v.add_child(_result_label)
 	var sc := ScrollContainer.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -313,13 +307,13 @@ func _build_catalogue(body: HBoxContainer) -> void:
 
 
 func _build_preview(body: HBoxContainer) -> void:
-	var plate := _plate(INK)
+	var plate := _plate(UIStyle.PANEL_INK)
 	plate.custom_minimum_size = Vector2(300, 0)
 	body.add_child(plate)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	plate.add_child(v)
-	v.add_child(_title("Preview", 18, PARCH))
+	v.add_child(UIStyle.title_label("Preview", 18, UIStyle.TEXT))
 	_preview_holder = VBoxContainer.new()
 	_preview_holder.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(_preview_holder)
@@ -327,7 +321,7 @@ func _build_preview(body: HBoxContainer) -> void:
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(sc)
-	_preview_text = UIStyle.label("", 14, PARCH, true)
+	_preview_text = UIStyle.label("", 14, UIStyle.TEXT, true)
 	_preview_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.add_child(_preview_text)
 	var row := HBoxContainer.new()
@@ -350,7 +344,7 @@ func _build_deck(body: HBoxContainer) -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	plate.add_child(v)
-	v.add_child(_title("Your deck", 18, PARCH))
+	v.add_child(UIStyle.title_label("Your deck", 18, UIStyle.TEXT))
 	deck_name_edit = LineEdit.new()
 	deck_name_edit.placeholder_text = "Deck name"
 	deck_name_edit.text_changed.connect(func(_t): dirty = true)
@@ -388,9 +382,9 @@ func _build_deck(body: HBoxContainer) -> void:
 	st_b.pressed.connect(func(): _guard_unsaved(_copy_starter))
 	strow.add_child(st_b)
 	v.add_child(HSeparator.new())
-	_deck_summary = UIStyle.label("", 14, GOLD_HI)
+	_deck_summary = UIStyle.label("", 14, UIStyle.GOLD_HI)
 	v.add_child(_deck_summary)
-	_empty_note = UIStyle.label("Your deck is empty. Add cards from the catalogue; there is no size limit, but an empty deck cannot play.", 13, PARCH_DIM, true)
+	_empty_note = UIStyle.label("Your deck is empty. Add cards from the catalogue; there is no size limit, but an empty deck cannot play.", 13, UIStyle.TEXT_DIM, true)
 	v.add_child(_empty_note)
 	var sc := ScrollContainer.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -430,7 +424,7 @@ func _refresh_catalogue() -> void:
 		_catalogue_box.add_child(_catalogue_row(d))
 	_result_label.text = "%d of %d cards" % [n, CardDB.all().size()]
 	if n == 0:
-		_catalogue_box.add_child(UIStyle.label("No cards match these filters.", 14, PARCH_DIM))
+		_catalogue_box.add_child(UIStyle.label("No cards match these filters.", 14, UIStyle.TEXT_DIM))
 
 
 func _catalogue_row(d: Dictionary) -> Control:
@@ -438,22 +432,10 @@ func _catalogue_row(d: Dictionary) -> Control:
 	var row := HBoxContainer.new()
 	row.set_meta("card_id", id)
 	row.add_theme_constant_override("separation", 6)
-	var swatch := ColorRect.new()
-	swatch.color = UIStyle.CATEGORY_COLORS.get(d["category"], Color.GRAY)
-	swatch.custom_minimum_size = Vector2(5, 0)
-	row.add_child(swatch)
-	var nm := Button.new()
+	row.add_child(_swatch(d))
 	var status := String(_summary(id)["support"])
-	nm.text = ("! " if status != "full" else "") + String(d["name"])
+	var nm := _name_button(("! " if status != "full" else "") + String(d["name"]), UIStyle.TEXT if status == "full" else UIStyle.BAD, id)
 	nm.tooltip_text = "Implementation: %s" % status if status != "full" else ""
-	nm.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	nm.flat = true
-	nm.focus_mode = Control.FOCUS_NONE
-	nm.clip_text = true
-	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	nm.add_theme_font_size_override("font_size", 14)
-	nm.add_theme_color_override("font_color", PARCH if status == "full" else UIStyle.BAD)
-	nm.pressed.connect(func(): show_preview(id))
 	nm.mouse_entered.connect(func(): show_preview(id))
 	row.add_child(nm)
 	var info := PackedStringArray()
@@ -461,11 +443,11 @@ func _catalogue_row(d: Dictionary) -> Control:
 	if d["type"] != null and d["type"] != "":
 		info.append(String(d["type"]))
 	info.append(CardDB.cost_label(d))
-	var il := UIStyle.label(" · ".join(info), 12, PARCH_DIM)
+	var il := UIStyle.label(" · ".join(info), 12, UIStyle.TEXT_DIM)
 	il.custom_minimum_size = Vector2(190, 0)
 	il.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(il)
-	var cnt := UIStyle.label("", 13, GOLD_HI)
+	var cnt := UIStyle.label("", 13, UIStyle.GOLD_HI)
 	cnt.name = "Count"
 	cnt.custom_minimum_size = Vector2(34, 0)
 	row.add_child(cnt)
@@ -479,6 +461,29 @@ func _catalogue_row(d: Dictionary) -> Control:
 	row.add_child(rem)
 	_set_count_label(row)
 	return row
+
+
+## Category colour strip at the start of a catalogue / deck row.
+static func _swatch(d: Dictionary) -> ColorRect:
+	var swatch := ColorRect.new()
+	swatch.color = UIStyle.CATEGORY_COLORS.get(d["category"], Color.GRAY)
+	swatch.custom_minimum_size = Vector2(SWATCH_W, 0)
+	return swatch
+
+
+## Flat, left-aligned card-name button of a row; pressing it previews card `id`.
+func _name_button(text: String, color: Color, id: int) -> Button:
+	var nm := Button.new()
+	nm.text = text
+	nm.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	nm.flat = true
+	nm.focus_mode = Control.FOCUS_NONE
+	nm.clip_text = true
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nm.add_theme_font_size_override("font_size", ROW_FONT_SIZE)
+	nm.add_theme_color_override("font_color", color)
+	nm.pressed.connect(func(): show_preview(id))
+	return nm
 
 
 func _set_count_label(row: Node) -> void:
@@ -516,7 +521,7 @@ func _refresh_deck() -> void:
 			if da["category"] != db["category"]:
 				return String(da["category"]) < String(db["category"])
 			return String(da["name"]) < String(db["name"]))
-		var h := _title("%s  (%d)" % [group, total], 15, GOLD)
+		var h := UIStyle.title_label("%s  (%d)" % [group, total], 15, UIStyle.GOLD)
 		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_deck_box.add_child(h)
 		for id in ids:
@@ -527,22 +532,9 @@ func _deck_row(id: int) -> Control:
 	var d := CardDB.get_def(id)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
-	var swatch := ColorRect.new()
-	swatch.color = UIStyle.CATEGORY_COLORS.get(d["category"], Color.GRAY)
-	swatch.custom_minimum_size = Vector2(5, 0)
-	row.add_child(swatch)
-	var nm := Button.new()
-	nm.text = "%dx  %s" % [counts[id], d["name"]]
-	nm.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	nm.flat = true
-	nm.focus_mode = Control.FOCUS_NONE
-	nm.clip_text = true
-	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	nm.add_theme_font_size_override("font_size", 14)
-	nm.add_theme_color_override("font_color", PARCH)
-	nm.pressed.connect(func(): show_preview(id))
-	row.add_child(nm)
-	row.add_child(UIStyle.label(CardDB.cost_label(d), 12, PARCH_DIM))
+	row.add_child(_swatch(d))
+	row.add_child(_name_button("%dx  %s" % [counts[id], d["name"]], UIStyle.TEXT, id))
+	row.add_child(UIStyle.label(CardDB.cost_label(d), 12, UIStyle.TEXT_DIM))
 	var add := UIStyle.button("+", 13)
 	add.custom_minimum_size = Vector2(30, 0)
 	add.pressed.connect(func(): add_card(id))
@@ -576,7 +568,7 @@ func _refresh_saved() -> void:
 
 func _say(text: String, bad: bool = false) -> void:
 	_status.text = text
-	_status.add_theme_color_override("font_color", UIStyle.BAD if bad else PARCH_DIM)
+	_status.add_theme_color_override("font_color", UIStyle.BAD if bad else UIStyle.TEXT_DIM)
 
 
 func _load_selected() -> void:
@@ -603,7 +595,7 @@ func _copy_starter() -> void:
 ## Runs `proceed` immediately, or after confirmation if there are unsaved edits.
 func _guard_unsaved(proceed: Callable) -> void:
 	if dirty and not counts.is_empty():
-		_confirm("You have unsaved changes to this deck. Discard them?", "Discard", proceed)
+		_confirm("Unsaved changes", "You have unsaved changes to this deck. Discard them?", "Discard", proceed)
 	else:
 		proceed.call()
 
@@ -621,39 +613,14 @@ func _ask_delete() -> void:
 	if not exists:
 		_say("No saved deck named \"%s\" to delete." % n, true)
 		return
-	_confirm("Delete the saved deck \"%s\"? This cannot be undone." % n, "Delete", func():
+	_confirm("Delete deck", "Delete the saved deck \"%s\"? This cannot be undone." % n, "Delete", func():
 		DeckStore.delete_deck(n)
 		_refresh_saved()
 		_say("Deleted \"%s\"." % n))
 
 
-func _confirm(text: String, yes_text: String, on_yes: Callable) -> void:
+## Asks `text` in the shared ConfirmDialog; `on_yes` runs when `yes_text` is pressed.
+func _confirm(title: String, text: String, yes_text: String, on_yes: Callable) -> void:
 	if _overlay != null and is_instance_valid(_overlay):
 		_overlay.queue_free()
-	_overlay = Control.new()
-	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(_overlay)
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.6)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_overlay.add_child(dim)
-	var c := CenterContainer.new()
-	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_overlay.add_child(c)
-	var p := _plate(INK)
-	p.custom_minimum_size = Vector2(460, 0)
-	c.add_child(p)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
-	p.add_child(v)
-	v.add_child(UIStyle.label(text, 16, PARCH, true))
-	var row := HBoxContainer.new()
-	v.add_child(row)
-	var yes := UIStyle.button(yes_text, 14)
-	yes.pressed.connect(func():
-		_overlay.queue_free()
-		on_yes.call())
-	row.add_child(yes)
-	var no := UIStyle.button("Cancel", 14)
-	no.pressed.connect(func(): _overlay.queue_free())
-	row.add_child(no)
+	_overlay = ConfirmDialog.open(self, title, text, yes_text, on_yes, "Cancel")

@@ -7,6 +7,7 @@ extends Button
 
 const HOVER_SCALE := 1.035
 const PRESS_SCALE := 0.97
+const SCALE_TIME := 0.09
 
 var _hover := false
 var _down := false
@@ -33,7 +34,7 @@ func _settle() -> void:
 		scale = Vector2.ONE
 		return
 	_tw = create_tween()
-	_tw.tween_property(self, "scale", Vector2(want, want), 0.09).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_tw.tween_property(self, "scale", Vector2(want, want), SCALE_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _draw() -> void:

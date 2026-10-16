@@ -37,28 +37,33 @@ static func start() -> void:
 		_player.play()
 
 
+## Sets the music volume (linear 0..1, clamped) and persists it.
 static func set_volume(linear: float) -> void:
 	_volume = clampf(linear, 0.0, 1.0)
 	_apply()
 	_save()
 
 
+## Returns the music volume (linear 0..1).
 static func get_volume() -> float:
 	load_settings()
 	return _volume
 
 
+## Mutes/unmutes the music and persists the choice.
 static func set_muted(on: bool) -> void:
 	_muted = on
 	_apply()
 	_save()
 
 
+## Returns whether the music is muted.
 static func is_muted() -> bool:
 	load_settings()
 	return _muted
 
 
+## Loads the persisted music settings once (later calls are no-ops).
 static func load_settings() -> void:
 	if _loaded:
 		return
