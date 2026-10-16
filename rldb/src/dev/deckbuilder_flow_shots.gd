@@ -190,6 +190,7 @@ func run() -> void:
 	# Unnamed save: inline error beside the name field, not at the bottom.
 	await _click_node(_find_button(db, "Save"))
 	_check("unnamed save shows inline error", db.name_error() != "" and not DeckStore.list().any(func(e): return e["name"] == ""))
+	await create_timer(0.4).timeout   # let the shake settle
 	_check("error sits under the name field", db._name_err.get_global_rect().position.y >= db.deck_name_edit.get_global_rect().end.y - 2 and absf(db._name_err.get_global_rect().position.x - db.deck_name_edit.get_global_rect().position.x) < 4)
 	await _shot("03c_name_error")
 

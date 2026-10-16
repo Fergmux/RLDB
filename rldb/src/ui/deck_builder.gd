@@ -19,6 +19,8 @@ const CELL_H := CARD_H + CELL_PAD * 2
 ## Deck grid tile: "mini" card 90x135, count badge, a -/+ strip underneath.
 const TILE_W := 100
 const TILE_H := 175
+## Tallest the saved/starter deck list grows before it scrolls.
+const LIST_MAX_H := 190.0
 ## Smallest gap between catalogue columns (the rest of the width is shared out between them).
 const GRID_MIN_GAP := 8
 
@@ -57,6 +59,8 @@ var _name_err: Label
 var _name_box: VBoxContainer
 var _name_shake: Tween
 var _list_box: VBoxContainer
+var _list_scroll: ScrollContainer
+var _preview_chip: PanelContainer
 var _tab_saved: Button
 var _tab_starters: Button
 var _show_starters: bool = false
@@ -309,6 +313,12 @@ func _update_preview_count() -> void:
 	var n := int(counts.get(_preview_id, 0))
 	_preview_count.text = ("In your deck: x%d" % n) if n > 0 else "Not in your deck"
 	_preview_count.add_theme_color_override("font_color", UIStyle.GOLD_HI if n > 0 else UIStyle.TEXT_DIM)
+	var sb := UIStyle.flat(Color(UIStyle.GOLD, 0.14) if n > 0 else Color(0, 0, 0, 0.3), UIStyle.GOLD if n > 0 else Color(UIStyle.BRONZE, 0.6), 1, 12)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 3
+	sb.content_margin_bottom = 3
+	_preview_chip.add_theme_stylebox_override("panel", sb)
 
 
 # ------------------------------------------------------------ small widgets
@@ -687,9 +697,13 @@ func _build_preview(body: HBoxContainer) -> void:
 	inner.add_child(_details)
 	_preview_note = UIStyle.label("", 13, UIStyle.BAD)
 	inner.add_child(_preview_note)
+	_preview_chip = PanelContainer.new()
+	_preview_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_preview_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_preview_count = UIStyle.label("", 14, UIStyle.TEXT_DIM)
-	_preview_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(_preview_count)
+	_preview_count.add_theme_font_override("font", UIStyle.font_bold())
+	_preview_chip.add_child(_preview_count)
+	inner.add_child(_preview_chip)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	v.add_child(row)
@@ -764,7 +778,7 @@ func _build_deck(body: HBoxContainer) -> void:
 	tabs.add_child(_tab_saved)
 	tabs.add_child(_tab_starters)
 	var list_sc := ScrollContainer.new()
-	list_sc.custom_minimum_size = Vector2(0, 176)
+	_list_scroll = list_sc
 	list_sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(list_sc)
 	_list_box = VBoxContainer.new()
@@ -1025,12 +1039,13 @@ func _refresh_saved() -> void:
 	if _show_starters:
 		for s in _starters:
 			_list_box.add_child(_deck_tile(String(s["name"]), s["main"] + s["extra"], false, true))
-		return
-	if decks.is_empty():
+	elif decks.is_empty():
 		_list_box.add_child(_empty_state("No saved decks yet", "Name your deck and press Save, or copy a starter deck."))
-		return
-	for dk in decks:
-		_list_box.add_child(_deck_tile(String(dk["name"]), dk["cards"], String(dk["name"]) == _loaded_name, false))
+	else:
+		for dk in decks:
+			_list_box.add_child(_deck_tile(String(dk["name"]), dk["cards"], String(dk["name"]) == _loaded_name, false))
+	# Fit the list to its content (tiles + gaps), scrolling only beyond LIST_MAX_H.
+	_list_scroll.custom_minimum_size.y = clampf(_list_box.get_combined_minimum_size().y + 4.0, 40.0, LIST_MAX_H)
 
 
 ## One deck tile: accent bar, name, Main/Extra counts, dominant Type icons, hover and loaded states, actions.
