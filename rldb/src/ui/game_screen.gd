@@ -6,6 +6,8 @@ extends Control
 ## only: the board is always rendered in its final state first.
 
 signal back_to_menu
+## Leave without the main menu's own confirmation (the in-game menu already warned).
+signal leave_to_menu
 
 const SIDEBAR_W := 360.0
 const TOP_H := 44.0
@@ -114,6 +116,7 @@ var overlay_box: VBoxContainer
 var pile_popup: PanelContainer
 var pile_box: VBoxContainer
 var settings_popup: PanelContainer
+var game_menu: PanelContainer
 var toast: Label
 var seat_label: Label
 var conn_label: Label
@@ -192,6 +195,7 @@ class BoardDeco extends Control:
 ## (e.g. a Fusion summon into a material's zone). Click-through.
 class ZoneRing extends Control:
 	var on: bool = false
+	var col: Color = UIStyle.TARGET
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -214,14 +218,14 @@ class ZoneRing extends Control:
 			a = 0.55 + 0.45 * (0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 900.0 * TAU))
 		var r := Rect2(Vector2.ZERO, size)
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(UIStyle.TARGET, 0.10 + 0.10 * a)
-		sb.border_color = Color(UIStyle.TARGET, a)
+		sb.bg_color = Color(col, 0.10 + 0.10 * a)
+		sb.border_color = Color(col, a)
 		sb.set_border_width_all(4)
 		sb.set_corner_radius_all(9)
 		draw_style_box(sb, r)
 		var glow := StyleBoxFlat.new()
 		glow.draw_center = false
-		glow.border_color = Color(UIStyle.TARGET, 0.3 * a)
+		glow.border_color = Color(col, 0.3 * a)
 		glow.set_border_width_all(5)
 		glow.set_corner_radius_all(12)
 		draw_style_box(glow, r.grow(4))
@@ -867,13 +871,9 @@ func _build_top_strip() -> void:
 	conn_label = UIStyle.label("", 14, UIStyle.MUTED)
 	conn_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(conn_label)
-	var gear := UIStyle.button("Settings", 12)
-	gear.custom_minimum_size = Vector2(0, 28)
-	gear.pressed.connect(func(): settings_popup.visible = not settings_popup.visible)
-	row.add_child(gear)
-	var menu_b := UIStyle.button("Menu", 12)
-	menu_b.custom_minimum_size = Vector2(60, 28)
-	menu_b.pressed.connect(func(): back_to_menu.emit())
+	var menu_b := UIStyle.button("Menu", 13)
+	menu_b.custom_minimum_size = Vector2(76, 30)
+	menu_b.pressed.connect(_toggle_game_menu)
 	row.add_child(menu_b)
 	# F02-07 context banner: covers the top strip (never the board) while I pick targets.
 	ctx_banner = PanelContainer.new()
@@ -990,6 +990,28 @@ func _build_overlays() -> void:
 	pile_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pile_box.add_theme_constant_override("separation", 6)
 	ps.add_child(_glow_room(pile_box, 12))
+	# In-game menu (Menu button / Esc): Settings, Concede, Return to menu, Quit to desktop.
+	game_menu = PanelContainer.new()
+	var gms := UIStyle.panel_style(Color(0.05, 0.045, 0.04, 0.98), UIStyle.GOLD, 10)
+	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		gms.set_content_margin(side, 14)
+	gms.shadow_size = 14
+	gms.shadow_color = Color(0, 0, 0, 0.6)
+	game_menu.add_theme_stylebox_override("panel", gms)
+	game_menu.visible = false
+	game_menu.z_index = 95
+	add_child(game_menu)
+	var gmv := VBoxContainer.new()
+	gmv.add_theme_constant_override("separation", 8)
+	game_menu.add_child(gmv)
+	for it in [["Settings", func(): game_menu.visible = false; settings_popup.visible = true],
+			["Concede game", func(): game_menu.visible = false; _confirm_concede()],
+			["Return to menu", func(): _confirm_forfeit(false)],
+			["Quit to desktop", func(): _confirm_forfeit(true)]]:
+		var gb := UIStyle.button(it[0], 16)
+		gb.custom_minimum_size = Vector2(230, 42)
+		gb.pressed.connect(it[1])
+		gmv.add_child(gb)
 	# Settings
 	settings_popup = PanelContainer.new()
 	settings_popup.add_theme_stylebox_override("panel", UIStyle.panel_style(Color(0.07, 0.065, 0.06, 0.99), UIStyle.GOLD, 10))
@@ -1127,6 +1149,8 @@ func _relayout() -> void:
 	pause_dim.size = Vector2(w - _sbw, h - TOP_H)
 	pause_panel.position = (pause_dim.size - Vector2(440, 160)) / 2.0
 	settings_popup.position = Vector2(w - _sbw - 400.0, TOP_H + 4.0)
+	game_menu.reset_size()
+	game_menu.position = Vector2(w - _sbw - game_menu.get_combined_minimum_size().x - 10.0, TOP_H + 4.0)
 	_layout_hand([], true)
 	_place_opp_hand()
 	_place_modals()
@@ -1580,7 +1604,12 @@ func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, target
 	var chosen: bool = opt != -1 and opt in multi
 	var dim: bool = targeting and opt == -1 and not (vis and uid == _src_uid_cache)
 	var zone_pick: bool = opt != -1 and String(_pending().get("kind", "")) == "slot"
-	(it["ring"] as ZoneRing).set_on(zone_pick and cv != null)
+	# The card whose summon / activation a Trap prompt responds to is outlined in red.
+	var cause_ref: Dictionary = _pending().get("cause", {}).get("card", {}) if _pending().get("mine", false) else {}
+	var is_cause: bool = not cause_ref.is_empty() and int(cause_ref["p"]) == pidx and String(cause_ref["zone"]) == zone and int(cause_ref["slot"]) == slot
+	var ring: ZoneRing = it["ring"]
+	ring.col = Color("ff6b5e") if is_cause else UIStyle.TARGET
+	ring.set_on((zone_pick or is_cause) and cv != null)
 	if cv == null:
 		bg.set_marks(opt != -1, chosen, dim)
 		return
@@ -1747,8 +1776,103 @@ func _update_conn() -> void:
 	conn_label.add_theme_color_override("font_color", UIStyle.BAD if (net.get("paused", false) or not net.get("opponent_connected", true)) and not net.is_empty() else UIStyle.MUTED)
 
 
+func _toggle_game_menu() -> void:
+	Sfx.play("select")
+	settings_popup.visible = false
+	game_menu.visible = not game_menu.visible
+	if game_menu.visible:
+		_clear_hover()
+
+
+## Return to menu / Quit to desktop: an unfinished series is forfeited (after a warning).
+func _confirm_forfeit(quit: bool) -> void:
+	game_menu.visible = false
+	var live: bool = view.get("stage", "") not in ["", "over"]
+	var go := func():
+		if live:
+			_send({"t": "forfeit_series"})
+		if quit:
+			get_tree().quit()
+		else:
+			leave_to_menu.emit()
+	if not live:
+		go.call()
+		return
+	_dialog("Are you sure?", "Quitting will forfeit the match.", "Forfeit and %s" % ("quit" if quit else "leave"), go)
+
+
+var _dialog_root: Control
+
+
+## Small centred confirmation dialog over a dimmed screen: title, message, a confirm button and
+## "Keep playing". Esc / clicking outside closes it.
+func _dialog(title: String, text: String, confirm: String, on_yes: Callable) -> void:
+	_close_dialog()
+	_dialog_root = Control.new()
+	_dialog_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_dialog_root.z_index = 120
+	add_child(_dialog_root)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.gui_input.connect(func(ev): if ev is InputEventMouseButton and ev.pressed: _close_dialog())
+	_dialog_root.add_child(dim)
+	var cc := CenterContainer.new()
+	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dialog_root.add_child(cc)
+	var p := PanelContainer.new()
+	var sb := UIStyle.panel_style(Color(0.05, 0.045, 0.04, 0.99), UIStyle.GOLD, 12)
+	for side in [SIDE_LEFT, SIDE_RIGHT]:
+		sb.set_content_margin(side, 30)
+	for side in [SIDE_TOP, SIDE_BOTTOM]:
+		sb.set_content_margin(side, 22)
+	sb.shadow_size = 20
+	sb.shadow_color = Color(0, 0, 0, 0.6)
+	p.add_theme_stylebox_override("panel", sb)
+	p.custom_minimum_size = Vector2(420, 0)
+	cc.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 12)
+	p.add_child(v)
+	var t := UIStyle.label(title, 26, UIStyle.GOLD, false, true)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var m := UIStyle.label(text, 16, UIStyle.TEXT, true)
+	m.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(m)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	v.add_child(row)
+	var yes := UIStyle.primary_button(confirm, 15)
+	yes.custom_minimum_size = Vector2(170, 40)
+	yes.pressed.connect(func(): _close_dialog(); on_yes.call())
+	row.add_child(yes)
+	var no := UIStyle.button("Keep playing", 15)
+	no.custom_minimum_size = Vector2(150, 40)
+	no.pressed.connect(_close_dialog)
+	row.add_child(no)
+	_clear_hover()
+	if not UIStyle.reduce_motion:
+		p.modulate.a = 0.0
+		p.scale = Vector2(0.94, 0.94)
+		p.pivot_offset = Vector2(210, 70)
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(p, "modulate:a", 1.0, 0.15)
+		tw.tween_property(p, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _close_dialog() -> bool:
+	if _dialog_root != null and is_instance_valid(_dialog_root):
+		_dialog_root.queue_free()
+		_dialog_root = null
+		return true
+	return false
+
+
 func _confirm_concede() -> void:
-	_show_message("Concede this game?", [["Concede", func(): _send({"t": "concede"}); pile_popup.visible = false], ["Keep playing", func(): pile_popup.visible = false]])
+	_dialog("Concede this game?", "Your opponent wins this game; the series continues.", "Concede", func(): _send({"t": "concede"}))
 
 
 # ---------------------------------------------------------------- selection & prompts
@@ -1932,24 +2056,35 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 ## Esc / right-click: close popups, cancel a cancellable prompt, otherwise unpin and clear hover.
-func _cancel() -> void:
+## Esc / right-click: close popups, cancel a cancellable prompt, otherwise unpin. Returns true
+## when it closed or cancelled something.
+func _cancel() -> bool:
+	if _close_dialog():
+		return true
+	if game_menu.visible:
+		game_menu.visible = false
+		return true
 	if pile_popup.visible:
 		pile_popup.visible = false
-		return
+		return true
 	if _pile_zone != "" and _pending().is_empty():
 		_close_pile()
-		return
+		return true
 	if settings_popup.visible:
 		settings_popup.visible = false
-		return
+		return true
+	var did := false
 	var pd := _pending()
 	if not pd.is_empty() and pd["mine"] and pd["cancellable"]:
 		multi = []
 		Sfx.play("cancel")
 		_send({"t": "cancel", "id": pd["id"]})
+		did = true
 	elif selected_uid != -1 or _row_open:
 		_deselect()
+		did = true
 	_clear_hover()
+	return did
 
 
 func _digit_of(k: int) -> int:
@@ -1966,7 +2101,8 @@ func _digit_of(k: int) -> int:
 func _handle_key(e: InputEventKey) -> bool:
 	var k: int = e.keycode
 	if k == KEY_ESCAPE:
-		_cancel()
+		if not _cancel() and not pause_dim.visible:
+			_toggle_game_menu()   # nothing to close or cancel: Esc opens the game menu
 		return true
 	if pile_popup.visible or settings_popup.visible or pause_dim.visible or view.is_empty():
 		return false
@@ -2104,7 +2240,7 @@ func _locked() -> bool:
 
 
 func _hover_blocked() -> bool:
-	return overlay.visible or pile_popup.visible or settings_popup.visible or pause_dim.visible or mv.is_empty()
+	return overlay.visible or pile_popup.visible or settings_popup.visible or game_menu.visible or pause_dim.visible or mv.is_empty()
 
 
 func _process(_d: float) -> void:
@@ -2816,7 +2952,15 @@ var _log_card: Dictionary = {}
 func _show_card_def(id: int) -> void:
 	if _pile_zone != "":
 		_close_pile()
-	_log_card = _summary_view(Series._card_summary(id))
+	# A copy you can see in the match opens exactly like clicking it on the board / in hand.
+	if not mv.is_empty():
+		for p in [me(), 1 - me()]:
+			for z in ["units", "backrow", "powers", "hand"]:
+				for c in _pv(p).get(z, []):
+					if c != null and not c.get("hidden", false) and int(c.get("id", -1)) == id and _item_for_uid(int(c["uid"])).size() > 0:
+						_select(int(c["uid"]))
+						return
+	_log_card = MatchView.def_view(id)
 	selected_uid = -1
 	_row_open = false
 	_clear_stack()
@@ -3037,6 +3181,14 @@ func _render_pile_list() -> void:
 		_reveal_pile_row.call_deferred(sel_row)
 
 
+## Makes a passive display subtree click-through (rows handle the click themselves).
+func _ignore_mouse(n: Node) -> void:
+	if n is Control:
+		(n as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for ch in n.get_children():
+		_ignore_mouse(ch)
+
+
 ## Scrolls the list so the selected row, including its action buttons, is fully visible.
 func _reveal_pile_row(row: Control) -> void:
 	await get_tree().process_frame
@@ -3084,30 +3236,14 @@ func _pile_row(c: Dictionary) -> Control:
 	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hb.add_child(vb)
-	var cat := String(c.get("category", ""))
-	var nm := UIStyle.label(String(c.get("name", "")), 15, UIStyle.category_text_color(cat).lightened(0.2), true, true)
-	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vb.add_child(nm)
-	var bits := [String(UIStyle.CATEGORY_NAMES.get(cat, cat))]
-	bits.append(String(c.get("cost_text", "")))
-	if c.has("race"):
-		var rt := []
-		if String(c.get("race", "")) != "":
-			rt.append(String(c["race"]))
-		if c.get("type") != null and String(c.get("type", "")) != "":
-			rt.append(String(c["type"]))
-		if not rt.is_empty():
-			bits.append(" ".join(rt))
-		if c.get("atk") != null:
-			bits.append("%s / %s" % [str(c.get("atk")), str(c.get("def"))])
-	var meta := UIStyle.label("  ·  ".join(bits.filter(func(x): return x != "")), 12, UIStyle.MUTED, true)
-	meta.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vb.add_child(meta)
-	var tx := CardWidget.card_text(c)
-	if tx != "":
-		var tl := UIStyle.label(tx, 13, UIStyle.TEXT, true)
-		tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		vb.add_child(tl)
+	# The same layout as the card details panel, in compact form (name, tags, stats, timing
+	# blocks, statuses), so the list reads like the details pane.
+	var dp := CardDetailsPanel.new()
+	dp.compact = true
+	dp.add_theme_constant_override("separation", 3)
+	dp.show_card(c)
+	_ignore_mouse(dp)
+	vb.add_child(dp)
 	if sel and not _locked():
 		var af := HFlowContainer.new()
 		af.add_theme_constant_override("h_separation", 6)
@@ -3240,6 +3376,7 @@ func _render_overlay() -> void:
 ## Dashed arrow from the acting card to the hovered legal target (board or sidebar list).
 func _update_arrow() -> void:
 	var on := false
+	var hostile := false
 	if arrow != null and not mv.is_empty() and not overlay.visible and _board_targeting():
 		var src := _source_rect()
 		var dst := _hovered_target_rect()
@@ -3248,7 +3385,23 @@ func _update_arrow() -> void:
 			arrow.a = inv * src.get_center()
 			arrow.b = inv * dst.get_center()
 			on = true
+	elif arrow != null and not overlay.visible:
+		# Deciding a Trap response to an attack: the enemy's attack arrow, attacker -> its target.
+		var cause: Dictionary = _pending().get("cause", {}) if _pending().get("mine", false) else {}
+		var at: Dictionary = cause.get("attacker", {})
+		if not at.is_empty():
+			var src2 := fx_slot_global_rect(int(at["p"]), "unit", int(at["slot"]))
+			var tg: Dictionary = cause.get("target", {})
+			var dst2: Vector2 = fx_slot_global_rect(int(tg["p"]), "unit", int(tg["slot"])).get_center() if not tg.is_empty() else side_center(int(cause.get("direct_p", me())))
+			if src2.size != Vector2.ZERO:
+				var inv2 := arrow.get_global_transform().affine_inverse()
+				arrow.a = inv2 * src2.get_center()
+				arrow.b = inv2 * dst2
+				on = true
+				hostile = true
 	var want_col: Color = VERDICT_COLORS.get(_preview_verdict, UIStyle.TARGET) if _preview_text != "" else UIStyle.TARGET
+	if hostile:
+		want_col = Color("ff6b5e")
 	var want_v := _preview_verdict if _preview_text != "" else ""
 	if on or arrow.on or arrow.col != want_col or arrow.verdict != want_v:
 		arrow.on = on

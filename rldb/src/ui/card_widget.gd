@@ -1047,8 +1047,9 @@ func _draw_overlays() -> void:
 		_ring(Color(fx_glow, fx_glow.a), 3.0 * _s, rect, rad)
 		_ring(Color(fx_glow, fx_glow.a * 0.35), 3.0 * _s, rect.grow(2.5 * _s), rad + 2.0 * _s)
 	if _is_ready:
-		# One ring OUTSIDE the card (its own frame colour stays visible) plus the chevron badge.
-		_ring(Color(UIStyle.READY, 0.95), maxf(2.0, 2.4 * _s), rect.grow(4.0 * _s), rad + 4.0 * _s)
+		# Steady warm-yellow glow OUTSIDE the card (its own frame colour stays visible) plus the chevron
+		# badge. TARGET differs by behaviour: it pulses and fills/rings the card itself.
+		_ready_glow(rect, rad)
 	if hovered or _self_hover:
 		# Soft ivory glow entirely OUTSIDE the card, no ring on it: the kind-coloured frame stays visible.
 		_outer_glow(rect, rad, UIStyle.HOVER_GLOW, 1.0)
@@ -1081,15 +1082,25 @@ func _outer_glow(rect: Rect2, rad: float, col: Color, k: float) -> void:
 	_ring(Color(col, 0.06 * k), 4.0 * _s, rect.grow(9.5 * _s), rad + 9.5 * _s)
 
 
-## Lime circle with a bold double up-chevron on the top edge: "can act now" by shape, not colour alone.
+## "Can act now" glow: a crisp thin READY ring just outside the card, then three fading bands
+## beyond it. Static (no per-frame redraw). Wider than the hover glow so both read when combined.
+func _ready_glow(rect: Rect2, rad: float) -> void:
+	_ring(Color(UIStyle.READY, 0.30), 3.5 * _s, rect.grow(6.0 * _s), rad + 6.0 * _s)
+	_ring(Color(UIStyle.READY, 0.15), 4.0 * _s, rect.grow(9.5 * _s), rad + 9.5 * _s)
+	_ring(Color(UIStyle.READY, 0.06), 4.5 * _s, rect.grow(13.5 * _s), rad + 13.5 * _s)
+	_ring(Color(UIStyle.READY, 0.9), maxf(1.5, 1.7 * _s), rect.grow(3.0 * _s), rad + 3.0 * _s)
+
+
+## Yellow circle with a bold dark double up-chevron on the top edge: "can act now" by shape, not
+## colour alone.
 func _ready_badge(rect: Rect2) -> void:
 	var rr := maxf(10.0, 10.5 * _s)
 	var c := Vector2(rect.get_center().x, rect.position.y - 5.0 * _s)
-	draw_circle(c, rr + 1.8 * _s, Color(0.05, 0.08, 0.02, 0.95), true, -1.0, true)
+	draw_circle(c, rr + 1.8 * _s, Color(0.09, 0.06, 0.02, 0.95), true, -1.0, true)
 	draw_circle(c, rr, UIStyle.READY, true, -1.0, true)
-	draw_arc(c, rr, 0.0, TAU, 24, Color.WHITE, maxf(1.2, 1.3 * _s), true)
+	draw_arc(c, rr, 0.0, TAU, 24, Color(1.0, 0.97, 0.86), maxf(1.2, 1.3 * _s), true)
 	var w := rr * 0.52
-	var dark := Color(0.08, 0.14, 0.02)
+	var dark := Color(0.17, 0.10, 0.02)
 	for y in [c.y + rr * 0.42, c.y - rr * 0.12]:
 		draw_polyline(PackedVector2Array([Vector2(c.x - w, y), Vector2(c.x, y - w * 0.9), Vector2(c.x + w, y)]), dark, maxf(2.2, 2.4 * _s), true)
 

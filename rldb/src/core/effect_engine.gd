@@ -584,7 +584,7 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 		var opts := [{"v": -1, "label": "Pass" if not eligible.is_empty() else "Pass (no Trap can respond)"}]
 		for uid in eligible:
 			opts.append(card_option(uid, "Activate " + name_of(uid)))
-		return ask(f, responder, "trap_response", "Respond to: %s" % ev.get("text", ev["name"]), opts)
+		return ask(f, responder, "trap_response", "Respond to: %s" % ev.get("text", ev["name"]), opts, 1, 1, false, {"event": ev})
 	var choice: int = ans[0]
 	if choice == -1:
 		f["vars"]["passed"] = true

@@ -127,9 +127,6 @@ func _parse_cmdline() -> void:
 
 
 func _clear_screens() -> void:
-	# Leaving the menu for a game: the menu dissolves into the new screen.
-	if menu != null and is_instance_valid(menu) and not _auto_started:
-		_crossfade_from_current()
 	for n in [menu, screen, local_host, privacy_overlay, net]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()
@@ -140,28 +137,36 @@ func _clear_screens() -> void:
 	net = null
 
 
-## Freezes what is on screen now into an overlay and fades it out (with a slight zoom) over
-## whatever is built next. Click-through; reduced motion makes it a quick plain fade.
-func _crossfade_from_current() -> void:
-	var img := get_viewport().get_texture().get_image()
-	if img == null or img.is_empty():
+var _fading := false
+
+
+## Fades to black, runs `fn` (which builds the next screen) and fades back in (user feedback:
+## menu -> game, game -> menu and the collection screens). Input is blocked while black.
+func _go(fn: Callable) -> void:
+	if _fading:
 		return
-	var shot := TextureRect.new()
-	shot.texture = ImageTexture.create_from_image(img)
-	shot.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	shot.stretch_mode = TextureRect.STRETCH_SCALE
-	shot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	shot.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shot.z_index = 200
-	add_child(shot)
-	shot.pivot_offset = get_viewport_rect().size / 2.0
+	if _auto_started and menu == null and screen == null:
+		fn.call()
+		return
+	_fading = true
+	var black := ColorRect.new()
+	black.color = Color(0, 0, 0, 0)
+	black.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	black.mouse_filter = Control.MOUSE_FILTER_STOP
+	black.z_index = 300
+	add_child(black)
+	var out_s := 0.2 if UIStyle.reduce_motion else 0.35
+	var in_s := 0.25 if UIStyle.reduce_motion else 0.55
 	var tw := create_tween()
-	tw.set_parallel(true)
-	var secs := 0.25 if UIStyle.reduce_motion else 0.7
-	tw.tween_property(shot, "modulate:a", 0.0, secs).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	if not UIStyle.reduce_motion:
-		tw.tween_property(shot, "scale", Vector2(1.08, 1.08), secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.chain().tween_callback(shot.queue_free)
+	tw.tween_property(black, "color:a", 1.0, out_s).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func():
+		fn.call()
+		move_child(black, -1))
+	tw.tween_interval(0.12)
+	tw.tween_property(black, "color:a", 0.0, in_s).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(func():
+		black.queue_free()
+		_fading = false)
 
 
 # ---------------------------------------------------------------- menu
@@ -344,10 +349,9 @@ func _show_menu() -> void:
 	status_label = UIStyle.label(SteamBridge.describe(), 13, M_DIM, true)
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	col.add_child(status_label)
-	# Centre content area (right of the band).
+	# Content panels sit in the centre of the whole screen.
 	_menu_center = CenterContainer.new()
 	_menu_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_menu_center.offset_left = BAND_W
 	_menu_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu.add_child(_menu_center)
 	_build_menu_level(false)
@@ -403,9 +407,9 @@ func _menu_pick(target: String) -> void:
 		"quit":
 			get_tree().quit()
 		"builder":
-			_show_deck_builder()
+			_go(_show_deck_builder)
 		"cards":
-			_show_card_list()
+			_go(_show_card_list)
 		_:
 			_menu_leaf = target
 			for mi in _menu_list.get_children():
@@ -513,7 +517,7 @@ func _leaf_panel(target: String) -> Control:
 		"bot":
 			pv = _center_panel("Play vs Bot", "A series against the computer. The bot picks a random starter deck.")
 			_series_options(pv[1])
-			_start_button(pv[1], "Start series", func(): _start_bot(opts.duplicate(true)))
+			_start_button(pv[1], "Start series", func(): _go(func(): _start_bot(opts.duplicate(true))))
 		"hotseat":
 			pv = _center_panel("Hot-seat", "Two players take turns on this screen.")
 			_series_options(pv[1])
@@ -522,7 +526,7 @@ func _leaf_panel(target: String) -> Control:
 			priv.button_pressed = _privacy
 			priv.toggled.connect(func(on): _privacy = on)
 			pv[1].add_child(priv)
-			_start_button(pv[1], "Start series", func(): _start_local(opts.duplicate(true)))
+			_start_button(pv[1], "Start series", func(): _go(func(): _start_local(opts.duplicate(true))))
 		"host_lan":
 			pv = _center_panel("Host LAN", "Your friend joins with your computer's local IP address and this port.")
 			_series_options(pv[1])
@@ -530,7 +534,7 @@ func _leaf_panel(target: String) -> Control:
 			port.text = _lan_addr.split(":")[-1]
 			port.custom_minimum_size = Vector2(160, 0)
 			_labelled(pv[1], "Port", port)
-			_start_button(pv[1], "Host series", func(): _start_lan_host(int(port.text), opts.duplicate(true)))
+			_start_button(pv[1], "Host series", func(): _go(func(): _start_lan_host(int(port.text), opts.duplicate(true))))
 		"join_lan":
 			pv = _center_panel("Join LAN", "Enter the host's address and port (for example 192.168.1.20:24680).")
 			var addr := LineEdit.new()
@@ -540,7 +544,7 @@ func _leaf_panel(target: String) -> Control:
 			_start_button(pv[1], "Join", func():
 				_lan_addr = addr.text
 				var hp := addr.text.split(":")
-				_start_lan_join(hp[0], int(hp[1]) if hp.size() > 1 else 24680))
+				_go(func(): _start_lan_join(hp[0], int(hp[1]) if hp.size() > 1 else 24680)))
 		"host_online":
 			pv = _center_panel("Host game", "Creates a Steam lobby and opens the invite dialog.")
 			_series_options(pv[1])
@@ -551,13 +555,13 @@ func _leaf_panel(target: String) -> Control:
 			pub.toggled.connect(func(on): opts["public_lobby"] = on)
 			pv[1].add_child(pub)
 			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, M_DIM, true))
-			_start_button(pv[1], "Host and invite", func(): _start_steam_host())
+			_start_button(pv[1], "Host and invite", func(): _go(func(): _start_steam_host()))
 		"join_online":
 			pv = _center_panel("Join game", "Accept a friend's invite in the Steam overlay, or browse public lobbies.")
 			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, M_DIM, true))
-			_start_button(pv[1], "Browse public lobbies", _start_steam_browse)
+			_start_button(pv[1], "Browse public lobbies", func(): _go(_start_steam_browse))
 		"resume":
-			pv = _center_panel("Resume", "Series saved between games. Resume one as hot-seat or as the host.")
+			pv = _center_panel("Resume", "Pick up a series where you left it.")
 			_add_saved_series(pv[1], SeriesStore.list())
 		"settings":
 			pv = _center_panel("Settings")
@@ -586,6 +590,7 @@ func _new_screen() -> GameScreen:
 	screen = GameScreen.new()
 	add_child(screen)
 	screen.back_to_menu.connect(_on_menu_requested)
+	screen.leave_to_menu.connect(func(): _go(_show_menu))
 	return screen
 
 
@@ -593,6 +598,7 @@ func _new_screen() -> GameScreen:
 
 func _start_local(cfg: Dictionary) -> void:
 	_clear_screens()
+	cfg["mode"] = "local"
 	local_host = LocalHost.new()
 	add_child(local_host)
 	local_host.start(cfg)
@@ -608,6 +614,7 @@ func _start_local(cfg: Dictionary) -> void:
 func _start_bot(cfg: Dictionary) -> void:
 	_clear_screens()
 	cfg["names"] = ["Player", "Bot"]
+	cfg["mode"] = "bot"
 	local_host = LocalHost.new()
 	add_child(local_host)
 	local_host.start(cfg)
@@ -667,6 +674,7 @@ func _show_privacy(seat: int) -> void:
 
 func _start_lan_host(port: int, cfg: Dictionary) -> void:
 	_clear_screens()
+	cfg["mode"] = "lan"
 	net = NetSession.new()
 	add_child(net)
 	var err := net.host_enet(port, cfg)
@@ -694,7 +702,9 @@ func _start_steam_host(cfg: Dictionary = {}) -> void:
 	_clear_screens()
 	net = NetSession.new()
 	add_child(net)
-	net.host_steam(cfg if not cfg.is_empty() else opts.duplicate(true))
+	var hc: Dictionary = cfg if not cfg.is_empty() else opts.duplicate(true)
+	hc["mode"] = "steam"
+	net.host_steam(hc)
 	_new_screen()
 	screen.attach(net.local_seat)
 
@@ -769,7 +779,7 @@ func _show_card_list() -> void:
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
 	var back := UIStyle.button("Back", 14)
-	back.pressed.connect(_show_menu)
+	back.pressed.connect(func(): _go(_show_menu))
 	head.add_child(back)
 	var sc := ScrollContainer.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -789,44 +799,67 @@ func _show_card_list() -> void:
 
 func _on_menu_requested() -> void:
 	if net != null and is_instance_valid(net) and net.is_active():
-		_confirm_leave("Leave this online series? Your opponent will be left waiting.", _show_menu)
+		_confirm_leave("Leave this online series? Your opponent will be left waiting.", func(): _go(_show_menu))
 		return
-	_show_menu()
+	_go(_show_menu)
 
 
 
 # ---------------------------------------------------------------- saved series (P-02)
 
-## Lists unfinished series saved at between-game checkpoints, each resumable as
-## hot-seat, LAN host or Steam host (the opponent rejoins as before).
+const MODE_NAMES := {"bot": "Against the bot", "local": "Hot-seat", "lan": "LAN (you host)", "steam": "Steam (you host)"}
+
+
+## Unfinished series saved between games, newest first: one tile each with the players, the
+## score, how it was played and when, a Resume button (reopens it the same way) and Delete.
 func _add_saved_series(box: VBoxContainer, saves: Array) -> void:
-	var sec := box
 	if saves.is_empty():
-		sec.add_child(UIStyle.label("No saved series.", 15, M_DIM))
-	for sv in saves.slice(0, 6):
+		box.add_child(UIStyle.label("No saved series.", 15, M_DIM))
+	for sv in saves.slice(0, 5):
+		var tile := PanelContainer.new()
+		var sb := UIStyle.flat(Color(1, 1, 1, 0.035), Color(UIStyle.BRONZE, 0.7), 1, 10)
+		for side in [SIDE_LEFT, SIDE_RIGHT]:
+			sb.set_content_margin(side, 16)
+		for side in [SIDE_TOP, SIDE_BOTTOM]:
+			sb.set_content_margin(side, 12)
+		tile.add_theme_stylebox_override("panel", sb)
+		box.add_child(tile)
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		sec.add_child(row)
-		var info := UIStyle.label("%s vs %s · %d–%d · best of %d · %s" % [sv["names"][0], sv["names"][1], sv["scores"][0], sv["scores"][1],
-			sv["best_of"], String(sv["saved_at"]).replace("T", " ")], 14, M_DIM)
+		row.add_theme_constant_override("separation", 16)
+		tile.add_child(row)
+		var info := VBoxContainer.new()
+		info.add_theme_constant_override("separation", 2)
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(info)
+		info.add_child(_title_label("%s  vs  %s" % [sv["names"][0], sv["names"][1]], 20, M_PARCH))
+		var when := String(sv["saved_at"]).replace("T", "  ")
+		info.add_child(UIStyle.label("%s  ·  best of %d  ·  next: game %d" % [MODE_NAMES.get(sv.get("mode", "local"), "Hot-seat"), int(sv["best_of"]), int(sv.get("game_no", 0)) + 1], 14, M_DIM))
+		info.add_child(UIStyle.label("Saved %s" % when.substr(0, 17), 13, M_DIM))
+		var score := _title_label("%d – %d" % [int(sv["scores"][0]), int(sv["scores"][1])], 30, M_GOLD)
+		score.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(score)
+		var btns := VBoxContainer.new()
+		btns.add_theme_constant_override("separation", 6)
+		btns.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(btns)
 		var id: String = sv["id"]
-		var hs := UIStyle.button("Hot-seat", 14)
-		hs.pressed.connect(func(): _resume(id, "local"))
-		row.add_child(hs)
-		var lan := UIStyle.button("Host LAN", 14)
-		lan.pressed.connect(func(): _resume(id, "lan"))
-		row.add_child(lan)
-		var st := UIStyle.button("Host Steam", 14)
-		st.disabled = not SteamBridge.available()
-		st.pressed.connect(func(): _resume(id, "steam"))
-		row.add_child(st)
-		var del := UIStyle.button("Delete", 14)
-		del.pressed.connect(func(): _confirm_leave("Delete this saved series?", func(): SeriesStore.delete(id); _show_menu()))
-		row.add_child(del)
+		var mode: String = String(sv.get("mode", "local"))
+		var res := UIStyle.primary_button("Resume", 16)
+		res.custom_minimum_size = Vector2(130, 40)
+		res.disabled = mode == "steam" and not SteamBridge.available()
+		if res.disabled:
+			res.tooltip_text = SteamBridge.describe()
+		res.pressed.connect(func(): _resume(id, mode))
+		btns.add_child(res)
+		var del := UIStyle.button("Delete", 13)
+		del.custom_minimum_size = Vector2(130, 30)
+		del.pressed.connect(func(): _confirm_leave("Delete this saved series?", func():
+			SeriesStore.delete(id)
+			_show_menu()))
+		btns.add_child(del)
 
 
+## Reopens a saved series the way it was being played (bot, hot-seat, LAN host, Steam host).
 func _resume(id: String, how: String) -> void:
 	var s := SeriesStore.load_series(id)
 	if s == null:
@@ -834,9 +867,10 @@ func _resume(id: String, how: String) -> void:
 		return
 	var cfg := {"resume": s}
 	match how:
-		"local": _start_local(cfg)
-		"lan": _start_lan_host(24680, cfg)
-		"steam": _start_steam_host(cfg)
+		"bot": _go(func(): _start_bot(cfg))
+		"lan": _go(func(): _start_lan_host(24680, cfg))
+		"steam": _go(func(): _start_steam_host(cfg))
+		_: _go(func(): _start_local(cfg))
 
 
 func _show_deck_builder() -> void:
@@ -844,7 +878,7 @@ func _show_deck_builder() -> void:
 	var db: Control = load("res://src/ui/deck_builder.gd").new()
 	menu = db
 	add_child(db)
-	db.connect("closed", _show_menu)
+	db.connect("closed", func(): _go(_show_menu))
 
 
 # ---------------------------------------------------------------- dev: deck builder screenshots

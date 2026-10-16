@@ -88,6 +88,14 @@ func wins_needed() -> int:
 func submit(p: int, cmd: Dictionary) -> String:
 	var t: String = cmd.get("t", "")
 	var err := ""
+	if t == "forfeit_series":
+		# Leaving mid-series (in-game menu: Return to menu / Quit): the whole series is lost and
+		# the save is marked over so it is no longer offered under Resume.
+		if stage == STAGE_OVER:
+			return "The series is over."
+		forfeit(p, "%s left the series" % names[p])
+		checkpoint.emit()
+		return ""
 	match stage:
 		STAGE_GAME:
 			if t == "concede_series":

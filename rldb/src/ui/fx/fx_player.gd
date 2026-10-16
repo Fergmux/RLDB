@@ -596,8 +596,11 @@ func _stance(p: int, slot: int, to: String) -> void:
 	tw.chain().tween_callback(_reset_widget.bind(w, holder))
 
 
-## A unit / Power effect starts (triggered effect or activated ability): a gold rune ring bursts out of
-## the card, the card glows and pops. Short (~0.5 s) and unlike a status gain (no label, no colour code).
+## A unit / Power effect is used (triggered effect or activated ability): a gold rune ring bursts out
+## of the card while it plays the summon-style flourish (pop, then a landing squash with a gold glow
+## and a dust puff at its foot) and gives a short horizontal shake (~0.25 s, a few px). Unlike a
+## status gain (no label, no colour code). Reduced motion: the glow only. Everything is undone by
+## _reset_widget, also from finish_all().
 func _trigger(at: Dictionary) -> void:
 	var it: Dictionary = screen.fx_slot_item(int(at["p"]), String(at["zone"]), int(at["slot"]))
 	if it.is_empty():
@@ -613,6 +616,7 @@ func _trigger(at: Dictionary) -> void:
 		tw.tween_callback(_reset_widget.bind(w, holder))
 		return
 	var grect := w.get_global_rect()
+	var foot := Vector2(grect.get_center().x, grect.end.y - 6.0)
 	var ring := RuneRing.new()
 	ring.col = col
 	ring.radius = grect.size.length() * 0.5
@@ -621,17 +625,28 @@ func _trigger(at: Dictionary) -> void:
 	var rt := _tw()
 	rt.tween_property(ring, "t", 1.0, UIStyle.dur(0.5))
 	rt.tween_callback(_free_node.bind(ring))
-	_burst("spark", grect.get_center(), col, 10, grect.size.length() * 0.45, 0.35)
 	holder.z_index = 20
 	w.pivot_offset = w.size / 2.0
-	tw.set_parallel(true)
+	# Opening glint on its own track so it does not hold up the sequence below.
+	var fl := _tw()
+	fl.tween_property(w, "fx_flash", 0.45, UIStyle.dur(0.06))
+	fl.tween_property(w, "fx_flash", 0.0, UIStyle.dur(0.18))
+	# Pop up, settle, then land like a summon: dust, glow, squash, shake.
 	tw.tween_property(w, "scale", Vector2(1.12, 1.12), UIStyle.dur(0.09)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.26)).set_delay(UIStyle.dur(0.09)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(w, "fx_flash", 0.55, UIStyle.dur(0.06))
-	tw.tween_property(w, "fx_flash", 0.0, UIStyle.dur(0.2)).set_delay(UIStyle.dur(0.06))
-	tw.tween_property(w, "fx_glow", Color(col, 1.0), UIStyle.dur(0.08))
-	tw.tween_property(w, "fx_glow", Color(col, 0.0), UIStyle.dur(0.35)).set_delay(UIStyle.dur(0.12))
+	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.12)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+	tw.tween_callback(_burst.bind("dust", foot, Color("c8b896"), 6, 46.0, 0.35))
+	tw.set_parallel(true)
+	tw.chain().tween_property(w, "scale", Vector2(0.94, 0.94), UIStyle.dur(0.05))
+	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.07)).set_delay(UIStyle.dur(0.05))
+	tw.tween_property(w, "fx_glow", Color(col, 0.0), UIStyle.dur(0.32)).from(Color(col, 0.8)).set_trans(Tween.TRANS_SINE)
+	tw.tween_method(_shake_x.bind(w, 5.0), 0.0, 1.0, UIStyle.dur(0.25))
 	tw.chain().tween_callback(_reset_widget.bind(w, holder))
+
+
+## Damped horizontal shake of a slot widget about its rest position (x = 0); `k` runs 0 -> 1.
+func _shake_x(k: float, w: CardWidget, amp: float) -> void:
+	if is_instance_valid(w):
+		w.position.x = amp * sin(k * TAU * 3.0) * (1.0 - k)
 
 
 # ---------------------------------------------------------------- spell / trap spotlight

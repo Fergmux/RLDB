@@ -256,3 +256,13 @@ func test_basic_change_can_change_race_and_type() -> void:
 	assert_int(s.decks[0].count(111)).is_equal(n)            # Basic Dragon (Fire)
 	assert_int(s.decks[0].count(1)).is_equal(0)
 	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 111, "to_type": "Fire", "to_race": "Dragon"})).contains("different")
+
+
+## In-game menu "Return to menu / Quit": the leaving player forfeits the whole series and the
+## save is no longer resumable.
+func test_forfeit_series_ends_the_series_for_the_leaver() -> void:
+	var s := _series()
+	assert_str(s.submit(0, {"t": "forfeit_series"})).is_empty()
+	assert_str(s.stage).is_equal(Series.STAGE_OVER)
+	assert_int(s.forfeit_by).is_equal(0)
+	assert_str(s.submit(1, {"t": "forfeit_series"})).is_equal("The series is over.")

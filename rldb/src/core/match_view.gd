@@ -72,6 +72,31 @@ static func card_view(m: MatchEngine, uid: int, viewer: int) -> Dictionary:
 	return v
 
 
+## A card definition shown outside a match instance (e.g. opened from the game log), with the
+## same fields card_view() gives a visible card so it renders identically.
+static func def_view(id: int) -> Dictionary:
+	var df := CardDB.get_def(id)
+	var v := {
+		"uid": -2000 - id, "id": id, "name": df["name"], "category": df["category"],
+		"cost_kind": df["cost_kind"], "cost_text": CardDB.cost_label(df), "cost": df["cost"],
+		"printed_cost": df["cost"], "zone": "pile", "slot": -1, "owner": -1, "ctl": -1,
+		"face_up": true, "statuses": {}, "runes": 0,
+		"text": _rules_text(df), "text_parts": rules_parts(df), "support": CardScripts.support_status(id), "art": df["art"],
+		"keywords": df["keywords"],
+	}
+	var abs: Array = CardScripts.get_entry(id).get("abilities", [])
+	if not abs.is_empty():
+		v["abilities"] = ability_views(abs)
+	if CardDB.is_unit_category(df["category"]):
+		v["race"] = df["race"]
+		v["type"] = df["type"]
+		v["printed_atk"] = df["atk"]
+		v["printed_def"] = df["def"]
+		v["atk"] = df["atk"]
+		v["def"] = df["def"]
+	return v
+
+
 static func _rules_text(df: Dictionary) -> String:
 	var lines := []
 	for part in rules_parts(df):
@@ -158,9 +183,23 @@ static func _pending_view(m: MatchEngine, viewer: int) -> Dictionary:
 				var cv := card_view(m, u, viewer) if can_see(m, u, viewer) else _forced_view(m, u, viewer)
 				ov["card"] = cv
 		opts.append(ov)
-	return {"id": pd["id"], "mine": true, "player": viewer, "kind": pd["kind"], "prompt": pd["prompt"],
+	var out := {"id": pd["id"], "mine": true, "player": viewer, "kind": pd["kind"], "prompt": pd["prompt"],
 		"options": opts, "min": pd["min"], "max": pd["max"], "cancellable": pd["cancellable"],
 		"min_total": pd.get("min_total", 0)}
+	if pd["kind"] == "trap_response" and pd.has("event"):
+		out["cause"] = _cause_refs(m, pd["event"])
+	return out
+
+
+## Public board positions of what a Trap is responding to: the attacker and its target (or the
+## defending player for a direct attack), or the card whose summon / activation opened the window.
+static func _cause_refs(m: MatchEngine, ev: Dictionary) -> Dictionary:
+	if ev.get("name", "") == "attack":
+		var t: int = int(ev.get("target", -1))
+		return {"attacker": m.fx_pos(int(ev.get("attacker", -1))),
+			"target": m.fx_pos(t) if t != -1 else {}, "direct_p": m.opp(int(ev.get("player", 0)))}
+	var c: int = int(ev.get("card", -1))
+	return {"card": m.fx_pos(c)} if c != -1 and m.cards.has(c) else {}
 
 
 ## A selection effect may reveal a normally hidden card to the chooser only.

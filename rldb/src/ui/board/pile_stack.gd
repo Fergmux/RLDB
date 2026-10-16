@@ -3,7 +3,7 @@ extends Control
 ## A card pile drawn as a stack of card backs whose height grows with the number of cards. The
 ## bottom card fills the whole rect (the same size as a Power zone); extra layers rise a few
 ## pixels above it. The pile's name sits on a plate at the foot of the top card and the count is
-## overlaid in the middle (user feedback 2026-10-16). Used for Draw, Extra, Spent and Exhaust
+## overlaid on its vertical centre (user feedback 2026-10-16). Used for Draw, Extra, Spent and Exhaust
 ## beside the unit zones. Clicking emits `pressed` when `clickable`.
 
 signal pressed(zone: String)
@@ -11,7 +11,11 @@ signal pressed(zone: String)
 const MAX_LAYERS := 6
 const LAYER_STEP := 1.2
 ## Count font size; the count badge is sized once for "99" at this size.
-const COUNT_FS := 26
+const COUNT_FS := 22
+## Name-plate height and its largest / smallest label font size.
+const PLATE_H := 17.0
+const TITLE_FS := 10
+const TITLE_FS_MIN := 8
 
 var zone: String = "draw"
 var title: String = "Deck"
@@ -104,20 +108,19 @@ func _draw() -> void:
 		h.set_corner_radius_all(7)
 		draw_style_box(h, top.grow(2))
 	if ready_mark:
-		var rb := StyleBoxFlat.new()
-		rb.draw_center = false
-		rb.border_color = UIStyle.READY
-		rb.set_border_width_all(3)
-		rb.set_corner_radius_all(9)
-		draw_style_box(rb, top.grow(4))
-	# Count overlaid in the middle of the top card: one fixed badge sized for "99" and one fixed font
-	# size, so the badge never grows when the count gains a digit (user feedback). 100+ steps down.
+		# Same steady soft yellow glow as a ready CardWidget: thin ring plus fading bands outside.
+		_ring(Color(UIStyle.READY, 0.30), 3.5, top.grow(6.0), 12.0)
+		_ring(Color(UIStyle.READY, 0.15), 4.0, top.grow(9.5), 15.5)
+		_ring(Color(UIStyle.READY, 0.06), 4.5, top.grow(13.5), 19.5)
+		_ring(Color(UIStyle.READY, 0.9), 2.0, top.grow(3.0), 9.0)
+	# Count overlaid on the vertical centre of the top card: one fixed badge sized for "99" and one fixed
+	# font size, so the badge never grows when the count gains a digit (user feedback). 100+ steps down.
 	var font := UIStyle.font_display(700)
 	var num := str(count)
-	var c := top.get_center() + Vector2(0, -6)
-	var badge_r := font.get_string_size("99", HORIZONTAL_ALIGNMENT_LEFT, -1, COUNT_FS).x / 2.0 + 9.0
+	var c := top.get_center()
+	var badge_r := font.get_string_size("99", HORIZONTAL_ALIGNMENT_LEFT, -1, COUNT_FS).x / 2.0 + 7.0
 	var fs := COUNT_FS
-	while fs > 12 and font.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > badge_r * 2.0 - 12.0:
+	while fs > 10 and font.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > badge_r * 2.0 - 10.0:
 		fs -= 1
 	var tsz := font.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
 	draw_set_transform(c, 0.0, Vector2.ONE * (1.0 + 0.16 * _pop))
@@ -125,12 +128,12 @@ func _draw() -> void:
 	draw_circle(c, badge_r, Color(0.05, 0.04, 0.08, 0.82 if n > 0 else 0.5), true, -1.0, true)
 	draw_arc(c, badge_r - 0.75, 0.0, TAU, 40, Color(UIStyle.GOLD, 0.45 if n > 0 else 0.25), 1.5, true)
 	var pos := Vector2(c.x - tsz.x / 2.0, c.y + (font.get_ascent(fs) - font.get_descent(fs)) / 2.0)
-	draw_string_outline(font, pos, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.85))
+	draw_string_outline(font, pos, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0, 0, 0, 0.85))
 	draw_string(font, pos, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UIStyle.GOLD_HI if n > 0 else UIStyle.MUTED)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# Name plate at the foot of the top card.
-	var plate_h := 20.0
-	var pr := Rect2(Vector2(top.position.x + 5.0, top.end.y - plate_h - 6.0), Vector2(top.size.x - 10.0, plate_h))
+	var plate_h := PLATE_H
+	var pr := Rect2(Vector2(top.position.x + 6.0, top.end.y - plate_h - 6.0), Vector2(top.size.x - 12.0, plate_h))
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.08, 0.07, 0.06, 0.92)
 	ps.border_color = Color(UIStyle.GOLD, 0.65)
@@ -138,8 +141,19 @@ func _draw() -> void:
 	ps.set_corner_radius_all(4)
 	draw_style_box(ps, pr)
 	var tf := UIStyle.font_display(600)
-	var tfs := 12
-	while tfs > 9 and tf.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x > pr.size.x - 6:
+	var tfs := TITLE_FS
+	while tfs > TITLE_FS_MIN and tf.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x > pr.size.x - 6:
 		tfs -= 1
 	var tw := tf.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x
-	draw_string(tf, Vector2(pr.position.x + (pr.size.x - tw) / 2.0, pr.position.y + plate_h / 2.0 + tfs * 0.36), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, UIStyle.TEXT)
+	var base_y := pr.position.y + plate_h / 2.0 + (tf.get_ascent(tfs) - tf.get_descent(tfs)) / 2.0
+	draw_string(tf, Vector2(pr.position.x + (pr.size.x - tw) / 2.0, base_y), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, UIStyle.TEXT)
+
+
+## Unfilled rounded ring of width `w` around `rect`.
+func _ring(col: Color, w: float, rect: Rect2, radius: float) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.draw_center = false
+	sb.border_color = col
+	sb.set_border_width_all(maxi(1, roundi(w)))
+	sb.set_corner_radius_all(maxi(1, roundi(radius)))
+	draw_style_box(sb, rect)

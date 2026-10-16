@@ -24,6 +24,8 @@ extends VBoxContainer
 const BODY := 15
 const SMALL := 13
 
+## Compact rendering (pile list rows): every text size scaled down, tighter spacing.
+var compact: bool = false
 ## Section ids in the order they were built by the last show_* call (used by tests).
 var sections: Array[String] = []
 ## Container inside the Type chip where the TypeIcons glyph can be added later.
@@ -234,7 +236,7 @@ func _stat_tile(cap: String, cur, printed) -> Control:
 	var num := Label.new()
 	num.text = "?" if cur == null else str(cur)
 	num.add_theme_font_override("font", UIStyle.font_display(700))
-	num.add_theme_font_size_override("font_size", 30)
+	num.add_theme_font_size_override("font_size", 30 if not compact else 22)
 	num.add_theme_color_override("font_color", col)
 	num.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hb.add_child(num)
@@ -395,7 +397,7 @@ func _collect(n: Node, out: PackedStringArray) -> void:
 
 ## Wrapping (by default) label that expands to the available width.
 func _lbl(text: String, size: int, color: Color, bold: bool = false, display: bool = false, wrap: bool = true) -> Label:
-	var l := UIStyle.label(text, size, color, wrap, display)
+	var l := UIStyle.label(text, size if not compact else maxi(10, roundi(size * 0.8)), color, wrap, display)
 	if bold and not display:
 		l.add_theme_font_override("font", UIStyle.font_bold())
 	if wrap:

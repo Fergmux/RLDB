@@ -30,8 +30,12 @@ static func list() -> Array:
 		var d = JSON.parse_string(FileAccess.get_file_as_string("%s/%s" % [DIR, fn]))
 		if d == null or d.get("stage", "") == Series.STAGE_OVER:
 			continue
+		# How the series was played, so Resume can reopen it the same way (older bot saves are
+		# recognised by the "Bot" seat name).
+		var mode: String = String(d["cfg"].get("mode", "bot" if String(d["names"][1]) == "Bot" else "local"))
 		out.append({"id": d["save_id"], "names": d["names"], "scores": d["scores"],
-			"best_of": d["cfg"]["best_of"], "saved_at": d.get("saved_at", ""), "stage": d["stage"]})
+			"best_of": d["cfg"]["best_of"], "saved_at": d.get("saved_at", ""), "stage": d["stage"],
+			"mode": mode, "game_no": int(d.get("game_no", 0))})
 	out.sort_custom(func(a, b): return a["saved_at"] > b["saved_at"])
 	return out
 
