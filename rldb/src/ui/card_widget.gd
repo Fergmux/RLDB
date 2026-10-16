@@ -61,6 +61,9 @@ var lift_offset: Vector2 = Vector2.ZERO: set = _set_lift_offset
 
 var _lifting := false
 var _lift_rest_pos := Vector2.ZERO
+## Position the lift itself last set (anything else moving the card is a new resting place).
+var _lift_applied_pos := Vector2.ZERO
+var _lift_applying := false
 var _self_hover := false
 var _is_ready := false
 var _pv_stat := ""
@@ -71,6 +74,7 @@ var _paint := CardPainter.new(self)
 
 
 func _init() -> void:
+	item_rect_changed.connect(_on_rect_changed)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
@@ -216,6 +220,7 @@ func _apply_lift() -> void:
 		_lifting = true
 		_lift_rest_pos = position
 	var sz := rest if neutral else (rest * lift_k).round()
+	_lift_applying = true
 	size = sz
 	if neutral:
 		if _lifting:
@@ -223,6 +228,18 @@ func _apply_lift() -> void:
 		_lifting = false
 	else:
 		position = (_lift_rest_pos + lift_offset - (sz - rest) / 2.0).round()
+	_lift_applied_pos = position
+	_lift_applying = false
+
+
+## Something else moved the card while it is lifted (the board re-laying it out, or a summon
+## flying it into its zone): that is its new resting place, so the lift follows it instead of
+## later snapping the card back to where it was when the hover began.
+func _on_rect_changed() -> void:
+	if not _lifting or _lift_applying or position.is_equal_approx(_lift_applied_pos):
+		return
+	_lift_rest_pos = position   # movers place the card's resting position
+	_apply_lift()
 
 
 func _set_flash(v: float) -> void:

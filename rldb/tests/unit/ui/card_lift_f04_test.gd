@@ -50,3 +50,18 @@ func test_inspector_has_no_close_hint_but_keeps_close_button() -> void:
 	assert_bool("Esc or click outside to close" in texts).is_false()
 	assert_bool("Close" in texts).is_true()
 	ins.close()
+
+
+## Regression (F04 tutorial run): a card hovered while a summon flies it into its zone kept the
+## mid-flight spot as its resting place and snapped back there on unlift, short of its zone.
+func test_card_moved_while_lifted_rests_where_it_was_moved() -> void:
+	var host: Control = auto_free(Control.new())
+	add_child(host)
+	var w := _widget()
+	host.add_child(w)
+	w.lift_offset = Vector2(0, -10)
+	w.lift_k = 1.1
+	w.position = Vector2(300, 400)   # e.g. the arrive animation or a board re-layout
+	w.lift_k = 1.0
+	w.lift_offset = Vector2.ZERO
+	assert_vector(w.position).is_equal(Vector2(300, 400))

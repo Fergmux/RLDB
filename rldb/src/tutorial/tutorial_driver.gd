@@ -7,6 +7,10 @@ extends SceneTree
 ## and finally Back to menu. Writes PNGs and tutorial_report.json into the directory, then quits.
 
 var main: Control
+## The whole run is abandoned (and the window closed) after this many seconds.
+const WATCHDOG_SECS := 360.0
+## A step that has not advanced after this many attempts fails the lesson instead of looping.
+const MAX_STEP_TRIES := 4
 var out: String = ""
 var checks: Array = []
 var _shot_no: int = 0
@@ -25,6 +29,10 @@ func _initialize() -> void:
 	DisplayServer.window_set_size(size)
 	main = load("res://main.tscn").instantiate()
 	root.add_child(main)
+	# Watchdog: a stuck step or a broken await must never leave the window open.
+	create_timer(WATCHDOG_SECS).timeout.connect(func():
+		_check("driver finished before the %d s watchdog" % int(WATCHDOG_SECS), false)
+		_finish())
 	_run.call_deferred()
 
 
@@ -118,10 +126,15 @@ func _play_lesson(li: int) -> void:
 	var guard := 0
 	var restarted := false
 	var esc_tried := false
+	var tries := {}
 	while not h.is_complete() and guard < 80:
 		guard += 1
 		var st := h.current_step()
 		var si := h.step_index
+		tries[si] = int(tries.get(si, 0)) + 1
+		if tries[si] > MAX_STEP_TRIES:
+			_check("L%d step %d completes within %d tries" % [li + 1, si + 1, MAX_STEP_TRIES], false)
+			return
 		await _settle()
 		await _shot("L%d_s%02d_%s" % [li + 1, si + 1, String(st["kind"])])
 		if String(st["kind"]) == "read":
