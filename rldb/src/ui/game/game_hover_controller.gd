@@ -124,8 +124,9 @@ func lift(it: Dictionary) -> void:
 	var d := UIStyle.dur(0.12 if it["kind"] == "hand" else 0.1)
 	if UIStyle.reduce_motion:
 		d = 0.05
-	tw.tween_property(w, "position", lp[1], d).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(w, "scale", Vector2(lp[0], lp[0]), d).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# Real size change, not `scale`: the face re-renders at the lifted size so text stays crisp (F04-05).
+	tw.tween_property(w, "lift_offset", lp[1], d).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "lift_k", float(lp[0]), d).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if it["kind"] == "hand":
 		tw.tween_property(holder, "rotation", 0.0, d)
 
@@ -168,8 +169,8 @@ func unlift(it: Dictionary) -> void:
 	w.set_meta("hv_tw", tw)
 	tw.set_parallel(true)
 	var d := UIStyle.dur(0.09)
-	tw.tween_property(w, "position", Vector2.ZERO, d)
-	tw.tween_property(w, "scale", Vector2.ONE, d)
+	tw.tween_property(w, "lift_offset", Vector2.ZERO, d)
+	tw.tween_property(w, "lift_k", 1.0, d)
 	if it["kind"] == "hand" and holder.has_meta("rest_rot"):
 		tw.tween_property(holder, "rotation", float(holder.get_meta("rest_rot")), d)
 	tw.chain().tween_callback(func():

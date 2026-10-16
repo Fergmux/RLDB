@@ -39,8 +39,12 @@ func test_c008_tag_team_s_fusion_summons_from_field() -> void:
 	TB.summon(m, 0, 8, 0)
 	TB.choose(m, ["Yes"])
 	TB.choose_uids(m, [wyrm])
+	# F04-22: materials are picked one by one, then the zone, stance and an explicit Confirm.
+	TB.choose_uids(m, [beast])
+	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Back row, column 2"])
 	TB.choose(m, ["Attack"])
+	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 	assert_str(m.cards[beast]["zone"]).is_equal("spent")
 	assert_str(m.cards[dragon]["zone"]).is_equal("spent")
@@ -374,8 +378,12 @@ func test_c067_void_basilisk_exhausts_itself_to_fuse_from_spent() -> void:
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.ability(m, vb)
 	TB.choose_uids(m, [wyrm])
+	# F04-22: materials are picked one by one, then the zone, stance and an explicit Confirm.
+	TB.choose_uids(m, [beast])
+	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 2"])
 	TB.choose(m, ["Attack"])
+	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[vb]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[beast]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[dragon]["zone"]).is_equal("exhaust")
@@ -385,13 +393,18 @@ func test_c067_void_basilisk_exhausts_itself_to_fuse_from_spent() -> void:
 func test_c068_sepukku_destroys_itself_to_fuse() -> void:
 	var m := TB.make()
 	var sp := TB.unit(m, 0, 68, 0)
-	TB.unit(m, 0, 4, 1)
-	TB.unit(m, 0, 2, 2)
+	var beast := TB.unit(m, 0, 4, 1)
+	var dragon := TB.unit(m, 0, 2, 2)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.ability(m, sp)
 	TB.choose_uids(m, [wyrm])
-	TB.choose(m, ["Front row, column 1"])
+	# F04-22: materials are picked one by one, then the zone, stance and an explicit Confirm.
+	TB.choose_uids(m, [beast])
+	TB.choose_uids(m, [dragon])
+	TB.choose(m, ["Front row, column 1"])                # Sepukku's own zone: it leaves first
 	TB.choose(m, ["Attack"])
+	assert_str(m.cards[sp]["zone"]).is_equal("unit")      # not destroyed until Confirm
+	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[sp]["zone"]).is_equal("spent")
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 
@@ -407,16 +420,20 @@ func test_c069_magentric_gives_adjacent_unit_two_pierce() -> void:
 func test_c040_aleister_pays_one_ap_to_fuse() -> void:
 	var m := TB.make()
 	var al := TB.unit(m, 0, 40, 0)
-	TB.unit(m, 0, 4, 1)
-	TB.unit(m, 0, 2, 2)
+	var beast := TB.unit(m, 0, 4, 1)
+	var dragon := TB.unit(m, 0, 2, 2)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	m.players[0]["ap"] = 2
 	m.submit(0, {"t": "ability", "uid": al, "idx": 0})
-	assert_int(m.players[0]["ap"]).is_equal(2)          # the Fusion unit is chosen before the cost
+	assert_int(m.players[0]["ap"]).is_equal(2)          # every choice is made before the cost (F04-22)
 	TB.choose_uids(m, [wyrm])
-	assert_int(m.players[0]["ap"]).is_equal(1)
+	TB.choose_uids(m, [beast])
+	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 2"])
 	TB.choose(m, ["Attack"])
+	assert_int(m.players[0]["ap"]).is_equal(2)
+	TB.choose(m, ["Confirm"])
+	assert_int(m.players[0]["ap"]).is_equal(1)
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 
 

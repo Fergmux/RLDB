@@ -188,14 +188,21 @@ func _build() -> void:
 	row.add_child(col)
 	var head := HBoxContainer.new()
 	col.add_child(head)
-	var hint := UIStyle.label("Esc or click outside to close", 13, UIStyle.TEXT_DIM)
-	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(hint)
+	# F04-16: no "Esc or click outside" hint; Esc and click-outside still close. The Close button sits
+	# at the right with a gold hairline under the header so it reads as a deliberate title bar.
+	var lead := Control.new()
+	lead.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lead.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(lead)
 	var x := UIStyle.button("Close", 15)
 	x.custom_minimum_size = Vector2(100, 36)
 	x.pressed.connect(close)
 	head.add_child(x)
+	var rule := ColorRect.new()
+	rule.color = Color(UIStyle.GOLD, 0.35)
+	rule.custom_minimum_size = Vector2(0, 1)
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(rule)
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -226,7 +233,7 @@ func _layout_card() -> void:
 	_card_box.size = Vector2(card_w, card_h)
 	GameUi.resize_card(_card_widget, Vector2(card_w, card_h))
 	_card_widget.position = Vector2.ZERO
-	_scroll.custom_minimum_size.y = card_h - 46.0
+	_scroll.custom_minimum_size.y = card_h - 48.0
 	_panel.reset_size()
 
 

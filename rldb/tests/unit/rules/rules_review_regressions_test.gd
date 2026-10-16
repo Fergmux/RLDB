@@ -150,18 +150,23 @@ func test_no_legal_choice_message_is_private() -> void:
 ## (the effect's source) instead of naming the Fusion unit being summoned; the zone prompt too.
 func test_fusion_zone_and_stance_prompts_name_the_fusion_unit() -> void:
 	var m := TB.make()
-	TB.unit(m, 0, 4, 3)                                  # Basic Beast (Water)
-	TB.unit(m, 0, 2, 1)                                  # Basic Dragon (Water)
+	var beast := TB.unit(m, 0, 4, 3)                     # Basic Beast (Water)
+	var dragon := TB.unit(m, 0, 2, 1)                    # Basic Dragon (Water)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.summon(m, 0, 8, 0)                                # Tag Team - S: On Summon may Fusion Summon
 	TB.choose(m, ["Yes"])
 	TB.choose_uids(m, [wyrm])
+	assert_str(String(m.pending["prompt"])).contains(m.name_of(wyrm))   # material prompts too
+	TB.choose_uids(m, [beast])
+	TB.choose_uids(m, [dragon])
 	assert_str(TB.pend_kind(m)).is_equal("slot")
 	assert_str(String(m.pending["prompt"])).contains(m.name_of(wyrm))
 	TB.choose(m, ["Front row, column 2"])                # the Dragon material's own zone
 	assert_str(TB.pend_kind(m)).is_equal("stance")
 	assert_str(String(m.pending["prompt"])).is_equal("Choose a stance for %s." % m.name_of(wyrm))
 	TB.choose(m, ["Defense"])
+	assert_str(String(m.pending["prompt"])).contains(m.name_of(wyrm))   # the F04-22 Confirm
+	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 	assert_str(m.cards[wyrm]["stance"]).is_equal("def")
 
@@ -322,14 +327,19 @@ func test_sepukku_prevented_self_destroy_does_not_fusion() -> void:
 	TB.unit(m, 0, 3, 2)
 	var sol := TB.card(m, 0, 181, "extra")                     # Warrior + Fire
 	assert_str(TB.ability(m, sep)).is_empty()
-	if TB.pend_kind(m) == "select" and m.pending["prompt"].contains("Fusion unit"):
-		TB.choose_uids(m, [sol])
+	TB.choose_uids(m, [sol])
+	# F04-22: every choice comes first; Sepukku is never offered as its own material.
 	var offered_self := false
-	if not m.pending.is_empty():
+	var guard := 0
+	while not m.pending.is_empty() and TB.pend_kind(m) != "confirm" and guard < 6:
+		guard += 1
 		for o in m.pending["options"]:
 			if o.get("uid", -1) == sep:
 				offered_self = true
+		m.submit(0, {"t": "choose", "id": m.pending["id"], "indices": [0]})
 	assert_bool(offered_self).is_false()
+	assert_str(TB.pend_kind(m)).is_equal("confirm")
+	TB.choose(m, ["Confirm"])                                  # the destroy is prevented: no Fusion
 	assert_bool(m.pending.is_empty()).is_true()
 	assert_str(m.cards[sol]["zone"]).is_equal("extra")
 	assert_str(m.cards[sep]["zone"]).is_equal("unit")

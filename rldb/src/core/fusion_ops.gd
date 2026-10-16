@@ -84,53 +84,113 @@ func fusion_candidates(p: int, sources: Array, exclude: int = -1) -> Array:
 	return out
 
 
-## Chooses the Fusion unit before an ability's cost is paid (cancellable). `_op_fusion` then
-## uses this pick if it is still summonable.
+## F04-22: every Fusion method makes all of its choices first, while its source is still where
+## it was: the Fusion unit, each material (picked on the board for Field materials), the zone and
+## the stance, then an explicit Confirm. Until Confirm everything is cancellable and nothing has
+## changed (only frame vars are written). Costs, self-destruction / exhaustion, the response
+## window and the summon follow; `_op_fusion` rechecks the plan before anything is tributed.
+## Op fields: sources, exclude_self (the paying unit leaves, so it is never a material and frees
+## its own zone), cancellable.
 func _op_fusion_pick(f: Dictionary, op: Dictionary) -> int:
+	var cancellable: bool = op.get("cancellable", true)
 	var ans: Variant = take_answer(f)
 	if ans != null:
-		f["vars"]["fusion_pre"] = ans[0]
+		_fusion_plan_ops(f, int(ans[0]), op["sources"], op.get("exclude_self", false), cancellable)
 		return R.CONT
+	f["vars"].erase("fusion_ready")
 	if op.get("exclude_self", false):
 		f["vars"]["fusion_exclude"] = f["src"]     # the paying unit is never its own material
 	var cands := fusion_candidates(f["ctl"], op["sources"], f["vars"].get("fusion_exclude", -1))
 	if cands.is_empty():
+		add_log("No Fusion Summon is possible.")
 		return R.END
 	var opts := []
 	for u in cands:
 		opts.append(card_option(u))
-	return ask(f, f["ctl"], "select", "Choose a Fusion unit to summon.", opts, 1, 1, true, {"reveal_pile": true})
+	return ask(f, f["ctl"], "select", "Choose a Fusion unit to summon.", opts, 1, 1, cancellable, {"reveal_pile": true})
 
 
-func _op_fusion(f: Dictionary, op: Dictionary) -> int:
-	var p: int = f["ctl"]
-	var ans: Variant = take_answer(f)
-	if ans == null and f["vars"].has("fusion_pre"):
-		var pre: int = f["vars"]["fusion_pre"]
-		f["vars"].erase("fusion_pre")
-		if pre in fusion_candidates(p, op["sources"], f["vars"].get("fusion_exclude", -1)):
-			ans = [pre]
-	if ans == null:
-		var cands := fusion_candidates(p, op["sources"], f["vars"].get("fusion_exclude", -1))
-		if cands.is_empty():
-			add_log("No Fusion Summon is possible.")
-			return R.CONT
-		var opts := []
-		for u in cands:
-			opts.append(card_option(u))
-		return ask(f, p, "select", "Choose a Fusion unit to summon.", opts, 1, 1, false, {"reveal_pile": true})
-	var fu: int = ans[0]
+## Splices the material, zone, stance and Confirm choices for Fusion unit `fu`.
+func _fusion_plan_ops(f: Dictionary, fu: int, sources: Array, leaves: bool, cancellable: bool) -> void:
 	f["vars"]["fusion"] = fu
 	f["vars"]["fmats"] = []
-	f["vars"]["fsources"] = op["sources"]
+	f["vars"]["fsources"] = sources
 	var ops := []
 	for i in script_of(fu)["fusion"].size():
-		ops.append({"op": "fusion_mat", "i": i})
-	# Zone is checked (counting zones the Field materials will free) before anything is consumed (P-16).
-	ops.append({"op": "pick_slot", "zone": "unit", "as": "fslot", "freeing": "$fmats", "for": fu})
-	ops.append({"op": "pick_stance", "as": "stance", "for": fu})
-	ops.append({"op": "fusion_tribute"})
-	ops.append({"op": "place", "target": fu, "slot": "$fslot", "stance": "$stance"})
+		ops.append({"op": "fusion_mat", "i": i, "cancellable": cancellable})
+	# Zones the Field materials (and a paying unit that leaves) will free count (P-16).
+	ops.append({"op": "pick_slot", "zone": "unit", "as": "fslot", "freeing": "$fmats", "free_src": leaves, "for": fu, "cancellable": cancellable})
+	ops.append({"op": "pick_stance", "as": "stance", "for": fu, "cancellable": cancellable})
+	ops.append({"op": "fusion_confirm", "cancellable": cancellable})
+	_splice(f, ops)
+
+
+## The explicit Confirm after the last Fusion choice (F04-22). Cancel discards the whole action.
+func _op_fusion_confirm(f: Dictionary, op: Dictionary) -> int:
+	var ans: Variant = take_answer(f)
+	if ans != null:
+		f["vars"]["fusion_ready"] = true
+		return R.CONT
+	var names := []
+	for m in f["vars"]["fmats"]:
+		names.append(name_of(m))
+	var fu: int = f["vars"]["fusion"]
+	return ask(f, f["ctl"], "confirm", "Fusion Summon %s using %s?" % [name_of(fu), " and ".join(names)],
+		[{"v": 1, "label": "Confirm"}], 1, 1, op.get("cancellable", true))
+
+
+## True while the confirmed plan (Fusion unit, materials in requirement order) is still legal:
+## rechecked after the cost, the response window and any triggers (P-15 / P-16).
+func _fusion_plan_valid(f: Dictionary) -> bool:
+	var p: int = f["ctl"]
+	var fu: int = f["vars"].get("fusion", -1)
+	if not (fu in players[p]["extra"]) or _summon_blocked(p, unit_type(fu)):
+		return false
+	var reqs: Array = script_of(fu).get("fusion", [])
+	var mats: Array = f["vars"].get("fmats", [])
+	if mats.size() != reqs.size():
+		return false
+	var ex: int = f["vars"].get("fusion_exclude", -1)
+	var pool := _fusion_pool(p, f["vars"]["fsources"]).filter(func(u): return u != ex)
+	var chosen := []
+	for i in mats.size():
+		var m: int = mats[i]
+		if not (m in pool) or m in chosen or not _req_ok(m, reqs[i], chosen):
+			return false
+		chosen.append(m)
+	if free_unit_slots(p).is_empty():
+		for m in mats:
+			if unit_on_field(m):
+				return true
+		return false
+	return true
+
+
+## Skips the rest of a failed effect; a used Spell/Trap still finishes.
+func _fusion_fizzle(f: Dictionary) -> int:
+	for j in range(f["pc"] + 1, f["ops"].size()):
+		if f["ops"][j]["op"] == "finish_card":
+			f["pc"] = j
+			return R.STAY
+	return R.END
+
+
+## The Fusion summon itself. With a confirmed plan it tributes and places; without one (a
+## triggered method such as Tag Team - S) it first runs the same choose-then-Confirm steps.
+func _op_fusion(f: Dictionary, op: Dictionary) -> int:
+	var p: int = f["ctl"]
+	if not f["vars"].get("fusion_ready", false):
+		if op.get("planned", false):
+			return R.CONT                 # the plan was abandoned (no candidates / materials)
+		_splice(f, [{"op": "fusion_pick", "sources": op["sources"], "cancellable": not f["committed"]},
+			{"op": "fusion", "sources": op["sources"], "planned": true}])
+		return R.CONT
+	f["vars"].erase("fusion_ready")
+	var fu: int = f["vars"]["fusion"]
+	if not _fusion_plan_valid(f):
+		add_log("The chosen Fusion materials are no longer available, so the Fusion Summon of %s fails." % name_of(fu))
+		return _fusion_fizzle(f)
+	var ops := [{"op": "fusion_tribute"}, {"op": "place", "target": fu, "slot": "$fslot", "stance": "$stance"}]
 	ops += summon_tail(fu, p)
 	_splice(f, ops)
 	return R.CONT
@@ -156,13 +216,12 @@ func _op_fusion_mat(f: Dictionary, op: Dictionary) -> int:
 	if ok.is_empty():
 		add_log("Fusion materials are no longer available.")
 		return R.END
-	if ok.size() == 1:
-		chosen.append(ok[0])
-		return R.CONT
+	# F04-22 / 2026-10-15: each material is picked by the player, even a sole legal one.
 	var opts := []
 	for u in ok:
 		opts.append(card_option(u, "%s (%s)" % [name_of(u), cards[u]["zone"].capitalize()]))
-	return ask(f, f["ctl"], "select", "Choose %s for the summon of %s." % [_a_an(_req_text(reqs[op["i"]])), name_of(fu)], opts, 1, 1, false, {"reveal_pile": true})
+	return ask(f, f["ctl"], "select", "Choose %s for the summon of %s (material %d of %d)." % [_a_an(_req_text(reqs[op["i"]])), name_of(fu), op["i"] + 1, reqs.size()],
+		opts, 1, 1, op.get("cancellable", false), {"reveal_pile": true})
 
 
 ## "a Fire unit" / "an Earth unit" (fusion material prompts).
