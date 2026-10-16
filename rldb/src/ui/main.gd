@@ -98,6 +98,7 @@ func _parse_cmdline() -> void:
 		if a.ends_with("shots") or a.contains("shots="):
 			# Scripted screenshot runs must never create or show the player's real saves.
 			SeriesStore.DIR = DEV_SAVES_DIR
+			PlayerProgress.persist = false   # nor flip the real "has played" flag (F04-09)
 	for a in args:
 		if a.begins_with("--net-shots="):
 			_run_driver("res://src/dev/net_shot_driver.gd", a.split("=")[1])

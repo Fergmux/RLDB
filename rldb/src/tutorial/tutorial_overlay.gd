@@ -53,7 +53,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ring = TutorialHighlight.new()
-	ring.z_index = UiLayers.HOVER + 5          # above the action row and lifted cards
+	ring.z_index = UiLayers.TUTORIAL_RING      # over the board and lifted cards, under every modal (F04-08)
 	add_child(ring)
 	_build_panel()
 	host.step_changed.connect(refresh.unbind(1))

@@ -13,6 +13,10 @@ const ARROW_W := 34.0
 const ARROW_H := 26.0
 const ARROW_GAP := 10.0
 const ARROW_BOB := 8.0
+## Margin kept between the arrow and the layer's edge.
+const ARROW_EDGE := 4.0
+## Slack before a decided arrow direction may flip (px of overshoot).
+const ARROW_HYSTERESIS := 12.0
 
 ## Target rects in this layer's coordinates.
 var rects: Array = []
@@ -22,6 +26,9 @@ var arrow: bool = true
 var arrow_from_below: bool = false
 ## Tight ring for small controls packed next to others (no outward pulse, thin glow).
 var compact: bool = false
+## Current arrow direction: 1 above the target (pointing down), -1 below it, 0 undecided.
+var arrow_dir: int = 0
+var _decided_rect: Rect2 = Rect2()
 var _t: float = 0.0
 
 
@@ -48,13 +55,51 @@ func _draw() -> void:
 	if arrow and not rects.is_empty():
 		var first: Rect2 = rects[0]
 		var bob := 0.0 if still else ARROW_BOB * sin(_t * TAU * PULSE_HZ * 0.8)
-		var tip := Vector2(first.get_center().x, first.position.y - RING_PAD - ARROW_GAP + bob)
-		if arrow_from_below or tip.y - ARROW_H < 4.0:
-			# No room above (e.g. a top-edge target): point up from below instead.
-			tip = Vector2(first.get_center().x, first.end.y + RING_PAD + ARROW_GAP - bob)
-			_arrow(tip, -1.0)
+		arrow_dir = choose_direction(first, size.y, arrow_from_below, arrow_dir, _decided_rect)
+		if _decided_rect == Rect2() or not _same_target(first, _decided_rect):
+			_decided_rect = first
+		if arrow_dir > 0:
+			_arrow(Vector2(first.get_center().x, first.position.y - RING_PAD - ARROW_GAP + bob), 1.0)
 		else:
-			_arrow(tip, 1.0)
+			_arrow(Vector2(first.get_center().x, first.end.y + RING_PAD + ARROW_GAP - bob), -1.0)
+	else:
+		arrow_dir = 0
+		_decided_rect = Rect2()
+
+
+## Free pixels above (or below) `r` for the arrow over its whole bob animation: the tip travels
+## +-ARROW_BOB around its rest point and the arrow body extends ARROW_H beyond the tip (negative
+## = does not fit). `height` is the layer's height.
+static func arrow_space(r: Rect2, height: float, above: bool) -> float:
+	var need := RING_PAD + ARROW_GAP + ARROW_BOB + ARROW_H + ARROW_EDGE
+	return (r.position.y - need) if above else (height - r.end.y - need)
+
+
+## True when `r` is the same target as `prev` (same size, centre moved less than a card width / 2).
+static func _same_target(r: Rect2, prev: Rect2) -> bool:
+	return prev != Rect2() and r.size.is_equal_approx(prev.size) and r.get_center().distance_to(prev.get_center()) < 48.0
+
+
+## Arrow direction for target `r`: 1 = above it pointing down, -1 = below it pointing up (F04-10).
+## Decided from the full space the arrow covers over its bob (not its current frame), once per
+## target: `prev` (0 = undecided) is kept while `r` is still the target decided at `prev_rect`,
+## unless it clearly no longer fits (beyond ARROW_HYSTERESIS) and the other side has more room.
+static func choose_direction(r: Rect2, height: float, prefer_below: bool, prev: int = 0, prev_rect: Rect2 = Rect2()) -> int:
+	var pref := -1 if prefer_below else 1
+	var sp_pref := arrow_space(r, height, pref > 0)
+	var sp_other := arrow_space(r, height, pref < 0)
+	if prev == 0 or not _same_target(r, prev_rect):
+		# A new target: the preferred side when the whole bob fits there, else the other, else the roomier.
+		if sp_pref >= 0.0 or sp_pref >= sp_other:
+			return pref
+		return -pref
+	var sp_prev := sp_pref if prev == pref else sp_other
+	var sp_alt := sp_other if prev == pref else sp_pref
+	if prev != pref and sp_pref >= 0.0:
+		return pref          # the step now wants the other side and it fits
+	if sp_prev < -ARROW_HYSTERESIS and sp_alt > sp_prev:
+		return -prev          # no longer fits at all (the target moved)
+	return prev
 
 
 func _arrow(tip: Vector2, dir: float) -> void:

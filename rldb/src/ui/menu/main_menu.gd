@@ -37,6 +37,8 @@ const MENU := {
 	"local": [["Tutorial", "tutorial"], ["Play vs Bot", "bot"], ["Hot-seat", "hotseat"], ["Host LAN", "host_lan"], ["Join LAN", "join_lan"]],
 	"decks": [["Deck builder", "builder"], ["Card list", "cards"]],
 }
+## Top item of the root level for a profile that has not played yet (F04-09); opens lesson 1.
+const PLAY_TUTORIAL_ITEM := ["Play tutorial", "play_tutorial"]
 const BAND_W := 520.0
 const BAND_FADE_W := 160.0
 const BAND_COLOR := Color(0.02, 0.018, 0.025)
@@ -148,6 +150,9 @@ func _build_menu_level(animate: bool = true) -> void:
 	var items: Array = MENU[level].duplicate()
 	if level == "root" and SeriesStore.list().is_empty():
 		items = items.filter(func(it): return it[1] != "resume")
+	if level == "root" and not PlayerProgress.has_played():
+		# F04-09: a profile that has not played yet is offered the tutorial at the top of the menu.
+		items.push_front(PLAY_TUTORIAL_ITEM)
 	var i := 0
 	for it in items:
 		var mi := MenuItem.new(it[0], ROOT_ITEM_SIZE if level == "root" else SUB_ITEM_SIZE)
@@ -193,6 +198,8 @@ func pick(target: String) -> void:
 			deck_builder_requested.emit()
 		"cards":
 			card_list_requested.emit()
+		"play_tutorial":
+			tutorial_requested.emit(0)
 		_:
 			_menu_leaf = target
 			for mi in _menu_list.get_children():
