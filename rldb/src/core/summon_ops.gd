@@ -26,6 +26,9 @@ func _op_pick_slot(f: Dictionary, op: Dictionary) -> int:
 			for m in free_after:
 				if unit_on_field(m) and cards[m]["ctl"] == p:
 					slots.append(cards[m]["slot"])
+			# A paying unit that leaves before the summon (Sepukku, Void Basilisk) frees its zone.
+			if op.get("free_src", false) and unit_on_field(f["src"]) and cards[f["src"]]["ctl"] == p and not (cards[f["src"]]["slot"] in slots):
+				slots.append(cards[f["src"]]["slot"])
 		"backrow": slots = free_backrow_slots(p)
 		"power": slots = free_power_slots(p)
 		"adjacent": slots = _adjacent_free(f["src"])

@@ -140,11 +140,14 @@ func test_polymerization_fuses_field_materials_into_bastion_wyrm() -> void:
 	var wyrm := TB.card(m, 0, 93, "extra")
 	var poly := TB.card(m, 0, 82)
 	assert_str(m.submit(0, {"t": "cast", "uid": poly})).is_empty()
-	# Single candidate Fusion and single matching materials resolve without prompts.
-	if m.pending.get("kind", "") == "select":
-		TB.choose_uids(m, [wyrm])
+	# F04-22: the Fusion unit and each material are picked, then zone, stance and Confirm.
+	TB.choose_uids(m, [wyrm])
+	TB.choose_uids(m, [beast])
+	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
+	assert_str(m.cards[poly]["zone"]).is_equal("hand")         # nothing paid or cast before Confirm
+	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 	assert_str(m.cards[beast]["zone"]).is_equal("spent")
 	assert_str(m.cards[dragon]["zone"]).is_equal("spent")
