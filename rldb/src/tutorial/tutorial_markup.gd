@@ -6,7 +6,7 @@ extends RefCounted
 ##
 ##   [kw]Battle Phase[/kw]    phases and rules terms: gold, bold
 ##   [stat]8 ATK[/stat]       stats, coloured by the stat named inside (ATK, DEF, HP, AP), bold
-##   [card]Bastion Wyrm[/card] card names: display face, warm white
+##   [card]Bastion Wyrm[/card] card names: bold, warm white
 ##   [type]Water[/type]       element Types, in the Type's colour, bold
 ##   [zone]Spent[/zone]       zones and piles: teal, bold
 ##   [btn]Go to Recovery[/btn] a button's label: shown in quotes, bold
@@ -57,7 +57,8 @@ static func _render(tag: String, inner: String) -> String:
 		"stat":
 			return "[b][color=#%s]%s[/color][/b]" % [stat_color(inner).to_html(false), inner]
 		"card":
-			return "[font=%s][color=#%s]%s[/color][/font]" % [UIStyle.FONT_DISPLAY, CARD_COLOR.to_html(false), inner]
+			# Bold body face: display small caps read as shouting mid-sentence.
+			return "[b][color=#%s]%s[/color][/b]" % [CARD_COLOR.to_html(false), inner]
 		"type":
 			return "[b][color=#%s]%s[/color][/b]" % [UIStyle.type_color(inner).lightened(0.2).to_html(false), inner]
 		"zone":

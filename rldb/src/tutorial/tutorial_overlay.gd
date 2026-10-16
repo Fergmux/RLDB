@@ -281,6 +281,14 @@ func _place_panel() -> void:
 	panel.scale = Vector2(k, k)
 	panel.size = Vector2(r.size.x / k, 0)
 	panel.reset_size()
+	# The card sits over the game log. When a step needs more height than the log has, the log
+	# grows to match, so the sidebar pushes Card Details down instead of the card covering it.
+	var lp: Control = gs.sidebar.log_panel
+	if lp != null and lp.is_visible_in_tree():
+		var need := panel.get_combined_minimum_size().y * k / maxf(0.001, lp.get_global_transform().get_scale().y)
+		if absf(lp.custom_minimum_size.y - need) > 1.0:
+			lp.custom_minimum_size.y = need
+		r = _sidebar_rect()
 	# Covers the whole log panel (a half-hidden log reads as clutter); grows if the text needs it.
 	panel.size = Vector2(r.size.x / k, maxf(panel.get_combined_minimum_size().y, r.size.y / k))
 	panel.position = inv * r.position
@@ -305,6 +313,10 @@ func _process(_d: float) -> void:
 	# A button inside the prompt banner: a tight ring (its neighbours stay readable and clickable)
 	# and the arrow from below, so it never covers the banner's text.
 	ring.compact = false
+	# A card in the choice tray: point up from below so the arrow never covers the tray's title.
+	var tr: Control = gs.prompt.tray
+	if not rects.is_empty() and tr != null and tr.is_visible_in_tree() and (inv * _rect_of(tr)).encloses(rects[0] as Rect2):
+		ring.arrow_from_below = true
 	var bn: Control = gs.prompt.ctx_banner
 	if not rects.is_empty() and bn != null and bn.is_visible_in_tree():
 		var br: Rect2 = inv * _rect_of(bn)

@@ -4890,7 +4890,7 @@
    "atk": 16,
    "def": 10,
    "keywords": [],
-   "condition": "Exhaust Units of equivilant cost from Spent",
+   "condition": "Exhaust Units from your Spent whose costs total exactly its Arcane cost",
    "on_summon": "You can send a card from Hand to Spent, gain +1 AP.",
    "on_field": "",
    "on_destruction": "You can lose -10 HP, add a card from Spent to Hand.",
@@ -4917,7 +4917,7 @@
    "atk": 4,
    "def": 10,
    "keywords": [],
-   "condition": "Exhaust Units of equivilant cost from Spent",
+   "condition": "Exhaust Units from your Spent whose costs total exactly its Arcane cost",
    "on_summon": "",
    "on_field": "At the start of your turn: gain +6 ATK. This Unit can attack your opponent directly.",
    "on_destruction": "Exhaust this Unit.",
@@ -4946,7 +4946,7 @@
    "keywords": [
     "reveal"
    ],
-   "condition": "Exhaust Units of equivilant cost from Spent",
+   "condition": "Exhaust Units from your Spent whose costs total exactly its Arcane cost",
    "on_summon": "",
    "on_field": "If this Unit is Sacrificed, you can Destroy a card with Reveal.",
    "on_destruction": "",
@@ -4975,7 +4975,7 @@
    "keywords": [
     "paralyse"
    ],
-   "condition": "Exhaust Units of equivilant cost from Spent",
+   "condition": "Exhaust Units from your Spent whose costs total exactly its Arcane cost",
    "on_summon": "Your opponent loses -4 HP x the amount of your opponents Units.",
    "on_field": "",
    "on_destruction": "Apply 1 Paralyse to all Units.",
@@ -5002,7 +5002,7 @@
    "atk": 16,
    "def": 28,
    "keywords": [],
-   "condition": "Exhaust Units of equivilant cost from Spent",
+   "condition": "Exhaust Units from your Spent whose costs total exactly its Arcane cost",
    "on_summon": "",
    "on_field": "If this Unit is Sacrificed or Tributed, gain +2 AP.",
    "on_destruction": "",
@@ -5031,7 +5031,7 @@
    "keywords": [
     "debilitate"
    ],
-   "condition": "Exhaust Units of equivilant cost from Spent",
+   "condition": "Exhaust Units from your Spent whose costs total exactly its Arcane cost",
    "on_summon": "Change Stance of your opponents Units.",
    "on_field": "Once per turn you can Apply 1 Debilitate to a Unit.",
    "on_destruction": "You can make your Units gain +10 DEF.",
@@ -5060,7 +5060,7 @@
    "keywords": [
     "medic"
    ],
-   "condition": "Exhaust Units of equivilant cost from Spent",
+   "condition": "Exhaust Units from your Spent whose costs total exactly its Arcane cost",
    "on_summon": "This Units ATK becomes the combined ATK of all Water Units on the Field.",
    "on_field": "Once per turn: you can Apply 2 Medic to Adjacent Units.",
    "on_destruction": "",
@@ -5087,7 +5087,7 @@
    "atk": 20,
    "def": 0,
    "keywords": [],
-   "condition": "Exhaust Units of equivilant cost from Spent",
+   "condition": "Exhaust Units from your Spent whose costs total exactly its Arcane cost",
    "on_summon": "",
    "on_field": "Whilst it is your turn, this Unit gains + 20 ATK. This Units attacks do not inflict Damage.",
    "on_destruction": "",
