@@ -203,12 +203,15 @@ const BACKGROUND := "res://assets/art/background.jpg"   # full 4096x4096 origina
 
 ## Full-screen background (user-supplied wood table art): scaled to cover the whole rect with the
 ## overflow cropped, plus an optional dark veil (`dim` 0..1) so cards and text keep their contrast.
-static func background(dim: float = 0.0) -> Control:
+const MENU_BACKGROUND := "res://assets/art/menu_background.jpg"   # 4096x4096 forest arch (a JPEG)
+
+
+static func background(dim: float = 0.0, path: String = BACKGROUND) -> Control:
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var tr := TextureRect.new()
-	tr.texture = load(BACKGROUND)
+	tr.texture = load(path)
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # crisp when scaled below 4K

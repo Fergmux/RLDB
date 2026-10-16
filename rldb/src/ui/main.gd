@@ -127,6 +127,9 @@ func _parse_cmdline() -> void:
 
 
 func _clear_screens() -> void:
+	# Leaving the menu for a game: the menu dissolves into the new screen.
+	if menu != null and is_instance_valid(menu) and not _auto_started:
+		_crossfade_from_current()
 	for n in [menu, screen, local_host, privacy_overlay, net]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()
@@ -135,6 +138,30 @@ func _clear_screens() -> void:
 	local_host = null
 	privacy_overlay = null
 	net = null
+
+
+## Freezes what is on screen now into an overlay and fades it out (with a slight zoom) over
+## whatever is built next. Click-through; reduced motion makes it a quick plain fade.
+func _crossfade_from_current() -> void:
+	var img := get_viewport().get_texture().get_image()
+	if img == null or img.is_empty():
+		return
+	var shot := TextureRect.new()
+	shot.texture = ImageTexture.create_from_image(img)
+	shot.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shot.stretch_mode = TextureRect.STRETCH_SCALE
+	shot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shot.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shot.z_index = 200
+	add_child(shot)
+	shot.pivot_offset = get_viewport_rect().size / 2.0
+	var tw := create_tween()
+	tw.set_parallel(true)
+	var secs := 0.25 if UIStyle.reduce_motion else 0.7
+	tw.tween_property(shot, "modulate:a", 0.0, secs).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	if not UIStyle.reduce_motion:
+		tw.tween_property(shot, "scale", Vector2(1.08, 1.08), secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(shot.queue_free)
 
 
 # ---------------------------------------------------------------- menu
@@ -187,7 +214,7 @@ func _show_menu() -> void:
 	menu = Control.new()
 	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(menu)
-	menu.add_child(UIStyle.background(0.15))
+	menu.add_child(UIStyle.background(0.1, UIStyle.MENU_BACKGROUND))
 	# Translucent band behind the menu column so its text reads over the table art.
 	var table := ColorRect.new()
 	table.color = Color(0.04, 0.03, 0.025, 0.72)
