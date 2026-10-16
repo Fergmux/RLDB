@@ -213,6 +213,7 @@ func _show_menu() -> void:
 		_show_menu(), "Delete", "Cancel"))
 	m.deck_builder_requested.connect(func(): _go(_show_deck_builder))
 	m.card_list_requested.connect(func(): _go(_show_card_list))
+	m.tutorial_requested.connect(func(lesson: int): _go(func(): _start_tutorial(lesson)))
 
 
 func _show_deck_builder() -> void:
@@ -248,6 +249,12 @@ func _start_local(cfg: Dictionary) -> void:
 func _start_bot(cfg: Dictionary) -> void:
 	_clear_screens()
 	_sessions.start_bot(cfg)
+
+
+## Guided tutorial (F03-15) at lesson `lesson`; no series is saved.
+func _start_tutorial(lesson: int = 0) -> void:
+	_clear_screens()
+	_sessions.start_tutorial(lesson)
 
 
 func _start_lan_host(port: int, cfg: Dictionary) -> void:

@@ -64,6 +64,8 @@ func load_lesson(i: int) -> void:
 	step_index = 0
 	opp_index = 0
 	refused = 0
+	for s in seats:
+		s.last_view = {}       # the rebuilt screen must not render the previous lesson's view
 	lesson_loaded.emit(lesson_index)
 	_settle()
 	broadcast()

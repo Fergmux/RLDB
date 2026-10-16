@@ -25,6 +25,8 @@ signal delete_save_requested(id: String)
 signal deck_builder_requested
 ## Emitted to open the card list.
 signal card_list_requested
+## Emitted to start the guided tutorial at lesson `lesson` (F03-15).
+signal tutorial_requested(lesson: int)
 
 ## Menu tree: level -> items [label, target]. A target starting with "@" opens a sub-level;
 ## anything else is a leaf shown in the centre (or an action).
@@ -32,7 +34,7 @@ const MENU := {
 	"root": [["Resume", "resume"], ["Play", "@play"], ["Decks", "@decks"], ["Settings", "settings"], ["Quit", "quit"]],
 	"play": [["Play online", "@online"], ["Play local", "@local"]],
 	"online": [["Host game", "host_online"], ["Join game", "join_online"]],
-	"local": [["Play vs Bot", "bot"], ["Hot-seat", "hotseat"], ["Host LAN", "host_lan"], ["Join LAN", "join_lan"]],
+	"local": [["Tutorial", "tutorial"], ["Play vs Bot", "bot"], ["Hot-seat", "hotseat"], ["Host LAN", "host_lan"], ["Join LAN", "join_lan"]],
 	"decks": [["Deck builder", "builder"], ["Card list", "cards"]],
 }
 const BAND_W := 520.0
@@ -344,6 +346,9 @@ func _leaf_panel(target: String) -> Control:
 			pv = _center_panel("Join game", "Accept a friend's invite in the Steam overlay, or browse public lobbies.")
 			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, UIStyle.TEXT_DIM, true))
 			_start_button(pv[1], "Browse public lobbies", steam_browse_requested.emit)
+		"tutorial":
+			pv = _center_panel("Tutorial", "Guided lessons on a prepared board against a scripted Rival. Nothing is saved.")
+			TutorialMenu.add_lessons(pv[1], tutorial_requested.emit)
 		"resume":
 			pv = _center_panel("Resume", "Pick up a series where you left it.")
 			SavedSeriesList.add_to(pv[1], SeriesStore.list(), resume_requested.emit, delete_save_requested.emit)
