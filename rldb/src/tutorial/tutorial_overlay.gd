@@ -34,9 +34,13 @@ var exit_btn: Button
 var _lesson_label: Label
 var _count_label: Label
 var _title_label: Label
-var _text_label: Label
+var _text_label: RichTextLabel
 var _hint_label: Label
 var _panel_style: StyleBoxFlat
+var _progress: TutorialDeco
+var _step_box: VBoxContainer
+var _hint_panel: PanelContainer
+var _shown_key: String = ""
 var _hint_gen: int = 0
 
 
@@ -69,33 +73,93 @@ func _build_panel() -> void:
 	_panel_style = UIStyle.flat(Color(0.075, 0.06, 0.04, 0.98), UIStyle.GOLD, 2, 10)
 	_panel_style.border_width_left = 6
 	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		_panel_style.set_content_margin(side, PANEL_PAD)
+		_panel_style.set_content_margin(side, 0)
 	_panel_style.shadow_color = Color(0, 0, 0, 0.6)
 	_panel_style.shadow_size = 12
 	panel.add_theme_stylebox_override("panel", _panel_style)
 	add_child(panel)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 6)
-	panel.add_child(v)
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 0)
+	panel.add_child(outer)
+	# Header band: lesson name and the step counter pill.
+	var head_p := PanelContainer.new()
+	var hs := UIStyle.flat(Color(0.15, 0.11, 0.05, 1.0), Color(UIStyle.GOLD, 0.55), 0, 8)
+	hs.corner_radius_bottom_left = 0
+	hs.corner_radius_bottom_right = 0
+	hs.border_width_bottom = 1
+	hs.content_margin_left = PANEL_PAD
+	hs.content_margin_right = 10
+	hs.content_margin_top = 7
+	hs.content_margin_bottom = 7
+	head_p.add_theme_stylebox_override("panel", hs)
+	outer.add_child(head_p)
 	var head := HBoxContainer.new()
-	v.add_child(head)
+	head.add_theme_constant_override("separation", 8)
+	head_p.add_child(head)
 	_lesson_label = UIStyle.label("", 13, UIStyle.GOLD, false, true)
 	_lesson_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_lesson_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_lesson_label.clip_text = true
 	_lesson_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	head.add_child(_lesson_label)
-	_count_label = UIStyle.label("", 13, UIStyle.TEXT_DIM, false, true)
-	head.add_child(_count_label)
+	var pill := PanelContainer.new()
+	var ps := UIStyle.flat(Color(0.04, 0.03, 0.02, 0.95), Color(UIStyle.GOLD, 0.6), 1, 11)
+	ps.content_margin_left = 10
+	ps.content_margin_right = 10
+	ps.content_margin_top = 1
+	ps.content_margin_bottom = 1
+	pill.add_theme_stylebox_override("panel", ps)
+	head.add_child(pill)
+	_count_label = UIStyle.label("", 13, UIStyle.GOLD_HI, false, true)
+	pill.add_child(_count_label)
+	_progress = TutorialDeco.steps(1, 0)
+	outer.add_child(_progress)
+	# Body: step title, flourish, formatted text, refusal hint.
+	var body := MarginContainer.new()
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("margin_left", int(PANEL_PAD))
+	body.add_theme_constant_override("margin_right", int(PANEL_PAD))
+	body.add_theme_constant_override("margin_top", 12)
+	body.add_theme_constant_override("margin_bottom", 10)
+	outer.add_child(body)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	body.add_child(v)
+	_step_box = VBoxContainer.new()
+	_step_box.add_theme_constant_override("separation", 6)
+	v.add_child(_step_box)
 	_title_label = UIStyle.label("", 20, UIStyle.GOLD_HI, true, true)
-	v.add_child(_title_label)
-	_text_label = UIStyle.label("", 15, UIStyle.TEXT, true)
-	v.add_child(_text_label)
-	_hint_label = UIStyle.label("", 14, UIStyle.BAD, true, true)
-	_hint_label.visible = false
-	v.add_child(_hint_label)
+	_step_box.add_child(_title_label)
+	_step_box.add_child(TutorialDeco.divider(UIStyle.GOLD, 10.0))
+	_text_label = TutorialMarkup.rich_label(16)
+	_step_box.add_child(_text_label)
+	_hint_panel = PanelContainer.new()
+	var hts := UIStyle.flat(Color(0.2, 0.05, 0.045, 0.92), Color(UIStyle.BAD, 0.8), 1, 6)
+	hts.border_width_left = 4
+	hts.content_margin_left = 10
+	hts.content_margin_right = 8
+	hts.content_margin_top = 5
+	hts.content_margin_bottom = 5
+	_hint_panel.add_theme_stylebox_override("panel", hts)
+	_hint_panel.visible = false
+	v.add_child(_hint_panel)
+	_hint_label = UIStyle.label("", 14, Color("ffc9c4"), true, true)
+	_hint_panel.add_child(_hint_label)
+	# Footer: the buttons sit at the bottom of the box (F04-11).
+	var foot_p := PanelContainer.new()
+	var fs := UIStyle.flat(Color(0.045, 0.036, 0.026, 1.0), Color(UIStyle.BRONZE, 0.8), 0, 8)
+	fs.corner_radius_top_left = 0
+	fs.corner_radius_top_right = 0
+	fs.border_width_top = 1
+	fs.content_margin_left = PANEL_PAD
+	fs.content_margin_right = 10
+	fs.content_margin_top = 8
+	fs.content_margin_bottom = 8
+	foot_p.add_theme_stylebox_override("panel", fs)
+	outer.add_child(foot_p)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
-	v.add_child(row)
+	foot_p.add_child(row)
 	restart_btn = UIStyle.button("Restart lesson", 13)
 	restart_btn.custom_minimum_size = Vector2(0, 32)
 	restart_btn.pressed.connect(_on_restart)
@@ -119,24 +183,46 @@ func refresh() -> void:
 		return
 	var n := host.step_count()
 	_lesson_label.text = "TUTORIAL · %s" % String(host.lesson["title"]).to_upper()
+	var key := "%d/%d" % [host.lesson_index, host.step_index]
 	if host.is_complete():
 		_count_label.text = "Done"
 		_title_label.text = "Lesson complete"
-		_text_label.text = String(host.lesson["summary"])
+		TutorialMarkup.set_text(_text_label, String(host.lesson["summary"]))
 		next_btn.visible = false
+		_progress.set_current(n, n)
 		_show_complete()
 	else:
 		var st := host.current_step()
 		_count_label.text = "Step %d / %d" % [host.step_index + 1, n]
 		_title_label.text = String(st.get("title", ""))
 		var txt := String(st.get("text", ""))
+		var bb := TutorialMarkup.to_bbcode(txt)
 		if st.get("kind", "") == "wait":
-			txt += "\n(The Rival is playing…)"
-		_text_label.text = txt
+			bb += "\n\n[i][color=#%s](The Rival is playing…)[/color][/i]" % UIStyle.TEXT_DIM.to_html(false)
+		_text_label.text = bb
 		next_btn.visible = st.get("kind", "") == "read"
 		next_btn.text = "Finish lesson" if host.step_index == n - 1 else "Next"
-	_hint_label.visible = false
+		_progress.set_current(n, host.step_index)
+	if key != _shown_key:
+		_shown_key = key
+		_fade_in(_step_box)
+	_hide_hint()
 	_place_panel()
+
+
+## Short fade of a freshly changed block (skipped with reduced motion).
+func _fade_in(c: Control) -> void:
+	if UIStyle.reduce_motion:
+		c.modulate.a = 1.0
+		return
+	c.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(c, "modulate:a", 1.0, UIStyle.dur(0.25)).set_trans(Tween.TRANS_SINE)
+
+
+func _hide_hint() -> void:
+	_hint_panel.visible = false
+	_panel_style.border_color = UIStyle.GOLD
 
 
 ## Shows the refusal hint under the step text and flashes the card's border.
@@ -144,13 +230,13 @@ func show_hint(text: String) -> void:
 	_hint_gen += 1
 	var gen := _hint_gen
 	_hint_label.text = text
-	_hint_label.visible = true
+	_hint_panel.visible = true
+	_fade_in(_hint_panel)
 	_panel_style.border_color = UIStyle.BAD
 	_place_panel()
 	get_tree().create_timer(HINT_SECS).timeout.connect(func():
 		if gen == _hint_gen and is_instance_valid(self):
-			_hint_label.visible = false
-			_panel_style.border_color = UIStyle.GOLD
+			_hide_hint()
 			_place_panel())
 
 
@@ -367,8 +453,10 @@ func _show_complete() -> void:
 	if complete_card != null and is_instance_valid(complete_card):
 		return
 	var last := not host.has_next_lesson()
+	var idx := host.lesson_index
+	var total := TutorialLessons.count()
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
+	dim.color = Color(0, 0, 0, 0.6)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.z_index = UiLayers.CONFIRM_DIALOG - 2
 	var area := gs.play_area
@@ -379,57 +467,134 @@ func _show_complete() -> void:
 	var c := CenterContainer.new()
 	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.add_child(c)
+	# Outer frame: gold border and a warm glow.
 	var p := PanelContainer.new()
 	var sb := UIStyle.flat(Color(0.06, 0.05, 0.035, 0.99), UIStyle.GOLD_HI, 2, 12)
-	for side in [SIDE_LEFT, SIDE_RIGHT]:
-		sb.set_content_margin(side, 30)
-	for side in [SIDE_TOP, SIDE_BOTTOM]:
-		sb.set_content_margin(side, 24)
+	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		sb.set_content_margin(side, 0)
 	sb.shadow_color = Color(UIStyle.GOLD, 0.35)
-	sb.shadow_size = 24
+	sb.shadow_size = 28
 	p.add_theme_stylebox_override("panel", sb)
 	p.custom_minimum_size = Vector2(COMPLETE_W, 0)
+	p.clip_contents = true
 	c.add_child(p)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
-	p.add_child(v)
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 0)
+	p.add_child(outer)
+	# Header band: "Lesson n of 5", flourish, headline, lesson name, progress.
+	var hb := PanelContainer.new()
+	var hs := UIStyle.flat(Color(0.17, 0.125, 0.055, 1.0), Color(UIStyle.GOLD, 0.6), 0, 10)
+	hs.corner_radius_bottom_left = 0
+	hs.corner_radius_bottom_right = 0
+	hs.border_width_bottom = 1
+	hs.content_margin_left = 30
+	hs.content_margin_right = 30
+	hs.content_margin_top = 18
+	hs.content_margin_bottom = 14
+	hs.shadow_color = Color(0, 0, 0, 0.5)
+	hs.shadow_size = 6
+	hs.shadow_offset = Vector2(0, 3)
+	hb.add_theme_stylebox_override("panel", hs)
+	outer.add_child(hb)
+	var hv := VBoxContainer.new()
+	hv.add_theme_constant_override("separation", 6)
+	hb.add_child(hv)
+	var count := UIStyle.label("TUTORIAL COMPLETE" if last else "LESSON %d OF %d" % [idx + 1, total], 13, UIStyle.GOLD, false, true)
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hv.add_child(count)
+	hv.add_child(TutorialDeco.divider(UIStyle.GOLD, 12.0))
 	var head := UIStyle.title_label("Tutorial complete" if last else "Lesson complete", 34, UIStyle.GOLD_HI)
-	v.add_child(head)
-	v.add_child(UIStyle.label(String(host.lesson["title"]), 18, UIStyle.GOLD, true, true))
-	var sum := UIStyle.label(String(host.lesson["summary"]), 16, UIStyle.TEXT, true)
-	sum.custom_minimum_size = Vector2(COMPLETE_W - 60.0, 0)
-	v.add_child(sum)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	head.add_theme_constant_override("shadow_offset_y", 2)
+	hv.add_child(head)
+	var lt := String(host.lesson["title"])
+	var name_l := UIStyle.label(lt.get_slice("·", 1).strip_edges() if lt.contains("·") else lt, 18, UIStyle.TEXT, true, true)
+	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hv.add_child(name_l)
+	var bar := TutorialDeco.steps(total, idx + 1)
+	bar.custom_minimum_size = Vector2(0, 6)
+	bar.highlight = false
+	hv.add_child(bar)
+	# Body: summary and what was learned.
+	var bm := MarginContainer.new()
+	for side in ["left", "right"]:
+		bm.add_theme_constant_override("margin_" + side, 32)
+	bm.add_theme_constant_override("margin_top", 18)
+	bm.add_theme_constant_override("margin_bottom", 16)
+	outer.add_child(bm)
+	var bv := VBoxContainer.new()
+	bv.add_theme_constant_override("separation", 10)
+	bm.add_child(bv)
+	var sum := TutorialMarkup.rich_label(17)
+	sum.text = "[center]%s[/center]" % TutorialMarkup.to_bbcode(String(host.lesson["summary"]))
+	bv.add_child(sum)
+	var learned_head := UIStyle.label("WHAT YOU LEARNED", 12, UIStyle.TEXT_DIM, false, true)
+	bv.add_child(learned_head)
+	var rows := []
+	for item in host.lesson.get("learned", []):
+		var r := HBoxContainer.new()
+		r.add_theme_constant_override("separation", 8)
+		var bl := TutorialDeco.bullet()
+		bl.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		bl.custom_minimum_size = Vector2(14, 22)
+		r.add_child(bl)
+		var rl := TutorialMarkup.rich_label(16)
+		rl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rl.text = TutorialMarkup.to_bbcode(String(item))
+		r.add_child(rl)
+		bv.add_child(r)
+		rows.append(r)
 	if last:
-		v.add_child(UIStyle.label("You have played every lesson. Start a series against the bot or a friend from Play.", 15, UIStyle.TEXT_DIM, true))
+		var done := TutorialMarkup.rich_label(15, UIStyle.TEXT_DIM)
+		done.text = "You have played every lesson. Start a series against the bot or a friend from [b]Play[/b]."
+		bv.add_child(done)
+	# Buttons: the way forward on top, the other two below it.
+	var fm := MarginContainer.new()
+	for side in ["left", "right"]:
+		fm.add_theme_constant_override("margin_" + side, 32)
+	fm.add_theme_constant_override("margin_bottom", 24)
+	outer.add_child(fm)
+	var fv := VBoxContainer.new()
+	fv.add_theme_constant_override("separation", 10)
+	fm.add_child(fv)
+	var main_b: Button
+	if last:
+		main_b = UIStyle.primary_button("Back to menu", 18)
+		main_b.pressed.connect(_on_exit)
+	else:
+		var nxt := TutorialLessons.get_lesson(idx + 1)
+		main_b = UIStyle.primary_button("Next: %s" % String(nxt["title"]).get_slice("·", 1).strip_edges(), 18)
+		main_b.pressed.connect(func():
+			Sfx.play("confirm")
+			host.load_lesson(idx + 1))
+	main_b.custom_minimum_size = Vector2(0, 52)
+	fv.add_child(main_b)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_child(row)
+	fv.add_child(row)
 	var replay := UIStyle.button("Replay lesson", 16)
-	replay.custom_minimum_size = Vector2(0, 46)
+	replay.custom_minimum_size = Vector2(0, 44)
+	replay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	replay.pressed.connect(_on_restart)
 	row.add_child(replay)
-	if last:
-		var menu_b := UIStyle.primary_button("Back to menu", 17)
-		menu_b.custom_minimum_size = Vector2(0, 46)
-		menu_b.pressed.connect(_on_exit)
-		row.add_child(menu_b)
-	else:
-		var nxt := TutorialLessons.get_lesson(host.lesson_index + 1)
-		var nb := UIStyle.primary_button("Next: %s" % String(nxt["title"]).get_slice("·", 1).strip_edges(), 17)
-		nb.custom_minimum_size = Vector2(0, 46)
-		nb.pressed.connect(func():
-			Sfx.play("confirm")
-			host.load_lesson(host.lesson_index + 1))
-		row.add_child(nb)
+	if not last:
 		var ex := UIStyle.button("Exit tutorial", 16)
-		ex.custom_minimum_size = Vector2(0, 46)
+		ex.custom_minimum_size = Vector2(0, 44)
+		ex.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		ex.pressed.connect(_on_exit)
 		row.add_child(ex)
 	if not UIStyle.reduce_motion:
 		p.modulate.a = 0.0
 		p.scale = Vector2(0.94, 0.94)
-		p.pivot_offset = Vector2(COMPLETE_W / 2.0, 120.0)
+		p.pivot_offset = Vector2(COMPLETE_W / 2.0, 200.0)
 		var tw := create_tween().set_parallel(true)
 		tw.tween_property(p, "modulate:a", 1.0, UIStyle.dur(0.3))
 		tw.tween_property(p, "scale", Vector2.ONE, UIStyle.dur(0.35)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		# What-you-learned lines arrive one after another.
+		for i in rows.size():
+			var rw: Control = rows[i]
+			rw.modulate.a = 0.0
+			var t2 := create_tween()
+			t2.tween_interval(UIStyle.dur(0.3 + 0.12 * i))
+			t2.tween_property(rw, "modulate:a", 1.0, UIStyle.dur(0.25))
