@@ -146,7 +146,7 @@ func _build_identity(c: Dictionary) -> void:
 		var hb: HBoxContainer = chip.get_child(0)
 		hb.add_child(icon_slot)
 		hb.move_child(icon_slot, 0)
-		icon_slot.add_child(TypeIcons.TypeBadge.new(ty_s))
+		icon_slot.add_child(TypeIcons.TypeBadge.new(ty_s, float(_line_h(SMALL))))
 		badges.add_child(chip)
 
 
@@ -180,6 +180,8 @@ func _build_stats(c: Dictionary) -> void:
 		flags.add_child(_chip("Attack stance" if c.get("stance", "atk") == "atk" else "Defense stance", UIStyle.SELECT))
 		if c.get("protected", false):
 			flags.add_child(_chip("Protected", UIStyle.GOOD))
+		if c.get("protecting", false):
+			flags.add_child(_chip("Protecting", UIStyle.SELECT))
 		var cu = c.get("controlled_until", -1)
 		if cu != null and int(cu) != -1:
 			flags.add_child(_chip("Controlled until end of turn %d" % int(cu), UIStyle.BAD))
@@ -187,9 +189,8 @@ func _build_stats(c: Dictionary) -> void:
 		add_child(flags)
 	else:
 		flags.free()
-	var parts: Array = c.get("stat_parts", [])
-	var plain: bool = parts.size() <= 1 and c.get("atk") == c.get("printed_atk") and c.get("def") == c.get("printed_def")
-	if not parts.is_empty() and not plain:   # a lone "Base a/d" line adds nothing when nothing is modified
+	var parts := modifier_parts(c)
+	if not parts.is_empty():   # F03-22: only real changes; no section when there are none
 		add_child(_lbl("Modifiers", SMALL, UIStyle.GOLD, true))
 		for p in parts:
 			var r := HBoxContainer.new()
@@ -197,6 +198,18 @@ func _build_stats(c: Dictionary) -> void:
 			r.add_child(Mark.new("dot", UIStyle.MUTED, 10))
 			r.add_child(_lbl(String(p), NOTE, UIStyle.MUTED))
 			add_child(r)
+
+
+## The stat_parts lines that are real changes (buffs, debuffs, effects): the leading
+## "Base a/d" line only restates the printed/base stats shown in the stat tiles (F03-22).
+static func modifier_parts(c: Dictionary) -> Array:
+	var out := []
+	for p in c.get("stat_parts", []):
+		var s := String(p)
+		if s.begins_with("Base ") and s.substr(5).split("/").size() == 2 and s.substr(5).replace("/", "").is_valid_int():
+			continue
+		out.append(s)
+	return out
 
 
 ## One stat tile: caption + trend line on the left, large current value on the right.
@@ -427,7 +440,19 @@ func _block(col: Color, bar_a: float) -> PanelContainer:
 	return pc
 
 
-## Small rounded badge: optional marker shape + text, tinted by `col`.
+## Font size a label of base size `size` really gets (compact rows scale down).
+func _fs(size: int) -> int:
+	return size if not compact else maxi(10, roundi(size * 0.8))
+
+
+## Text line height (px) at base size `size`: the height every tag's content is held to, so an
+## icon or marker never makes one tag taller than its peers (F03-03).
+func _line_h(size: int) -> int:
+	return ceili(UIStyle.font_body().get_height(_fs(size)))
+
+
+## Small rounded badge: optional marker shape + text, tinted by `col`. Every badge has the same
+## height (text line + fixed padding); icons and markers are centred inside it, never larger.
 func _chip(text: String, col: Color, shape: String = "", strong: bool = false) -> PanelContainer:
 	var pc := PanelContainer.new()
 	var bg := col.darkened(0.45) if strong else Color(col.darkened(0.6), 0.9)
@@ -437,10 +462,15 @@ func _chip(text: String, col: Color, shape: String = "", strong: bool = false) -
 	sb.content_margin_top = 1
 	sb.content_margin_bottom = 2
 	pc.add_theme_stylebox_override("panel", sb)
+	pc.custom_minimum_size.y = _line_h(SMALL) + sb.content_margin_top + sb.content_margin_bottom
+	pc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 5)
+	hb.alignment = BoxContainer.ALIGNMENT_CENTER
 	pc.add_child(hb)
 	if shape != "":
 		hb.add_child(Mark.new(shape, col, 10))
-	hb.add_child(_lbl(text, SMALL, UIStyle.TEXT, true, false, false))
+	var l := _lbl(text, SMALL, UIStyle.TEXT, true, false, false)
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hb.add_child(l)
 	return pc

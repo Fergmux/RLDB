@@ -61,6 +61,7 @@ static func card_view(m: MatchEngine, uid: int, viewer: int) -> Dictionary:
 			v["stat_parts"] = b["parts"]
 			v["stance"] = inst["stance"]
 			v["protected"] = m.is_protected(uid)
+			v["protecting"] = m.protected_by(uid) != -1   # F03-23: front unit with a friendly unit right behind it
 			v["attacked"] = inst["attacked_turn"] == m.turn
 			v["new"] = inst["summoned_turn"] == m.turn
 			v["controlled_until"] = inst["control_until"]
