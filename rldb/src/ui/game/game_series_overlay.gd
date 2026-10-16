@@ -176,6 +176,7 @@ func _show_deck() -> void:
 		flow.add_child(cell)
 		var w := CardWidget.new().setup(MatchView.summary_view(c), "hand")
 		w.auto_hover = true
+		w.right_pressed.connect(gs.inspect.inspect_widget)
 		cell.add_child(w)
 		if int(counts[c["id"]]) > 1:
 			var n := UIStyle.label("×%d" % int(counts[c["id"]]), 15, UIStyle.GOLD_HI, false, true)
@@ -310,6 +311,7 @@ func _render_decks() -> void:
 		cw.tooltip_text = "Pick %s" % c["name"]
 		var idx: int = i
 		cw.pressed.connect(func(_w): gs.send({"t": "draft_pick", "index": idx}))
+		cw.right_pressed.connect(gs.inspect.inspect_widget)
 		cw.mouse_entered.connect(func(): _lift(cw, DRAFT_HOVER_SCALE))
 		cw.mouse_exited.connect(func(): _lift(cw, 1.0))
 		col.add_child(cw)

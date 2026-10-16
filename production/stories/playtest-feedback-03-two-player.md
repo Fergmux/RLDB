@@ -30,15 +30,15 @@ retained evidence under `production/qa/evidence/2026-10-16-f03/`).
 | F03-03 Consistent tags with contained icons | In progress | I | | |
 | F03-04 Exact Arcane total | In progress | R | | |
 | F03-05 Hide zero-cost Arcane materials | In progress | R | | |
-| F03-06 Smaller player panels | In progress | B | | |
-| F03-07 Power-slot mirroring | In progress | B | | |
+| F03-06 Smaller player panels | Implemented — unverified | B | Plates 300→252 px wide, 89 px tall; `PlayerPlate.PLATE_W` | Rect check: no plate/zone overlap, ~24 px gap at 1600x900; long name / 120 HP / 9 AP fit (`board/plates_*`) |
+| F03-07 Power-slot mirroring | Implemented — unverified | B | Reproduced: opponent block was not mirrored. `GameBoardView.power_cell(side, slot)` rotates the display 180°; slot ids unchanged | `power_mapping_test.gd` (4 slots x 2 views); `board/power_before*`, `power_after*` |
 | F03-08 Fusion availability highlight | In progress | R | | |
 | F03-09 Basic-unit names without Type suffix | In progress | R | | |
 | F03-10 Draft composition controls | In progress | R | | |
 | F03-11 One Extra Deck category (draft, rewards) | In progress | R | | |
 | F03-12 No empty-Hand text | In progress | I | | |
 | F03-13 Victory / defeat presentation | In progress | V | | |
-| F03-14 HP display reset between games | In progress | B | | |
+| F03-14 HP display reset between games | Implemented — unverified | B | Cause: reset only ran on `GameScreen.attach()`, which a series keeps across games. `PlayerPlate.begin_game(save_id:game_no)` resets each new game | `hp_reset_test.gd`; live two-game series still to run |
 | F03-15 Guided tutorial | Captured | T | | |
 | F03-16 Destroy / Exhaust animations | In progress | V | | |
 | F03-17 Special-summon sequences | In progress | V | | |
@@ -49,12 +49,21 @@ retained evidence under `production/qa/evidence/2026-10-16-f03/`).
 | F03-22 No base stats in Modifiers | In progress | I | | |
 | F03-23 Protecting tag | In progress | I | | |
 | F03-24 Deck builder grid with art | Captured | D | | |
-| F03-25 Prominent input-required banner | In progress | B | | |
+| F03-25 Prominent input-required banner | Implemented — unverified | B | Tall narrow banner in the free left column (top-centre fallback), actor tag, pop-in glow, breathing border | Rect test: clear of zones/piles/plates; `board/banner_*` |
 | F03-26 Empty-space click closes passive viewer | In progress | I | | |
-| F03-27 Type-coloured declaration buttons | In progress | B | | |
+| F03-27 Type-coloured declaration buttons | Implemented — unverified | B | Type choices (kind `mode`, all labels Type names) get Type colour, icon, contrast-checked text | `ui_f03_prompt_test.gd` (Waang 4 Types, Chaos Witch 7, click sets Earth, contrast) |
+
+## Deviations for user review
+
+Where an implementation departs from a suggestion in the feedback (not a confirmed rule), it is kept and listed here for the user to review.
+
+| Item | Suggested | Implemented | Why |
+| --- | --- | --- | --- |
+| F03-25 | Banner slightly lower, narrower and taller (top of screen) | Tall narrow banner in the free left column below the opponent's hand; top centre only when that column is narrower than 220 px | At 900 px height a top banner cannot clear the Trap/Spell row; the side column covers no zones |
 
 ## Agent ledger
 
 | Task | Role | Model | Result |
 | --- | --- | --- | --- |
 | Lobby browser fix (user report) | lead | opus | Fixed, `b43562f` |
+| Package B (06, 07, 14, 25, 27) | ui-programmer | sonnet | Done, 455/455 on branch, merged `8524b8b` |

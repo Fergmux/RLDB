@@ -205,6 +205,25 @@ func show_draft() -> void:
 	render_pile_list()
 
 
+## Empty-space click (F03-26): closes the passive pile list (not the draft list, which stays
+## while drafting) and a card opened from the log, and drops the hover. Sends nothing and never
+## touches a pending choice. True when something closed.
+func dismiss_passive() -> bool:
+	var did := false
+	if not log_card.is_empty():
+		log_card = {}
+		details_sig = ""
+		did = true
+	if pile_zone != "" and pile_zone != DRAFT_ZONE:
+		close_pile()
+		did = true
+	elif did:
+		render()
+	if did:
+		gs.hover.clear()
+	return did
+
+
 ## Returns the panel from the pile list to card details.
 func close_pile() -> void:
 	pile_zone = ""
@@ -281,14 +300,19 @@ func _pile_row(c: Dictionary) -> Control:
 	row.add_theme_stylebox_override("panel", sb)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.tooltip_text = CardWidget.tooltip_for(c)
-	if pile_zone != DRAFT_ZONE:   # draft picks are read-only
+	var editable := pile_zone != DRAFT_ZONE   # draft picks are read-only (but can still be inspected)
+	if editable:
 		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		var pick := func():
-			gs.selected_uid = uid
-			show_pile(pile_zone, -1 if sel else uid)
-		row.gui_input.connect(func(ev):
-			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-				pick.call())
+	var pick := func():
+		gs.selected_uid = uid
+		show_pile(pile_zone, -1 if sel else uid)
+	row.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed:
+			if ev.button_index == MOUSE_BUTTON_LEFT and editable:
+				pick.call()
+			elif ev.button_index == MOUSE_BUTTON_RIGHT:
+				row.accept_event()
+				gs.inspect.inspect_card(c))
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 8)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE

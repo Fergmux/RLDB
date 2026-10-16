@@ -23,6 +23,9 @@ const SPOTLIGHT_DIM := 95
 const SPOTLIGHT_CARD := 96
 const SPOTLIGHT_PILL := 97
 const HOVER := 100
+## Near-full-screen pile browser and the large card inspector (the inspector opens over the browser).
+const PILE_BROWSER := 105
+const CARD_INSPECTOR := 110
 const CONFIRM_DIALOG := 120
 ## Screen transitions cover everything.
 const FADER := 300
