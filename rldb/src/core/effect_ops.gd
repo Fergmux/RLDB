@@ -182,7 +182,13 @@ func _op_stat(f: Dictionary, op: Dictionary) -> int:
 			ud = mini(ud, 0)
 		cards[u]["mods"].append({"atk": ua, "def": ud, "until": op.get("until", "field"), "src": name_of(f["src"]) if f["src"] != -1 else "effect"})
 		add_log("%s %+d ATK / %+d DEF%s (now %d/%d)." % [name_of(u), ua, ud, " until end of turn" if op.get("until", "") == "turn" else "", atk_of(u), def_of(u)])
-		add_fx({"k": "stat", "at": fx_pos(u), "atk": ua, "def": ud})
+		var ev := {"k": "stat", "at": fx_pos(u), "atk": ua, "def": ud}
+		# F03-18: a chosen target shows a short arrow from the effect's source to it (both seats).
+		if op["target"] is String and String(op["target"]).begins_with("$") and f["src"] != -1 and f["src"] != u:
+			var from := fx_pos(f["src"])
+			if not from.is_empty():
+				ev["from"] = from
+		add_fx(ev)
 	return R.CONT
 
 

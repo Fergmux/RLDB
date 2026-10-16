@@ -408,6 +408,19 @@ func test_f03_19_overextend_text_names_the_choice() -> void:
 	assert_str(String(df["condition"])).contains("3 or more Units")
 
 
+func test_f03_18_chosen_target_stat_event_carries_the_source_for_both_seats() -> void:
+	var b := _overextend_board()
+	var m: MatchEngine = b["m"]
+	TB.choose_uids(m, [b["small"]])
+	for seat in [0, 1]:
+		var found := {}
+		for entry in MatchView.build(m, seat)["log"]:
+			for e in entry.get("fx", []):
+				if e["k"] == "stat" and e.has("from"):
+					found = e
+		assert_dict(found.get("from", {})).is_equal({"p": 0, "zone": "backrow", "slot": 1})
+
+
 func test_f03_18_pending_choice_carries_its_effect_source() -> void:
 	var b := _overextend_board()
 	var m: MatchEngine = b["m"]

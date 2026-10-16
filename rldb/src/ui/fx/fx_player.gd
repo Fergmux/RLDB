@@ -180,6 +180,9 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 				sched.append([t, _cards.status.bind(e["at"], String(e["s"]), int(e.get("n", 1)))])
 				t += 0.06
 			"stat":
+				if e.has("from"):
+					sched.append([t, _cards.effect_arrow.bind(e["from"], e["at"])])
+					t += 0.35
 				sched.append([t, _cards.stat.bind(e["at"])])
 			"stance":
 				var sat: Dictionary = e["at"]

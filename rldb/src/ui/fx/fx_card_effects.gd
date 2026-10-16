@@ -10,6 +10,9 @@ const DISSOLVE_SHADER := "res://assets/shaders/dissolve.gdshader"
 const NO_GLOW := Color(1, 1, 1, 0)
 ## Dust puff at a card's foot when it lands.
 const DUST_COLOR := Color("c8b896")
+## Effect-target arrow (F03-18): seconds shown, then seconds fading out.
+const EFFECT_ARROW_HOLD := 0.55
+const EFFECT_ARROW_FADE := 0.3
 
 
 ## A card arrives in its slot from the owner's hand anchor (summon / play).
@@ -132,6 +135,26 @@ func stat(at: Dictionary) -> void:
 	_clear_glow_on_finish(w)
 	var tw := _fx.new_tween()
 	tw.tween_property(w, "fx_glow", Color(UIStyle.GOLD_HI, 0.0), UIStyle.dur(0.3))
+
+
+## A chosen effect target (F03-18): the targeting arrow flashes from the source card at `from` to
+## the card at `at`, then fades. Shown to both seats; the source is a board position only.
+func effect_arrow(from: Dictionary, at: Dictionary) -> void:
+	var ra: Rect2 = _fx.screen.fx_slot_global_rect(int(from["p"]), String(from["zone"]), int(from["slot"]))
+	var rb: Rect2 = _fx.screen.fx_slot_global_rect(int(at["p"]), String(at["zone"]), int(at["slot"]))
+	if ra.size == Vector2.ZERO or rb.size == Vector2.ZERO:
+		return
+	var arrow := ArrowLayer.new()
+	arrow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	arrow.a = _fx.fx_pos(ra.get_center())
+	arrow.b = _fx.fx_pos(rb.get_center())
+	arrow.on = true
+	_fx.add_node(arrow)
+	arrow.queue_redraw()
+	var tw := _fx.new_tween()
+	tw.tween_interval(UIStyle.dur(EFFECT_ARROW_HOLD))
+	tw.tween_property(arrow, "modulate:a", 0.0, UIStyle.dur(EFFECT_ARROW_FADE))
+	tw.tween_callback(_fx.free_node.bind(arrow))
 
 
 ## Stance change (`to` = "def" | "atk"): the widget is already drawn in its final orientation, so it
