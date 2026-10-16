@@ -4,15 +4,24 @@ extends Control
 ## lands on the face of the player who goes first, then names them. Presentation only and
 ## click-through; it frees itself when done. Reduced motion shows the result without spinning.
 
+## Coin radius in pixels.
 const R := 64.0
+## Seconds of spin.
 const SPIN_TIME := 1.7
+## Seconds the result stays after landing.
 const HOLD_TIME := 1.3
-const HALF_TURNS := 9          # half turns of spin; the coin lands on the winner's face (see _face)
+## Half turns of spin; the coin lands on the winner's face (see _face).
+const HALF_TURNS := 9
 
-var names: Array = ["", ""]    # [winner, other]
+## Player names [winner, other].
+var names: Array = ["", ""]
+## True when the local player goes first (gold face, "You go first").
 var winner_is_me: bool = false
-var phase: float = 0.0: set = _set_phase   # 0 .. HALF_TURNS * PI
+## Spin angle, 0 .. HALF_TURNS * PI.
+var phase: float = 0.0: set = _set_phase
+## Height the coin is thrown above the table in pixels.
 var lift: float = 0.0: set = _set_lift
+## Opacity of the result line under the coin.
 var result_a: float = 0.0: set = _set_result
 
 
