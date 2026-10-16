@@ -1,0 +1,225 @@
+class_name GameHoverController
+extends RefCounted
+## Hover is inspection only (F02-01): the card under the pointer lifts and its details show;
+## it never shows action buttons and never sends anything. Over the selected card's action
+## row, the tray or the banner nothing else hovers.
+
+const HAND_SCALE := 1.25
+const FIELD_SCALE := 1.08
+## Seconds the pointer may leave a hovered card before it drops.
+const CLOSE_DELAY := 0.12
+
+var gs: GameScreen
+## Hovered item {key, w, holder, uid, kind, own}, or {}.
+var hv: Dictionary = {}
+## Set by the debug_* hovers: the pointer does not move the hover.
+var forced: bool = false
+var _close_at: float = -1.0
+
+
+func _init(screen: GameScreen) -> void:
+	gs = screen
+
+
+## Visible card under global point m (hand cards topmost first), skipping `exclude_key`.
+func items_under(m: Vector2, exclude_key: String) -> Dictionary:
+	var hand := gs.hand
+	# Hand cards: topmost (last) first.
+	for i in range(hand.order.size() - 1, -1, -1):
+		var uid: int = hand.order[i]
+		var it: Dictionary = hand.items[uid]
+		var h: Control = it["holder"]
+		if "h:%d" % uid != exclude_key and h.get_global_rect().has_point(m):
+			return {"key": "h:%d" % uid, "w": it["widget"], "holder": h, "uid": uid, "kind": "hand", "own": true}
+	var slots := gs.board.slots
+	for k in slots.keys():
+		var sl: Dictionary = slots[k]
+		var w: CardWidget = sl["widget"]
+		if k == exclude_key or not w.visible or w.view.is_empty() or w.view.get("hidden", false):
+			continue
+		# The card box is the displayed card (2:3, or 3:2 when turned), not the whole zone.
+		var h2: Control = sl["holder"]
+		if h2.get_global_rect().has_point(m):
+			return {"key": k, "w": w, "holder": h2, "uid": w.view.get("uid", -1), "kind": GameBoardView.ZONE_KIND[sl["zone"]], "own": (k as String).begins_with("1:")}
+	return {}
+
+
+## Follows the pointer at global point m (called every frame unless forced).
+func update(m: Vector2) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if gs.hover_blocked():
+		if not hv.is_empty():
+			clear()
+		return
+	var prompt := gs.prompt
+	var on_row := gs.action_row.stack_rect().grow(3.0).has_point(m) or (prompt.tray.visible and prompt.tray.get_global_rect().has_point(m)) \
+		or (prompt.ctx_banner.visible and prompt.ctx_banner.get_global_rect().has_point(m))
+	if not hv.is_empty():
+		if not is_instance_valid(hv["w"]) or not (hv["w"] as Node).is_inside_tree():
+			clear()
+			return
+		var tr := target_rect(hv)
+		if tr.has_point(m) or (on_row and hv["uid"] == gs.selected_uid):
+			_close_at = -1.0
+		else:
+			var cand := {} if on_row else items_under(m, hv["key"])
+			if not cand.is_empty():
+				set_hover(cand)
+			else:
+				var region := tr.grow(10.0).merge((hv["holder"] as Control).get_global_rect())
+				if region.has_point(m) and not on_row:
+					_close_at = -1.0
+				elif _close_at < 0.0:
+					_close_at = now + CLOSE_DELAY
+				elif now >= _close_at:
+					clear()
+	elif not on_row:
+		var cand2 := items_under(m, "")
+		if not cand2.is_empty():
+			set_hover(cand2)
+
+
+## [scale, lift offset] of a hovered card of this kind (smaller with reduced motion).
+static func lift_params(kind: String) -> Array:
+	var hand := kind == "hand"
+	var sc := HAND_SCALE if hand else FIELD_SCALE
+	var lift := Vector2(0, -48) if hand else Vector2.ZERO
+	if UIStyle.reduce_motion:
+		sc = minf(sc, 1.05)
+		lift = Vector2(0, -16) if hand else Vector2.ZERO
+	return [sc, lift]
+
+
+## Global rect a lifted item occupies (its holder scaled and offset by lift_params).
+func target_rect(it: Dictionary) -> Rect2:
+	var hr: Rect2 = (it["holder"] as Control).get_global_rect()
+	var lp := lift_params(it["kind"])
+	var c := hr.get_center() + (lp[1] as Vector2)
+	return Rect2(c - hr.size * float(lp[0]) / 2.0, hr.size * float(lp[0]))
+
+
+## A selected hand card stays lifted while its action row is open.
+func _keeps_lift(it: Dictionary) -> bool:
+	return gs.row_open and it.get("uid", -9) == gs.selected_uid and it.get("kind", "") == "hand"
+
+
+## Raises and scales an item above its neighbours.
+func lift(it: Dictionary) -> void:
+	var w: CardWidget = it["w"]
+	var holder: Control = it["holder"]
+	holder.z_index = GameScreen.Z_LIFTED_CARD
+	if it["kind"] == "hand":
+		gs.hand.layer.move_child(holder, -1)
+	var lp := lift_params(it["kind"])
+	_kill_tween(w)
+	var tw := w.create_tween()
+	w.set_meta("hv_tw", tw)
+	tw.set_parallel(true)
+	var d := UIStyle.dur(0.12 if it["kind"] == "hand" else 0.1)
+	if UIStyle.reduce_motion:
+		d = 0.05
+	tw.tween_property(w, "position", lp[1], d).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "scale", Vector2(lp[0], lp[0]), d).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if it["kind"] == "hand":
+		tw.tween_property(holder, "rotation", 0.0, d)
+
+
+## Makes `it` the hovered item: lifts it and shows its details at once.
+func set_hover(it: Dictionary) -> void:
+	if not hv.is_empty():
+		unlift(hv)
+	hv = it
+	_close_at = -1.0
+	(it["w"] as CardWidget).hovered = true
+	lift(it)
+	# Details follow the pointer immediately (user feedback: no delay).
+	if it["uid"] != -1 and it["uid"] != gs.peek_uid:
+		gs.peek_uid = it["uid"]
+		gs.details.render()
+	var stack := gs.action_row.stack
+	if stack != null:
+		gs.hover_layer.move_child(stack, -1)
+
+
+static func _kill_tween(w: CardWidget) -> void:
+	if w.has_meta("hv_tw"):
+		var t: Tween = w.get_meta("hv_tw")
+		if t != null and t.is_valid():
+			t.kill()
+
+
+## Drops a lifted item back to rest (unless it is the selected hand card with its row open).
+func unlift(it: Dictionary) -> void:
+	var w: CardWidget = it["w"]
+	if not is_instance_valid(w):
+		return
+	w.hovered = false
+	if _keeps_lift(it):
+		return
+	var holder: Control = it["holder"]
+	_kill_tween(w)
+	var tw := w.create_tween()
+	w.set_meta("hv_tw", tw)
+	tw.set_parallel(true)
+	var d := UIStyle.dur(0.09)
+	tw.tween_property(w, "position", Vector2.ZERO, d)
+	tw.tween_property(w, "scale", Vector2.ONE, d)
+	if it["kind"] == "hand" and holder.has_meta("rest_rot"):
+		tw.tween_property(holder, "rotation", float(holder.get_meta("rest_rot")), d)
+	tw.chain().tween_callback(func():
+		if is_instance_valid(holder):
+			holder.z_index = 0)
+	if it["kind"] == "hand":
+		# The hand order can still list cards removed in this same render; skip them.
+		var hand := gs.hand
+		var idx := 1
+		for huid in hand.order:
+			if hand.items.has(huid):
+				hand.layer.move_child(hand.items[huid]["holder"], idx)
+				idx += 1
+
+
+## Ends any hover (and its details peek).
+func clear() -> void:
+	if not hv.is_empty():
+		unlift(hv)
+	hv = {}
+	forced = false
+	_close_at = -1.0
+	if gs.peek_uid != -1:
+		gs.peek_uid = -1
+		gs.details.render()
+
+
+## Dev/test API: force the hover state on a hand card (index).
+func debug_hover_hand(index: int) -> void:
+	var hand := gs.hand
+	if index < 0 or index >= hand.order.size():
+		return
+	var uid: int = hand.order[index]
+	var it: Dictionary = hand.items[uid]
+	forced = false
+	set_hover({"key": "h:%d" % uid, "w": it["widget"], "holder": it["holder"], "uid": uid, "kind": "hand", "own": true})
+	forced = true
+	gs.peek_uid = uid
+	gs.details.render()
+
+
+## Dev/test API: force the hover state on player p's field slot.
+func debug_hover_slot(p: int, zone: String, slot: int) -> void:
+	var board := gs.board
+	var it: Dictionary = board.slot_item(p, zone, slot)
+	if it.is_empty():
+		return
+	var w: CardWidget = it["widget"]
+	forced = false
+	set_hover({"key": GameBoardView.key(board.side_of(p), zone, slot), "w": w, "holder": it["holder"], "uid": w.view.get("uid", -1), "kind": GameBoardView.ZONE_KIND[zone], "own": p == gs.me()})
+	forced = true
+	gs.peek_uid = w.view.get("uid", -1)
+	gs.details.render()
+
+
+## Dev/test API: release a forced hover.
+func debug_clear() -> void:
+	forced = false
+	clear()
