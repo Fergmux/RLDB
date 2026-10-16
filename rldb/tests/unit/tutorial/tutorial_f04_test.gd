@@ -38,7 +38,7 @@ func test_every_lesson_text_is_tagged_balanced_and_broken_up() -> void:
 
 func test_arcane_step_says_exactly() -> void:
 	var found := false
-	for st in TutorialLessons.get_lesson(4)["steps"]:
+	for st in TutorialLessons.get_lesson(TutorialLessons.index_of("arcane"))["steps"]:
 		if String(st["text"]).contains("Arcane") and TutorialMarkup.plain(String(st["text"])).contains("exactly"):
 			found = true
 	assert_bool(found).is_true()

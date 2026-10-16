@@ -4,7 +4,7 @@ extends SceneTree
 ## Opens the real main scene, enters Play > Tutorial from the menu, and plays every
 ## lesson by clicking (pushed mouse events) the rect the overlay highlights, so the highlights are
 ## proven to point at working controls. Also tries an off-script Esc (cancel), Restart lesson,
-## and finally Back to menu. Writes PNGs and tutorial_report.json into the directory, then quits.
+## the Arcane over-pay (F05-01), and finally Back to menu. Writes PNGs and tutorial_report.json into the directory, then quits.
 
 var main: Control
 ## The whole run is abandoned (and the window closed) after this many seconds.
@@ -53,6 +53,8 @@ func _run() -> void:
 	await _shot("menu_tutorial_panel")
 	var b := _find_button(main.menu, "Lesson 1")
 	_check("menu offers the tutorial lessons", b != null)
+	_check("F05-01 menu lists Ritual and Arcane lessons", _find_button(main.menu, "Lesson 6 · Extra Deck: Ritual") != null \
+		and _find_button(main.menu, "Lesson 7 · Extra Deck: Arcane") != null)
 	await _click(_rect(b).get_center())
 	await _wait(1.6)
 	for li in TutorialLessons.count():
@@ -125,6 +127,7 @@ func _play_lesson(li: int) -> void:
 	var guard := 0
 	var restarted := false
 	var esc_tried := false
+	var overpay_tried := false
 	var tries := {}
 	while not h.is_complete() and guard < 80:
 		guard += 1
@@ -158,21 +161,27 @@ func _play_lesson(li: int) -> void:
 					await _wait(0.3)
 					_check("Esc (cancel) during a forced zone pick is refused", h.refused == before + 1 and h.step_index == si)
 					await _shot("L2_offscript_hint")
+				if String(h.lesson["id"]) == "arcane" and h.game().pending.get("total_exact", false) and not overpay_tried:
+					overpay_tried = true
+					await _check_arcane_overpay(h)
 				var rs := _overlay().target_rects()
 				_check("L%d step %d has a highlight" % [li + 1, si + 1], not rs.is_empty())
 				if rs.is_empty():
 					return
 				await _click((rs[0] as Rect2).get_center())
 				await _wait(0.35)
-				if h.step_index == si and not h.is_complete() and String(st["expect"][0]["t"]) != "next_phase" \
-						and String(st["expect"][0]["t"]) != "choose":
-					# First click selected the card: the highlight moved to its action button.
+				# Follow the moving highlight: a card then its action button; the Extra Deck pile,
+				# then the unit's row, then its button; materials one by one, then Confirm.
+				var follow := 0
+				while h.step_index == si and not h.is_complete() and String(st["expect"][0]["t"]) != "next_phase" and follow < 4:
+					follow += 1
 					await _settle()
-					await _shot("L%d_s%02d_button" % [li + 1, si + 1])
+					await _shot("L%d_s%02d_click%d" % [li + 1, si + 1, follow + 1])
 					var rs2 := _overlay().target_rects()
-					if not rs2.is_empty():
-						await _click((rs2[0] as Rect2).get_center())
-						await _wait(0.4)
+					if rs2.is_empty():
+						break
+					await _click((rs2[0] as Rect2).get_center())
+					await _wait(0.4)
 				if st.get("until", {}).is_empty():
 					_check("L%d step %d advanced" % [li + 1, si + 1], h.step_index != si)
 		if li == 0 and si == 2 and not restarted:
@@ -185,6 +194,39 @@ func _play_lesson(li: int) -> void:
 	await _wait(0.6)
 	_check("lesson %d complete" % (li + 1), h.is_complete())
 	await _shot("L%d_complete" % (li + 1))
+
+
+## F05-01: the Arcane picker offers no 0-cost unit; picking both Dragons (4 of exactly 3) by
+## clicking them keeps Confirm disabled and the banner shows the total; an over-pay command is
+## refused with the total hint; deselecting restores an empty pick.
+func _check_arcane_overpay(h: TutorialHost) -> void:
+	var gs: GameScreen = main.screen
+	var o := _overlay()
+	var pd := gs.pending()
+	var offered := []
+	for x in pd.get("options", []):
+		offered.append(int(x.get("card", {}).get("uid", -1)))
+	_check("Arcane picker does not offer the 0-cost Drake", not (int(h.keys["s_drake"]) in offered) and offered.size() == 3)
+	_check("Arcane banner shows the exact total", gs.prompt._banner_how.contains("cost total 0 / exactly 3"))
+	await _shot("L7_arcane_picker")
+	for k in ["s_wyvern", "s_hydra"]:
+		await _click(o._card_rect(int(h.keys[k])).get_center())
+		await _wait(0.3)
+	var confirm := _find_button(gs.prompt.banner_btns, "Confirm")
+	_check("over-pay (4 of exactly 3) keeps Confirm disabled", gs.multi.size() == 2 and confirm != null and confirm.disabled)
+	_check("over-pay banner reads 4 / exactly 3", gs.prompt._banner_how.contains("cost total 4 / exactly 3"))
+	var rings := o.target_rects()
+	_check("over-pay: only the Dragon to deselect is ringed", rings.size() == 1 and (rings[0] as Rect2).is_equal_approx(o._card_rect(int(h.keys["s_hydra"]))))
+	await _shot("L7_arcane_overpay")
+	var before := h.refused
+	h.handle(TutorialLessons.PLAYER, {"t": "choose", "id": int(h.game().pending["id"]), "indices": gs.multi.duplicate()})
+	await _wait(0.3)
+	_check("an over-pay command is refused", h.refused == before + 1 and h.game().pending.get("total_exact", false))
+	await _shot("L7_arcane_overpay_hint")
+	for k in ["s_hydra", "s_wyvern"]:
+		await _click(o._card_rect(int(h.keys[k])).get_center())
+		await _wait(0.3)
+	_check("deselecting clears the pick", gs.multi.is_empty())
 
 
 ## F04-11: Restart / Exit / Next sit at the bottom of the guidance card.

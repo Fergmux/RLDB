@@ -190,6 +190,19 @@ func show_pile(zone: String, sel_uid: int = -1) -> void:
 	Sfx.play("select")
 
 
+## Uid of the selected row of the open pile list (-1: none).
+func pile_selected() -> int:
+	return _pile_sel
+
+
+## The open pile list's row for card `uid` (null when it is not listed).
+func pile_row(uid: int) -> Control:
+	for r in pile_list.get_children():
+		if r.has_meta("uid") and int(r.get_meta("uid")) == uid and not r.is_queued_for_deletion():
+			return r
+	return null
+
+
 ## True while this seat is drafting its deck (the panel then lists the picks).
 func is_drafting() -> bool:
 	var view := gs.view

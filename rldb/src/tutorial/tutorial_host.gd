@@ -19,6 +19,8 @@ const HINT_FOLLOW := "Tutorial: follow the highlighted step."
 const HINT_READ := "Tutorial: read the guidance, then click Next."
 const HINT_WAIT := "Tutorial: watch the Rival's move."
 const HINT_CONCEDE := "Use Exit tutorial to leave the lesson."
+## A material pick whose costs miss an exact total (Arcane, F03-04): selected, required.
+const HINT_TOTAL := "Tutorial: those materials total %d; the summon needs exactly %d."
 const REASON_LOCKED := "Not part of this tutorial step."
 
 ## Seconds between the scripted opponent's commands (0 = at once, used by tests).
@@ -147,8 +149,26 @@ func refusal(cmd: Dictionary) -> String:
 			for pat in st.get("expect", []):
 				if TutorialScript.matches(game(), keys, pat, cmd):
 					return ""
-			return HINT_FOLLOW
+			var off := total_mismatch(cmd)
+			return HINT_TOTAL % off if not off.is_empty() else HINT_FOLLOW
 	return HINT_FOLLOW
+
+
+## [selected total, required total] when `cmd` picks materials for an exact-total choice and
+## misses the total (an Arcane over- or under-pay), else [].
+func total_mismatch(cmd: Dictionary) -> Array:
+	var pd: Dictionary = game().pending
+	if String(cmd.get("t", "")) != "choose" or not pd.get("total_exact", false):
+		return []
+	var got = TutorialScript.chosen_indices(game(), cmd)
+	if got == null:
+		return []
+	var total := 0
+	for i in got:
+		if int(i) >= 0 and int(i) < pd["options"].size():
+			total += maxi(int(pd["options"][int(i)].get("value", 0)), 0)
+	var need := int(pd["total_required"])
+	return [] if total == need else [total, need]
 
 
 func _submit(p: int, cmd: Dictionary) -> bool:

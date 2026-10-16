@@ -28,6 +28,22 @@ static func option_index(m: MatchEngine, keys: Dictionary, opt: Dictionary) -> i
 	return -1
 
 
+## Sorted pending option indices that pattern `opt` selects ([] when any is missing): every
+## option of {cards: [key]} (a multi-pick such as Arcane materials), else the one option_index.
+static func option_indices(m: MatchEngine, keys: Dictionary, opt: Dictionary) -> Array:
+	var out := []
+	if opt.has("cards"):
+		for k in opt["cards"]:
+			var i := option_index(m, keys, {"card": k})
+			if i == -1 or i in out:
+				return []
+			out.append(i)
+		out.sort()
+		return out
+	var j := option_index(m, keys, opt)
+	return [] if j == -1 else [j]
+
+
 ## The pending option indices command `cmd` picks (by index or by value), or null when malformed.
 static func chosen_indices(m: MatchEngine, cmd: Dictionary):
 	var pd: Dictionary = m.pending
@@ -55,9 +71,12 @@ static func matches(m: MatchEngine, keys: Dictionary, pat: Dictionary, cmd: Dict
 	if t != String(pat.get("t", "")):
 		return false
 	if t == "choose":
-		var want := option_index(m, keys, pat.get("opt", {}))
+		var want := option_indices(m, keys, pat.get("opt", {}))
 		var got = chosen_indices(m, cmd)
-		return want != -1 and got != null and got == [want]
+		if got == null or want.is_empty():
+			return false
+		got.sort()
+		return got == want
 	if pat.has("card") and int(cmd.get("uid", -1)) != int(keys.get(String(pat["card"]), -2)):
 		return false
 	if pat.has("stance") and String(cmd.get("stance", "")) != String(pat["stance"]):
@@ -71,10 +90,10 @@ static func matches(m: MatchEngine, keys: Dictionary, pat: Dictionary, cmd: Dict
 static func resolve(m: MatchEngine, keys: Dictionary, pat: Dictionary) -> Dictionary:
 	var t: String = String(pat.get("t", ""))
 	if t == "choose":
-		var i := option_index(m, keys, pat.get("opt", {}))
-		if i == -1:
+		var idx := option_indices(m, keys, pat.get("opt", {}))
+		if idx.is_empty():
 			return {}
-		return {"t": "choose", "id": int(m.pending["id"]), "indices": [i]}
+		return {"t": "choose", "id": int(m.pending["id"]), "indices": idx}
 	var cmd := {"t": t}
 	if pat.has("card"):
 		if not keys.has(String(pat["card"])):
