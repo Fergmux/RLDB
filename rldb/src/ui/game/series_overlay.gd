@@ -195,7 +195,7 @@ func render() -> void:
 		return
 	overlay.visible = true
 	overlay_dim.visible = true
-	gs._clear_hover()
+	gs.hover.clear()
 	var want := Vector2(1000, 800)
 	match stage:
 		"decks": want = Vector2(1180, 860)

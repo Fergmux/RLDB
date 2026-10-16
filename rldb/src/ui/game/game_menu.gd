@@ -127,7 +127,7 @@ func toggle() -> void:
 	settings_popup.visible = false
 	game_menu.visible = not game_menu.visible
 	if game_menu.visible:
-		gs._clear_hover()
+		gs.hover.clear()
 
 
 ## Return to menu / Quit to desktop: an unfinished series is forfeited (after a warning).
@@ -154,7 +154,7 @@ func confirm_forfeit(quit: bool) -> void:
 func _dialog(title: String, text: String, confirm: String, on_yes: Callable) -> void:
 	close_dialog()
 	_dialog_root = ConfirmDialog.open(gs, title, text, confirm, on_yes)
-	gs._clear_hover()
+	gs.hover.clear()
 
 
 ## Closes the open confirmation dialog; returns true when there was one.

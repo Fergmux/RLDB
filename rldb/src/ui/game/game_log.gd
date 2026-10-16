@@ -74,7 +74,7 @@ func _on_meta(meta) -> void:
 	if str(meta).begins_with("card:"):
 		var id := int(str(meta).substr(5))
 		if CardDB.has(id):
-			gs._show_card_def(id)
+			gs.details.show_card_def(id)
 		return
 	if str(meta) == "show_all":
 		_full = true
