@@ -180,12 +180,11 @@ func _op_ambush(f: Dictionary, op: Dictionary) -> int:
 	var p: int = f["ctl"]
 	var pool: Array = players[p]["hand"].filter(func(u): return category(u) == "basic_unit") \
 		+ players[p]["draw"].filter(func(u): return category(u) == "basic_unit")
+	pool = pool.filter(func(u): return not _summon_blocked(p, unit_type(u)))   # blocked cards use no zone
 	var ops := []
 	var free := free_unit_slots(p)
 	for i in mini(free.size(), pool.size()):
 		var u: int = pool[i]
-		if _summon_blocked(p, unit_type(u)):
-			continue
 		ops.append({"op": "place", "target": u, "slot": free[i], "stance": "atk"})
 		ops += summon_tail(u, p)
 	if ops.is_empty():
@@ -398,7 +397,9 @@ func _op_fusion_pick(f: Dictionary, op: Dictionary) -> int:
 	if ans != null:
 		f["vars"]["fusion_pre"] = ans[0]
 		return R.CONT
-	var cands := fusion_candidates(f["ctl"], op["sources"], f["src"] if op.get("exclude_self", false) else -1)
+	if op.get("exclude_self", false):
+		f["vars"]["fusion_exclude"] = f["src"]     # the paying unit is never its own material
+	var cands := fusion_candidates(f["ctl"], op["sources"], f["vars"].get("fusion_exclude", -1))
 	if cands.is_empty():
 		return R.END
 	var opts := []
@@ -413,10 +414,10 @@ func _op_fusion(f: Dictionary, op: Dictionary) -> int:
 	if ans == null and f["vars"].has("fusion_pre"):
 		var pre: int = f["vars"]["fusion_pre"]
 		f["vars"].erase("fusion_pre")
-		if pre in fusion_candidates(p, op["sources"]):
+		if pre in fusion_candidates(p, op["sources"], f["vars"].get("fusion_exclude", -1)):
 			ans = [pre]
 	if ans == null:
-		var cands := fusion_candidates(p, op["sources"])
+		var cands := fusion_candidates(p, op["sources"], f["vars"].get("fusion_exclude", -1))
 		if cands.is_empty():
 			add_log("No Fusion Summon is possible.")
 			return R.CONT
@@ -449,7 +450,8 @@ func _op_fusion_mat(f: Dictionary, op: Dictionary) -> int:
 	if ans != null:
 		chosen.append(ans[0])
 		return R.CONT
-	var pool := _fusion_pool(f["ctl"], f["vars"]["fsources"])
+	var ex: int = f["vars"].get("fusion_exclude", -1)
+	var pool := _fusion_pool(f["ctl"], f["vars"]["fsources"]).filter(func(u): return u != ex)
 	var ok := []
 	for u in pool:
 		if u in chosen or not _req_ok(u, reqs[op["i"]], chosen):

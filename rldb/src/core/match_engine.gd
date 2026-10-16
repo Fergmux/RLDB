@@ -367,6 +367,8 @@ func _spell_target_check(p: int, uid: int) -> String:
 			break
 		if op["op"] == "require" and op.has("cond") and not eval_cond(f, op["cond"]):
 			return "Condition not met."
+	if column_summon_blocked(f, entry["spell"]):
+		return "No free zone in this column."
 	# A Fusion Spell (Polymerization) needs a Fusion unit it could actually summon.
 	for op in entry["spell"]:
 		if op["op"] == "fusion" and fusion_candidates(p, op["sources"]).is_empty():
@@ -390,6 +392,8 @@ func _ability_check(p: int, uid: int, idx: int, ab: Dictionary) -> String:
 			if select(f, op["sel"]).is_empty():
 				return "No legal target."
 			break
+	if column_summon_blocked(f, ab["ops"]):
+		return "No free zone in this column."
 	# A Fusion ability needs a Fusion unit it could actually summon (the paying unit itself
 	# leaves before the summon when the ability exhausts/destroys it).
 	var leaves := false
@@ -492,16 +496,22 @@ func _stance_op(cmd: Dictionary) -> Dictionary:
 
 ## Splits an effect's ops into its leading target/mode choices (made cancellable, so they
 ## can be chosen before any cost is paid) and the rest. User decision 2026-10-15.
+## A lead mode only records the choice; its option ops apply (via `mode_apply`) where the
+## rest begins, i.e. after the cost, the response window and the negation check.
 func _lead_choices(ops: Array) -> Array:
 	var lead := []
+	var applies := []
 	var i := 0
 	while i < ops.size() and ops[i]["op"] in ["choose", "mode", "near_self"] and not ops[i].get("random", false):
 		var c: Dictionary = ops[i].duplicate()
 		if c["op"] != "near_self":       # near_self only lists the units a following choice may pick
 			c["cancellable"] = true
+		if c["op"] == "mode":
+			c["defer"] = "_mode%d" % i
+			applies.append({"op": "mode_apply", "key": c["defer"], "options": c["options"]})
 		lead.append(c)
 		i += 1
-	return [lead, ops.slice(i)]
+	return [lead, applies + ops.slice(i)]
 
 
 ## A set Spell turns face up when its activation is committed (after any target choice).
@@ -542,15 +552,15 @@ func _op_pick_slot(f: Dictionary, op: Dictionary) -> int:
 		"backrow": slots = free_backrow_slots(p)
 		"power": slots = free_power_slots(p)
 		"adjacent": slots = _adjacent_free(f["src"])
-		"column":
-			var col: int = f["vars"].get("column", _col_any(f["src"]) if on_field(f["src"]) else f["event"].get("column", 0))
-			slots = [col, col + 3].filter(func(s): return players[p]["units"][s] == -1)
-		"orig":
-			var o: int = f["event"].get("orig_slot", cards[f["src"]]["orig_slot"])
-			slots = [o] if o >= 0 and players[p]["units"][o] == -1 else []
+		"column", "orig": slots = placement_slots(f, op["zone"])
 	slots.sort()
 	if slots.is_empty():
 		add_log("%s: no free zone." % f["label"])
+		# The rest of the effect is skipped, but a used Spell/Trap still finishes.
+		for j in range(f["pc"] + 1, f["ops"].size()):
+			if f["ops"][j]["op"] == "finish_card":
+				f["pc"] = j
+				return R.STAY
 		return R.END
 	var opts := []
 	for s in slots:

@@ -624,6 +624,8 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 			if tr.get("by_opponent", false) and ev.get("by_player", -1) != opp(p): return false
 	if tr.has("cond") and not eval_cond(f, tr["cond"]):
 		return false
+	if column_summon_blocked(f, tr["ops"]):
+		return false
 	# A Trap whose effect opens with a target choice is only offered when that choice has a legal
 	# target (feedback 07: Wabuku on a direct attack with nothing in its column). needs_target
 	# extends the check to a later or optional choice.
@@ -635,6 +637,29 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 		if not tr.get("needs_target", false) and not (op["op"] in ["cost_perm"]):
 			break
 	return true
+
+
+## Free zones for a summon placed "column" (the source's column) or "orig" (the zone it
+## left) by frame f.
+func placement_slots(f: Dictionary, zone: String) -> Array:
+	var p: int = f["ctl"]
+	match zone:
+		"column":
+			var col: int = f["vars"].get("column", _col_any(f["src"]) if on_field(f["src"]) else f["event"].get("column", 0))
+			return [col, col + 3].filter(func(s): return players[p]["units"][s] == -1)
+		"orig":
+			var o: int = f["event"].get("orig_slot", cards[f["src"]]["orig_slot"])
+			return [o] if o >= 0 and players[p]["units"][o] == -1 else []
+	return []
+
+
+## True when a top-level summon into "column"/"orig" has no free zone, so the Trap is not
+## offered and the Spell/ability is refused before anything is paid.
+func column_summon_blocked(f: Dictionary, ops: Array) -> bool:
+	for op in ops:
+		if op["op"] == "summon" and op.get("place", "any") in ["column", "orig"] and placement_slots(f, op["place"]).is_empty():
+			return true
+	return false
 
 
 func activate_trap(uid: int, p: int, ev: Dictionary) -> void:
@@ -749,12 +774,38 @@ func _splice(f: Dictionary, ops: Array) -> void:
 func _op_mode(f: Dictionary, op: Dictionary) -> int:
 	var ans: Variant = take_answer(f)
 	if ans != null:
-		_splice(f, op["options"][ans[0]]["ops"])
+		if op.has("defer"):               # lead mode: applied later by its mode_apply op
+			f["vars"][op["defer"]] = ans[0]
+		else:
+			_splice(f, op["options"][ans[0]]["ops"])
 		return R.CONT
+	# Only options that can actually do something are offered (e.g. Auric's "Destroy a face-down
+	# card" while no face-down card exists), so a cost is never paid for an impossible effect.
 	var opts := []
 	for i in op["options"].size():
-		opts.append({"v": i, "label": op["options"][i]["label"]})
+		if _option_possible(f, op["options"][i]["ops"]):
+			opts.append({"v": i, "label": op["options"][i]["label"]})
+	if opts.is_empty():
+		add_log("%s: no effect can be applied." % f["label"])
+		return R.END
 	return ask(f, f["ctl"], "mode", op.get("prompt", "Choose an effect."), opts, 1, 1, op.get("cancellable", false))
+
+
+## False when an option opens with a required target choice that has no legal target.
+func _option_possible(f: Dictionary, ops: Array) -> bool:
+	for o in ops:
+		if o["op"] == "choose":
+			return o.get("optional", false) or not select(f, o["sel"]).is_empty()
+		return true
+	return true
+
+
+## Applies the option chosen earlier by a deferred lead mode (see MatchEngine._lead_choices).
+func _op_mode_apply(f: Dictionary, op: Dictionary) -> int:
+	var i: int = int(f["vars"].get(op["key"], -1))
+	if i >= 0 and i < op["options"].size():
+		_splice(f, op["options"][i]["ops"])
+	return R.CONT
 
 
 ## Stop resolving unless the condition holds.
@@ -770,6 +821,8 @@ func _op_require(f: Dictionary, op: Dictionary) -> int:
 func _op_status(f: Dictionary, op: Dictionary) -> int:
 	var n := eval_num(f, op.get("n", 1))
 	for u in refs(f, op["target"]):
+		if op.get("unit_only", false) and not unit_on_field(u):
+			continue                      # e.g. "the Unit that Destroyed it" when a Power/Trap did
 		if on_field(u) or cards[u]["zone"] == "hand":
 			apply_status(u, op["s"], n)
 	return R.CONT
@@ -860,7 +913,11 @@ func _op_move(f: Dictionary, op: Dictionary) -> int:
 func _op_destroy(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
 		if on_field(u):
-			destroy(u, "effect", f["src"], f["ctl"])
+			var done := destroy(u, "effect", f["src"], f["ctl"])
+			# "Destroy this Unit, ...": if the cost was prevented, nothing else happens.
+			if not done and op["target"] == "self":
+				add_log("%s was not destroyed, so its effect ends." % name_of(u))
+				return R.END
 	return R.CONT
 
 

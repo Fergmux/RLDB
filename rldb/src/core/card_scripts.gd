@@ -91,6 +91,11 @@ static func st(target, s: String, n = 1) -> Dictionary:
 	return {"op": "status", "target": target, "s": s, "n": n}
 
 
+## Status on "the Unit that Destroyed it": skipped when the destroyer was not a unit on the Field.
+static func by_unit_st(s: String, n) -> Dictionary:
+	return {"op": "status", "target": "event.by", "s": s, "n": n, "unit_only": true}
+
+
 static func all_(sel: Dictionary, as_name: String = "all") -> Dictionary:
 	return {"op": "all", "sel": sel, "as": as_name}
 
@@ -288,14 +293,14 @@ static func _build() -> Dictionary:
 		trig("destroyed", [ch({"kind": "facedown"}, "u", true, "Apply Reveal to a face-down card?"), st("$u", "reveal")])],
 		"abilities": [abil("Apply 1 Infiltrate to a unit", [ch({"kind": "unit"}, "u"), st("$u", "infiltrate")])]}
 	t[99] = {"on": [trig("summoned", [ch({"kind": "spent", "side": "self", "unit_card": true}, "u", false, "Move a unit from your Spent to Draw."), {"op": "move", "target": "$u", "to": "draw"}])]}
-	t[100] = {"on": [trig("destroyed", [{"op": "status", "target": "event.by", "s": "paralyse", "n": 2}])]}
+	t[100] = {"on": [trig("destroyed", [by_unit_st("paralyse", 2)])]}
 	t[102] = {"abilities": [
 		abil("Change this unit's Type (Water/Fire/Earth/Lightning)", [{"op": "declare_type", "types": ["Water", "Fire", "Earth", "Lightning"], "as": "ty"}, {"op": "set_type", "target": "self", "var": "ty"}]),
 		abil("Apply 1 Curse to a unit with the same Type", [ch({"kind": "unit", "type": "$self_type"}, "u"), st("$u", "curse")])]}
 	t[135] = {"flags": ["rider_no_attack"], "aura": [{"to": "protector_dragon", "atk": 14}]}
 	t[150] = {"flags": ["no_defense"], "on": [trig("summoned", [ch({"kind": "spent", "side": "self"}, "u", false, "Move a card from Spent to the top of Draw."), {"op": "move", "target": "$u", "to": "draw_top"}]),
 		trig("tribute_or_sacrifice", [{"op": "ap", "n": 1}])]}
-	t[162] = {"flags": ["direct_attack"], "on": [trig("destroyed", [{"op": "status", "target": "event.by", "s": "blind", "n": 1}])]}
+	t[162] = {"flags": ["direct_attack"], "on": [trig("destroyed", [by_unit_st("blind", 1)])]}
 	t[155] = {"on": [trig("summoned", [st("self", "eternal")])], "aura": [{"to": "protector", "atk": 10}]}
 	t[156] = {"on": [trig("summoned", [st("self", "eternal")])], "aura": [{"to": "protector", "atk": 20}]}
 	t[157] = {"on": [trig("summoned", [st("self", "eternal")])], "aura": [{"to": "adjacent", "atk": 10}]}
@@ -417,7 +422,7 @@ static func _build() -> Dictionary:
 		"on": [trig("destroyed", [yes("Double all Debuffs on the Field?"), {"op": "double_debuffs", "side": "any"}])]}
 
 	# ------------------------------------------------------------ Ritual
-	t[98] = {"on": [trig("summoned", [st("self", "burn", 8)]), trig("destroyed", [{"op": "status", "target": "event.by", "s": "burn", "n": 4}])],
+	t[98] = {"on": [trig("summoned", [st("self", "burn", 8)]), trig("destroyed", [by_unit_st("burn", 4)])],
 		"abilities": [abil("Apply Reveal to a face-down card", [ch({"kind": "facedown"}, "u"), st("$u", "reveal")])]}
 	t[62] = {"on": [trig("summoned", [st("self", "curse")]), trig("destroyed", [ch({"kind": "unit"}, "u", true, "Apply 1 Curse to a unit?"), st("$u", "curse")])],
 		"abilities": [abil("Apply 1 Debilitate to a unit in this column", [ch({"kind": "unit", "column": true}, "u"), st("$u", "debilitate")])]}

@@ -234,3 +234,168 @@ func test_mirror_force_leaves_the_attackers_traps_and_powers() -> void:
 	assert_str(m.cards[t1]["zone"]).is_equal("backrow")
 	assert_str(m.cards[t2]["zone"]).is_equal("backrow")
 	assert_str(m.cards[pw]["zone"]).is_equal("power")
+
+
+# ---------------------------------------------------------------- core rules review (2026-10-16)
+
+## A lead MODE choice is made first, but its ops apply after the cost and the response
+## window, so Energy Dispel negates Shaman's Snunday Brew before the opponent loses HP.
+func test_lead_mode_applies_after_response_window_so_it_can_be_negated() -> void:
+	var m := TB.make()
+	var brew := TB.power(m, 0, 167)
+	TB.set_card(m, 1, 140, 0)                                 # Energy Dispel
+	TB.ability(m, brew)
+	assert_str(TB.choose(m, ["Opponent loses 4 HP"])).is_empty()
+	assert_int(m.players[1]["hp"]).is_equal(60)               # nothing applied before the window
+	assert_str(TB.pend_kind(m)).is_equal("trap_response")
+	TB.choose(m, ["Activate Energy Dispel"])
+	assert_int(m.players[1]["hp"]).is_equal(60)
+
+
+## Auric: the HP cost is paid before the chosen mode's +10 ATK applies.
+func test_lead_mode_effect_follows_the_hp_cost() -> void:
+	var m := TB.make()
+	var a := TB.unit(m, 0, 23, 0)
+	var atk0 := m.atk_of(a)
+	TB.ability(m, a)
+	TB.choose(m, ["gains +10 ATK"])
+	assert_int(m.players[0]["hp"]).is_equal(50)
+	assert_int(m.atk_of(a)).is_equal(atk0 + 10)
+	var hp_i := TB.log_index(m, "pays") if TB.log_index(m, "pays") != -1 else TB.log_index(m, "cost of")
+	var atk_i := TB.log_index(m, "+10 ATK")
+	assert_bool(hp_i != -1 and atk_i > hp_i).is_true()
+
+
+## Saviour Appears Defcon 2 is not offered when its column has no free zone.
+func test_column_summon_trap_not_offered_without_a_free_zone() -> void:
+	var m := TB.make()
+	TB.to_turn2(m)
+	var t := TB.set_card(m, 0, 52, 0)
+	TB.unit(m, 0, TB.WATER, 0)
+	TB.unit(m, 0, TB.WATER, 3)
+	TB.card(m, 0, TB.WATER, "spent")
+	TB.summon(m, 1, 28, 1)
+	assert_str(TB.pend_kind(m)).is_not_equal("trap_response")
+	assert_str(m.cards[t]["zone"]).is_equal("backrow")
+	assert_bool(m.cards[t]["face_up"]).is_false()
+
+
+## A Trap whose summon finds no free zone still finishes (goes to Spent) instead of
+## staying face-up on the Field to be activated again.
+func test_trap_finishes_even_when_its_summon_finds_no_zone() -> void:
+	var m := TB.make()
+	TB.to_turn2(m)
+	var t := TB.set_card(m, 0, 52, 0)
+	TB.unit(m, 0, TB.WATER, 0)
+	TB.unit(m, 0, TB.WATER, 3)
+	var dead := TB.card(m, 0, TB.WATER, "spent")
+	m.activate_trap(t, 0, {"name": "summon", "player": 1, "column": 0})
+	m.run()
+	if TB.pend_kind(m) == "select":
+		TB.choose_uids(m, [dead])
+	assert_bool(m.pending.is_empty()).is_true()
+	assert_str(m.cards[t]["zone"]).is_equal("spent")
+	assert_str(m.cards[dead]["zone"]).is_equal("spent")
+
+
+## Tag Team - X refuses its ability (no AP paid) when its column has no free zone.
+func test_column_summon_ability_refused_without_a_free_zone() -> void:
+	var m := TB.make()
+	var x := TB.unit(m, 0, 12, 0)
+	TB.unit(m, 0, TB.WATER, 3)
+	TB.card(m, 0, TB.WATER, "spent")
+	m.players[0]["ap"] = 2
+	var e := m.submit(0, {"t": "ability", "uid": x, "idx": 0})
+	assert_str(e).is_equal("No free zone in this column.")
+	assert_int(m.players[0]["ap"]).is_equal(2)
+
+
+## Sepukku: when the self-destroy cost is prevented (Mans Best Friend), no Fusion happens
+## and Sepukku is never offered as its own material.
+func test_sepukku_prevented_self_destroy_does_not_fusion() -> void:
+	var m := TB.make()
+	var sep := TB.unit(m, 0, 68, 0)
+	TB.unit(m, 0, 73, 3)                                       # Mans Best Friend, same column
+	TB.unit(m, 0, TB.FIRE, 1)
+	TB.unit(m, 0, 3, 2)
+	var sol := TB.card(m, 0, 181, "extra")                     # Warrior + Fire
+	assert_str(TB.ability(m, sep)).is_empty()
+	if TB.pend_kind(m) == "select" and m.pending["prompt"].contains("Fusion unit"):
+		TB.choose_uids(m, [sol])
+	var offered_self := false
+	if not m.pending.is_empty():
+		for o in m.pending["options"]:
+			if o.get("uid", -1) == sep:
+				offered_self = true
+	assert_bool(offered_self).is_false()
+	assert_bool(m.pending.is_empty()).is_true()
+	assert_str(m.cards[sol]["zone"]).is_equal("extra")
+	assert_str(m.cards[sep]["zone"]).is_equal("unit")
+
+
+## Ambush: a Bahatia-blocked Basic Unit does not use up a free zone.
+func test_ambush_skips_blocked_basics_without_wasting_zones() -> void:
+	var m := TB.make(7, 0)
+	TB.unit(m, 1, 141, 0)                                      # Bahatia blocks Physical summons
+	m.players[0]["hand"].clear()
+	TB.card(m, 0, TB.PHYSICAL)
+	TB.card(m, 0, TB.WATER)
+	TB.card(m, 0, TB.WATER)
+	for s in [0, 1, 2, 3]:
+		TB.unit(m, 0, TB.WATER, s)
+	TB.cast(m, 0, 42)
+	while not m.pending.is_empty():
+		var pd := m.pending
+		m.submit(pd["player"], {"t": "choose", "id": pd["id"], "indices": [pd["options"].size() - 1]})
+	assert_int(m.field_units(0).size()).is_equal(6)
+
+
+## "The Unit that Destroyed it" is only a unit: Gaping Crevasse destroyed by Martyrdom
+## (a Power) paralyses nothing.
+func test_destroyed_by_status_ignores_non_unit_destroyer() -> void:
+	var m := TB.make()
+	var mart := TB.power(m, 0, 148)
+	TB.unit(m, 0, TB.WATER, 0)
+	var crev := TB.unit(m, 1, 100, 0)
+	TB.ability(m, mart)
+	TB.choose(m, ["Basic Mage"])
+	TB.choose_uids(m, [crev])
+	assert_str(m.cards[crev]["zone"]).is_not_equal("unit")
+	assert_bool(m.cards[mart]["st"].is_empty()).is_true()
+
+
+## Every op named in a card script resolves to an _op_<name> method on MatchEngine.
+func test_every_card_script_op_has_an_engine_method() -> void:
+	var m := MatchEngine.new()
+	var missing := []
+	for d in CardDB.all():
+		var entry := CardScripts.get_entry(int(d["id"]))
+		_collect_missing_ops(m, entry, int(d["id"]), missing)
+	assert_array(missing).is_empty()
+
+
+func _collect_missing_ops(m: MatchEngine, node, id: int, missing: Array) -> void:
+	if node is Dictionary:
+		if node.has("op") and node["op"] is String and not m.has_method("_op_" + String(node["op"])):
+			missing.append("%d:%s" % [id, node["op"]])
+		for k in node:
+			_collect_missing_ops(m, node[k], id, missing)
+	elif node is Array:
+		for v in node:
+			_collect_missing_ops(m, v, id, missing)
+
+
+## Review follow-up: a mode only offers options that can do something, so Auric never pays its
+## 10 HP for "Destroy a face-down card" when no face-down card exists.
+func test_mode_offers_only_possible_options() -> void:
+	var m := TB.make()
+	var au := TB.unit(m, 0, 23, 0)
+	assert_str(TB.ability(m, au)).is_empty()
+	assert_str(TB.pend_kind(m)).is_equal("mode")
+	var labels: Array = m.pending["options"].map(func(o): return String(o["label"]))
+	assert_array(labels).is_equal(["This unit gains +10 ATK"])
+	TB.set_card(m, 1, 45, 0)                                # now a face-down card exists
+	m.submit(0, {"t": "cancel", "id": m.pending["id"]})
+	m.cards[au]["opt"] = {}
+	assert_str(TB.ability(m, au)).is_empty()
+	assert_int(m.pending["options"].size()).is_equal(2)

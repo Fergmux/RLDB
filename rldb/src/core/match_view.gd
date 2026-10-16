@@ -97,6 +97,22 @@ static func def_view(id: int) -> Dictionary:
 	return v
 
 
+## Display view of a card summary (Series._card_summary) for menus, rewards, decks and the
+## spotlight: a full card face with no game instance behind it.
+static func summary_view(c: Dictionary) -> Dictionary:
+	var kind := "ap"
+	match c["category"]:
+		"fusion": kind = "fusion"
+		"ritual": kind = "ritual"
+		"arcane": kind = "arcane"
+	var d := CardDB.get_def(c["id"])
+	var printed = d["cost"]
+	return {"uid": -1000 - c["id"], "id": c["id"], "name": c["name"], "category": c["category"], "cost_kind": kind,
+		"cost_text": c["cost_text"], "cost": printed if printed != null else 0, "printed_cost": printed,
+		"race": c["race"], "type": c["type"], "atk": c["atk"], "def": c["def"], "printed_atk": c["atk"], "printed_def": c["def"],
+		"text": c["text"], "support": c["support"], "art": d["art"], "statuses": {}, "runes": 0, "zone": "pile"}
+
+
 static func _rules_text(df: Dictionary) -> String:
 	var lines := []
 	for part in rules_parts(df):
