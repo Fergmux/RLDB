@@ -326,6 +326,9 @@ func target_rects() -> Array:
 	for f in st.get("focus", []):
 		out.append(_focus_rect(f))
 	if st.get("kind", "") == "do" and out.is_empty():
+		var multi := _multi_rects(st.get("expect", []))
+		if not multi.is_empty():
+			return multi.filter(func(r): return (r as Rect2).has_area())
 		for pat in st.get("expect", []):
 			out.append(_expect_rect(pat))
 			if String(pat.get("t", "")) == "choose":
@@ -335,6 +338,68 @@ func target_rects() -> Array:
 				if b.has_area() and b != out[-1]:
 					out.insert(out.size() - 1, b)
 	return out.filter(func(r): return (r as Rect2).has_area())
+
+
+## A multi-pick step (opt.cards, e.g. Arcane materials): the expected cards not yet selected of
+## every combination the current selection can still complete; Confirm once a combination is
+## complete; the off-combination picks (to deselect) when none can be completed. [] otherwise.
+func _multi_rects(pats: Array) -> Array:
+	var sets := []
+	for pat in pats:
+		if String(pat.get("t", "")) == "choose" and pat.get("opt", {}).has("cards"):
+			var w := TutorialScript.option_indices(host.game(), host.keys, pat["opt"])
+			if not w.is_empty():
+				sets.append(w)
+	if sets.is_empty():
+		return []
+	var sel: Array = gs.multi.duplicate()
+	sel.sort()
+	for w in sets:
+		if w == sel:
+			return [_banner_button_rect("Confirm")]
+	var out := []
+	var seen := {}
+	for w in sets:
+		if sel.all(func(i): return i in w):
+			for i in w:
+				if not (i in sel) and not seen.has(i):
+					seen[i] = true
+					out.append(_option_rect(i))
+	if out.is_empty():
+		for i in sel:
+			if not sets.any(func(w): return i in w):
+				out.append(_option_rect(i))
+		if out.is_empty():
+			for i in sel:
+				out.append(_option_rect(i))
+	return out
+
+
+func _banner_button_rect(text: String) -> Rect2:
+	if gs.prompt.banner_btns == null:
+		return Rect2()
+	for b in (gs.prompt.banner_btns as Node).get_children():
+		if b is Button and String((b as Button).text) == text:
+			return _rect_of(b)
+	return Rect2()
+
+
+## A Ritual / Arcane summon of an Extra Deck unit (F05-01): the Extra Deck pile until its list is
+## open, then the unit's row until it is selected, then the row's action button for the stance.
+func _extra_action_rect(uid: int, pat: Dictionary) -> Rect2:
+	var d := gs.details
+	if d.pile_zone != "extra":
+		return _rect_of(gs.board.piles[gs.board.side_of(gs.me())]["extra"])
+	var row := d.pile_row(uid)
+	if row == null:
+		return Rect2()
+	if d.pile_selected() != uid:
+		return _rect_of(row)
+	var want := "Summon Attack" if String(pat.get("stance", "atk")) == "atk" else "Summon Defense"
+	for b in row.find_children("*", "Button", true, false):
+		if String((b as Button).text) == want:
+			return _rect_of(b)
+	return _rect_of(row)
 
 
 func _seat(who: String) -> int:
@@ -408,6 +473,8 @@ func _expect_rect(pat: Dictionary) -> Rect2:
 		var r := _option_rect(i)
 		return r if r.has_area() else _option_button_rect(i)
 	var uid: int = int(host.keys.get(String(pat.get("card", "")), -1))
+	if t in ["ritual", "arcane"]:
+		return _extra_action_rect(uid, pat)
 	if uid == gs.selected_uid and gs.action_row.stack != null and is_instance_valid(gs.action_row.stack) \
 			and gs.action_row.stack.get_child_count() > 0:
 		return _rect_of(gs.action_row.stack)
@@ -490,7 +557,7 @@ func _show_complete() -> void:
 	var outer := VBoxContainer.new()
 	outer.add_theme_constant_override("separation", 0)
 	p.add_child(outer)
-	# Header band: "Lesson n of 5", flourish, headline, lesson name, progress.
+	# Header band: "Lesson n of N", flourish, headline, lesson name, progress.
 	var hb := PanelContainer.new()
 	var hs := UIStyle.flat(Color(0.17, 0.125, 0.055, 1.0), Color(UIStyle.GOLD, 0.6), 0, 10)
 	hs.corner_radius_bottom_left = 0

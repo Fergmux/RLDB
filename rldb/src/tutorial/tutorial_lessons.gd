@@ -17,7 +17,8 @@ extends RefCounted
 ##     do:   only a command matching one `expect` pattern is accepted; the step ends when it
 ##           succeeds (and `until` holds, when given — e.g. "press the phase button until the turn ends").
 ##     wait: the scripted opponent acts; the step ends as soon as `until` holds.
-##   command pattern: {t, card: key, stance, opt: {slot, zone, card: key, label}}
+##   command pattern: {t, card: key, stance, opt: {slot, zone, card: key, cards: [key], label}}
+##     opt.cards: a multi-pick (Arcane materials) of exactly those options, in any order.
 ##   condition: {active, phase, pending_kind, pending_player}
 ##   focus: {plate: me|opp} {hand: true} {pips: true} {pile: [me|opp, zone]} {slot: [me|opp, zone, n]}
 ##     {card: key}. A `do` step without focus highlights its expected card, button or option.
@@ -51,11 +52,27 @@ const MAGIC_CYLINDER := 45
 const BASTION_WYRM := 93
 const RAGING_INFERNO := 98
 const GRANDMOTHER_KAYA := 170
+const ACCURSED_ZEALOT := 17
+const THE_CREEPING_NULL := 65
+const BASIC_WARRIOR_PHYSICAL := 117
+const FLEDGLING_DRAKE := 33
+const HYDRA := 27
+const BOOM := 175
+const BASIC_BEAST_LIGHTNING := 133
 
 
 ## All lessons in play order.
 static func all() -> Array:
-	return [_turn_flow(), _summoning(), _battle(), _spells_traps(), _extra_deck()]
+	return [_turn_flow(), _summoning(), _battle(), _spells_traps(), _extra_deck(), _ritual(), _arcane()]
+
+
+## Index of the lesson with id `id`, or -1.
+static func index_of(id: String) -> int:
+	var ls := all()
+	for i in ls.size():
+		if String(ls[i]["id"]) == id:
+			return i
+	return -1
 
 
 ## Number of lessons.
@@ -264,7 +281,7 @@ static func _extra_deck() -> Dictionary:
 		"learned": ["[kw]Fusion[/kw], [kw]Ritual[/kw] and [kw]Arcane[/kw] units wait in the [zone]Extra Deck[/zone]", "Fusion tributes its listed materials to [zone]Spent[/zone]", "Summoned units may attack at once"],
 		"setup": {"first": OPPONENT, "turn": 2, "hp": [START_HP, START_HP], "cards": cards},
 		"steps": [
-			_read("The Extra Deck", "[kw]Fusion[/kw], [kw]Ritual[/kw] and [kw]Arcane[/kw] units wait in your [zone]Extra Deck[/zone].\n\nThey are never drawn; each kind has its own way to be summoned.", [{"pile": ["me", "extra"]}]),
+			_read("The Extra Deck", "[kw]Fusion[/kw], [kw]Ritual[/kw] and [kw]Arcane[/kw] units wait in your [zone]Extra Deck[/zone].\n\nThey are never drawn; each kind has its own way to be summoned.\nThis lesson is [kw]Fusion[/kw]; the next two cover Ritual and Arcane.", [{"pile": ["me", "extra"]}]),
 			_read("Fusion materials", "[card]Bastion Wyrm[/card] needs a [kw]Beast[/kw] unit and a [kw]Dragon[/kw] unit.\n\nYour [type]Earth[/type] Beast and [type]Fire[/type] Dragon on the field fit.", [{"slot": ["me", "unit", 0]}, {"slot": ["me", "unit", 1]}]),
 			_do("Cast Polymerization", "Click [card]Polymerization[/card] in your [zone]Hand[/zone] and click [btn]Cast[/btn].", [{"t": "cast", "card": "p_poly"}]),
 			_do("Choose the Fusion unit", "Click [card]Bastion Wyrm[/card].", [{"t": "choose", "opt": {"card": "p_wyrm"}}]),
@@ -274,11 +291,89 @@ static func _extra_deck() -> Dictionary:
 			_do("Choose its stance", "Click [btn]Attack[/btn] to summon it in Attack stance.", [{"t": "choose", "opt": {"label": "Attack"}}]),
 			_do("Confirm", "Nothing has been paid or tributed yet: [btn]Cancel[/btn] would undo the whole cast.\n\nClick [btn]Confirm[/btn].", [{"t": "choose", "opt": {"label": "Confirm"}}]),
 			_read("Tribute", "The Beast and Dragon were tributed to [zone]Spent[/zone]: tribute is neither destruction nor sacrifice and refunds no [stat]AP[/stat].\n\n[card]Bastion Wyrm[/card] ([stat]36 ATK[/stat] / [stat]40 DEF[/stat]) arrived and gained [kw]Eternal[/kw].", [{"slot": ["me", "unit", 1]}, {"pile": ["me", "spent"]}]),
-			_read("Ritual and Arcane", "[kw]Ritual[/kw] units (like [card]Raging Inferno[/card]) tribute one unit carrying enough [kw]Runes[/kw].\n\n[kw]Arcane[/kw] units (like [card]Grandmother Kaya[/card]) exhaust units from your [zone]Spent[/zone] whose current costs add up to [b]exactly[/b] their requirement.", [{"pile": ["me", "extra"]}]),
 			_do("Enter the Battle Phase", "Newly summoned units may attack at once.\n\nClick [btn]Go to Battle Phase[/btn].", [{"t": "next_phase"}]),
 			_do("Attack with the Wyrm", "Click [card]Bastion Wyrm[/card] and click [btn]Attack[/btn].", [{"t": "attack", "card": "p_wyrm"}]),
 			_do("Pick the target", "Click the Rival's [type]Fire[/type] Monster.\n\nNo Type advantage either way: 36 against 8.", [{"t": "choose", "opt": {"card": "o_monster"}}]),
-			_read("Tutorial complete", "[stat]36 ATK[/stat] against 8: the Monster is destroyed and the Rival loses [stat]28 HP[/stat].\n\nYou have finished the tutorial. Good luck in your first series!", [{"plate": "opp"}]),
+			_read("Lesson complete", "[stat]36 ATK[/stat] against 8: the Monster is destroyed and the Rival loses [stat]28 HP[/stat].\n\nNext: [kw]Ritual[/kw] summoning, which tributes a unit carrying [kw]Runes[/kw].", [{"plate": "opp"}]),
+		],
+		"opponent": [],
+	}
+
+
+# ---------------------------------------------------------------- lesson 6
+
+## Ritual (F05-01, design/playtest-feedback-05.md; rules/01-GAME-RULES.md "Ritual", P-10): Runes
+## on a unit, one more from a real Rune source, then tributing that unit for a Ritual unit.
+## Accursed Zealot starts with 1 Rune and gains its own at the real start of the turn (2), and
+## Sacred Offerings makes 3 = The Creeping Null's requirement.
+static func _ritual() -> Dictionary:
+	var cards := [
+		_c("p_zealot", ACCURSED_ZEALOT, PLAYER, "unit", 1),
+		_c("p_offer", SACRED_OFFERINGS, PLAYER, "hand"),
+		_c("p_null", THE_CREEPING_NULL, PLAYER, "extra"),
+		_c("o_warrior", BASIC_WARRIOR_PHYSICAL, OPPONENT, "unit", 1),
+	] + _fill("p_hand", BASIC_MAGE_FIRE, PLAYER, 3, "hand") + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) \
+		+ _fill("o_fill", BASIC_MONSTER_NECROTIC, OPPONENT, 8)
+	cards[0]["runes"] = 1
+	return {
+		"id": "ritual",
+		"title": "Lesson 6 · Extra Deck: Ritual",
+		"summary": "[kw]Ritual[/kw] units are summoned by tributing one of your units that carries enough [kw]Runes[/kw]. The material goes to [zone]Spent[/zone] and loses its Runes.",
+		"learned": ["[kw]Runes[/kw] are counters on a unit, added by cards such as [card]Sacred Offerings[/card]", "A Ritual summon tributes one unit with at least the required Runes", "The material goes to [zone]Spent[/zone]; Runes never leave the field with it"],
+		"setup": {"first": OPPONENT, "turn": 2, "hp": [START_HP, START_HP], "cards": cards},
+		"steps": [
+			_read("Runes", "[kw]Runes[/kw] are counters on a unit. They are not buffs, so Curse does not remove them.\n\n[card]Accursed Zealot[/card] came with 1 Rune and gains another at the start of each of your turns: it now has 2.", [{"slot": ["me", "unit", 1]}]),
+			_read("A Ritual unit", "[card]The Creeping Null[/card] waits in your [zone]Extra Deck[/zone].\n\nIts [kw]Ritual[/kw] requirement is 3: tribute one of your units carrying at least [stat]3 Runes[/stat].", [{"pile": ["me", "extra"]}]),
+			_do("Add a Rune", "Click [card]Sacred Offerings[/card] in your [zone]Hand[/zone] and click [btn]Cast[/btn].\n\nIt costs [stat]1 AP[/stat].", [{"t": "cast", "card": "p_offer"}]),
+			_do("Choose its target", "Click your [card]Accursed Zealot[/card] to give it a third [kw]Rune[/kw].", [{"t": "choose", "opt": {"card": "p_zealot"}}]),
+			_read("Enough Runes", "The Zealot now carries [stat]3 Runes[/stat]: enough for [card]The Creeping Null[/card].\n\nA Ritual summon costs no [stat]AP[/stat]; the Runes are its price.", [{"slot": ["me", "unit", 1]}]),
+			_do("Open the Ritual summon", "Click your [zone]Extra Deck[/zone] pile, click [card]The Creeping Null[/card] in the list, then click [btn]Summon Attack[/btn].", [{"t": "ritual", "card": "p_null", "stance": "atk"}]),
+			_do("Choose the material", "Only units with at least 3 Runes are offered.\n\nClick the Zealot to tribute it.", [{"t": "choose", "opt": {"card": "p_zealot"}}]),
+			_do("Choose its zone", "The material leaves the field first, so its zone is free for the Ritual unit.\n\nClick the highlighted zone.", [{"t": "choose", "opt": {"slot": 1}}]),
+			_read("Where the material went", "The Zealot was tributed to your [zone]Spent[/zone] pile. Its Runes were removed as it left the field: Runes never travel with a card.\n\nOn Summon, [card]The Creeping Null[/card] [kw]Paralysed[/kw] the Rival's units: they cannot attack or move zones.", [{"pile": ["me", "spent"]}, {"slot": ["me", "unit", 1]}]),
+			_do("Enter the Battle Phase", "Click [btn]Go to Battle Phase[/btn].", [{"t": "next_phase"}]),
+			_do("Attack with the Null", "Click [card]The Creeping Null[/card] and click [btn]Attack[/btn].", [{"t": "attack", "card": "p_null"}]),
+			_do("Pick the target", "Click the Rival's [type]Physical[/type] Warrior.\n\nNo Type advantage either way: [stat]46 ATK[/stat] against 8.", [{"t": "choose", "opt": {"card": "o_warrior"}}]),
+			_read("Lesson complete", "The Warrior was in Attack stance, so the Rival lost the difference: [stat]38 HP[/stat].\n\nNext: [kw]Arcane[/kw] summoning, which pays with units from your [zone]Spent[/zone] pile.", [{"plate": "opp"}]),
+		],
+		"opponent": [],
+	}
+
+
+# ---------------------------------------------------------------- lesson 7
+
+## Arcane (F05-01; rules/01-GAME-RULES.md "Arcane" as superseded by F03-04 exact totals and F03-05
+## zero-cost exclusion). Spent: a 0-cost Drake (not offered), a 1-cost Mage and two 2-cost Dragons,
+## against Boom's requirement of 3: Mage + either Dragon is exact, both Dragons (4) over-pay and
+## any single card under-pays.
+static func _arcane() -> Dictionary:
+	var cards := [
+		_c("s_drake", FLEDGLING_DRAKE, PLAYER, "spent"),
+		_c("s_mage", BASIC_MAGE_WATER, PLAYER, "spent"),
+		_c("s_wyvern", FROST_WYVERN, PLAYER, "spent"),
+		_c("s_hydra", HYDRA, PLAYER, "spent"),
+		_c("p_boom", BOOM, PLAYER, "extra"),
+		_c("o_beast", BASIC_BEAST_LIGHTNING, OPPONENT, "unit", 1, "def"),
+	] + _fill("p_hand", BASIC_MAGE_FIRE, PLAYER, 4, "hand") + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) \
+		+ _fill("o_fill", BASIC_MONSTER_NECROTIC, OPPONENT, 8)
+	return {
+		"id": "arcane",
+		"title": "Lesson 7 · Extra Deck: Arcane",
+		"summary": "[kw]Arcane[/kw] units are summoned by exhausting units from your [zone]Spent[/zone] whose current costs total [b]exactly[/b] the requirement. No AP is paid.",
+		"learned": ["Arcane materials come from your [zone]Spent[/zone] pile, not the field", "Their current costs must total [b]exactly[/b] the requirement; 0-cost units are not offered", "The materials are [kw]exhausted[/kw] for the rest of the game"],
+		"setup": {"first": OPPONENT, "turn": 2, "hp": [START_HP, START_HP], "cards": cards},
+		"steps": [
+			_read("An Arcane unit", "[card]Boom, Councillor of The Order[/card] is an [kw]Arcane[/kw] unit with a requirement of 3.\n\nIt is paid with units from your [zone]Spent[/zone] pile whose current costs total [b]exactly[/b] 3. You pay no [stat]AP[/stat].", [{"pile": ["me", "extra"]}]),
+			_read("Your Spent pile", "Your [zone]Spent[/zone] holds [card]Fledgling Drake[/card] (cost 0), [card]Basic Mage[/card] (1), [card]Frost Wyvern[/card] (2) and [card]Hydra[/card] (2).\n\nA 0-cost unit adds nothing to the total, so the Drake is not offered.", [{"pile": ["me", "spent"]}]),
+			_do("Open the Arcane summon", "Click your [zone]Extra Deck[/zone] pile, click [card]Boom, Councillor of The Order[/card] in the list, then click [btn]Summon Attack[/btn].", [{"t": "arcane", "card": "p_boom", "stance": "atk"}]),
+			_read("Exactly 3", "The banner shows [stat]cost total 0 / exactly 3[/stat].\n\nBoth Dragons make 4, too much: [btn]Confirm[/btn] stays disabled. One card alone is too little. The Mage and one Dragon make exactly 3.", []),
+			_do("Choose the materials", "Click the [card]Basic Mage[/card] and one Dragon, then click [btn]Confirm[/btn].", [{"t": "choose", "opt": {"cards": ["s_mage", "s_wyvern"]}}, {"t": "choose", "opt": {"cards": ["s_mage", "s_hydra"]}}]),
+			_do("Choose its zone", "Arcane materials come from [zone]Spent[/zone], so they free no zone on the field.\n\nClick the highlighted zone.", [{"t": "choose", "opt": {"slot": 1}}]),
+			_read("Exhausted", "The Mage and the Dragon were [kw]exhausted[/kw]: they are in your [zone]Exhaust[/zone] pile for the rest of this game, and their field effects did not trigger.\n\nOn Summon, Boom changed the stance of the Rival's units: the Beast is now in [kw]Attack stance[/kw].", [{"pile": ["me", "exhaust"]}, {"slot": ["me", "unit", 1]}]),
+			_do("Enter the Battle Phase", "Click [btn]Go to Battle Phase[/btn].", [{"t": "next_phase"}]),
+			_do("Attack with Boom", "Click [card]Boom, Councillor of The Order[/card] and click [btn]Attack[/btn].", [{"t": "attack", "card": "p_boom"}]),
+			_do("Pick the target", "[type]Earth[/type] is effective against [type]Lightning[/type]: Boom gets [stat]+6 ATK[/stat] (36 against 8).\n\nClick the Rival's Beast.", [{"t": "choose", "opt": {"card": "o_beast"}}]),
+			_read("Tutorial complete", "The Beast was in Attack stance, so the Rival lost the difference: [stat]28 HP[/stat].\n\nYou have finished the tutorial. Good luck in your first series!", [{"plate": "opp"}]),
 		],
 		"opponent": [],
 	}

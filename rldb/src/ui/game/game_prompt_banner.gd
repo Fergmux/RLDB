@@ -203,7 +203,9 @@ func _multi_status(pd: Dictionary) -> String:
 	if pd.get("min_total", 0) > 0:
 		var total := 0
 		for i in gs.multi:
-			total += maxi(pd["options"][i].get("card", {}).get("cost", 0), 0)
+			# The option's `value` is the material's current (modified) cost, as the authority counts it.
+			var o: Dictionary = pd["options"][i]
+			total += maxi(int(o.get("value", o.get("card", {}).get("cost", 0))), 0)
 		total_txt = "  ·  cost total %d / %s%d" % [total, "exactly " if pd.get("total_exact", false) else "", pd["min_total"]]
 	var rng := "%d" % pd["min"] if pd["min"] == pd["max"] else "%d–%d" % [pd["min"], pd["max"]]
 	return "Selected %d of %s%s" % [gs.multi.size(), rng, total_txt]
