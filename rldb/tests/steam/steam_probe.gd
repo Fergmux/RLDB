@@ -1,7 +1,7 @@
 extends SceneTree
 ## Real-environment Steam probe (single account). Not part of the automated suite.
 ##   godot --path rldb -s res://tests/steam/steam_probe.gd -- <evidence dir>
-## Verifies: init with App ID 480, friends-only lobby creation + lobby data, host socket,
+## Verifies: init with App ID 480 (at engine startup, so the overlay is injected), friends-only lobby creation + lobby data, host socket,
 ## invite overlay call, public lobby creation and discovery through the lobby search,
 ## lobby membership/ownership, and leaving. Writes a JSON report next to a screenshot.
 
@@ -30,8 +30,10 @@ func _wait_signal(sig: Signal, seconds: float) -> Array:
 
 
 func _run() -> void:
-	SteamBridge.init(480)
+	SteamBridge.init()
 	report["init_ok"] = SteamBridge.available()
+	await create_timer(1.0).timeout
+	report["overlay_enabled"] = SteamBridge.steam().isOverlayEnabled() if SteamBridge.available() else false
 	report["init_message"] = SteamBridge.describe()
 	if not SteamBridge.available():
 		_finish()

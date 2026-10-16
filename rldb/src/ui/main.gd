@@ -7,7 +7,6 @@ extends Control
 ## Dev drivers (src/dev) and tests reach in through the members kept here: `screen`,
 ## `local_host`, `menu`, `opts`, `_privacy`, `_shown_seat`, `_start_local`, `_show_menu`, ...
 
-const DEFAULT_STEAM_APP_ID := 480
 const DEV_SAVES_DIR := "user://dev_saves"
 const DECKBUILDER_SHOT_DRIVER := "res://src/dev/deck_builder_shot_driver.gd"
 
@@ -68,8 +67,7 @@ func _ready() -> void:
 	Music.start()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if not ("--no-steam" in args):
-		var cfg := Series.load_mode_config()
-		SteamBridge.init(int(cfg.get("steam_app_id", DEFAULT_STEAM_APP_ID)))
+		SteamBridge.init()
 		if SteamBridge.available():
 			SteamBridge.steam().join_requested.connect(_on_steam_join_requested)
 	_parse_cmdline()

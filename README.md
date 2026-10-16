@@ -32,8 +32,10 @@ Extra command-line flags (after `--`): `--no-steam`, `--seed=N`, `--draft`, `--b
 ## Steam
 
 - Uses **GodotSteam 4.23 GDExtension** (`rldb/addons/godotsteam`) and **App ID 480** (Valve's
-  Spacewar test app) for development. Change `steam_app_id` in `rldb/data/mode_config.json`
-  when you have your own App ID.
+  Spacewar test app) for development. Change `steam/initialization/app_data/app_id` in
+  `rldb/project.godot` (and `steam_appid.txt` next to a dev build) when you have your own App ID.
+- GodotSteam initialises Steam at engine startup, before the renderer, so the Steam overlay
+  (invite dialog) works with D3D12 even when the exe is not launched through Steam.
 - The Steam client must be running and logged in before the game starts; otherwise the menu
   says so and the hot-seat/LAN modes still work.
 - Host flow: *Host Steam lobby* creates a friends-only lobby and opens the Steam invite dialog.

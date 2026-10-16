@@ -11,6 +11,9 @@ const LOBBY_PUBLIC := 2
 const LOBBY_ENTER_SUCCESS := 1
 const LOBBY_GAME_KEY := "rldb_game"
 const LOBBY_GAME_VALUE := "RLDB-v1"
+## The App ID lives in the project settings: GodotSteam reads it when it initialises at startup.
+## 480 is Valve's Spacewar test app (development only); replace it with the real App ID.
+const APP_ID_SETTING := "steam/initialization/app_data/app_id"
 
 static var _tried := false
 static var _ok := false
@@ -22,22 +25,38 @@ static func steam() -> Object:
 	return Engine.get_singleton("Steam") if Engine.has_singleton("Steam") else null
 
 
-## Initialises Steam once. Callbacks are embedded (GodotSteam runs them per frame).
-static func init(id: int) -> void:
+## Picks up Steam once. GodotSteam initialises it at engine startup (initialize_on_startup),
+## before the renderer exists: that is what lets the Steam overlay (invite dialog) hook D3D12 and
+## Vulkan when the game is not launched by Steam; a later init only gets an overlay with OpenGL.
+## If the startup init did not succeed it is retried here. Callbacks cannot be embedded at startup
+## (there is no SceneTree yet), so they are run every frame from here.
+static func init() -> void:
 	if _tried:
 		return
 	_tried = true
-	app_id = id
+	app_id = int(ProjectSettings.get_setting(APP_ID_SETTING, 480))
 	var s := steam()
 	if s == null:
 		_message = "Steam integration unavailable: the GodotSteam extension is not loaded on this platform."
 		return
-	var r: Dictionary = s.steamInitEx(id, true)
+	var r: Dictionary = s.get_steam_init_result()
+	if int(r.get("status", -1)) != INIT_OK:
+		r = s.steamInitEx(app_id, false)
 	_ok = int(r.get("status", -1)) == INIT_OK
 	if _ok:
-		_message = "Steam ready as %s (App ID %d%s)." % [s.getPersonaName(), s.getAppID(), " — Spacewar dev ID" if id == 480 else ""]
+		(Engine.get_main_loop() as SceneTree).process_frame.connect(s.run_callbacks)
+		_message = "Steam ready as %s (App ID %d%s)." % [s.getPersonaName(), s.getAppID(), " — Spacewar dev ID" if app_id == 480 else ""]
 	else:
 		_message = "Steam unavailable (%s). Start the Steam client and log in, then restart the game. LAN/hot-seat modes still work." % r.get("verbal", "unknown error")
+	print(_message)
+	if _ok:
+		_log_overlay()
+
+
+## Logs whether the Steam overlay hooked the renderer (it needs a moment after the first frames).
+static func _log_overlay() -> void:
+	await (Engine.get_main_loop() as SceneTree).create_timer(2.0).timeout
+	print("Steam overlay %s." % ("available" if steam().isOverlayEnabled() else "NOT available (invites need the overlay)"))
 
 
 static func available() -> bool:
