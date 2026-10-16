@@ -173,7 +173,22 @@ func _slot_rect(side: int, zone: String, slot: int) -> Rect2:
 			return Rect2(_ux + slot * (UNIT_SIZE + SLOT_GAP), _y0 + (0.0 if side == 0 else 645.0), UNIT_SIZE, TRAP_H)
 	var bx := _ux - PILE_GAP - (2.0 * POWER_W + SLOT_GAP) if side == 0 else _ux + 3.0 * UNIT_SIZE + 2.0 * SLOT_GAP + PILE_GAP
 	var by := _y0 + (93.0 if side == 0 else 373.0)
-	return Rect2(bx + (slot % 2) * (POWER_W + SLOT_GAP), by + int(slot / 2) * (UNIT_SIZE + SLOT_GAP), POWER_W, UNIT_SIZE)
+	var cell := power_cell(side, slot)
+	return Rect2(bx + cell.x * (POWER_W + SLOT_GAP), by + cell.y * (UNIT_SIZE + SLOT_GAP), POWER_W, UNIT_SIZE)
+
+
+## F03-07: displayed (column, row) of authoritative Power slot `slot` in the 2x2 Power block of
+## board side `side` (1 = my half, 0 = the opponent's). My own block shows slot s at column
+## s % 2, row s / 2. The opponent's block is that arrangement rotated 180 degrees (both axes
+## mirrored), so the slot nearest an owner's front unit row stays nearest that row from either
+## seat: slot 0 top-left -> bottom-right, 1 top-right -> bottom-left, 2 -> top-right, 3 -> top-left.
+## Display only: slot ids and the cards in them never change.
+static func power_cell(side: int, slot: int) -> Vector2i:
+	var col := slot % 2
+	var row := slot / 2
+	if side == 0:
+		return Vector2i(1 - col, 1 - row)
+	return Vector2i(col, row)
 
 
 ## Lays the field out in the screen's play area (window size w x h).
