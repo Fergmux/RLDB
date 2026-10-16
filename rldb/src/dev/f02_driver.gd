@@ -105,15 +105,15 @@ func _steps() -> void:
 	var sig0 := _state_sig()
 	await _move(_hand_rect(uids["h_water"]).get_center())
 	await _wait(0.5)
-	_check("F02-01 hover shows details", gs._details_uid() == uids["h_water"], "details uid %d" % gs._details_uid())
-	_check("F02-01 hover shows no action buttons", gs._stack == null)
+	_check("F02-01 hover shows details", gs.details.details_uid() == uids["h_water"], "details uid %d" % gs.details.details_uid())
+	_check("F02-01 hover shows no action buttons", gs.action_row.stack == null)
 	await _shot("02_hover_hand_details_no_actions")
 	await _move(_slot_rect(a, "unit", 4).get_center())
 	await _wait(0.4)
-	_check("F02-01 hover field card: details, no actions", gs._details_uid() == uids["pierce"] and gs._stack == null)
+	_check("F02-01 hover field card: details, no actions", gs.details.details_uid() == uids["pierce"] and gs.action_row.stack == null)
 	await _move(_slot_rect(o, "backrow", 2).get_center())
 	await _wait(0.4)
-	_check("F02-01 hidden card never inspected", gs._details_uid() != uids["o_trap"] and gs._hv.is_empty())
+	_check("F02-01 hidden card never inspected", gs.details.details_uid() != uids["o_trap"] and gs.hover.hv.is_empty())
 	await _hover_sweep()
 	_check("F02-01 hover sweep changed no state and sent nothing", _state_sig() == sig0)
 	# F02-01 click-select and F02-02 summon buttons.
@@ -131,7 +131,7 @@ func _steps() -> void:
 	await _click_row("Summon Defense")
 	await _wait(0.4)
 	_check("F02-02 summon goes straight to zone choice (no stance menu)", m.pending.get("kind", "") == "slot")
-	_check("F02-07 banner explains the choice", gs.ctx_banner.visible and gs.banner_title.text.contains("zone"), gs.banner_title.text)
+	_check("F02-07 banner explains the choice", gs.prompt.ctx_banner.visible and gs.prompt.banner_title.text.contains("zone"), gs.prompt.banner_title.text)
 	_check("F02-07 no sidebar list of zones", not ("prompt_box" in gs))
 	await _shot("04_summon_zone_banner")
 	await _click(_zone_rect(a, "unit", 3).get_center())
@@ -158,12 +158,12 @@ func _steps() -> void:
 	await _shot("06_field_selected_short_labels")
 	await _click_row("Apply Pierce")
 	await _wait(0.4)
-	_check("F02-07 target banner names the effect", gs.ctx_banner.visible and m.pending.get("kind", "") == "select", gs.banner_title.text)
+	_check("F02-07 target banner names the effect", gs.prompt.ctx_banner.visible and m.pending.get("kind", "") == "select", gs.prompt.banner_title.text)
 	await _shot("07_ability_target_banner")
 	await _click(_slot_rect(a, "unit", 0).get_center())
 	await _wait(0.6)
 	_check("F02-07 direct click applied Pierce", m.status_count(uids["water"], "pierce") == 1 and m.pending.is_empty())
-	_check("F02-07 interaction state valid after completion", not gs.ctx_banner.visible)
+	_check("F02-07 interaction state valid after completion", not gs.prompt.ctx_banner.visible)
 	# F02-09 toast: Loak in column 3 (no opponent unit there).
 	await _click(_hand_rect(uids["h_loak"]).get_center())
 	await _wait(0.3)
@@ -171,7 +171,7 @@ func _steps() -> void:
 	await _wait(0.3)
 	await _click(_zone_rect(a, "unit", 5).get_center())
 	await _wait(0.5)
-	_check("F02-09 toast explains missing target", gs.toast.text.contains("no legal target"), gs.toast.text)
+	_check("F02-09 toast explains missing target", gs.prompt.toast.text.contains("no legal target"), gs.prompt.toast.text)
 	_check("F02-09 no fake choice / queue not stuck", m.pending.is_empty() and m.stack.is_empty())
 	await _shot("08_no_target_toast")
 	# F02-10 single pick from a pile tray (Anduras: unit from Spent to Draw).
@@ -181,12 +181,12 @@ func _steps() -> void:
 	await _wait(0.3)
 	await _click(_zone_rect(a, "unit", 2).get_center())
 	await _wait(0.6)
-	_check("F02-10 pile cards offered in the tray", gs.tray.visible and _tray_widgets().size() == 3, "tray %s n %d" % [gs.tray.visible, _tray_widgets().size()])
+	_check("F02-10 pile cards offered in the tray", gs.prompt.tray.visible and _tray_widgets().size() == 3, "tray %s n %d" % [gs.prompt.tray.visible, _tray_widgets().size()])
 	_check("F02-10 no per-card Choose buttons", _tray_buttons() == 0)
 	var tw0: CardWidget = _tray_widgets()[0]
 	await _move(tw0.get_global_rect().get_center())
 	await _wait(0.4)
-	_check("F02-10 hovering a tray card shows its details", gs._details_uid() == int(tw0.view["uid"]))
+	_check("F02-10 hovering a tray card shows its details", gs.details.details_uid() == int(tw0.view["uid"]))
 	await _shot("09_pile_tray_single")
 	var picked := int(tw0.view["uid"])
 	await _click(tw0.get_global_rect().get_center())
@@ -198,13 +198,13 @@ func _steps() -> void:
 	await _click_row("Sacrifice")
 	await _wait(0.6)
 	# Extra Deck: click-to-act inside the pile popup, then an ordered multi tray.
-	_check("Extra pile stack shows the summon-ready ring", (gs._piles[1]["extra"] as PileStack).ready_mark)
-	await _click((gs._piles[1]["extra"] as Control).get_global_rect().get_center())
+	_check("Extra pile stack shows the summon-ready ring", (gs.board.piles[1]["extra"] as PileStack).ready_mark)
+	await _click((gs.board.piles[1]["extra"] as Control).get_global_rect().get_center())
 	await _wait(0.4)
-	_check("FB5-10 pile opens as a list in the details panel", gs.pile_scroll.visible and not gs.pile_popup.visible and gs.details_title.text.contains("Extra"), gs.details_title.text)
+	_check("FB5-10 pile opens as a list in the details panel", gs.details.pile_scroll.visible and not gs.overlays.pile_popup.visible and gs.details.details_title.text.contains("Extra"), gs.details.details_title.text)
 	for row in _pile_cells():
 		if int((row as Node).get_meta("uid", -1)) == uids["tyde"]:
-			gs.pile_scroll.ensure_control_visible(row)
+			gs.details.pile_scroll.ensure_control_visible(row)
 			await _wait(0.2)
 			await _click((row as Control).get_global_rect().get_center())
 			await _wait(0.4)
@@ -216,7 +216,7 @@ func _steps() -> void:
 		await _click(arc_btn.get_global_rect().get_center())
 		await _wait(0.5)
 		var trays := _tray_widgets()
-		_check("F02-10 multi selection tray", gs.tray.visible and trays.size() >= 2)
+		_check("F02-10 multi selection tray", gs.prompt.tray.visible and trays.size() >= 2)
 		if trays.size() >= 2:
 			await _click((trays[1] as Control).get_global_rect().get_center())
 			await _wait(0.3)
@@ -234,7 +234,7 @@ func _steps() -> void:
 			_check("F02-02 Arcane summon entered Defense", m.cards[uids["tyde"]]["zone"] == "unit" and m.cards[uids["tyde"]]["stance"] == "def")
 	await _shot("12_after_arcane")
 	# F02-12 combat preview.
-	await _click(gs.phase_btn.get_global_rect().get_center())
+	await _click(gs.sidebar.phase_btn.get_global_rect().get_center())
 	await _wait(1.2)
 	_check("phase advanced to Battle by the real button", m.phase == "battle")
 	_check("F02-11 attack-ready unit highlighted in Battle", _w_slot(a, "unit", 0).is_ready_on())
@@ -246,17 +246,17 @@ func _steps() -> void:
 	var sig1 := _state_sig()
 	await _move(_slot_rect(o, "unit", 0).get_center())
 	await _wait(0.5)
-	_check("F02-12 Water 8 vs Fire 10 previews 14 vs 10", _w_slot(a, "unit", 0).has_preview() and gs._preview_text.contains("14") and gs._preview_text.contains("10"), gs._preview_text)
-	_check("F02-12 favourable = green arrow", gs._preview_verdict == "good" and gs.arrow.col == GameScreen.VERDICT_COLORS["good"])
-	_check("F02-12 hidden trap caveat", gs._preview_text.contains("face-down"))
+	_check("F02-12 Water 8 vs Fire 10 previews 14 vs 10", _w_slot(a, "unit", 0).has_preview() and gs.preview.text.contains("14") and gs.preview.text.contains("10"), gs.preview.text)
+	_check("F02-12 favourable = green arrow", gs.preview.verdict == "good" and gs.arrow.col == GameScreen.VERDICT_COLORS["good"])
+	_check("F02-12 hidden trap caveat", gs.preview.text.contains("face-down"))
 	await _shot("13_preview_favourable")
 	await _move(_slot_rect(o, "unit", 1).get_center())
 	await _wait(0.5)
-	_check("F02-12 Defense tie previews stalemate (neutral)", gs._preview_verdict == "neutral" and gs._preview_text.contains("nothing destroyed"), gs._preview_text)
+	_check("F02-12 Defense tie previews stalemate (neutral)", gs.preview.verdict == "neutral" and gs.preview.text.contains("nothing destroyed"), gs.preview.text)
 	await _shot("14_preview_stalemate_neutral")
-	await _move(Vector2(gs._area.position.x + 30, gs._area.get_center().y))
+	await _move(Vector2(gs.play_area.position.x + 30, gs.play_area.get_center().y))
 	await _wait(0.4)
-	_check("F02-12 preview restored on hover exit", gs._preview_ws.is_empty() and not _w_slot(a, "unit", 0).has_preview() and gs._preview_text == "")
+	_check("F02-12 preview restored on hover exit", gs.preview.ws.is_empty() and not _w_slot(a, "unit", 0).has_preview() and gs.preview.text == "")
 	_check("F02-12 previews mutated nothing and sent nothing", _state_sig() == sig1)
 	await _key(KEY_ESCAPE)
 	await _wait(0.4)
@@ -268,22 +268,22 @@ func _steps() -> void:
 	await _wait(0.4)
 	await _move(_slot_rect(o, "unit", 1).get_center())
 	await _wait(0.5)
-	_check("F02-12 Fire 10 vs defending Water 8+6 = 14 is unfavourable/red", gs._preview_verdict == "bad" and gs._preview_text.contains("14"), gs._preview_text)
+	_check("F02-12 Fire 10 vs defending Water 8+6 = 14 is unfavourable/red", gs.preview.verdict == "bad" and gs.preview.text.contains("14"), gs.preview.text)
 	await _shot("15_preview_unfavourable")
 	await _click(_slot_rect(o, "unit", 1).get_center())
 	await _wait(0.8)
 	if m.pending.get("kind", "") == "trap_response":
 		await _click(_slot_rect(a, "unit", 0).get_center())
 		await _wait(0.3)
-		_check("F02-01 response lock: own card shows no actions", gs._stack == null)
+		_check("F02-01 response lock: own card shows no actions", gs.action_row.stack == null)
 		# Hot-seat hands the screen to the responder at once; look from the waiting seat explicitly.
 		_view_seat(a)
 		await _wait(0.4)
-		_check("FB4-22 opponent-is-responding notice in the middle of the board", gs.wait_chip.visible and gs.wait_label.text.contains("responding"), gs.wait_label.text)
+		_check("FB4-22 opponent-is-responding notice in the middle of the board", gs.prompt.wait_chip.visible and gs.prompt.wait_label.text.contains("responding"), gs.prompt.wait_label.text)
 		await _shot("16_waiting_on_opponent_response")
 		_view_seat(o)
 		await _wait(0.5)
-		_check("trap response prompt is shown in the banner", gs.ctx_banner.visible and gs.pending()["mine"] and gs.banner_flow.visible)
+		_check("trap response prompt is shown in the banner", gs.prompt.ctx_banner.visible and gs.pending()["mine"] and gs.prompt.banner_flow.visible)
 		await _shot("17_opponent_response_prompt")
 		var pass_i := -1
 		var labels := []
@@ -302,32 +302,32 @@ func _steps() -> void:
 	await _wait(0.6)
 	await _click(_slot_rect(o, "unit", 0).get_center())
 	await _wait(0.3)
-	_check("opponent seat: own card selectable for details but no actions off-turn", gs.selected_uid == uids["o_fire"] and gs._stack == null)
+	_check("opponent seat: own card selectable for details but no actions off-turn", gs.selected_uid == uids["o_fire"] and gs.action_row.stack == null)
 	await _shot("19_opponent_view")
 	_view_seat(a)
 	await _wait(0.5)
 	# Keyboard: Tab selects the next ready card and opens its row; Esc clears.
-	await _click(gs.phase_btn.get_global_rect().get_center())
+	await _click(gs.sidebar.phase_btn.get_global_rect().get_center())
 	await _wait(1.0)
 	await _key(KEY_TAB)
 	await _wait(0.3)
-	_check("keyboard Tab selects a ready card with its row", gs.selected_uid != -1 and gs._stack != null, str(_row_labels()))
+	_check("keyboard Tab selects a ready card with its row", gs.selected_uid != -1 and gs.action_row.stack != null, str(_row_labels()))
 	await _shot("20_keyboard_tab_selection")
 	await _key(KEY_ESCAPE)
 	await _wait(0.3)
-	_check("Esc deselects", gs.selected_uid == -1 and gs._stack == null)
+	_check("Esc deselects", gs.selected_uid == -1 and gs.action_row.stack == null)
 	# F02-05 / F02-08 details at the supported sizes (a typical effect unit from the Hand).
 	var typical: int = -1
-	for uid in gs._hand_order:
+	for uid in gs.hand.order:
 		if m.is_unit(uid) and String(m.d(uid)["on_summon"]) != "":
 			typical = uid
 			break
 	if typical != -1:
 		await _click(_hand_rect(typical).get_center())
 		await _wait(0.4)
-	_check("details show the selected card", gs._details_uid() == typical and typical != -1, str(typical))
+	_check("details show the selected card", gs.details.details_uid() == typical and typical != -1, str(typical))
 	await _shot("21_details_1600x1000")
-	var vb := gs.details_scroll.get_v_scroll_bar()
+	var vb := gs.details.details_scroll.get_v_scroll_bar()
 	_check("F02-05 typical unit details fit without scrolling at 1600x1000", vb.max_value - vb.page <= 4.0, "overflow %.0f px" % (vb.max_value - vb.page))
 	for sz in [Vector2i(1280, 800), Vector2i(1920, 1080)]:
 		DisplayServer.window_set_size(sz)
@@ -388,7 +388,7 @@ func _fusion_zone_steps() -> void:
 	host.handle(p, {"t": "next_phase"})
 	await _wait(0.2)
 	gs.fx.finish_all()
-	await _click(gs.phase_btn.get_global_rect().get_center())
+	await _click(gs.sidebar.phase_btn.get_global_rect().get_center())
 	await _wait(0.12)
 	await _shot("26_end_turn_discard")
 	await _wait(1.0)
@@ -415,8 +415,8 @@ func _check(name: String, ok: bool, detail: String = "") -> void:
 
 func _check_proportions(name: String) -> void:
 	var bad := []
-	for k in gs._slots.keys():
-		var w: CardWidget = gs._slots[k]["widget"]
+	for k in gs.board.slots.keys():
+		var w: CardWidget = gs.board.slots[k]["widget"]
 		if not w.visible:
 			continue
 		var r := w.card_rect()
@@ -424,8 +424,8 @@ func _check_proportions(name: String) -> void:
 		var want := 1.5 if w.rotated else 2.0 / 3.0
 		if absf(ratio - want) > 0.02:
 			bad.append("%s %.3f" % [k, ratio])
-	for uid in gs._hand_items.keys():
-		var hw: CardWidget = gs._hand_items[uid]["widget"]
+	for uid in gs.hand.items.keys():
+		var hw: CardWidget = gs.hand.items[uid]["widget"]
 		var hr := hw.card_rect()
 		if absf(hr.size.x / hr.size.y - 2.0 / 3.0) > 0.02:
 			bad.append("hand %d" % uid)
@@ -438,22 +438,22 @@ func _state_sig() -> String:
 
 
 func _hover_sweep() -> void:
-	for uid in gs._hand_order:
+	for uid in gs.hand.order:
 		await _move(_hand_rect(uid).get_center())
 		await _wait(0.12)
-	for k in gs._slots.keys():
-		await _move((gs._slots[k]["zone_node"] as Control).get_global_rect().get_center())
+	for k in gs.board.slots.keys():
+		await _move((gs.board.slots[k]["zone_node"] as Control).get_global_rect().get_center())
 		await _frames(3)
 
 
 # ---------------------------------------------------------------- UI lookups
 
 func _w_hand(uid: int) -> CardWidget:
-	return gs._hand_items[uid]["widget"]
+	return gs.hand.items[uid]["widget"]
 
 
 func _hand_rect(uid: int) -> Rect2:
-	return (gs._hand_items[uid]["holder"] as Control).get_global_rect()
+	return (gs.hand.items[uid]["holder"] as Control).get_global_rect()
 
 
 func _w_slot(p: int, zone: String, slot: int) -> CardWidget:
@@ -469,25 +469,25 @@ func _zone_rect(p: int, zone: String, slot: int) -> Rect2:
 
 
 func _row_labels() -> Array:
-	if gs._stack == null or not is_instance_valid(gs._stack):
+	if gs.action_row.stack == null or not is_instance_valid(gs.action_row.stack):
 		return []
-	return gs._stack.get_children().map(func(b): return (b as Button).text)
+	return gs.action_row.stack.get_children().map(func(b): return (b as Button).text)
 
 
 func _row_tooltip(label: String) -> String:
-	if gs._stack == null:
+	if gs.action_row.stack == null:
 		return ""
-	for b in gs._stack.get_children():
+	for b in gs.action_row.stack.get_children():
 		if (b as Button).text == label:
 			return (b as Button).tooltip_text
 	return ""
 
 
 func _click_row(label: String) -> void:
-	if gs._stack == null or not is_instance_valid(gs._stack):
+	if gs.action_row.stack == null or not is_instance_valid(gs.action_row.stack):
 		_check("row has '%s'" % label, false, "no action row")
 		return
-	for b in gs._stack.get_children():
+	for b in gs.action_row.stack.get_children():
 		if (b as Button).text == label:
 			await _click((b as Control).get_global_rect().get_center())
 			return
@@ -496,7 +496,7 @@ func _click_row(label: String) -> void:
 
 func _tray_widgets() -> Array:
 	var out := []
-	for ch in gs.tray_box.get_children():
+	for ch in gs.prompt.tray_box.get_children():
 		if ch is GridContainer:
 			for w in ch.get_children():
 				if w is CardWidget:
@@ -506,7 +506,7 @@ func _tray_widgets() -> Array:
 
 func _tray_buttons() -> int:
 	var n := 0
-	for ch in gs.tray_box.get_children():
+	for ch in gs.prompt.tray_box.get_children():
 		if ch is GridContainer:
 			for w in ch.get_children():
 				if w is Button:
@@ -515,14 +515,14 @@ func _tray_buttons() -> int:
 
 
 func _banner_button(prefix: String) -> Button:
-	for b in gs.banner_btns.get_children():
+	for b in gs.prompt.banner_btns.get_children():
 		if (b as Button).text.begins_with(prefix):
 			return b
 	return Button.new()
 
 
 func _pile_cells() -> Array:
-	return gs.pile_list.get_children().filter(func(n): return (n as Node).has_meta("uid"))
+	return gs.details.pile_list.get_children().filter(func(n): return (n as Node).has_meta("uid"))
 
 
 func _pile_button(label: String) -> Button:

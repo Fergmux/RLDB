@@ -78,7 +78,7 @@ func _kb_cards() -> Array:
 	for uid in hand.order:
 		if _has_ok_action(uid):
 			var it: Dictionary = hand.items[uid]
-			out.append({"key": "h:%d" % uid, "w": it["widget"], "holder": it["holder"], "uid": uid, "kind": "hand", "own": true})
+			out.append(GameHoverController.make_item("h:%d" % uid, it["widget"], it["holder"], uid, "hand", true))
 	var slots := gs.board.slots
 	for zone in GameBoardView.ZONE_SLOTS:
 		for slot in GameBoardView.ZONE_SLOTS[zone]:
@@ -89,7 +89,7 @@ func _kb_cards() -> Array:
 				continue
 			var uid2: int = wd.view.get("uid", -1)
 			if uid2 != -1 and _has_ok_action(uid2):
-				out.append({"key": key, "w": wd, "holder": sl["holder"], "uid": uid2, "kind": Zones.KIND[zone], "own": true})
+				out.append(GameHoverController.make_item(key, wd, sl["holder"], uid2, Zones.KIND[zone], true))
 	return out
 
 

@@ -25,9 +25,9 @@ func run(main_node: Node, dir: String) -> void:
 	await _frames(8)
 	host = main.local_host
 	await _shot("01_deck_select")
-	main.screen._deck_open["s1"] = true
-	main.screen._overlay_sig = 0
-	main.screen._render_overlay()
+	main.screen.overlays.deck_open["s1"] = true
+	main.screen.overlays.overlay_sig = 0
+	main.screen.overlays.render()
 	await _frames(6)
 	await _shot("01b_deck_select_full_list")
 	DeckStore.delete_deck("Shot Deck")
@@ -43,22 +43,22 @@ func run(main_node: Node, dir: String) -> void:
 	# I-02: hover actions on a hand card and on a field card (hover API; no mouse needed).
 	var hs: GameScreen = main.screen
 	await _real_mouse_hover_shot(hs)
-	hs.debug_hover_hand(0)
+	hs.hover.debug_hover_hand(0)
 	await get_tree().create_timer(0.5).timeout
 	await _shot("02b_hover_hand_card")
-	hs.debug_hover_hand(2)
+	hs.hover.debug_hover_hand(2)
 	await get_tree().create_timer(0.5).timeout
 	await _shot("02b2_hover_hand_spell")
-	hs.debug_hover_slot(m.active, "unit", 0)
+	hs.hover.debug_hover_slot(m.active, "unit", 0)
 	await get_tree().create_timer(0.5).timeout
 	await _shot("02c_hover_field_card")
-	hs.debug_clear_hover()
+	hs.hover.debug_clear()
 	await _frames(5)
 	# Keyboard fallback: Tab opens the first actionable card's action row.
-	hs._kb_cycle(1)
+	hs.keyboard.cycle(1)
 	await get_tree().create_timer(0.5).timeout
 	await _shot("02d_keyboard_focus_action_row")
-	hs.debug_clear_hover()
+	hs.hover.debug_clear()
 	await _frames(5)
 	# Details for a unit with statuses and an aura-modified stat.
 	var screen: GameScreen = main.screen
@@ -113,10 +113,10 @@ func run(main_node: Node, dir: String) -> void:
 	_view_seat(attacker_side)
 	await _frames(3)
 	await _shot("07_after_battle_log")
-	screen._show_pile("draw")
+	screen.details.show_pile("draw")
 	await _frames(3)
 	await _shot("08_draw_inspection")
-	screen._close_pile()
+	screen.details.close_pile()
 	# Finish game 1 by concession, then rewards and first-player choice.
 	host.handle(1 - attacker_side, {"t": "concede"})
 	_view_seat(0)
@@ -213,9 +213,9 @@ func _shot(name: String) -> void:
 ## Moves the real mouse pointer onto the first hand card and onto its first action
 ## button, so hover logic is exercised by genuine pointer events (not debug hooks).
 func _real_mouse_hover_shot(hs) -> void:
-	if hs._hand_order.is_empty():
+	if hs.hand.order.is_empty():
 		return
-	var it: Dictionary = hs._hand_items[hs._hand_order[0]]
+	var it: Dictionary = hs.hand.items[hs.hand.order[0]]
 	var r: Rect2 = it["holder"].get_global_rect()
 	get_viewport().warp_mouse(r.get_center())
 	await get_tree().create_timer(0.5).timeout

@@ -19,7 +19,7 @@ const SPOT_HOLD := FxSpotlight.HOLD
 const MAX_BATCH_TIME := 3.0
 
 ## The host screen (GameScreen) that owns the layers and answers the host contract.
-var screen: Control
+var screen: GameScreen
 
 var _tweens: Array = []
 var _cleanups: Array = []
@@ -278,7 +278,7 @@ func shake(node: Control, amp: float) -> void:
 	if UIStyle.reduce_motion:
 		return
 	var rest := node.position
-	_cleanups.append(func(): if is_instance_valid(node): node.position = rest)
+	add_cleanup(func(): if is_instance_valid(node): node.position = rest)
 	var tw := new_tween()
 	for dx in [amp, -amp, amp * 0.6, -amp * 0.3, 0.0]:
 		tw.tween_property(node, "position:x", rest.x + dx, UIStyle.dur(0.03))

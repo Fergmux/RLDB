@@ -160,13 +160,13 @@ func item_for_uid(uid: int) -> Dictionary:
 	var items := gs.hand.items
 	if items.has(uid):
 		var hi: Dictionary = items[uid]
-		return {"key": "h:%d" % uid, "w": hi["widget"], "holder": hi["holder"], "uid": uid, "kind": "hand", "own": true}
+		return GameHoverController.make_item("h:%d" % uid, hi["widget"], hi["holder"], uid, "hand", true)
 	var slots := gs.board.slots
 	for k in slots.keys():
 		var sl: Dictionary = slots[k]
 		var wd: CardWidget = sl["widget"]
 		if wd.visible and not wd.view.is_empty() and not wd.view.get("hidden", false) and wd.view.get("uid", -9) == uid:
-			return {"key": k, "w": wd, "holder": sl["holder"], "uid": uid, "kind": Zones.KIND[sl["zone"]], "own": (k as String).begins_with("1:")}
+			return GameHoverController.make_item(k, wd, sl["holder"], uid, Zones.KIND[sl["zone"]], (k as String).begins_with("1:"))
 	return {}
 
 

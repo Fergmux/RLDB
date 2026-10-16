@@ -21,6 +21,11 @@ func _init(screen: GameScreen) -> void:
 	gs = screen
 
 
+## The hover/selection item dictionary {key, w, holder, uid, kind, own} (one shape everywhere).
+static func make_item(key: String, w: CardWidget, holder: Control, uid: int, kind: String, own: bool) -> Dictionary:
+	return {"key": key, "w": w, "holder": holder, "uid": uid, "kind": kind, "own": own}
+
+
 ## Visible card under global point m (hand cards topmost first), skipping `exclude_key`.
 func items_under(m: Vector2, exclude_key: String) -> Dictionary:
 	var hand := gs.hand
@@ -30,7 +35,7 @@ func items_under(m: Vector2, exclude_key: String) -> Dictionary:
 		var it: Dictionary = hand.items[uid]
 		var h: Control = it["holder"]
 		if "h:%d" % uid != exclude_key and h.get_global_rect().has_point(m):
-			return {"key": "h:%d" % uid, "w": it["widget"], "holder": h, "uid": uid, "kind": "hand", "own": true}
+			return make_item("h:%d" % uid, it["widget"], h, uid, "hand", true)
 	var slots := gs.board.slots
 	for k in slots.keys():
 		var sl: Dictionary = slots[k]
@@ -40,7 +45,7 @@ func items_under(m: Vector2, exclude_key: String) -> Dictionary:
 		# The card box is the displayed card (2:3, or 3:2 when turned), not the whole zone.
 		var h2: Control = sl["holder"]
 		if h2.get_global_rect().has_point(m):
-			return {"key": k, "w": w, "holder": h2, "uid": w.view.get("uid", -1), "kind": Zones.KIND[sl["zone"]], "own": (k as String).begins_with("1:")}
+			return make_item(k, w, h2, int(w.view.get("uid", -1)), Zones.KIND[sl["zone"]], (k as String).begins_with("1:"))
 	return {}
 
 
@@ -199,7 +204,7 @@ func debug_hover_hand(index: int) -> void:
 	var uid: int = hand.order[index]
 	var it: Dictionary = hand.items[uid]
 	forced = false
-	set_hover({"key": "h:%d" % uid, "w": it["widget"], "holder": it["holder"], "uid": uid, "kind": "hand", "own": true})
+	set_hover(make_item("h:%d" % uid, it["widget"], it["holder"], uid, "hand", true))
 	forced = true
 	gs.peek_uid = uid
 	gs.details.render()
@@ -213,7 +218,7 @@ func debug_hover_slot(p: int, zone: String, slot: int) -> void:
 		return
 	var w: CardWidget = it["widget"]
 	forced = false
-	set_hover({"key": GameBoardView.key(board.side_of(p), zone, slot), "w": w, "holder": it["holder"], "uid": w.view.get("uid", -1), "kind": Zones.KIND[zone], "own": p == gs.me()})
+	set_hover(make_item(GameBoardView.key(board.side_of(p), zone, slot), w, it["holder"], int(w.view.get("uid", -1)), Zones.KIND[zone], p == gs.me()))
 	forced = true
 	gs.peek_uid = w.view.get("uid", -1)
 	gs.details.render()

@@ -84,13 +84,13 @@ func test_plan_b_second_multi_prompt_starts_with_no_stale_selection() -> void:
 	await await_idle_frame()
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
 	# Act 1: first Plan B, ordered picks slot 2 then slot 1, confirmed
-	gs._pick_option(_opt(gs.pending(), "Plan B"))
+	gs.selection.pick_option(_opt(gs.pending(), "Plan B"))
 	gs.skip_effects()
 	await await_idle_frame()
 	assert_int(int(gs.pending()["max"])).is_greater(1)
-	gs._pick_option(_opt_slot(gs.pending(), d, 2))
-	gs._pick_option(_opt_slot(gs.pending(), d, 1))
-	gs._confirm_multi()
+	gs.selection.pick_option(_opt_slot(gs.pending(), d, 2))
+	gs.selection.pick_option(_opt_slot(gs.pending(), d, 1))
+	gs.selection.confirm_multi()
 	gs.skip_effects()
 	await await_idle_frame()
 	# Assert 1: destruction followed the clicked order
@@ -102,7 +102,7 @@ func test_plan_b_second_multi_prompt_starts_with_no_stale_selection() -> void:
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
 	var second := _opt(gs.pending(), "Plan B")
 	assert_int(second).is_not_equal(-1)
-	gs._pick_option(second)
+	gs.selection.pick_option(second)
 	gs.skip_effects()
 	await await_idle_frame()
 	assert_int(int(gs.pending().get("max", 1))).is_greater(1)
@@ -140,14 +140,14 @@ func test_enter_with_focused_confirm_sends_one_command() -> void:
 	host.handle(1 - d, {"t": "choose", "id": pd["id"], "indices": [_opt_slot(pd, d, 0)]})
 	gs.skip_effects()
 	await await_idle_frame()
-	gs._pick_option(_opt(gs.pending(), "Plan B"))
+	gs.selection.pick_option(_opt(gs.pending(), "Plan B"))
 	gs.skip_effects()
 	await await_idle_frame()
-	gs._pick_option(_opt_slot(gs.pending(), d, 2))
+	gs.selection.pick_option(_opt_slot(gs.pending(), d, 2))
 	gs.skip_effects()
 	await await_idle_frame()
 	var confirm: Button = null
-	for b in gs.banner_btns.get_children():
+	for b in gs.prompt.banner_btns.get_children():
 		if (b as Button).text.begins_with("Confirm"):
 			confirm = b
 	assert_object(confirm).is_not_null()
@@ -172,10 +172,10 @@ func test_stale_summon_click_after_card_left_hand_sends_nothing() -> void:
 	host.broadcast()
 	gs.skip_effects()
 	await await_idle_frame()
-	gs._select(uid)
+	gs.selection.select(uid)
 	gs.skip_effects()
 	await await_idle_frame()
-	var acts: Array = gs._actions_for_card(uid)
+	var acts: Array = gs.action_row.actions_for_card(uid)
 	assert_int(acts.size()).is_equal(2)
 	# Act: the card leaves the Hand before the click lands
 	m.players[first]["hand"].erase(uid)
@@ -185,7 +185,7 @@ func test_stale_summon_click_after_card_left_hand_sends_nothing() -> void:
 	gs.skip_effects()
 	await await_idle_frame()
 	var sent := gs.debug_sent
-	gs._run_action(uid, acts[0])
+	gs.action_row.run_action(uid, acts[0])
 	# Assert
 	assert_int(gs.debug_sent).is_equal(sent)
 	assert_str(m.cards[uid]["zone"]).is_equal("spent")
@@ -196,10 +196,10 @@ func test_stale_click_while_opponent_prompt_pending_sends_nothing() -> void:
 	var board := _plan_b_board()
 	var a := 1 - first
 	await _attach(a)
-	gs._select(board[0])
+	gs.selection.select(board[0])
 	gs.skip_effects()
 	await await_idle_frame()
-	var acts: Array = gs._actions_for_card(board[0])
+	var acts: Array = gs.action_row.actions_for_card(board[0])
 	var atk: Array = acts.filter(func(x): return x["t"] == "attack")
 	assert_int(atk.size()).is_equal(1)
 	host.handle(a, {"t": "attack", "uid": board[0]})
@@ -210,7 +210,7 @@ func test_stale_click_while_opponent_prompt_pending_sends_nothing() -> void:
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
 	var sent := gs.debug_sent
 	# Act
-	gs._run_action(board[0], atk[0])
+	gs.action_row.run_action(board[0], atk[0])
 	# Assert
 	assert_int(gs.debug_sent).is_equal(sent)
-	assert_array(gs._actions_for_card(board[0])).is_empty()
+	assert_array(gs.action_row.actions_for_card(board[0])).is_empty()

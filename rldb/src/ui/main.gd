@@ -144,7 +144,7 @@ func _run_driver(path: String, dir: String) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		if screen != null and is_instance_valid(screen) and screen.has_live_series():
-			screen._confirm_forfeit(true)
+			screen.menu.confirm_forfeit(true)
 		else:
 			get_tree().quit()
 
@@ -164,6 +164,7 @@ func _clear_screens() -> void:
 	if menu != null and is_instance_valid(menu):
 		menu.queue_free()
 	menu = null
+	status_label = null
 	_sessions.clear()
 
 
@@ -216,16 +217,6 @@ func _show_menu() -> void:
 	m.card_list_requested.connect(func(): _go(_show_card_list))
 
 
-## Picks main-menu target `target` (forwarded to the MainMenu; used by scripted runs).
-func _menu_pick(target: String) -> void:
-	(menu as MainMenu).pick(target)
-
-
-## Main-menu "Back" (forwarded to the MainMenu; used by scripted runs).
-func _menu_back() -> void:
-	(menu as MainMenu).back_out()
-
-
 func _show_deck_builder() -> void:
 	_clear_screens()
 	var db := DeckBuilder.new()
@@ -259,11 +250,6 @@ func _start_local(cfg: Dictionary) -> void:
 func _start_bot(cfg: Dictionary) -> void:
 	_clear_screens()
 	_sessions.start_bot(cfg)
-
-
-## Hot-seat hand-over to `seat` (no privacy screen).
-func _switch_seat(seat: int) -> void:
-	_sessions.switch_seat(seat)
 
 
 func _start_lan_host(port: int, cfg: Dictionary) -> void:
