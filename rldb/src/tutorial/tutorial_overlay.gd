@@ -342,7 +342,7 @@ func target_rects() -> Array:
 
 ## A multi-pick step (opt.cards, e.g. Arcane materials): the expected cards not yet selected of
 ## every combination the current selection can still complete; Confirm once a combination is
-## complete; the off-combination picks (to deselect) when none can be completed. [] otherwise.
+## complete; the picks to deselect when none can be completed. [] when the step has no multi-pick.
 func _multi_rects(pats: Array) -> Array:
 	var sets := []
 	for pat in pats:
@@ -366,11 +366,14 @@ func _multi_rects(pats: Array) -> Array:
 					seen[i] = true
 					out.append(_option_rect(i))
 	if out.is_empty():
+		# No combination can be completed (e.g. both Dragons, an over-pay): ring the picks to
+		# deselect, measured against the combination sharing the most picks.
+		var best: Array = sets[0]
+		for w in sets:
+			if sel.filter(func(i): return i in w).size() > sel.filter(func(i): return i in best).size():
+				best = w
 		for i in sel:
-			if not sets.any(func(w): return i in w):
-				out.append(_option_rect(i))
-		if out.is_empty():
-			for i in sel:
+			if not (i in best):
 				out.append(_option_rect(i))
 	return out
 
