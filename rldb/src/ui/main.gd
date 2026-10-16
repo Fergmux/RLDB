@@ -363,7 +363,7 @@ func _build_menu_level(animate: bool = true) -> void:
 		_menu_list.remove_child(ch)
 		ch.queue_free()
 	var level: String = _menu_path[-1]
-	_menu_crumb.text = String(MENU_TITLES.get(level, "")).to_upper()
+	_menu_crumb.text = ""   # no breadcrumb above the options (user feedback); the spacer keeps the layout
 	var items: Array = MENU[level].duplicate()
 	if level == "root" and SeriesStore.list().is_empty():
 		items = items.filter(func(it): return it[1] != "resume")
