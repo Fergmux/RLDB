@@ -6,6 +6,8 @@ Note: `production/stories/playtest-feedback-03.md` is an older, unrelated round;
 Rules authority: `design/decision-register-answers.md`, superseded where F03 says so (F03-04 exact Arcane total,
 F03-19 Overextend chooses any opposing unit).
 
+Final verification (16 Oct 2026): GdUnit 547/547, live drivers (f02 73/73, tutorial 77/77, deck-builder flow 15/15, inspection 10/10, networked series 8/8 both directions), exported exe launches with no script errors.
+
 Status key: Captured → In progress → Implemented — unverified → Verified (automated test and/or live run with
 retained evidence under `production/qa/evidence/2026-10-16-f03/`).
 
@@ -25,33 +27,33 @@ retained evidence under `production/qa/evidence/2026-10-16-f03/`).
 
 | Item | Status | Owner | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| F03-01 Right-click inspection | Implemented — unverified | I + lead | `CardInspector` (big 2:3 card + details panel), `GameInspect`; right-click on Field/Hand/pile rows/browser/deck builder; lead added draft, reward, deck-choice and choice-tray cards (`bab0f2e`). Hidden cards not inspectable; refreshes or closes on new views | `ui_f03_inspect_test.gd` (22); `inspect/01..03` |
-| F03-02 Near-full-screen pile browser | Implemented — unverified | I | `PileBrowser`: own Draw/Spent/Exhaust/Extra, `best_layout` grid, Draw in shown-random order, card inspection returns to the same scroll | Tests in `ui_f03_inspect_test.gd`; `inspect/04..08` |
-| F03-03 Consistent tags with contained icons | Implemented — unverified | I | One tag height (line height + padding); Type icon sized to the line | `card_details_f03_test.gd` (equal heights) |
-| F03-04 Exact Arcane total | Implemented — unverified | R | Exact subset-sum of current costs in authority, availability and picker (`MatchView.multi_pick_error`); "cost total X / exactly N"; bot picks an exact set; old overpayment wording marked superseded in `rules/01`, `05`, `06` | `rules_f03_test.gd` `test_f03_04_*` (11) |
-| F03-05 Hide zero-cost Arcane materials | Implemented — unverified | R | Current-cost-0 units not offered (also not legal in the authority; adds 0 so no outcome changes); other Spent lists unchanged | `test_f03_05_*` (3) |
-| F03-06 Smaller player panels | Implemented — unverified | B | Plates 300→252 px wide, 89 px tall; `PlayerPlate.PLATE_W` | Rect check: no plate/zone overlap, ~24 px gap at 1600x900; long name / 120 HP / 9 AP fit (`board/plates_*`) |
-| F03-07 Power-slot mirroring | Implemented — unverified | B | Reproduced: opponent block was not mirrored. `GameBoardView.power_cell(side, slot)` rotates the display 180°; slot ids unchanged | `power_mapping_test.gd` (4 slots x 2 views); `board/power_before*`, `power_after*` |
-| F03-08 Fusion availability highlight | Implemented — unverified | R | Before: Fusion never lit the Extra Deck. `MatchEngine.fusion_methods(p)` reuses the activation checks; `extra_avail` lists methods; full Field needs a Field material | `test_f03_08_*` (11) |
-| F03-09 Basic-unit names without Type suffix | Implemented — unverified | R | 35 basic names in `cards.json` and the importer; ids/Type/Race unchanged | `test_f03_09_*` (2); `draft/04_draft_overlay.png` |
-| F03-10 Draft composition controls | Implemented — unverified | R + lead | Per-category -/+ steppers in series setup, validation message; lead: Start disabled while invalid (`1b678e1`); host config used online | `test_f03_10_*` (3); `draft/01..04` |
-| F03-11 One Extra Deck category (draft, rewards) | Implemented — unverified | R | Draft shows "Extra Deck"; rewards offer one Extra Deck group from Fusion/Ritual/Arcane | `test_f03_11_*`; `draft/04` |
-| F03-12 No empty-Hand text | Implemented — unverified | I | Label removed from `game_hand_view.gd` | `inspect/00` |
-| F03-13 Victory / defeat presentation | Implemented — unverified | V + lead | `FxGameEnd`: game/series win and loss variants; result modal held until it ends (click skips, 8 s safety). Lead: hot-seat hand-over waits for it (`4ce74a0`) | `fx_f03_test.gd`; win/series-win frames; lead re-ran defeat in a bot game: DEFEAT plays, then the modal |
-| F03-14 HP display reset between games | Implemented — unverified | B | Cause: reset only ran on `GameScreen.attach()`, which a series keeps across games. `PlayerPlate.begin_game(save_id:game_no)` resets each new game | `hp_reset_test.gd`; live two-game series still to run |
-| F03-15 Guided tutorial | Captured | T | | |
-| F03-16 Destroy / Exhaust animations | Implemented — unverified | V | Destroy: flash, cracks, ember dissolve to its pile. Exhaust: front and centre, "EXHAUSTED", violet void ring into Exhaust. Identity only for seats that may see it | `fx_f03_test.gd` (routing, redaction); `fx/destroy_*`, `fx/exhaust_*` |
-| F03-17 Special-summon sequences | Implemented — unverified | V | Material ghosts fly from their sources, motes to Spent/Exhaust; Fusion swirl, Ritual light column, Arcane hexagram | `fx_f03_test.gd`; `fx/fusion_*`, `ritual_*`, `arcane_*`; two-client run pending |
-| F03-18 Effect arrow from its source | Implemented — unverified | R + lead | Pending choice carries the source position; live arrow starts there; lead: both seats see a short source→target arrow when a chosen target is affected (`2108937`) | `test_f03_18_*` (2); `overextend/opponent_view_arrow*.png` |
-| F03-19 Overextend chooses its target | Implemented — unverified | R | Any opposing unit; friendly rejected; -20 ATK until it leaves; no fallback | `test_f03_19_*` (4); live: 24 → 4 ATK on a non-highest unit |
-| F03-20 Smaller ATK/DEF badges | Implemented — unverified | V | Badges drawn at 0.86 of their rect with margin | `fx/ready_strip.png`; 3-digit / rotated checks pending |
-| F03-21 Animated action glow and bouncing cue | Implemented — unverified | V | Pulsing ready glow, bouncing chevrons; Extra pile too; steady under reduced motion | `fx/ready_strip.png`; Power-card case pending |
-| F03-22 No base stats in Modifiers | Implemented — unverified | I | `modifier_parts()` drops the base line; no section when unmodified | `card_details_f03_test.gd`; `inspect/02` |
-| F03-23 Protecting tag | Implemented — unverified | I | `protecting` in `match_view.card_view` (reuses `protected_by`); tag beside Protected | `card_details_f03_test.gd` (rear behind / empty / diagonal); `inspect/01` |
-| F03-24 Deck builder grid with art | Implemented — unverified | D | Catalogue grid of card images with Type captions, click adds, right-click inspects, in-deck border and count, Rename, replace guard, unsaved marker | `deck_builder_grid_test.gd` (4); live flow 15/15 (`deckbuilder/`) |
-| F03-25 Prominent input-required banner | Implemented — unverified | B | Tall narrow banner in the free left column (top-centre fallback), actor tag, pop-in glow, breathing border | Rect test: clear of zones/piles/plates; `board/banner_*` |
-| F03-26 Empty-space click closes passive viewer | Implemented — unverified | I | Click reaching the GameScreen root calls `dismiss_passive()`; never cancels a pending choice | `ui_f03_inspect_test.gd`; `inspect/09..10` |
-| F03-27 Type-coloured declaration buttons | Implemented — unverified | B | Type choices (kind `mode`, all labels Type names) get Type colour, icon, contrast-checked text | `ui_f03_prompt_test.gd` (Waang 4 Types, Chaos Witch 7, click sets Earth, contrast) |
+| F03-01 Right-click inspection | Verified | I + lead | `CardInspector` (big 2:3 card + details panel), `GameInspect`; right-click on Field/Hand/pile rows/browser/deck builder; lead added draft, reward, deck-choice and choice-tray cards (`bab0f2e`). Hidden cards not inspectable; refreshes or closes on new views | `ui_f03_inspect_test.gd` (22); `inspect/01..03` |
+| F03-02 Near-full-screen pile browser | Verified | I | `PileBrowser`: own Draw/Spent/Exhaust/Extra, `best_layout` grid, Draw in shown-random order, card inspection returns to the same scroll | Tests in `ui_f03_inspect_test.gd`; `inspect/04..08` |
+| F03-03 Consistent tags with contained icons | Verified | I | One tag height (line height + padding); Type icon sized to the line | `card_details_f03_test.gd` (equal heights) |
+| F03-04 Exact Arcane total | Verified | R | Exact subset-sum of current costs in authority, availability and picker (`MatchView.multi_pick_error`); "cost total X / exactly N"; bot picks an exact set; old overpayment wording marked superseded in `rules/01`, `05`, `06` | `rules_f03_test.gd` `test_f03_04_*` (11) |
+| F03-05 Hide zero-cost Arcane materials | Verified | R | Current-cost-0 units not offered (also not legal in the authority; adds 0 so no outcome changes); other Spent lists unchanged | `test_f03_05_*` (3) |
+| F03-06 Smaller player panels | Verified | B | Plates 300→252 px wide, 89 px tall; `PlayerPlate.PLATE_W` | Rect check: no plate/zone overlap, ~24 px gap at 1600x900; long name / 120 HP / 9 AP fit (`board/plates_*`) |
+| F03-07 Power-slot mirroring | Verified | B | Reproduced: opponent block was not mirrored. `GameBoardView.power_cell(side, slot)` rotates the display 180°; slot ids unchanged | `power_mapping_test.gd` (4 slots x 2 views); `board/power_before*`, `power_after*`; ENet: client view is the host view rotated 180° |
+| F03-08 Fusion availability highlight | Verified | R | Before: Fusion never lit the Extra Deck. `MatchEngine.fusion_methods(p)` reuses the activation checks; `extra_avail` lists methods; full Field needs a Field material | `test_f03_08_*` (11) |
+| F03-09 Basic-unit names without Type suffix | Verified | R | 35 basic names in `cards.json` and the importer; ids/Type/Race unchanged | `test_f03_09_*` (2); `draft/04_draft_overlay.png` |
+| F03-10 Draft composition controls | Verified | R + lead | Per-category -/+ steppers in series setup, validation message; lead: Start disabled while invalid (`1b678e1`); host config used online | `test_f03_10_*` (3); `draft/01..04` |
+| F03-11 One Extra Deck category (draft, rewards) | Verified | R | Draft shows "Extra Deck"; rewards offer one Extra Deck group from Fusion/Ritual/Arcane | `test_f03_11_*`; `draft/04` |
+| F03-12 No empty-Hand text | Verified | I | Label removed from `game_hand_view.gd` | `inspect/00` |
+| F03-13 Victory / defeat presentation | Verified | V + lead | `FxGameEnd`: game/series win and loss variants; result modal held until it ends (click skips, 8 s safety). Lead: hot-seat hand-over waits for it (`4ce74a0`) | `fx_f03_test.gd`; win/series-win frames; lead re-ran defeat in a bot game: DEFEAT plays, then the modal |
+| F03-14 HP display reset between games | Verified | B | Cause: reset only ran on `GameScreen.attach()`, which a series keeps across games. `PlayerPlate.begin_game(save_id:game_no)` resets each new game | `hp_reset_test.gd`; ENet series from the client screen: 95 in game 1, 60/60 in game 2 (`twoclient/`) |
+| F03-15 Guided tutorial | Verified | T + lead | 5 lessons from Play local → Tutorial (turn flow, summoning/stances, battle, Spells/Traps, Fusion); scripted Rival; off-script commands refused with a hint; Restart / Exit; never saved. Lead: no Cancel on forced steps, tight ring for banner buttons, exact Arcane wording | `tutorial_host_test.gd` (14); live driver 77/77 on the integrated build (`tutorial/integrated_1600/`) |
+| F03-16 Destroy / Exhaust animations | Verified | V | Destroy: flash, cracks, ember dissolve to its pile. Exhaust: front and centre, "EXHAUSTED", violet void ring into Exhaust. Identity only for seats that may see it | `fx_f03_test.gd` (routing, redaction); `fx/destroy_*`, `fx/exhaust_*` |
+| F03-17 Special-summon sequences | Verified (local) — two-client run not done | V | Material ghosts fly from their sources, motes to Spent/Exhaust; Fusion swirl, Ritual light column, Arcane hexagram | `fx_f03_test.gd`; `fx/fusion_*`, `ritual_*`, `arcane_*`; two-client run pending |
+| F03-18 Effect arrow from its source | Verified | R + lead | Pending choice carries the source position; live arrow starts there; lead: both seats see a short source→target arrow when a chosen target is affected (`2108937`) | `test_f03_18_*` (2); `overextend/opponent_view_arrow*.png` |
+| F03-19 Overextend chooses its target | Verified | R | Any opposing unit; friendly rejected; -20 ATK until it leaves; no fallback | `test_f03_19_*` (4); live: 24 → 4 ATK on a non-highest unit |
+| F03-20 Smaller ATK/DEF badges | Verified (normal values) — 3-digit / rotated not captured | V | Badges drawn at 0.86 of their rect with margin | `fx/ready_strip.png`; 3-digit / rotated checks pending |
+| F03-21 Animated action glow and bouncing cue | Verified (units, hand, Extra pile) — Power-card case not staged | V | Pulsing ready glow, bouncing chevrons; Extra pile too; steady under reduced motion | `fx/ready_strip.png`; Power-card case pending |
+| F03-22 No base stats in Modifiers | Verified | I | `modifier_parts()` drops the base line; no section when unmodified | `card_details_f03_test.gd`; `inspect/02` |
+| F03-23 Protecting tag | Verified | I | `protecting` in `match_view.card_view` (reuses `protected_by`); tag beside Protected | `card_details_f03_test.gd` (rear behind / empty / diagonal); `inspect/01` |
+| F03-24 Deck builder grid with art | Verified | D | Catalogue grid of card images with Type captions, click adds, right-click inspects, in-deck border and count, Rename, replace guard, unsaved marker | `deck_builder_grid_test.gd` (4); live flow 15/15 (`deckbuilder/`) |
+| F03-25 Prominent input-required banner | Verified | B | Tall narrow banner in the free left column (top-centre fallback), actor tag, pop-in glow, breathing border | Rect test: clear of zones/piles/plates; `board/banner_*` |
+| F03-26 Empty-space click closes passive viewer | Verified | I | Click reaching the GameScreen root calls `dismiss_passive()`; never cancels a pending choice | `ui_f03_inspect_test.gd`; `inspect/09..10` |
+| F03-27 Type-coloured declaration buttons | Verified | B | Type choices (kind `mode`, all labels Type names) get Type colour, icon, contrast-checked text | `ui_f03_prompt_test.gd` (Waang 4 Types, Chaos Witch 7, click sets Earth, contrast) |
 
 ## Deviations for user review
 
@@ -69,6 +71,9 @@ Where an implementation departs from a suggestion in the feedback (not a confirm
 | F03-10 | Configurable counts | -/+ steppers (cap 40 per category, a sanity limit, not a deck rule) | Matches the button style |
 | F03-05 | Hide zero-cost cards in the picker | Also not legal in the authority | They add 0 to an exact total, so no outcome changes |
 | F03-08 | Fusion availability | With Hand-only materials on a full Field, the Fusion is refused before anything is paid | Follows the confirmed "check space before paying" decision |
+| F03-15 | Guidance panel at the top of the screen | Guidance card over the top of the right sidebar (covers the game log during lessons) | At 1600 px the input banner falls back to top centre and would collide; the step text narrates the Rival's moves |
+| F03-15 | Lesson count / scope | 5 lessons; Fusion is the Extra Deck lesson, Ritual and Arcane explained in text | Exact count was left open |
+| F03-18 | Arrow in the opponent's view | The chooser sees the live arrow; the opponent sees a short source-to-target arrow when the chosen target is affected | The chooser's hover is not sent over the network |
 
 ## Agent ledger
 
@@ -80,3 +85,5 @@ Where an implementation departs from a suggestion in the feedback (not a confirm
 | Package V (13, 16, 17, 20, 21) | technical-artist | sonnet | Done, 450/450 on branch, merged `6097b19`; defeat re-checked by lead |
 | Package D (24) | ui-programmer | sonnet | Done, 490/490 on branch, merged `88cab9b` |
 | Package R (04, 05, 08, 09, 10, 11, 18, 19) | gameplay-programmer | opus | Done, 480/480 on branch, merged; integrated suite 532/532; live f02 driver 73/73 |
+| Package T (15) | gameplay-programmer | opus | Done, 500/500 on branch, live 77/77, merged |
+| Two-client QA | qa-tester | sonnet | Inconclusive: its driver ended game 1 by editing HP, so the series never advanced; stopped. Lead wrote `src/dev/f03_net_series_driver.gd` instead: 8/8 both directions |
