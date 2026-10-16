@@ -9,6 +9,8 @@ signal closed
 const MARGIN := 16
 const ROW_FONT_SIZE := 14
 const SWATCH_W := 5
+## Catalogue grid cell: a "hand" card (120x180) plus a caption row, with a little padding.
+const CELL_MIN_W := 132
 
 const COST_OPTIONS := [
 	["Any cost", ""], ["0 AP", "ap:0"], ["1 AP", "ap:1"], ["2 AP", "ap:2"], ["3 AP", "ap:3"],
@@ -27,7 +29,11 @@ var _type_opt: OptionButton
 var _race_opt: OptionButton
 var _cost_opt: OptionButton
 var _result_label: Label
-var _catalogue_box: VBoxContainer
+var _grid: HFlowContainer
+var _no_match: Label
+## card id -> its catalogue grid cell (one per catalogue card, built once; filters only hide cells).
+var _cells: Dictionary = {}
+var _loaded_name: String = ""
 var _deck_box: VBoxContainer
 var _deck_summary: Label
 var _empty_note: Label
@@ -48,6 +54,7 @@ func _ready() -> void:
 	_starters = Series.load_starters()
 	_build()
 	_refresh_saved()
+	_build_cells()
 	_refresh_catalogue()
 	_refresh_deck()
 	var all := CardDB.all()
@@ -139,6 +146,7 @@ func set_filters(query: String) -> void:
 func new_deck() -> void:
 	counts = {}
 	deck_name_edit.text = ""
+	_loaded_name = ""
 	dirty = false
 	_say("Started a new empty deck.")
 	_refresh_deck()
@@ -149,6 +157,7 @@ func new_deck() -> void:
 func load_cards(name: String, cards: Array) -> void:
 	counts = cards_to_counts(cards)
 	deck_name_edit.text = name
+	_loaded_name = name
 	dirty = false
 	_refresh_deck()
 	_refresh_catalogue_counts()
@@ -162,9 +171,60 @@ func save() -> bool:
 		return false
 	DeckStore.save_deck(n, counts_to_cards(counts))
 	dirty = false
+	_loaded_name = n
 	_refresh_saved()
-	_say("Saved \"%s\" (%d cards)." % [n, counts_to_cards(counts).size()])
+	_refresh_deck()
+	_say("Saved \"%s\" (%d cards). Pick it under \"Your saved decks\" when you set up a series." % [n, counts_to_cards(counts).size()])
 	return true
+
+
+## Renames the loaded saved deck to the text in the name field, keeping the working cards.
+## False (with a message) when no saved deck is loaded, the name is empty/unchanged or taken.
+func rename_loaded() -> bool:
+	var n := deck_name_edit.text.strip_edges()
+	if _loaded_name == "" or not _saved_exists(_loaded_name):
+		_say("Load a saved deck first, then type a new name and press Rename.", true)
+		return false
+	if n == "" or n == _loaded_name:
+		_say("Type a different name to rename \"%s\"." % _loaded_name, true)
+		return false
+	if _saved_exists(n):
+		_say("A saved deck named \"%s\" already exists." % n, true)
+		return false
+	DeckStore.delete_deck(_loaded_name)
+	DeckStore.save_deck(n, counts_to_cards(counts))
+	_say("Renamed \"%s\" to \"%s\"." % [_loaded_name, n])
+	_loaded_name = n
+	dirty = false
+	_refresh_saved()
+	_refresh_deck()
+	return true
+
+
+func _saved_exists(n: String) -> bool:
+	for dk in DeckStore.list():
+		if dk["name"] == n:
+			return true
+	return false
+
+
+## The grid cell widget of catalogue card `id` (null when absent): emit its `pressed` / `right_pressed`.
+func cell_widget(id: int) -> CardWidget:
+	return _cells[id]["widget"] if _cells.has(id) else null
+
+
+## Number of catalogue cells currently shown (passing the filters).
+func visible_cell_count() -> int:
+	var n := 0
+	for c in _cells.values():
+		if c["cell"].visible:
+			n += 1
+	return n
+
+
+## Opens the shared card inspector for catalogue card `id`; the working deck is untouched.
+func inspect_card(id: int) -> CardInspector:
+	return CardInspector.open(self, MatchView.summary_view(_summary(id)))
 
 
 ## Shows card `id` big in the preview column with its details and rules text.
@@ -300,10 +360,13 @@ func _build_catalogue(body: HBoxContainer) -> void:
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(sc)
-	_catalogue_box = VBoxContainer.new()
-	_catalogue_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_catalogue_box.add_theme_constant_override("separation", 2)
-	sc.add_child(_catalogue_box)
+	_grid = HFlowContainer.new()
+	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_grid.add_theme_constant_override("h_separation", 8)
+	_grid.add_theme_constant_override("v_separation", 8)
+	sc.add_child(_grid)
+	_no_match = UIStyle.label("No cards match these filters. Try Clear filters.", 14, UIStyle.TEXT_DIM)
+	v.add_child(_no_match)
 
 
 func _build_preview(body: HBoxContainer) -> void:
@@ -347,17 +410,24 @@ func _build_deck(body: HBoxContainer) -> void:
 	v.add_child(UIStyle.title_label("Your deck", 18, UIStyle.TEXT))
 	deck_name_edit = LineEdit.new()
 	deck_name_edit.placeholder_text = "Deck name"
-	deck_name_edit.text_changed.connect(func(_t): dirty = true)
+	deck_name_edit.text_changed.connect(func(_t):
+		dirty = true
+		_refresh_deck())
+	deck_name_edit.text_submitted.connect(func(_t): _on_save_pressed())
 	v.add_child(deck_name_edit)
 	var actions := HFlowContainer.new()
 	actions.add_theme_constant_override("h_separation", 6)
 	v.add_child(actions)
 	var save_b := UIStyle.button("Save", 14)
-	save_b.pressed.connect(save)
+	save_b.pressed.connect(_on_save_pressed)
 	actions.add_child(save_b)
 	var new_b := UIStyle.button("New", 14)
 	new_b.pressed.connect(func(): _guard_unsaved(new_deck))
 	actions.add_child(new_b)
+	var ren_b := UIStyle.button("Rename", 14)
+	ren_b.tooltip_text = "Rename the loaded saved deck to the name typed above"
+	ren_b.pressed.connect(rename_loaded)
+	actions.add_child(ren_b)
 	var del_b := UIStyle.button("Delete", 14)
 	del_b.pressed.connect(_ask_delete)
 	actions.add_child(del_b)
@@ -408,62 +478,96 @@ func _sel(o: OptionButton) -> String:
 	return String(o.get_item_metadata(o.selected)) if o.selected >= 0 else ""
 
 
+## Builds one grid cell per catalogue card (once). Left-click adds a copy, right-click inspects.
+func _build_cells() -> void:
+	for d in CardDB.all():
+		_grid.add_child(_make_cell(d))
+
+
+func _make_cell(d: Dictionary) -> Control:
+	var id := int(d["id"])
+	var sm := _summary(id)
+	var status := String(sm["support"])
+	var cell := PanelContainer.new()
+	cell.set_meta("card_id", id)
+	cell.custom_minimum_size = Vector2(CELL_MIN_W, 0)
+	cell.add_theme_stylebox_override("panel", _cell_style(false))
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 3)
+	cell.add_child(v)
+	var w := CardWidget.new().setup(MatchView.summary_view(sm), "hand")
+	w.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	if status != "full":
+		w.tooltip_text += "\n\nImplementation: %s" % status
+	w.pressed.connect(func(_w): add_card(id))
+	w.right_pressed.connect(func(_w): inspect_card(id))
+	w.mouse_entered.connect(func(): show_preview(id))
+	v.add_child(w)
+	var cap_row := HBoxContainer.new()
+	v.add_child(cap_row)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.custom_minimum_size = Vector2(0, 22)
+	row.alignment = BoxContainer.ALIGNMENT_END
+	v.add_child(row)
+	# Category and Type in words under the art: same-name basic variants differ only by Type.
+	var info := String(UIStyle.CATEGORY_NAMES.get(d["category"], d["category"]))
+	if d["type"] != null and d["type"] != "":
+		info += " · " + String(d["type"])
+	var cap := UIStyle.label(("! " if status != "full" else "") + info, 11, UIStyle.TEXT_DIM if status == "full" else UIStyle.BAD)
+	cap.clip_text = true
+	cap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cap_row.add_child(cap)
+	var cnt := UIStyle.label("", 13, UIStyle.GOLD_HI)
+	cnt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(cnt)
+	var rem := UIStyle.button("-", 11)
+	rem.custom_minimum_size = Vector2(22, 0)
+	rem.tooltip_text = "Remove one copy from the deck"
+	rem.focus_mode = Control.FOCUS_NONE
+	rem.pressed.connect(func(): remove_card(id))
+	row.add_child(rem)
+	_cells[id] = {"cell": cell, "widget": w, "count": cnt, "remove": rem}
+	_update_cell(id)
+	return cell
+
+
+static func _cell_style(in_deck: bool) -> StyleBoxFlat:
+	var sb := UIStyle.flat(Color(UIStyle.GOLD, 0.12) if in_deck else Color(0, 0, 0, 0.12), UIStyle.GOLD_HI if in_deck else Color(UIStyle.BRONZE, 0.35), 2 if in_deck else 1, 6)
+	sb.set_content_margin_all(4)
+	return sb
+
+
+func _update_cell(id: int) -> void:
+	var c: Dictionary = _cells[id]
+	var n := int(counts.get(id, 0))
+	(c["count"] as Label).text = ("x%d" % n) if n > 0 else ""
+	(c["remove"] as Button).visible = n > 0
+	(c["cell"] as Control).add_theme_stylebox_override("panel", _cell_style(n > 0))
+
+
 func _refresh_catalogue() -> void:
-	for c in _catalogue_box.get_children():
-		_catalogue_box.remove_child(c)
-		c.queue_free()
 	var cat := _sel(_cat_opt)
 	var type := _sel(_type_opt)
 	var race := _sel(_race_opt)
 	var cost := _sel(_cost_opt)
 	var n := 0
 	for d in CardDB.all():
-		if not matches(d, _search.text, cat, type, race, cost):
-			continue
-		n += 1
-		_catalogue_box.add_child(_catalogue_row(d))
-	_result_label.text = "%d of %d cards" % [n, CardDB.all().size()]
-	if n == 0:
-		_catalogue_box.add_child(UIStyle.label("No cards match these filters.", 14, UIStyle.TEXT_DIM))
+		var show := matches(d, _search.text, cat, type, race, cost)
+		_cells[int(d["id"])]["cell"].visible = show
+		if show:
+			n += 1
+	_result_label.text = "%d of %d cards   ·   click a card to add it, right-click to inspect" % [n, CardDB.all().size()]
+	_no_match.visible = n == 0
 
 
-func _catalogue_row(d: Dictionary) -> Control:
-	var id := int(d["id"])
-	var row := HBoxContainer.new()
-	row.set_meta("card_id", id)
-	row.add_theme_constant_override("separation", 6)
-	row.add_child(_swatch(d))
-	var status := String(_summary(id)["support"])
-	var nm := _name_button(("! " if status != "full" else "") + String(d["name"]), UIStyle.TEXT if status == "full" else UIStyle.BAD, id)
-	nm.tooltip_text = "Implementation: %s" % status if status != "full" else ""
-	nm.mouse_entered.connect(func(): show_preview(id))
-	row.add_child(nm)
-	var info := PackedStringArray()
-	info.append(UIStyle.CATEGORY_NAMES.get(d["category"], d["category"]))
-	if d["type"] != null and d["type"] != "":
-		info.append(String(d["type"]))
-	info.append(CardDB.cost_label(d))
-	var il := UIStyle.label(" · ".join(info), 12, UIStyle.TEXT_DIM)
-	il.custom_minimum_size = Vector2(190, 0)
-	il.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(il)
-	var cnt := UIStyle.label("", 13, UIStyle.GOLD_HI)
-	cnt.name = "Count"
-	cnt.custom_minimum_size = Vector2(34, 0)
-	row.add_child(cnt)
-	var add := UIStyle.button("+", 14)
-	add.custom_minimum_size = Vector2(32, 0)
-	add.pressed.connect(func(): add_card(id))
-	row.add_child(add)
-	var rem := UIStyle.button("-", 14)
-	rem.custom_minimum_size = Vector2(32, 0)
-	rem.pressed.connect(func(): remove_card(id))
-	row.add_child(rem)
-	_set_count_label(row)
-	return row
+func _refresh_catalogue_counts() -> void:
+	for id in _cells:
+		_update_cell(id)
 
 
-## Category colour strip at the start of a catalogue / deck row.
+## Category colour strip at the start of a deck row.
 static func _swatch(d: Dictionary) -> ColorRect:
 	var swatch := ColorRect.new()
 	swatch.color = UIStyle.CATEGORY_COLORS.get(d["category"], Color.GRAY)
@@ -471,7 +575,7 @@ static func _swatch(d: Dictionary) -> ColorRect:
 	return swatch
 
 
-## Flat, left-aligned card-name button of a row; pressing it previews card `id`.
+## Flat, left-aligned card-name button of a deck row: click previews card `id`, right-click inspects it.
 func _name_button(text: String, color: Color, id: int) -> Button:
 	var nm := Button.new()
 	nm.text = text
@@ -483,18 +587,12 @@ func _name_button(text: String, color: Color, id: int) -> Button:
 	nm.add_theme_font_size_override("font_size", ROW_FONT_SIZE)
 	nm.add_theme_color_override("font_color", color)
 	nm.pressed.connect(func(): show_preview(id))
+	nm.mouse_entered.connect(func(): show_preview(id))
+	nm.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_RIGHT:
+			inspect_card(id)
+			nm.accept_event())
 	return nm
-
-
-func _set_count_label(row: Node) -> void:
-	var n := int(counts.get(int(row.get_meta("card_id")), 0))
-	(row.get_node("Count") as Label).text = ("x%d" % n) if n > 0 else ""
-
-
-func _refresh_catalogue_counts() -> void:
-	for row in _catalogue_box.get_children():
-		if row.has_meta("card_id"):
-			_set_count_label(row)
 
 
 func _refresh_deck() -> void:
@@ -503,7 +601,7 @@ func _refresh_deck() -> void:
 		c.queue_free()
 	var cards := counts_to_cards(counts)
 	var sc := DeckStore.split_counts(cards)
-	_deck_summary.text = "%d cards   Main %d   Extra %d   (%d unique)" % [cards.size(), sc["main"], sc["extra"], counts.size()]
+	_deck_summary.text = "%d cards   Main %d   Extra %d   (%d unique)%s" % [cards.size(), sc["main"], sc["extra"], counts.size(), "   * unsaved" if dirty else ""]
 	_empty_note.visible = cards.is_empty()
 	for group in ["Main Deck", "Extra Deck"]:
 		var want_extra: bool = group == "Extra Deck"
@@ -533,6 +631,7 @@ func _deck_row(id: int) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	row.add_child(_swatch(d))
+	row.add_child(TypeIcons.TypeBadge.new(String(d["type"]) if d["type"] != null else "", 18))
 	row.add_child(_name_button("%dx  %s" % [counts[id], d["name"]], UIStyle.TEXT, id))
 	row.add_child(UIStyle.label(CardDB.cost_label(d), 12, UIStyle.TEXT_DIM))
 	var add := UIStyle.button("+", 13)
@@ -571,6 +670,15 @@ func _say(text: String, bad: bool = false) -> void:
 	_status.add_theme_color_override("font_color", UIStyle.BAD if bad else UIStyle.TEXT_DIM)
 
 
+## Save button / Enter in the name field: asks before replacing a different saved deck of the same name.
+func _on_save_pressed() -> void:
+	var n := deck_name_edit.text.strip_edges()
+	if n != "" and n != _loaded_name and _saved_exists(n):
+		_confirm("Replace deck", "A saved deck named \"%s\" already exists. Replace it?" % n, "Replace", func(): save())
+	else:
+		save()
+
+
 func _load_selected() -> void:
 	if _saved_opt.disabled or _saved_opt.selected < 0:
 		return
@@ -589,6 +697,8 @@ func _copy_starter() -> void:
 	var s: Dictionary = _starters[i]
 	load_cards(String(s["name"]) + " (copy)", s["main"] + s["extra"])
 	dirty = true
+	_loaded_name = ""
+	_refresh_deck()
 	_say("Copied starter deck \"%s\". Save to keep your edits." % s["name"])
 
 
@@ -616,7 +726,11 @@ func _ask_delete() -> void:
 	_confirm("Delete deck", "Delete the saved deck \"%s\"? This cannot be undone." % n, "Delete", func():
 		DeckStore.delete_deck(n)
 		_refresh_saved()
-		_say("Deleted \"%s\"." % n))
+		if _loaded_name == n:
+			_loaded_name = ""
+		dirty = true
+		_refresh_deck()
+		_say("Deleted \"%s\". The cards are still in the editor; Save to keep them under a name." % n))
 
 
 ## Asks `text` in the shared ConfirmDialog; `on_yes` runs when `yes_text` is pressed.
