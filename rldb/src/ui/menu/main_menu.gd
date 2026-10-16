@@ -32,9 +32,9 @@ signal tutorial_requested(lesson: int)
 ## anything else is a leaf shown in the centre (or an action).
 const MENU := {
 	"root": [["Resume", "resume"], ["Play", "@play"], ["Decks", "@decks"], ["Settings", "settings"], ["Quit", "quit"]],
-	"play": [["Play online", "@online"], ["Play local", "@local"]],
+	"play": [["Tutorial", "tutorial"], ["Play online", "@online"], ["Play local", "@local"]],
 	"online": [["Host game", "host_online"], ["Join game", "join_online"]],
-	"local": [["Tutorial", "tutorial"], ["Play vs Bot", "bot"], ["Hot-seat", "hotseat"], ["Host LAN", "host_lan"], ["Join LAN", "join_lan"]],
+	"local": [["Play vs Bot", "bot"], ["Hot-seat", "hotseat"], ["Host LAN", "host_lan"], ["Join LAN", "join_lan"]],
 	"decks": [["Deck builder", "builder"], ["Card list", "cards"]],
 }
 ## Top item of the root level for a profile that has not played yet (F04-09); opens lesson 1.

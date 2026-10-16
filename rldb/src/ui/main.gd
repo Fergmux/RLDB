@@ -8,6 +8,8 @@ extends Control
 ## `local_host`, `menu`, `opts`, `_privacy`, `_shown_seat`, `_start_local`, `_show_menu`, ...
 
 const DEV_SAVES_DIR := "user://dev_saves"
+## Frame cap while the window is in the background (F05-04).
+const BACKGROUND_FPS := 30
 const DECKBUILDER_SHOT_DRIVER := "res://src/dev/deck_builder_shot_driver.gd"
 
 ## Current non-game screen: the MainMenu, DeckBuilder or CardListScreen (null during a game).
@@ -21,6 +23,8 @@ var _sessions: SessionLauncher
 var _fader := ScreenFader.new()
 var _confirm_panel: ConfirmDialog
 var _auto_started := false
+var _backgrounded := false
+var _foreground_max_fps := 0
 
 ## Game screen of the live session (or null).
 var screen: GameScreen:
@@ -144,6 +148,17 @@ func _run_driver(path: String, dir: String) -> void:
 ## The window's close button behaves like the in-game "Quit to desktop": a live series asks
 ## first and is forfeited; anywhere else the game simply quits.
 func _notification(what: int) -> void:
+	# F05-04: while the window is in the background (unfocused or minimised) render at most
+	# BACKGROUND_FPS; the normal cap comes back with focus. Timers and the network keep running.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		if not _backgrounded:
+			_backgrounded = true
+			_foreground_max_fps = Engine.max_fps
+			Engine.max_fps = BACKGROUND_FPS
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		if _backgrounded:
+			_backgrounded = false
+			Engine.max_fps = _foreground_max_fps
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		if screen != null and is_instance_valid(screen) and screen.has_live_series():
 			screen.menu.confirm_forfeit(true)

@@ -1,7 +1,7 @@
 extends SceneTree
 ## Development-only live check of the guided tutorial (F03-15). Run windowed:
 ##   godot --path rldb -s res://src/tutorial/tutorial_driver.gd -- --tutorial-shots=<dir> [--size=1600x900]
-## Opens the real main scene, enters Play > Play local > Tutorial from the menu, and plays every
+## Opens the real main scene, enters Play > Tutorial from the menu, and plays every
 ## lesson by clicking (pushed mouse events) the rect the overlay highlights, so the highlights are
 ## proven to point at working controls. Also tries an off-script Esc (cancel), Restart lesson,
 ## and finally Back to menu. Writes PNGs and tutorial_report.json into the directory, then quits.
@@ -47,8 +47,7 @@ func _run() -> void:
 	var menu: MainMenu = main.menu
 	menu.pick("@play")
 	await _wait(0.4)
-	menu.pick("@local")
-	await _wait(0.5)
+	_check("F05-02 Tutorial is listed directly under Play", not main.menu.find_children("*", "MenuItem", true, false).filter(func(m): return m.is_visible_in_tree() and m.label_text == "Tutorial").is_empty())
 	menu.pick("tutorial")
 	await _wait(0.6)
 	await _shot("menu_tutorial_panel")

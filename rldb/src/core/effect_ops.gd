@@ -33,7 +33,7 @@ func _op_choose(f: Dictionary, op: Dictionary) -> int:
 		if not op.get("optional", false) and not op.get("quiet", false):
 			# F02-09: a resolving effect with nothing to choose explains itself (toast + log).
 			# Named publicly only when its source card is public.
-			var msg := "%s: no legal target, so this part does nothing." % f["label"]
+			var msg := "%s: no legal target." % f["label"]
 			add_log(msg if is_public_card(f["src"]) else "", {f["ctl"]: msg})
 			log_entries[-1]["toast"] = true
 		return R.END if op.get("end_if_none", false) else R.CONT
