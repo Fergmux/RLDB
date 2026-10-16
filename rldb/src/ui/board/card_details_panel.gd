@@ -31,6 +31,8 @@ const BLOCK_BAR_W := 3
 
 ## Compact rendering (pile list rows): every text size scaled down, tighter spacing.
 var compact: bool = false
+## Text size multiplier (the large card inspector reads at a distance: > 1).
+var text_scale: float = 1.0
 ## Section ids in the order they were built by the last show_* call (used by tests).
 var sections: Array[String] = []
 
@@ -245,7 +247,7 @@ func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	var num := Label.new()
 	num.text = "?" if cur == null else str(cur)
 	num.add_theme_font_override("font", UIStyle.font_display(700))
-	num.add_theme_font_size_override("font_size", 30 if not compact else 22)
+	num.add_theme_font_size_override("font_size", _fs(30) if not compact else 22)
 	num.add_theme_color_override("font_color", col)
 	num.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hb.add_child(num)
@@ -389,7 +391,7 @@ func _collect(n: Node, out: PackedStringArray) -> void:
 
 ## Wrapping (by default) label that expands to the available width.
 func _lbl(text: String, size: int, color: Color, bold: bool = false, display: bool = false, wrap: bool = true) -> Label:
-	var l := UIStyle.label(text, size if not compact else maxi(10, roundi(size * 0.8)), color, wrap, display)
+	var l := UIStyle.label(text, _fs(size), color, wrap, display)
 	if bold and not display:
 		l.add_theme_font_override("font", UIStyle.font_bold())
 	if wrap:
@@ -442,7 +444,7 @@ func _block(col: Color, bar_a: float) -> PanelContainer:
 
 ## Font size a label of base size `size` really gets (compact rows scale down).
 func _fs(size: int) -> int:
-	return size if not compact else maxi(10, roundi(size * 0.8))
+	return roundi(size * text_scale) if not compact else maxi(10, roundi(size * 0.8))
 
 
 ## Text line height (px) at base size `size`: the height every tag's content is held to, so an

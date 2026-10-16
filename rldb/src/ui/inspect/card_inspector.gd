@@ -14,7 +14,9 @@ extends Control
 ## Emitted once when the inspector closes.
 signal closed
 
-const DETAILS_W := 440.0
+const DETAILS_W := 520.0
+## Details text is larger than in the sidebar: the inspector is read at a glance.
+const DETAILS_TEXT_SCALE := 1.2
 const PAD := 22.0
 
 ## Inspectors currently open, oldest first (the last one is on top).
@@ -199,6 +201,7 @@ func _build() -> void:
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(_scroll)
 	_details = CardDetailsPanel.new()
+	_details.text_scale = DETAILS_TEXT_SCALE
 	_details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_details)
 	resized.connect(_relayout)
