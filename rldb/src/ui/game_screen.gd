@@ -14,7 +14,6 @@ const TOP_H := 44.0
 const HAND_H := 190.0
 const U := 128.0
 const G := 8.0
-const MID := 16.0
 const PW := 85.0
 const TH := 85.0
 const PGAP := 24.0
@@ -46,7 +45,6 @@ var _log_game: int = -1
 var _fx_seq: int = -1
 var _fx_game: int = -99
 var _draws_me: int = 0
-var _overlay_hidden_by_user: bool = false
 var _last_stage: String = ""
 var _error_text: String = ""
 var _laid_size: Vector2 = Vector2.ZERO
@@ -96,8 +94,6 @@ var turn_note: Label
 var pips: PhasePips
 var phase_btn: Button
 var details_box: VBoxContainer
-var prompt_panel: PanelContainer
-var prompt_box: VBoxContainer
 var log_label: RichTextLabel
 var overlay: PanelContainer
 var overlay_dim: ColorRect
@@ -117,7 +113,6 @@ var pile_box: VBoxContainer
 var settings_popup: PanelContainer
 var game_menu: PanelContainer
 var toast: Label
-var seat_label: Label
 var conn_label: Label
 var empty_hand_label: Label
 var opp_hand_box: Control
@@ -137,7 +132,6 @@ var pile_scroll: ScrollContainer
 var pile_list: VBoxContainer
 var pile_head: HBoxContainer      # hint + Close: stays put while the list scrolls
 var pile_hint: Label
-var sfx_vol: HSlider
 ## Hot-seat: the seat switch waits until this time (msec) so an animation that belongs to the
 ## current seat (end-of-turn discard) finishes on its own screen.
 var fx_hold_until: int = 0
@@ -155,8 +149,6 @@ var _slots: Dictionary = {}        # "side:zone:slot" -> {holder, widget, hash, 
 var _hand_items: Dictionary = {}   # uid -> {holder, widget, hash}
 var _hand_order: Array = []
 var _gone_hand: Dictionary = {}    # uid -> {"c": global centre, "v": card view} of hand cards removed by the last render
-var _prompt_tween: Tween
-var _prompt_style: StyleBoxFlat
 
 # Hover state
 var _hv: Dictionary = {}
@@ -599,7 +591,6 @@ func _build_board() -> void:
 		var pl := PlayerPlate.new()
 		board_layer.add_child(pl)
 		var s := side
-		pl.pile_pressed.connect(func(z): if s == 1: _show_pile(z))
 		_plates.append(pl)
 		for zt in PILE_ZONES:
 			var ps := PileStack.new()
@@ -742,15 +733,6 @@ func _build_side() -> void:
 	turn_note = UIStyle.label("", 13, Color("ff9ff3"), true)
 	turn_note.visible = false
 	tv.add_child(turn_note)
-	# Prompt
-	prompt_panel = _side_panel()
-	_prompt_style = prompt_panel.get_theme_stylebox("panel") as StyleBoxFlat
-	col.add_child(prompt_panel)
-	prompt_panel.visible = false   # user feedback: choices live in the banner over the board
-	prompt_box = VBoxContainer.new()
-	prompt_box.add_theme_constant_override("separation", 4)
-	prompt_panel.add_child(prompt_box)
-	prompt_panel.custom_minimum_size = Vector2(0, 88)   # D8: short prompts don't shift the details panel
 	# Series summary (deck selection, rewards, between games, series over)
 	series_panel = _side_panel()
 	series_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -861,10 +843,9 @@ func _build_top_strip() -> void:
 	row.offset_bottom = -6
 	row.add_theme_constant_override("separation", 8)
 	top_strip.add_child(row)
-	seat_label = UIStyle.label("", 15, UIStyle.MUTED)
-	seat_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	seat_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(seat_label)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(gap)
 	conn_label = UIStyle.label("", 14, UIStyle.MUTED)
 	conn_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(conn_label)
@@ -1343,14 +1324,12 @@ func _on_view(v: Dictionary) -> void:
 	view = v
 	mv = v.get("match", {})
 	if v["stage"] != _last_stage:
-		_overlay_hidden_by_user = false
 		_last_stage = v["stage"]
 	# A multi-pick belongs to one prompt: clear it whenever the pending choice changes (QA-F02-01).
 	var pid: int = int(mv.get("pending", {}).get("id", -1)) if not mv.is_empty() else -1
 	if pid != _multi_pid:
 		multi = []
 		_multi_pid = pid
-	seat_label.text = ""   # no "You are X · Series a-b (best of n)" line (user feedback)
 	var events := _collect_fx()
 	_draws_me = 0
 	for e in events:
@@ -2145,14 +2124,6 @@ func _cancel() -> bool:
 	return did
 
 
-func _digit_of(k: int) -> int:
-	if k >= KEY_1 and k <= KEY_9:
-		return k - KEY_1 + 1
-	if k >= KEY_KP_1 and k <= KEY_KP_9:
-		return k - KEY_KP_1 + 1
-	return 0
-
-
 ## Keyboard fallback. 1-9 pick prompt options, Enter confirms a multi-select or ends the phase,
 ## Esc cancels, Tab / Shift+Tab walk your actionable cards (opening the card's action row) and
 ## the arrow keys + Enter choose an action. Returns true when the key was used.
@@ -2164,18 +2135,11 @@ func _handle_key(e: InputEventKey) -> bool:
 		return true
 	if pile_popup.visible or settings_popup.visible or pause_dim.visible or view.is_empty():
 		return false
-	var num := 0   # number-key shortcuts removed (user feedback)
 	var is_enter: bool = k == KEY_ENTER or k == KEY_KP_ENTER
 	var stage: String = view.get("stage", "")
 	if stage != "game":
 		if not overlay.visible:
 			return false
-		if stage == "decks" and view.has("starters") and num > 0 and num <= view["starters"].size() and not view["deck_ready"][me()]:
-			_send({"t": "pick_starter", "index": num - 1})
-			return true
-		if stage == "first_player" and view.get("last_loser", -1) == me() and (num == 1 or num == 2):
-			_send({"t": "first_player", "who": me() if num == 1 else 1 - me()})
-			return true
 		return false
 	if mv.is_empty() or mv["winner"] != -1:
 		return false
@@ -2183,9 +2147,6 @@ func _handle_key(e: InputEventKey) -> bool:
 	if not pd.is_empty():
 		if not pd["mine"]:
 			return false
-		if num > 0 and num <= pd["options"].size():
-			_pick_option(pd["options"][num - 1]["i"])
-			return true
 		if is_enter and pd["max"] > 1 and multi.size() >= pd["min"]:
 			_confirm_multi()
 			return true
@@ -2677,19 +2638,6 @@ func debug_clear_hover() -> void:
 
 # ---------------------------------------------------------------- prompt
 
-func _render_net_banner() -> bool:
-	var net: Dictionary = view.get("net", {})
-	if net.is_empty():
-		return false
-	if net.get("paused", false):
-		return true
-	elif not net.get("opponent_connected", true) and net.get("is_host", false):
-		prompt_box.add_child(UIStyle.label(net.get("message", "Waiting for an opponent…"), 14, UIStyle.ACCENT, true))
-		if net.get("transport", "") == "steam":
-			pass   # the invite button lives in the pregame lobby (deck selection), not in a game
-	return false
-
-
 func _render_pause() -> void:
 	var net: Dictionary = view.get("net", {})
 	var paused: bool = not net.is_empty() and net.get("paused", false)
@@ -2710,100 +2658,17 @@ func _render_pause() -> void:
 	pause_panel.set_deferred("size", Vector2(440, 0))
 
 
-func _prompt_pulse(on: bool) -> void:
-	if _prompt_tween != null and _prompt_tween.is_valid():
-		_prompt_tween.kill()
-	_prompt_style.border_color = UIStyle.BRONZE
-	if not on:
-		return
-	if UIStyle.reduce_motion:
-		_prompt_style.border_color = UIStyle.GOLD
-		return
-	_prompt_tween = create_tween().set_loops()
-	_prompt_tween.tween_property(_prompt_style, "border_color", UIStyle.GOLD_HI, 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_prompt_tween.tween_property(_prompt_style, "border_color", UIStyle.BRONZE, 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-
-
+## The choice banner and the pile tray follow the pending choice (rebuilt only when it changes).
 func _render_prompt() -> void:
 	var pd := _pending()
 	var sig := hash([view.get("stage", ""), view.get("net", {}), pd, mv.get("active", -1), mv.get("winner", -1), mv.get("resolving", false),
-		multi, _overlay_hidden_by_user, view.get("deck_ready", []), view.get("you", 0)])
+		multi, view.get("deck_ready", []), view.get("you", 0)])
 	if sig == _prompt_sig:
 		return
 	_prompt_sig = sig
-	_clear(prompt_box)
 	_hover_opt = -1
 	_render_banner()
 	_render_tray()
-	var decision := false
-	if _render_net_banner():
-		prompt_box.add_child(UIStyle.label("Match paused. Nothing can happen until both players are connected.", 14, UIStyle.MUTED, true))
-		_prompt_pulse(false)
-		return
-	if view.get("stage", "") != "game" or mv.is_empty():
-		if _overlay_hidden_by_user and view.get("stage", "") != "game":
-			var back := UIStyle.button("Return to %s" % _stage_title(view.get("stage", "")), 15)
-			back.pressed.connect(func(): _overlay_hidden_by_user = false; _render_all())
-			prompt_box.add_child(back)
-		else:
-			prompt_box.add_child(UIStyle.label(_stage_hint(), 15, UIStyle.MUTED, true))
-		_prompt_pulse(false)
-		return
-	if mv["winner"] != -1:
-		prompt_box.add_child(UIStyle.label("Game over: %s wins." % _pv(mv["winner"])["name"], 17, UIStyle.ACCENT, true, true))
-	elif pd.is_empty():
-		var txt := "Your turn. Click a card to see what it can do; hover to read it." if mv["active"] == me() else "Opponent's turn."
-		if mv["resolving"]:
-			txt = "Resolving…"
-		prompt_box.add_child(UIStyle.label(txt, 15, UIStyle.TEXT if mv["active"] == me() else UIStyle.MUTED, true))
-	elif not pd["mine"]:
-		prompt_box.add_child(UIStyle.label(pd["prompt"], 15, UIStyle.ACCENT, true))
-		prompt_box.add_child(UIStyle.label("You cannot act until this choice is made.", 13, UIStyle.MUTED, true))
-	else:
-		decision = true
-		_render_choice(pd)
-	_prompt_pulse(decision)
-
-
-func _render_choice(pd: Dictionary) -> void:
-	if _board_targeting():
-		# D13: the banner over the board carries the prompt; the sidebar only points to it.
-		prompt_box.add_child(UIStyle.label("▲ Choose on the board — see the banner at the top.", 14, UIStyle.TARGET, true))
-		return
-	prompt_box.add_child(UIStyle.label(pd["prompt"], 16, UIStyle.TARGET, true))
-	if false:
-		# F02-07: no list of field cards here — targets are picked on the board / tray, and
-		# the banner at the top says what is being chosen and holds Confirm / Cancel.
-		return
-	if pd["kind"] == "trap_response":
-		prompt_box.add_child(UIStyle.label("Your opponent is waiting. Activate a Trap or pass.", 13, UIStyle.MUTED, true))
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 3)
-	prompt_box.add_child(list)
-	var shown := 0
-	for o in pd["options"]:
-		var chosen: bool = o["i"] in multi
-		var idx: int = o["i"]
-		shown += 1
-		var b2 := UIStyle.button(("✓ " if chosen else "") + o["label"], 14)
-		b2.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b2.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		b2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b2.tooltip_text = o["label"]
-		b2.pressed.connect(_pick_option.bind(idx))
-		b2.mouse_entered.connect(func(): _hover_opt = idx)
-		b2.mouse_exited.connect(func(): if _hover_opt == idx: _hover_opt = -1)
-		list.add_child(b2)
-	if pd["max"] > 1:
-		prompt_box.add_child(UIStyle.label(_multi_status(pd), 13, UIStyle.MUTED))
-		var confirm := UIStyle.primary_button("Confirm selection", 15)
-		confirm.disabled = multi.size() < pd["min"]
-		confirm.pressed.connect(_confirm_multi)
-		prompt_box.add_child(confirm)
-	if pd["cancellable"]:
-		var cancel := UIStyle.button("Cancel", 14)
-		cancel.pressed.connect(_cancel)
-		prompt_box.add_child(cancel)
 
 
 func _multi_status(pd: Dictionary) -> String:
@@ -2979,15 +2844,6 @@ func _render_tray() -> void:
 func _fit_tray() -> void:
 	await get_tree().process_frame
 	_place_tray()
-
-
-func _stage_hint() -> String:
-	match view.get("stage", ""):
-		"decks": return "Choose a deck."
-		"rewards": return "Choose your rewards."
-		"first_player": return "Choosing who goes first."
-		"over": return "The series is over."
-	return ""
 
 
 # ---------------------------------------------------------------- details (inspection only)
@@ -3353,7 +3209,7 @@ func _show_deck() -> void:
 		var cell := VBoxContainer.new()
 		cell.add_theme_constant_override("separation", 2)
 		flow.add_child(cell)
-		var w := CardWidget.new().setup(_summary_view(c), "hand")
+		var w := CardWidget.new().setup(MatchView.summary_view(c), "hand")
 		w.auto_hover = true
 		cell.add_child(w)
 		if int(counts[c["id"]]) > 1:
@@ -3364,20 +3220,6 @@ func _show_deck() -> void:
 	pile_popup.visible = true
 
 
-func _show_message(text: String, buttons: Array) -> void:
-	_clear(pile_box)
-	pile_box.add_child(UIStyle.label(text, 16, UIStyle.GOLD, true, true))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	pile_box.add_child(row)
-	for pair in buttons:
-		var b := UIStyle.button(pair[0], 14)
-		b.pressed.connect(pair[1])
-		row.add_child(b)
-	pile_popup.visible = true
-	_clear_hover()
-
-
 # ---------------------------------------------------------------- series stages (overlay)
 
 func _render_overlay() -> void:
@@ -3386,12 +3228,12 @@ func _render_overlay() -> void:
 	if stage != "game":
 		var vv := view.duplicate()
 		vv.erase("match")
-		sig = hash([vv, _overlay_hidden_by_user, _deck_open])
+		sig = hash([vv, _deck_open])
 	if sig == _overlay_sig:
 		return
 	_overlay_sig = sig
 	_clear(overlay_box)
-	if stage == "game" or stage == "" or _overlay_hidden_by_user:
+	if stage == "game" or stage == "":
 		overlay.visible = false
 		overlay_dim.visible = false
 		_overlay_stage = ""
@@ -3642,7 +3484,7 @@ func _render_decks() -> void:
 	for i in dr["offer"].size():
 		var c: Dictionary = dr["offer"][i]
 		var cell := VBoxContainer.new()
-		cell.add_child(CardWidget.new().setup(_summary_view(c), "big"))
+		cell.add_child(CardWidget.new().setup(MatchView.summary_view(c), "big"))
 		var b2 := UIStyle.primary_button("Pick", 14)
 		b2.pressed.connect(func(): _send({"t": "draft_pick", "index": i}))
 		cell.add_child(b2)
@@ -3809,21 +3651,6 @@ func _deck_tile(id: String, title: String, theme: String, main: Array, extra: Ar
 	return tile
 
 
-func _summary_view(c: Dictionary) -> Dictionary:
-	var kind := "ap"
-	var printed = null
-	match c["category"]:
-		"fusion": kind = "fusion"
-		"ritual": kind = "ritual"
-		"arcane": kind = "arcane"
-	var d := CardDB.get_def(c["id"])
-	printed = d["cost"]
-	return {"uid": -1000 - c["id"], "id": c["id"], "name": c["name"], "category": c["category"], "cost_kind": kind,
-		"cost_text": c["cost_text"], "cost": printed if printed != null else 0, "printed_cost": printed,
-		"race": c["race"], "type": c["type"], "atk": c["atk"], "def": c["def"], "printed_atk": c["atk"], "printed_def": c["def"],
-		"text": c["text"], "support": c["support"], "art": d["art"], "statuses": {}, "runes": 0, "zone": "pile"}
-
-
 func _resize_card(w: CardWidget, sz: Vector2) -> void:
 	w.custom_minimum_size = sz
 	w.size = sz
@@ -3875,7 +3702,7 @@ func _render_rewards() -> void:
 			var c: Dictionary = r["offer"][i]
 			var cell := VBoxContainer.new()
 			cell.add_theme_constant_override("separation", 6)
-			var cw := CardWidget.new().setup(_summary_view(c), "big")
+			var cw := CardWidget.new().setup(MatchView.summary_view(c), "big")
 			_resize_card(cw, Vector2(200, 300))
 			var idx: int = i
 			cw.pressed.connect(func(_w): _send({"t": "reward_add", "index": idx}))
@@ -4004,7 +3831,7 @@ func _reward_remove_panel(order: Array, counts: Dictionary) -> Control:
 			shown = c
 	if shown.is_empty() and not order.is_empty():
 		shown = order[0]
-	prev.setup(_summary_view(shown) if not shown.is_empty() else null, "big")
+	prev.setup(MatchView.summary_view(shown) if not shown.is_empty() else null, "big")
 	_resize_card(prev, Vector2(180, 270))
 	right.add_child(prev)
 	for c in order:
@@ -4016,7 +3843,7 @@ func _reward_remove_panel(order: Array, counts: Dictionary) -> Control:
 		b2.clip_text = true
 		var cc: Dictionary = c
 		b2.mouse_entered.connect(func():
-			prev.setup(_summary_view(cc), "big")
+			prev.setup(MatchView.summary_view(cc), "big")
 			_resize_card(prev, Vector2(180, 270)))
 		b2.pressed.connect(func():
 			_remove_sel = int(cc["id"])

@@ -199,10 +199,6 @@ func _go(fn: Callable) -> void:
 # ---------------------------------------------------------------- menu
 
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Variable.ttf")
-const M_WOOD := Color("2a211a")
-const M_DEEP := Color("0e0d0c")
-const M_SLATE := Color("1f1c1a")
-const M_BRONZE := Color("7a5a30")
 const M_GOLD := Color("d4a64a")
 const M_PARCH := Color("ece4d2")
 const M_DIM := Color("a79c88")
@@ -212,25 +208,6 @@ func _title_label(text: String, size: int, color: Color = M_GOLD) -> Label:
 	var l := UIStyle.label(text, size, color)
 	l.add_theme_font_override("font", FONT_TITLE)
 	return l
-
-
-## A bronze-trimmed slate plate with a heading; returns the VBox to fill.
-func _section(parent: Control, heading: String, note: String = "") -> VBoxContainer:
-	var p := PanelContainer.new()
-	var sb := UIStyle.flat(M_SLATE, M_BRONZE, 1, 6)
-	sb.content_margin_left = 14
-	sb.content_margin_right = 14
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 12
-	p.add_theme_stylebox_override("panel", sb)
-	parent.add_child(p)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
-	p.add_child(v)
-	v.add_child(_title_label(heading, 20, M_GOLD))
-	if note != "":
-		v.add_child(UIStyle.label(note, 14, M_DIM, true))
-	return v
 
 
 ## One entry of the left-hand menu: large Cinzel text, left-aligned. Hover slides it a touch
@@ -305,12 +282,10 @@ const MENU := {
 	"local": [["Play vs Bot", "bot"], ["Hot-seat", "hotseat"], ["Host LAN", "host_lan"], ["Join LAN", "join_lan"]],
 	"decks": [["Deck builder", "builder"], ["Card list", "cards"]],
 }
-const MENU_TITLES := {"root": "", "play": "Play", "online": "Play · Online", "local": "Play · Local", "decks": "Decks"}
 const BAND_W := 520.0
 
 var _menu_path: Array = ["root"]
 var _menu_list: VBoxContainer
-var _menu_crumb: Label
 var _menu_center: CenterContainer
 var _menu_leaf: String = ""
 var _lan_addr: String = "127.0.0.1:24680"
@@ -363,10 +338,9 @@ func _show_menu() -> void:
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(0, 54)
 	col.add_child(gap)
-	_menu_crumb = _title_label("", 16, M_BRONZE.lightened(0.3))
-	_menu_crumb.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_menu_crumb.custom_minimum_size = Vector2(0, 24)
-	col.add_child(_menu_crumb)
+	var crumb_gap := Control.new()
+	crumb_gap.custom_minimum_size = Vector2(0, 24)
+	col.add_child(crumb_gap)
 	_menu_list = VBoxContainer.new()
 	_menu_list.add_theme_constant_override("separation", 2)
 	col.add_child(_menu_list)
@@ -390,7 +364,6 @@ func _build_menu_level(animate: bool = true) -> void:
 		_menu_list.remove_child(ch)
 		ch.queue_free()
 	var level: String = _menu_path[-1]
-	_menu_crumb.text = ""   # no breadcrumb above the options (user feedback); the spacer keeps the layout
 	var items: Array = MENU[level].duplicate()
 	if level == "root" and SeriesStore.list().is_empty():
 		items = items.filter(func(it): return it[1] != "resume")
@@ -817,12 +790,8 @@ func _show_card_list() -> void:
 	flow.add_theme_constant_override("h_separation", 6)
 	flow.add_theme_constant_override("v_separation", 6)
 	sc.add_child(flow)
-	var gs := GameScreen.new()
 	for d in CardDB.all():
-		var summary := Series._card_summary(d["id"])
-		var w := CardWidget.new().setup(gs._summary_view(summary), "big")
-		flow.add_child(w)
-	gs.free()
+		flow.add_child(CardWidget.new().setup(MatchView.summary_view(Series._card_summary(d["id"])), "big"))
 
 
 func _on_menu_requested() -> void:

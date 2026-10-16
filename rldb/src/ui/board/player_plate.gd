@@ -3,10 +3,6 @@ extends PanelContainer
 ## Player info plate (match-board.md section 4): name with turn marker, HP bar with number,
 ## AP gems and pile chips. Pile chips for the local player are clickable (inspection only).
 
-signal pile_pressed(zone: String)
-
-const CHIP_ZONES := [["hand", "Hand"], ["draw", "Deck"], ["spent", "Spent"], ["exhaust", "Exh"], ["extra", "Extra"]]
-const CHIP_TIPS := {"hand": "Hand", "draw": "Draw pile (Deck)", "spent": "Spent pile", "exhaust": "Exhaust pile", "extra": "Extra Deck"}
 
 
 class HpBar extends Control:
@@ -293,7 +289,6 @@ var next_label: Label
 var hp_bar: HpBar
 var ap_gems: ApGems
 var turn_mark: TurnMark
-var chips: Dictionary = {}
 var _max_hp: int = 60
 var _active: bool = false
 var _tween: Tween
@@ -323,30 +318,6 @@ func _init() -> void:
 	v.add_child(hp_bar)
 	ap_gems = ApGems.new()
 	v.add_child(ap_gems)
-	# Piles are drawn as stacks beside the unit zones now (PileStack); the chip row stays
-	# hidden so existing anchors keep working.
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 3)
-	row.visible = false
-	v.add_child(row)
-	for z in CHIP_ZONES:
-		var b := UIStyle.button("%s 0" % z[1], 13)
-		b.custom_minimum_size = Vector2(0, 26)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.add_theme_stylebox_override("normal", UIStyle.flat(UIStyle.PANEL_LIGHT, Color(UIStyle.BRONZE, 0.7), 1, 11))
-		b.add_theme_stylebox_override("hover", UIStyle.flat(UIStyle.PANEL_LIGHT.lightened(0.1), UIStyle.GOLD, 1, 11))
-		b.add_theme_stylebox_override("disabled", UIStyle.flat(Color(UIStyle.PANEL_LIGHT, 0.7), Color(UIStyle.BRONZE, 0.6), 1, 11))
-		for s in ["normal", "hover", "disabled"]:
-			(b.get_theme_stylebox(s) as StyleBoxFlat).content_margin_left = 4
-			(b.get_theme_stylebox(s) as StyleBoxFlat).content_margin_right = 4
-			(b.get_theme_stylebox(s) as StyleBoxFlat).content_margin_top = 1
-			(b.get_theme_stylebox(s) as StyleBoxFlat).content_margin_bottom = 1
-		b.add_theme_color_override("font_disabled_color", UIStyle.TEXT)
-		b.tooltip_text = CHIP_TIPS[z[0]]
-		var zone: String = z[0]
-		b.pressed.connect(func(): pile_pressed.emit(zone))
-		row.add_child(b)
-		chips[zone] = b
 
 
 ## Refreshes the plate from a player view. `mine` enables pile inspection.
@@ -367,14 +338,6 @@ func update_from(pv: Dictionary, active: bool, mine: bool, label_suffix: String,
 	var ap := int(pv["ap"])
 	ap_gems.set_values(ap, int(pv.get("ap_start", ap)), int(pv.get("ap_peak", ap)), snap)
 	next_label.text = next_text
-	var counts: Dictionary = pv["counts"]
-	for z in CHIP_ZONES:
-		var b: Button = chips[z[0]]
-		b.text = "%s %d" % [z[1], counts[z[0]]]
-		var inspectable: bool = mine and z[0] != "hand"
-		b.disabled = not inspectable
-		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if inspectable else Control.CURSOR_ARROW
-		b.tooltip_text = CHIP_TIPS[z[0]] + ("" if mine else " (count only)")
 	if active != _active:
 		_active = active
 		pulse()
@@ -403,10 +366,6 @@ func hp_anchor() -> Vector2:
 
 func ap_anchor() -> Vector2:
 	return ap_gems.get_global_rect().get_center() + Vector2(60, 0)
-
-
-func deck_anchor() -> Vector2:
-	return (chips["draw"] as Control).get_global_rect().get_center()
 
 
 func portrait_center() -> Vector2:

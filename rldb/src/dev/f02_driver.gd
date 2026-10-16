@@ -132,7 +132,7 @@ func _steps() -> void:
 	await _wait(0.4)
 	_check("F02-02 summon goes straight to zone choice (no stance menu)", m.pending.get("kind", "") == "slot")
 	_check("F02-07 banner explains the choice", gs.ctx_banner.visible and gs.banner_title.text.contains("zone"), gs.banner_title.text)
-	_check("F02-07 no sidebar list of zones", _sidebar_option_buttons() == 0)
+	_check("F02-07 no sidebar list of zones", not ("prompt_box" in gs))
 	await _shot("04_summon_zone_banner")
 	await _click(_zone_rect(a, "unit", 3).get_center())
 	await _wait(0.8)
@@ -492,14 +492,6 @@ func _click_row(label: String) -> void:
 			await _click((b as Control).get_global_rect().get_center())
 			return
 	_check("row has '%s'" % label, false, str(_row_labels()))
-
-
-func _sidebar_option_buttons() -> int:
-	var n := 0
-	for ch in gs.prompt_box.get_children():
-		if ch is Button or ch is VBoxContainer and ch.get_child_count() > 0:
-			n += 1
-	return n
 
 
 func _tray_widgets() -> Array:

@@ -709,7 +709,7 @@ func _show_spotlight(e: Dictionary) -> void:
 		if sr.size != Vector2.ZERO:
 			origin_g = sr.get_center()
 	var origin := inv * origin_g
-	var v: Dictionary = screen._summary_view(Series._card_summary(int(e["id"])))
+	var v: Dictionary = MatchView.summary_view(Series._card_summary(int(e["id"])))
 	var accent: Color = UIStyle.CATEGORY_COLORS.get(String(v.get("category", "spell")), UIStyle.GOLD)
 	# Backdrop: soft radial dark vignette over the board.
 	var g := Gradient.new()

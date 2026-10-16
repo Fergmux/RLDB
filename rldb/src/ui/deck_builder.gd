@@ -7,9 +7,7 @@ extends Control
 signal closed
 
 const TABLE := Color("2a211a")
-const TABLE_DEEP := Color("0e0d0c")
 const SLATE := Color("1f1c1a")
-const RAISED := Color("2a2623")
 const INK := Color("12100f")
 const BRONZE := Color("7a5a30")
 const GOLD := Color("d4a64a")
@@ -173,7 +171,7 @@ func show_preview(id: int) -> void:
 	for c in _preview_holder.get_children():
 		c.queue_free()
 	var s := _summary(id)
-	_preview_holder.add_child(CardWidget.new().setup(_summary_view(s), "big"))
+	_preview_holder.add_child(CardWidget.new().setup(MatchView.summary_view(s), "big"))
 	var d := CardDB.get_def(id)
 	var lines := PackedStringArray()
 	lines.append("%s · %s" % [UIStyle.CATEGORY_NAMES.get(d["category"], d["category"]), CardDB.cost_label(d)])
@@ -659,18 +657,3 @@ func _confirm(text: String, yes_text: String, on_yes: Callable) -> void:
 	var no := UIStyle.button("Cancel", 14)
 	no.pressed.connect(func(): _overlay.queue_free())
 	row.add_child(no)
-
-
-## Same view-dict shape GameScreen._summary_view builds for card previews.
-func _summary_view(c: Dictionary) -> Dictionary:
-	var kind := "ap"
-	match c["category"]:
-		"fusion": kind = "fusion"
-		"ritual": kind = "ritual"
-		"arcane": kind = "arcane"
-	var d := CardDB.get_def(c["id"])
-	var printed = d["cost"]
-	return {"uid": -1000 - c["id"], "id": c["id"], "name": c["name"], "category": c["category"], "cost_kind": kind,
-		"cost_text": c["cost_text"], "cost": printed if printed != null else 0, "printed_cost": printed,
-		"race": c["race"], "type": c["type"], "atk": c["atk"], "def": c["def"], "printed_atk": c["atk"], "printed_def": c["def"],
-		"text": c["text"], "support": c["support"], "art": d["art"], "statuses": {}, "runes": 0, "zone": "pile"}
