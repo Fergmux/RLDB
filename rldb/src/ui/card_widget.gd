@@ -1054,12 +1054,11 @@ func _draw_overlays() -> void:
 		# Soft ivory glow entirely OUTSIDE the card, no ring on it: the kind-coloured frame stays visible.
 		_outer_glow(rect, rad, UIStyle.HOVER_GLOW, 1.0)
 	if selected:
-		# No ring or fill on the card: a slight blue glow outside it plus corner brackets that breathe
-		# slowly in and out (~1.6 s period).
+		# Only the corner brackets, breathing slowly in and out (~1.6 s period); no ring, fill or
+		# glow around the card (user feedback).
 		var ph := 0.0
 		if not UIStyle.reduce_motion:
 			ph = sin(float(Time.get_ticks_msec()) / 1600.0 * TAU)
-		_outer_glow(rect, rad, UIStyle.SELECT, 0.9 + 0.15 * ph)
 		_corner_brackets(rect.grow((6.0 + 2.2 * ph) * _s), maxf(8.0, 9.0 * _s), UIStyle.SELECT.lightened(0.3), maxf(2.2, 2.4 * _s))
 	if highlighted:
 		var a := 1.0
