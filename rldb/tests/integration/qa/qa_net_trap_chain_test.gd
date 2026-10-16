@@ -18,9 +18,10 @@ func test_plan_b_over_network_resolves_depth_first_heals_last_and_client_view_ma
 	# Arrange
 	var m: MatchEngine = await _client_turn2()
 	var atk := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
-	var c2 := TB.unit(m, 1, TB.PHYSICAL, 1)
-	var h1 := TB.unit(m, 0, TB.EARTH, 0)
-	var h2 := TB.unit(m, 0, TB.FIRE, 1)
+	# F03-09: names no longer carry the Type, so the three units differ by Race.
+	var c2 := TB.unit(m, 1, 118, 1)                         # Basic Beast (Physical)
+	var h1 := TB.unit(m, 0, 122, 0)                         # Basic Warrior (Earth)
+	var h2 := TB.unit(m, 0, 111, 1)                         # Basic Dragon (Fire)
 	TB.set_card(m, 0, PLAN_B, 0)
 	TB.set_card(m, 0, SHARED_FATE, 1)
 	var decoy := TB.set_card(m, 0, MAGIC_CYLINDER, 2)        # never selected, must stay hidden
@@ -31,7 +32,7 @@ func test_plan_b_over_network_resolves_depth_first_heals_last_and_client_view_ma
 	# Act: client attacks the Earth mage in column 1
 	client.local_seat.send({"t": "attack", "uid": atk})
 	assert_bool(await _await_pending(m, 1, "attack_target")).is_true()
-	_client_choose(["Basic Mage (Earth)"])
+	_client_choose(["Basic Warrior"])
 	assert_bool(await _await_pending(m, 0, "trap_response")).is_true()
 	assert_array(_labels(hpend())).not_contains(["Activate Magic Cylinder"])   # column 3, not eligible
 	_host_choose(["Plan B"])
@@ -39,19 +40,19 @@ func test_plan_b_over_network_resolves_depth_first_heals_last_and_client_view_ma
 	# The waiting client sees only that the host is choosing.
 	assert_bool(cpend().get("mine", true)).is_false()
 	assert_bool(cpend().has("options")).is_false()
-	_host_choose(["Basic Mage (Fire)", "Basic Mage (Earth)"])     # ordered: Fire first
+	_host_choose(["Basic Dragon", "Basic Warrior"])     # ordered: Fire first
 	assert_bool(await _await_pending(m, 0, "trap_response")).is_true()
 	assert_int(m.players[0]["hp"]).is_equal(60)                # no healing before chains finish
 	assert_str(m.cards[h1]["zone"]).is_equal("unit")            # second target not yet destroyed
 	_host_choose(["Shared Fate"])
 	if await _await_pending(m, 0, "select", 60):
-		_host_choose(["Basic Mage (Physical)"])
+		_host_choose(["Basic Beast"])
 	assert_bool(await _await_idle(m)).is_true()
 	# Assert
-	var i_fire := TB.log_index(m, "Basic Mage (Fire) is destroyed")
+	var i_fire := TB.log_index(m, "Basic Dragon is destroyed")
 	var i_fate := TB.log_index(m, "activates Trap Shared Fate")
-	var i_phys := TB.log_index(m, "Basic Mage (Physical) is destroyed")
-	var i_earth := TB.log_index(m, "Basic Mage (Earth) is destroyed")
+	var i_phys := TB.log_index(m, "Basic Beast is destroyed")
+	var i_earth := TB.log_index(m, "Basic Warrior is destroyed")
 	var i_heal := TB.log_index(m, "(Plan B, 2 destroyed)")
 	assert_bool(i_fire >= 0 and i_fire < i_fate and i_fate < i_phys and i_phys < i_earth and i_earth < i_heal) \
 		.override_failure_message("order fire=%d fate=%d phys=%d earth=%d heal=%d" % [i_fire, i_fate, i_phys, i_earth, i_heal]).is_true()

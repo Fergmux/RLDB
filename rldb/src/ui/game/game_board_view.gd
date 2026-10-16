@@ -288,7 +288,8 @@ func render() -> void:
 
 
 ## Pile stacks: counts for both players; only your own piles open for inspection. Your Extra
-## pile carries the "can act" ring while a Ritual/Arcane summon is available from it.
+## pile carries the "can act" ring while a Ritual/Arcane summon is available from it, or a
+## Fusion method can be activated now with a summonable Fusion unit (F03-08, `extra_avail`).
 func _update_piles(side: int, pidx: int, pv: Dictionary) -> void:
 	var mine := pidx == gs.me()
 	var extra_ready := false
@@ -296,6 +297,8 @@ func _update_piles(side: int, pidx: int, pv: Dictionary) -> void:
 		for c in pv.get("extra", []):
 			if ready_uids.has(int(c.get("uid", -1))):
 				extra_ready = true
+		if not gs.locked() and bool(gs.mv.get("extra_avail", {}).get("any", false)):
+			extra_ready = true
 	for zt in PILE_ZONES:
 		var ps: PileStack = piles[side][zt[0]]
 		ps.visible = not gs.mv.is_empty()

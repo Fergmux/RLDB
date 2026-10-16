@@ -45,10 +45,12 @@ const CATEGORY_COLORS := {
 	"basic_unit": Color("7a5636"), "unit": Color("8b5a2b"), "spell": Color("2e9e48"),
 	"trap": Color("c8352e"), "power": Color("6ec6f0"), "fusion": Color("2747a8"),
 	"ritual": Color("8e4fd0"), "arcane": Color("9a9ca3"),
+	"extra": Color("2747a8"),
 }
 const CATEGORY_NAMES := {
 	"basic_unit": "Basic Unit", "unit": "Unit", "spell": "Spell", "trap": "Trap", "power": "Power",
 	"fusion": "Fusion Unit", "ritual": "Ritual Unit", "arcane": "Arcane Unit",
+	"extra": "Extra Deck",       # F03-11: the combined Fusion/Ritual/Arcane reward and draft group
 }
 const COST_COLORS := {"ap": Color("f2b544"), "ritual": Color("a874e0"), "arcane": Color("b4b6bc"), "fusion": Color("5a7fe0")}
 const STATUS_SHORT := {

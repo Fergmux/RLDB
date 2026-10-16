@@ -54,6 +54,8 @@ const CENTER_PANEL_W := 560.0
 var status_label: Label
 
 var _options: SessionOptions
+## True while building a panel that carries the series pickers (its Start checks the draft counts).
+var _series_panel_active := false
 var _menu_path: Array = ["root"]
 var _menu_list: VBoxContainer
 var _menu_center: CenterContainer
@@ -264,10 +266,16 @@ static func _labelled(v: VBoxContainer, text: String, ctl: Control) -> void:
 	v.add_child(row)
 
 
-static func _start_button(v: VBoxContainer, text: String, fn: Callable) -> void:
+func _start_button(v: VBoxContainer, text: String, fn: Callable) -> void:
 	var b := UIStyle.primary_button(text, 19)
 	b.custom_minimum_size = Vector2(0, 52)
-	b.pressed.connect(fn)
+	var guarded := _series_panel_active
+	b.pressed.connect(func():
+		# F03-10: an unusable draft composition is explained by the pickers and blocks the start.
+		var so: Dictionary = _options.series
+		if guarded and so.get("deck_mode", "") == "draft" and Series.validate_draft_quota(so.get("draft_quota", Series.default_draft_quota())) != "":
+			return
+		fn.call())
 	v.add_child(b)
 
 
@@ -292,8 +300,67 @@ func _series_options(v: VBoxContainer) -> void:
 	dm.add_item("Starter decks")
 	dm.add_item("Draft")
 	dm.select(0 if opts["deck_mode"] == "starter" else 1)
-	dm.item_selected.connect(func(i): opts["deck_mode"] = "starter" if i == 0 else "draft")
 	_labelled(v, "Decks", dm)
+	# F03-10: draft composition, shown while Draft is chosen. In online/LAN games the host's
+	# counts are the series config both seats use.
+	var dq := _draft_quota_box(opts)
+	dq.visible = opts["deck_mode"] == "draft"
+	v.add_child(dq)
+	dm.item_selected.connect(func(i):
+		opts["deck_mode"] = "starter" if i == 0 else "draft"
+		dq.visible = i == 1)
+	_series_panel_active = true
+
+
+## Per-category draft count steppers (defaults from mode_config.json), the pick total and why
+## the composition cannot be used, if it cannot (F03-10). Edits opts["draft_quota"] in place.
+func _draft_quota_box(opts: Dictionary) -> VBoxContainer:
+	if not (opts.get("draft_quota", null) is Dictionary):
+		opts["draft_quota"] = Series.default_draft_quota()
+	var q: Dictionary = opts["draft_quota"]
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	box.add_child(UIStyle.label("Draft picks per category", 15, UIStyle.MUTED))
+	var total_l := UIStyle.label("", 14, UIStyle.MUTED)
+	var warn := UIStyle.label("", 14, Color("ff6b5e"))
+	var refresh := func():
+		var e := Series.validate_draft_quota(q)
+		warn.text = e
+		warn.visible = e != ""
+		var n := 0
+		for c in Series.DRAFT_CATEGORIES:
+			n += int(q.get(c, 0))
+		total_l.text = "%d picks in total" % n
+	for cat in Series.DRAFT_CATEGORIES:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var name_l := UIStyle.label(String(Series.DRAFT_LABELS[cat]), 15, UIStyle.TEXT)
+		name_l.custom_minimum_size = Vector2(150, 0)
+		row.add_child(name_l)
+		var minus := UIStyle.button("-", 15)
+		minus.custom_minimum_size = Vector2(36, 30)
+		var val := UIStyle.label(str(int(q.get(cat, 0))), 16, UIStyle.TEXT)
+		val.custom_minimum_size = Vector2(40, 0)
+		val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var plus := UIStyle.button("+", 15)
+		plus.custom_minimum_size = Vector2(36, 30)
+		var c2: String = cat
+		minus.pressed.connect(func():
+			q[c2] = maxi(int(q.get(c2, 0)) - 1, 0)
+			val.text = str(q[c2])
+			refresh.call())
+		plus.pressed.connect(func():
+			q[c2] = mini(int(q.get(c2, 0)) + 1, Series.DRAFT_MAX_PER_CATEGORY)
+			val.text = str(q[c2])
+			refresh.call())
+		row.add_child(minus)
+		row.add_child(val)
+		row.add_child(plus)
+		box.add_child(row)
+	box.add_child(total_l)
+	box.add_child(warn)
+	refresh.call()
+	return box
 
 
 func _privacy_box(text: String) -> CheckBox:
@@ -303,6 +370,7 @@ func _privacy_box(text: String) -> CheckBox:
 ## Centre content for a leaf of the menu tree (null for an unknown target).
 func _leaf_panel(target: String) -> Control:
 	var pv: Array
+	_series_panel_active = false
 	match target:
 		"bot":
 			pv = _center_panel("Play vs Bot", "A series against the computer. The bot picks a random starter deck.")

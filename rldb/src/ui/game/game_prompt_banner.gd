@@ -189,7 +189,7 @@ func _multi_status(pd: Dictionary) -> String:
 		var total := 0
 		for i in gs.multi:
 			total += maxi(pd["options"][i].get("card", {}).get("cost", 0), 0)
-		total_txt = "  ·  cost total %d / %d" % [total, pd["min_total"]]
+		total_txt = "  ·  cost total %d / %s%d" % [total, "exactly " if pd.get("total_exact", false) else "", pd["min_total"]]
 	var rng := "%d" % pd["min"] if pd["min"] == pd["max"] else "%d–%d" % [pd["min"], pd["max"]]
 	return "Selected %d of %s%s" % [gs.multi.size(), rng, total_txt]
 
@@ -252,7 +252,7 @@ func _render_banner() -> void:
 	if int(pd["max"]) > 1:
 		var c := UIStyle.primary_button("Confirm", 14)
 		c.custom_minimum_size = Vector2(0, OPTION_H)
-		c.disabled = gs.multi.size() < int(pd["min"])
+		c.disabled = MatchView.multi_pick_error(pd, gs.multi) != ""   # count and exact Arcane total (F03-04)
 		c.pressed.connect(gs.selection.confirm_multi)
 		banner_btns.add_child(c)
 	if pd["cancellable"]:

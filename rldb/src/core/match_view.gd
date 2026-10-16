@@ -18,7 +18,28 @@ static func build(m: MatchEngine, viewer: int) -> Dictionary:
 		"resolving": not m.stack.is_empty(),
 	}
 	v["actions"] = actions_for(m, viewer)
+	v["extra_avail"] = extra_availability(m, viewer, v["actions"])
 	return v
+
+
+## F03-08: what can be summoned from the viewer's Extra Deck right now, by method, so the Extra
+## pile cue is never mistaken for Fusion-specific proof. {"any": bool, "methods": [...]} where a
+## method is {"kind": "ritual" | "arcane", "uid": Extra unit} or {"kind": "fusion", "t": command,
+## "via": method card, "idx": ability index, "targets": [Fusion units]}. Only the viewer's own
+## cards appear, and only while the viewer can act.
+static func extra_availability(m: MatchEngine, viewer: int, actions: Array) -> Dictionary:
+	var methods := []
+	var seen := {}
+	var extra: Array = m.players[viewer]["extra"]
+	for a in actions:
+		if a.get("ok", false) and String(a["t"]) in ["ritual", "arcane"] and int(a["uid"]) in extra and not seen.has(a["uid"]):
+			seen[a["uid"]] = true
+			methods.append({"kind": a["t"], "uid": a["uid"]})
+	var can_act := m.winner == -1 and m.pending.is_empty() and m.stack.is_empty() and m.active == viewer
+	if can_act:
+		for fm in m.fusion_methods(viewer):
+			methods.append({"kind": "fusion", "t": fm["t"], "via": fm["uid"], "idx": fm.get("idx", -1), "targets": fm["targets"]})
+	return {"any": not methods.is_empty(), "methods": methods}
 
 
 ## Whether `viewer` may see the identity of card `uid`.
@@ -179,14 +200,18 @@ static func _pending_view(m: MatchEngine, viewer: int) -> Dictionary:
 	if pd.is_empty():
 		return {}
 	if pd["player"] != viewer:
-		return {"id": pd["id"], "mine": false, "player": pd["player"], "kind": pd["kind"],
+		var wait := {"id": pd["id"], "mine": false, "player": pd["player"], "kind": pd["kind"],
 			"prompt": "Waiting for %s: %s" % [m.pname(pd["player"]), _public_kind(pd["kind"])]}
+		_add_source(m, pd, viewer, wait)
+		return wait
 	var opts := []
 	for i in pd["options"].size():
 		var o: Dictionary = pd["options"][i]
 		var ov := {"i": i, "label": o["label"]}
 		if o.has("preview"):
 			ov["preview"] = o["preview"]
+		if o.has("value"):
+			ov["value"] = o["value"]          # e.g. an Arcane material's current cost (F03-04)
 		if o.has("slot"):
 			ov["slot"] = o["slot"]
 			ov["zone"] = o["zone"]
@@ -203,9 +228,51 @@ static func _pending_view(m: MatchEngine, viewer: int) -> Dictionary:
 	var out := {"id": pd["id"], "mine": true, "player": viewer, "kind": pd["kind"], "prompt": pd["prompt"],
 		"options": opts, "min": pd["min"], "max": pd["max"], "cancellable": pd["cancellable"],
 		"min_total": pd.get("min_total", 0)}
+	_add_source(m, pd, viewer, out)
+	if pd.has("total_required"):
+		out["total_required"] = pd["total_required"]
+		out["total_exact"] = pd.get("total_exact", false)
 	if pd["kind"] == "trap_response" and pd.has("event"):
 		out["cause"] = _cause_refs(m, pd["event"])
 	return out
+
+
+## F03-18: the card whose effect asks for this choice, so its targeting arrow starts there (e.g.
+## Overextend in its Trap zone) rather than at a selected or attacking unit. `source` is the
+## board position (public); `source_uid` is given only when the viewer may see that card.
+## Trap-response prompts carry no source: which face-down card may respond is not revealed.
+static func _add_source(m: MatchEngine, pd: Dictionary, viewer: int, out: Dictionary) -> void:
+	var src: int = int(pd.get("source", -1))
+	if pd["kind"] == "trap_response" or not m.cards.has(src):
+		return
+	if not can_see(m, src, viewer):
+		return
+	var pos := m.fx_pos(src)
+	if not pos.is_empty():
+		out["source"] = pos
+	out["source_uid"] = src
+
+
+## Why picking option indices `picks` would be rejected for the viewer's pending choice `pd`
+## (a _pending_view result), or "" when the authority will accept the count and total. The
+## material picker uses this so its Confirm agrees with the authority (F03-04).
+static func multi_pick_error(pd: Dictionary, picks: Array) -> String:
+	if pd.is_empty():
+		return "No choice."
+	if picks.size() < int(pd.get("min", 1)) or picks.size() > int(pd.get("max", 1)):
+		return "Choose between %d and %d options." % [int(pd.get("min", 1)), int(pd.get("max", 1))]
+	if pd.has("total_required") or int(pd.get("min_total", 0)) > 0:
+		var total := 0
+		for i in picks:
+			for o in pd.get("options", []):
+				if int(o["i"]) == int(i):
+					total += maxi(int(o.get("value", o.get("card", {}).get("cost", 0))), 0)
+		if pd.get("total_exact", false):
+			if total != int(pd["total_required"]):
+				return "Selected total %d; exactly %d required." % [total, int(pd["total_required"])]
+		elif total < int(pd.get("min_total", 0)):
+			return "Selected total %d; %d required." % [total, int(pd["min_total"])]
+	return ""
 
 
 ## Public board positions of what a Trap is responding to: the attacker and its target (or the

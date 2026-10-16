@@ -62,7 +62,7 @@ func _plan_b_board() -> Array:
 	host.handle(d, {"t": "next_phase"})
 	host.handle(a, {"t": "next_phase"})
 	assert_str(m.phase).is_equal("battle")
-	var us := [TB.unit(m, d, TB.WATER, 0), TB.unit(m, d, TB.FIRE, 1), TB.unit(m, d, TB.EARTH, 2),
+	var us := [TB.unit(m, d, TB.WATER, 0), TB.unit(m, d, 111, 1), TB.unit(m, d, 122, 2),     # Basic Dragon (Fire), Basic Warrior (Earth)
 		TB.unit(m, d, TB.WATER, 3), TB.unit(m, d, TB.WATER, 4)]
 	m.players[d]["backrow"] = [-1, -1, -1]
 	TB.set_card(m, d, PLAN_B, 0)
@@ -94,8 +94,8 @@ func test_plan_b_second_multi_prompt_starts_with_no_stale_selection() -> void:
 	gs.skip_effects()
 	await await_idle_frame()
 	# Assert 1: destruction followed the clicked order
-	var i_earth := TB.log_index(m, "Basic Mage (Earth) is destroyed")
-	var i_fire := TB.log_index(m, "Basic Mage (Fire) is destroyed")
+	var i_earth := TB.log_index(m, "Basic Warrior is destroyed")
+	var i_fire := TB.log_index(m, "Basic Dragon is destroyed")
 	assert_int(i_earth).is_not_equal(-1)
 	assert_int(i_fire).is_greater(i_earth)
 	# Act 2: the window re-opens; activate the second Plan B

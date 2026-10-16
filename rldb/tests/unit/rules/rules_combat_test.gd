@@ -123,9 +123,9 @@ func test_blind_picks_random_target_only_among_legal_targets() -> void:
 		var back := TB.unit(m, 0, TB.WATER, 5, "def", 0, 50)
 		assert_str(m.submit(1, {"t": "attack", "uid": a})).is_empty()
 		assert_bool(m.pending.is_empty()).is_true()  # no target prompt under Blind
-		assert_bool(TB.log_text(m).contains("attacks Basic Mage (Water)")).is_true()
+		assert_bool(TB.log_text(m).contains("attacks Basic Mage")).is_true()
 		assert_int(m.status_count(a, "blind")).is_equal(0)
-		assert_bool(TB.log_index(m, "Battle: Basic Mage (Water) 1 vs Basic Mage (Water) DEF 50") >= 0).is_true()
+		assert_bool(TB.log_index(m, "Battle: Basic Mage 1 vs Basic Mage DEF 50") >= 0).is_true()
 		assert_str(m.cards[back]["zone"]).is_equal("unit")
 
 

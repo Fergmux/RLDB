@@ -17,7 +17,15 @@ const STAGE_REWARDS := "rewards"
 const STAGE_FIRST := "first_player"
 const STAGE_OVER := "over"
 ## Card types offered by an add-card reward (user feedback 2026-10-16: choose the type first).
-const REWARD_TYPES := ["unit", "spell", "trap", "power", "fusion", "ritual", "arcane"]
+## F03-11: Fusion, Ritual and Arcane form one "extra" (Extra Deck) group drawing from all three.
+const REWARD_TYPES := ["unit", "spell", "trap", "power", "extra"]
+## Draft categories in pick order (F03-10 / F03-11: one combined Extra Deck category).
+const DRAFT_CATEGORIES := ["basic", "unit", "spell", "trap", "power", "extra"]
+## Player-facing names of draft / reward categories.
+const DRAFT_LABELS := {"basic": "Basic Unit", "unit": "Unit", "spell": "Spell", "trap": "Trap", "power": "Power", "extra": "Extra Deck"}
+## Upper bound per draft category (a sanity limit for the setup steppers, not a deck rule).
+const DRAFT_MAX_PER_CATEGORY := 40
+const EXTRA_CATEGORIES := ["fusion", "ritual", "arcane"]
 
 var cfg: Dictionary = {}
 var names: Array = ["Player 1", "Player 2"]
@@ -56,11 +64,67 @@ static func load_starters() -> Array:
 	return decks_raw
 
 
-## overrides: best_of, deck_mode, seed, names, rewards_per_game ...
+## The draft counts per category from data/mode_config.json (the setup pickers' defaults).
+static func default_draft_quota() -> Dictionary:
+	var q: Dictionary = load_mode_config()["draft"]["quota"]
+	var out := {}
+	for cat in DRAFT_CATEGORIES:
+		out[cat] = int(q.get(cat, 0))
+	return out
+
+
+## Why a draft composition is unusable ("" when it is fine): every category must be a whole
+## number from 0 to DRAFT_MAX_PER_CATEGORY, unknown categories are refused, and at least one
+## pick must be drafted (F03-10).
+static func validate_draft_quota(q) -> String:
+	if not (q is Dictionary):
+		return "The draft composition is missing."
+	for k in q:
+		if not (String(k) in DRAFT_CATEGORIES):
+			return "Unknown draft category \"%s\"." % String(k)
+	var total := 0
+	for cat in DRAFT_CATEGORIES:
+		var v = q.get(cat, 0)
+		if not (v is int or v is float) or float(v) != floorf(float(v)):
+			return "%s picks must be a whole number." % DRAFT_LABELS[cat]
+		if int(v) < 0 or int(v) > DRAFT_MAX_PER_CATEGORY:
+			return "%s picks must be between 0 and %d." % [DRAFT_LABELS[cat], DRAFT_MAX_PER_CATEGORY]
+		total += int(v)
+	if total <= 0:
+		return "Choose at least one card to draft."
+	return ""
+
+
+## Player-facing summary of a draft composition: "1 Basic Unit (x3), 9 Unit, ..." (zeros omitted).
+static func draft_composition_text(q: Dictionary, basic_copies: int) -> String:
+	var parts := []
+	for cat in DRAFT_CATEGORIES:
+		var n := int(q.get(cat, 0))
+		if n > 0:
+			parts.append("%d %s%s" % [n, DRAFT_LABELS[cat], (" (x%d copies)" % basic_copies) if cat == "basic" and basic_copies > 1 else ""])
+	return ", ".join(parts)
+
+
+## overrides: best_of, deck_mode, seed, names, rewards_per_game, draft_quota (F03-10) ...
 func setup(overrides: Dictionary = {}) -> void:
 	CardDB.ensure_loaded()
 	cfg = load_mode_config()
+	var draft_over = overrides.get("draft", null)
 	cfg.merge(overrides, true)
+	if draft_over is Dictionary:
+		# A partial "draft" override keeps the other draft settings (offer size, basic copies).
+		var base: Dictionary = load_mode_config()["draft"]
+		base.merge(draft_over, true)
+		cfg["draft"] = base
+	var quota_error := ""
+	if overrides.has("draft_quota"):
+		# F03-10: the series creator's (the host's) composition is authoritative for both seats.
+		quota_error = validate_draft_quota(overrides["draft_quota"])
+		if quota_error == "":
+			var q := {}
+			for cat in DRAFT_CATEGORIES:
+				q[cat] = int(overrides["draft_quota"].get(cat, 0))
+			cfg["draft"]["quota"] = q
 	_seed = int(cfg.get("seed", Time.get_ticks_usec()))
 	rng.seed = _seed
 	if cfg.has("names"):
@@ -72,6 +136,11 @@ func setup(overrides: Dictionary = {}) -> void:
 		for p in 2:
 			draft[p] = _new_draft()
 	_log("Series start: best of %d, %s decks." % [cfg["best_of"], cfg["deck_mode"]])
+	if cfg["deck_mode"] == "draft":
+		if quota_error != "":
+			# Explained, never silent: the menu blocks this, but a bad config from elsewhere is reported.
+			_log("Draft composition not used (%s) The default counts apply." % quota_error)
+		_log("Draft: %s." % draft_composition_text(cfg["draft"]["quota"], int(cfg["draft"]["basic_copies"])))
 
 
 func _log(text: String) -> void:
@@ -275,7 +344,7 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 func _new_draft() -> Dictionary:
 	var quota: Dictionary = cfg["draft"]["quota"]
 	var order := []
-	for cat in ["basic", "unit", "spell", "trap", "power", "extra"]:
+	for cat in DRAFT_CATEGORIES:
 		for i in int(quota.get(cat, 0)):
 			order.append(cat)
 	return {"order": order, "step": 0, "picked": [], "offer": []}
@@ -292,7 +361,7 @@ func _draft_pool(cat: String) -> Array:
 			"basic": ok = c == "basic_unit"
 			"unit": ok = c == "unit"
 			"spell", "trap", "power": ok = c == cat
-			"extra": ok = c in ["fusion", "ritual", "arcane"]
+			"extra": ok = c in EXTRA_CATEGORIES
 		if ok:
 			out.append(d["id"])
 	return out
@@ -362,11 +431,13 @@ func _on_game_over() -> void:
 	checkpoint.emit()
 
 
-## Implemented, non-basic cards of one reward type.
+## Implemented, non-basic cards of one reward type. "extra" (F03-11) is every Fusion, Ritual
+## and Arcane card; the single categories still work for series saved before the change.
 static func reward_pool(cat: String) -> Array:
+	var cats: Array = EXTRA_CATEGORIES if cat == "extra" else [cat]
 	var pool := []
 	for d in CardDB.all():
-		if CardScripts.is_implemented(d["id"]) and d["category"] == cat:
+		if CardScripts.is_implemented(d["id"]) and d["category"] in cats:
 			pool.append(d["id"])
 	return pool
 
@@ -493,8 +564,11 @@ func view_for(p: int) -> Dictionary:
 			else:
 				_ensure_offer(p)
 				var st: Dictionary = draft[p]
+				var dcat: String = st["order"][st["step"]] if st["step"] < st["order"].size() else ""
 				v["draft"] = {"step": st["step"], "total": st["order"].size(),
-					"category": st["order"][st["step"]] if st["step"] < st["order"].size() else "",
+					"category": dcat, "category_label": DRAFT_LABELS.get(dcat, dcat.capitalize()),
+					"quota": cfg["draft"]["quota"].duplicate(),
+					"composition": draft_composition_text(cfg["draft"]["quota"], int(cfg["draft"]["basic_copies"])),
 					"offer": st["offer"].map(func(i): return card_summary(i)), "picked": st["picked"].map(func(i): return card_summary(i))}
 		STAGE_REWARDS:
 			var r: Dictionary = rewards[p]

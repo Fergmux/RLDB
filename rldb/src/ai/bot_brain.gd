@@ -117,6 +117,12 @@ func choose(m: MatchEngine, depth: int) -> Dictionary:
 func _multi_pick(m: MatchEngine, depth: int) -> Array:
 	var pd: Dictionary = m.pending
 	var n: int = pd["options"].size()
+	# F03-04: an exact-total selection (Arcane materials) takes a combination hitting the total.
+	if pd.get("total_exact", false):
+		var vals := []
+		for o in pd["options"]:
+			vals.append(int(o.get("value", 0)))
+		return SummonOps.exact_subset(vals, int(pd["total_required"]))
 	var need: int = clampi(int(pd["min"]), 1, n)
 	var scored := []
 	for i in n:

@@ -133,6 +133,68 @@ func test_draft_builds_deck_from_category_quotas() -> void:
 	assert_int(s.decks[0].size()).is_equal(23)   # 3 basic copies + 17 picks + 3 extra
 
 
+func _draft_all(s: Series) -> void:
+	for p in 2:
+		var guard := 0
+		while not s.deck_ready[p] and guard < 100:
+			assert_str(s.submit(p, {"t": "draft_pick", "index": 0})).is_empty()
+			guard += 1
+
+
+func test_f03_10_configured_draft_counts_are_used_and_shown() -> void:
+	var s := Series.new()
+	s.setup({"seed": 9, "deck_mode": "draft", "draft_quota": {"basic": 0, "unit": 2, "spell": 1, "trap": 0, "power": 0, "extra": 2}})
+	var dv: Dictionary = s.view_for(1)["draft"]
+	assert_int(int(dv["total"])).is_equal(5)
+	assert_str(String(dv["composition"])).is_equal("2 Unit, 1 Spell, 2 Extra Deck")
+	assert_str(String(dv["category_label"])).is_equal("Unit")
+	_draft_all(s)
+	var cats := {}
+	for id in s.decks[0]:
+		var c: String = CardDB.get_def(id)["category"]
+		cats[c] = cats.get(c, 0) + 1
+	assert_int(cats.get("unit", 0)).is_equal(2)
+	assert_int(cats.get("spell", 0)).is_equal(1)
+	assert_int(int(cats.get("fusion", 0)) + int(cats.get("ritual", 0)) + int(cats.get("arcane", 0))).is_equal(2)
+	assert_int(s.decks[0].size()).is_equal(5)
+	# Extra Deck picks still route to the Extra Deck at game start.
+	assert_int(s.game.players[0]["extra"].size()).is_equal(2)
+
+
+func test_f03_10_partial_quota_override_keeps_other_draft_settings() -> void:
+	var s := Series.new()
+	s.setup({"seed": 9, "deck_mode": "draft", "draft_quota": {"unit": 1}})
+	assert_int(int(s.cfg["draft"]["offer"])).is_equal(3)
+	assert_int(int(s.cfg["draft"]["quota"]["basic"])).is_equal(0)
+
+
+func test_f03_10_invalid_draft_counts_are_explained() -> void:
+	assert_str(Series.validate_draft_quota({"basic": 0, "unit": 0, "spell": 0, "trap": 0, "power": 0, "extra": 0})).contains("at least one")
+	assert_str(Series.validate_draft_quota({"unit": -1})).contains("between")
+	assert_str(Series.validate_draft_quota({"unit": 1.5})).contains("whole")
+	assert_str(Series.validate_draft_quota({"fusion": 2})).contains("Unknown")
+	assert_str(Series.validate_draft_quota(Series.default_draft_quota())).is_empty()
+	var s := Series.new()
+	s.setup({"seed": 9, "deck_mode": "draft", "draft_quota": {"unit": 0}})
+	assert_bool(" ".join(s.series_log).contains("Draft composition not used")).is_true()
+
+
+func test_f03_11_draft_and_rewards_use_one_extra_deck_group() -> void:
+	assert_bool("fusion" in Series.REWARD_TYPES or "ritual" in Series.REWARD_TYPES or "arcane" in Series.REWARD_TYPES).is_false()
+	assert_bool("extra" in Series.REWARD_TYPES).is_true()
+	var cats := {}
+	for id in Series.reward_pool("extra"):
+		cats[CardDB.get_def(id)["category"]] = true
+	assert_array(cats.keys()).contains_exactly_in_any_order(["fusion", "ritual", "arcane"])
+	var s := _series()
+	s.submit(s.game.active, {"t": "concede"})
+	var types: Array = s.view_for(0)["rewards"]["types"]
+	assert_bool("extra" in types and not ("fusion" in types)).is_true()
+	assert_str(s.submit(0, {"t": "reward_type", "category": "extra"})).is_empty()
+	for c in s.view_for(0)["rewards"]["offer"]:
+		assert_bool(String(c["category"]) in ["fusion", "ritual", "arcane"]).is_true()
+
+
 func test_opponent_reward_choices_are_private() -> void:
 	var s := _series()
 	s.submit(s.game.active, {"t": "concede"})
