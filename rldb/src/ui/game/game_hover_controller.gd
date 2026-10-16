@@ -124,7 +124,7 @@ func lift(it: Dictionary) -> void:
 	var d := UIStyle.dur(0.12 if it["kind"] == "hand" else 0.1)
 	if UIStyle.reduce_motion:
 		d = 0.05
-	# Real size change, not `scale`: the face re-renders at the lifted size so text stays crisp (F04-05).
+	# Real size change, not `scale` (F04-05); the face keeps its resting layout, drawn scaled with crisp text (F05-03).
 	tw.tween_property(w, "lift_offset", lp[1], d).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(w, "lift_k", float(lp[0]), d).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if it["kind"] == "hand":

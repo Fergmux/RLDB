@@ -10,6 +10,8 @@ extends RefCounted
 
 ## Smallest font size (px) fs() returns.
 const MIN_FS := 6
+## draw_string's default justification flags (the parameter has to be given to reach `oversampling`).
+const _JUST := TextServer.JUSTIFICATION_KASHIDA | TextServer.JUSTIFICATION_WORD_BOUND
 
 ## One reusable style box: StyleBoxFlat.draw emits its commands immediately, so sharing is safe
 ## and avoids allocating a StyleBoxFlat for every ring/plate on every redraw.
@@ -37,6 +39,18 @@ var s: float = 1.0
 var cr := Rect2()
 ## Unrotated portrait size.
 var ps := Vector2(85, 128)
+## Draw scale (F05-03 hover lift): the face is laid out at its RESTING size (s, cr, ps and every font
+## size come from it) and every command is drawn scaled by `k` about the widget origin, so a lifted
+## card shows exactly its resting line breaks and proportions, only bigger.
+var k: float = 1.0
+## Raster oversampling for every text draw (0.0 = the viewport's own). Set by the widget to the
+## viewport oversampling times the card's on-screen scale (lift and any `scale` above it), so the
+## glyphs drawn under `k` are rasterised at their final pixel size and stay sharp.
+var text_os: float = 0.0
+## Tests: when true every text draw appends a record of its layout (text, size, face-space position).
+var tracing := false
+## The records of the last draw while `tracing`.
+var trace: Array = []
 
 
 func _init(canvas: CanvasItem) -> void:
@@ -68,11 +82,16 @@ func accent() -> Color:
 	return UIStyle.CATEGORY_COLORS.get(view.get("category", "unit"), UIStyle.BRONZE)
 
 
+## Resting-layout space -> widget space: the lift scale `k` about the widget origin.
+func base_xform() -> Transform2D:
+	return Transform2D(0.0, Vector2(k, k), 0.0, Vector2.ZERO)
+
+
 ## Card-face (portrait) space -> widget space: the face is turned 90 degrees clockwise when `rotated`.
 func face_xform() -> Transform2D:
 	if rotated:
-		return Transform2D(PI / 2.0, Vector2(cr.end.x, cr.position.y))
-	return Transform2D(0.0, cr.position)
+		return base_xform() * Transform2D(PI / 2.0, Vector2(cr.end.x, cr.position.y))
+	return base_xform() * Transform2D(0.0, cr.position)
 
 
 ## Draw subsequent commands in card-face space.
@@ -80,16 +99,16 @@ func set_face_transform() -> void:
 	ci.draw_set_transform_matrix(face_xform())
 
 
-## Draw subsequent commands in plain widget space.
+## Draw subsequent commands in plain (resting-layout) widget space.
 func reset_transform() -> void:
-	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	ci.draw_set_transform_matrix(base_xform())
 
 
 ## While a rotated face is drawn, the parts drawn next (centred on face point `c`) stay upright in
 ## screen space at the same spot on the card: ATK/DEF badges, cost gem, type pip. Pair with upright_end().
 func upright_begin(c: Vector2) -> void:
 	if rotated:
-		ci.draw_set_transform(face_xform() * c - c, 0.0, Vector2.ONE)
+		ci.draw_set_transform(face_xform() * c - c * k, 0.0, Vector2(k, k))
 
 
 ## Ends an upright-drawing section started by upright_begin().
@@ -102,16 +121,30 @@ func upright_end() -> void:
 func text_at(font: Font, text: String, pos_top_left: Vector2, fsz: int, col: Color, width: float = -1.0, align: int = HORIZONTAL_ALIGNMENT_LEFT, line_h: float = 0.0) -> void:
 	var h := line_h if line_h > 0.0 else float(fsz) * 1.1
 	var base_y := pos_top_left.y + h / 2.0 + (font.get_ascent(fsz) - font.get_descent(fsz)) / 2.0
-	ci.draw_string(font, Vector2(pos_top_left.x, base_y), text, align, width, fsz, col)
+	if tracing:
+		trace.append(["line", text, fsz, Vector2(pos_top_left.x, base_y), width, align])
+	ci.draw_string(font, Vector2(pos_top_left.x, base_y), text, align, width, fsz, col, _JUST, TextServer.DIRECTION_AUTO, TextServer.ORIENTATION_HORIZONTAL, text_os)
 
 
 ## One line of text centred on `centre`, with an optional dark outline `outline` px wide.
 func text_c(font: Font, text: String, centre: Vector2, fsz: int, col: Color, outline: float = 0.0) -> void:
 	var sz := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz)
 	var pos := Vector2(centre.x - sz.x / 2.0, centre.y + (font.get_ascent(fsz) - font.get_descent(fsz)) / 2.0)
+	if tracing:
+		trace.append(["centred", text, fsz, pos])
 	if outline > 0.0:
-		ci.draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, int(ceil(outline)), Color(0, 0, 0, 0.7))
-	ci.draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, col)
+		ci.draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, int(ceil(outline)), Color(0, 0, 0, 0.7), _JUST, TextServer.DIRECTION_AUTO, TextServer.ORIENTATION_HORIZONTAL, text_os)
+	ci.draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, col, _JUST, TextServer.DIRECTION_AUTO, TextServer.ORIENTATION_HORIZONTAL, text_os)
+
+
+## A shaped paragraph (CardTextLayout) with its top-left at `pos`, rasterised at `text_os`.
+func para(tp: TextParagraph, pos: Vector2, col: Color) -> void:
+	if tracing:
+		var lines := []
+		for i in tp.get_line_count():
+			lines.append(tp.get_line_range(i))
+		trace.append(["para", tp.get_size(), pos, lines])
+	tp.draw(ci.get_canvas_item(), pos, col, Color(1, 1, 1), text_os)
 
 
 ## Resets the shared style box to a plain fill/border (no shadow) and returns it.
