@@ -132,7 +132,8 @@ func _build_identity(c: Dictionary) -> void:
 	badges.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(badges)
 	badges.add_child(_chip(String(UIStyle.CATEGORY_NAMES.get(cat, cat)), cat_col, "", true))
-	badges.add_child(_cost_chip(c))
+	if String(c.get("cost_kind", "ap")) != "fusion":   # "Fusion Unit" already says how it is summoned
+		badges.add_child(_cost_chip(c))
 	if c.has("race"):
 		var race: String = String(c.get("race", ""))
 		badges.add_child(_chip(race if race != "" else "No race", UIStyle.BRONZE.lightened(0.25)))

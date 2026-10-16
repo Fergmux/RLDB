@@ -134,7 +134,7 @@ func test_trap_and_power() -> void:
 
 func test_special_cost_cards_show_cost_text() -> void:
 	var p := _panel()
-	for id in [FUSION, RITUAL, ARCANE]:
+	for id in [RITUAL, ARCANE]:
 		var v := _non_unit(id, "extra")
 		p.show_card(v, [])
 		assert_bool(p.all_text().contains(String(v["cost_text"]))).is_true()
@@ -177,3 +177,18 @@ func test_notes_are_not_shown() -> void:
 	p.show_card(v, ["Cannot cast: Not enough AP."])
 	assert_bool(p.sections.has("notes")).is_false()
 	assert_bool(p.all_text().contains("Not enough AP")).is_false()
+
+
+## Feedback 07: a Fusion unit shows only the "Fusion Unit" tag, not a separate "Fusion" cost tag.
+func test_fusion_unit_has_no_separate_fusion_tag() -> void:
+	var v := _non_unit(FUSION, "extra")
+	var p := _panel()
+	p.show_card(v, [])
+	var tags := []
+	for ch in p.get_children():
+		if ch is HFlowContainer:
+			for chip in ch.get_children():
+				tags.append(chip)
+			break
+	assert_bool(p.all_text().contains("Fusion Unit")).is_true()
+	assert_int(tags.size()).is_equal(3)                   # Fusion Unit, race, type

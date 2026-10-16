@@ -3645,6 +3645,7 @@ func _render_rewards() -> void:
 		var flow := HFlowContainer.new()
 		flow.add_theme_constant_override("h_separation", 18)
 		flow.add_theme_constant_override("v_separation", 10)
+		flow.alignment = FlowContainer.ALIGNMENT_CENTER   # the offered cards sit centred in the modal
 		overlay_box.add_child(flow)
 		for i in r["offer"].size():
 			var c: Dictionary = r["offer"][i]

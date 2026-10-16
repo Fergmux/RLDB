@@ -188,3 +188,26 @@ func test_polymerization_needs_a_summonable_fusion() -> void:
 	TB.unit(m, 0, 2, 1)
 	TB.card(m, 0, 93, "extra")
 	assert_str(m.validate(0, {"t": "cast", "uid": poly})).is_empty()
+
+
+## Feedback 07 bug: Wabuku ("Apply 1 Eternal to a unit in this column") was offered on a direct
+## attack with no own unit in its column. A Trap whose effect has no legal target is not offered.
+func test_trap_without_a_legal_target_is_not_offered() -> void:
+	var m := TB.make()
+	TB.to_turn2(m)                                           # player 1 attacks, player 0 holds the Trap
+	TB.set_card(m, 0, 50, 0)                                 # Wabuku in column 1, no unit of player 0 there
+	TB.to_battle(m)
+	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
+	assert_str(TB.attack(m, a, -1)).is_empty()
+	assert_str(TB.pend_kind(m)).is_not_equal("trap_response")
+
+
+func test_trap_with_a_legal_target_is_offered() -> void:
+	var m := TB.make()
+	TB.to_turn2(m)
+	TB.set_card(m, 0, 50, 0)
+	var guard := TB.unit(m, 0, TB.WATER, 3)                  # back row, column 1: Wabuku's column
+	TB.to_battle(m)
+	var a := TB.unit(m, 1, TB.WATER, 1, "atk", 10)
+	TB.attack(m, a, guard)
+	assert_str(TB.pend_kind(m)).is_equal("trap_response")

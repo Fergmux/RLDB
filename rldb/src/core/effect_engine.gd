@@ -624,10 +624,16 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 			if tr.get("by_opponent", false) and ev.get("by_player", -1) != opp(p): return false
 	if tr.has("cond") and not eval_cond(f, tr["cond"]):
 		return false
-	if tr.get("needs_target", false):
-		for op in tr["ops"]:
-			if op["op"] == "choose":
+	# A Trap whose effect opens with a target choice is only offered when that choice has a legal
+	# target (feedback 07: Wabuku on a direct attack with nothing in its column). needs_target
+	# extends the check to a later or optional choice.
+	for op in tr["ops"]:
+		if op["op"] == "choose":
+			if tr.get("needs_target", false) or not op.get("optional", false):
 				return not select(f, op["sel"]).is_empty()
+			break
+		if not tr.get("needs_target", false) and not (op["op"] in ["cost_perm"]):
+			break
 	return true
 
 
