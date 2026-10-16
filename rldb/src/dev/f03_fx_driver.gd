@@ -260,13 +260,12 @@ func _mode_strike() -> void:
 	var a := m.active
 	var o := 1 - a
 	TB.unit(m, a, 36, 0)
-	TB.unit(m, o, 70, 1, "def")
 	host.handle(a, {"t": "next_phase"})
 	_fresh_view(a)
 	await _wait(0.5)
 	host.handle(a, {"t": "attack", "uid": m.players[a]["units"][0]})
 	_auto_answer()
-	await _seq("strike", 16, 0.07)
+	await _seq("strike", 24, 0.04)
 	_done()
 
 
@@ -281,4 +280,31 @@ func _mode_final() -> void:
 	m.change_hp(o, -9, " (test)")
 	host.broadcast()
 	await _seq("final", 22, 0.1)
+	_done()
+
+
+## F04-07: frame rate through the lethal sequence (no screenshots, so nothing else slows the loop). Prints the
+## frames per second of every half second from before the attack to the end of the victory look.
+func _mode_fps() -> void:
+	_turn2()
+	var a := m.active
+	var o := 1 - a
+	TB.unit(m, a, 36, 0)
+	m.players[o]["hp"] = 5
+	host.handle(a, {"t": "next_phase"})
+	_fresh_view(a)
+	await _wait(1.0)
+	var counter := [0]
+	var cb := func(): counter[0] += 1
+	process_frame.connect(cb)
+	var uid: int = m.players[a]["units"][0]
+	host.handle(a, {"t": "attack", "uid": uid})
+	_auto_answer()
+	var line := []
+	for i in 16:
+		counter[0] = 0
+		await _wait(0.5)
+		line.append("%.0f" % (counter[0] / 0.5))
+	process_frame.disconnect(cb)
+	print("FPS per 0.5s from the attack: ", ", ".join(line), "  (Engine.time_scale=", Engine.time_scale, ")")
 	_done()

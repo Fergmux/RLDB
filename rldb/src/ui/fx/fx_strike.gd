@@ -219,15 +219,15 @@ func _impact(ctx: Dictionary) -> void:
 		_fx.burst(FxBurst.Kind.EMBER, c, Color("ffd27a"), 40, reach * 0.34, 1.4)
 		_fx.screen_flash(FLASH_WHITE, 1.0, 0.1, 0.75)
 		_fx.camera_shake(24.0, 1.1)
-		_damage_number(c, int(ctx["dmg"]), tcol, 132)
+		_damage_number(_number_pos(c), int(ctx["dmg"]), tcol, 132)
 	else:
 		Sfx.play("impact", 0.0, 0.03)
-		_blast(FxBlast.Look.HIT, c, tcol, reach * 0.13, 0.55)
-		_fx.burst(FxBurst.Kind.SPARK, c, tcol.lightened(0.5), 20, reach * 0.17, 0.45)
+		_blast(FxBlast.Look.HIT, c, tcol, reach * 0.2, 0.6)
+		_fx.burst(FxBurst.Kind.SPARK, c, tcol.lightened(0.5), 24, reach * 0.26, 0.5)
 		_fx.burst(FxBurst.Kind.EMBER, c, Color("ffd27a"), 10, reach * 0.09, 0.7)
 		_fx.screen_flash(FLASH_WHITE, 0.2, 0.02, 0.18)
 		_fx.camera_shake(6.0, 0.3)
-		_damage_number(c, int(ctx["dmg"]), tcol, 84)
+		_damage_number(_number_pos(c), int(ctx["dmg"]), tcol, 84)
 
 
 # ---------------------------------------------------------------- final blow from an effect
@@ -247,7 +247,7 @@ func flourish(info: Dictionary) -> void:
 	_fx.burst(FxBurst.Kind.SPARK, c, tcol.lightened(0.5), 26, reach * 0.26, 0.7)
 	_fx.screen_flash(FLASH_WHITE, 0.55, 0.05, 0.45)
 	_fx.camera_shake(12.0, 0.6)
-	_damage_number(c, int(info["d"]), tcol, 104)
+	_damage_number(_number_pos(c), int(info["d"]), tcol, 104)
 	_fx.float_text("FINAL BLOW", Color("ffe9b0"), pl.hp_anchor() + Vector2(0, 62), 26, 20.0, 0.95)
 	var tl := _fx.new_tween()
 	tl.tween_interval(UIStyle.dur(0.8))
@@ -301,6 +301,12 @@ func _trail(p: float, w: CardWidget, holder: Control, col: Color, steps: int, st
 	tw.tween_property(m, "modulate:a", 0.0, UIStyle.dur(0.45))
 	tw.tween_property(m, "scale", Vector2(0.4, 0.4), UIStyle.dur(0.45))
 	tw.chain().tween_callback(_fx.free_node.bind(m))
+
+
+## Where a damage number goes for a plate at `c`: pushed toward the middle of the window so it never clips.
+func _number_pos(c: Vector2) -> Vector2:
+	var mid: Vector2 = _fx.screen.get_global_rect().get_center()
+	return c + Vector2(130.0 if c.x < mid.x else -130.0, 90.0 if c.y < mid.y else -90.0)
 
 
 ## Big damage number with punch: slams in oversized, settles, then drifts up and fades.
