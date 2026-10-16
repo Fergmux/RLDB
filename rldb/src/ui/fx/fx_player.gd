@@ -165,6 +165,7 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 		_tweens.clear()
 		_cleanups.clear()
 	var sched: Array = []   # [time, Callable]
+	var spot_marks: Array = []   # sched indices after which a spotlight hold starts
 	var t := 0.0
 	var attack_end := 0.0
 	var turn_in_batch := false
@@ -219,8 +220,11 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 				sched.append([t, _trigger.bind(e["at"])])
 				t += 0.1
 			"spotlight":
+				# The card is shown first; everything after it in this batch (statuses, destroys,
+				# HP changes) waits until it has left the screen.
 				sched.append([t, _spotlight.bind(e)])
 				t += 0.05
+				spot_marks.append(sched.size())
 			"turn":
 				var mine: bool = int(e["p"]) == screen.me()
 				sched.append([t, _banner.bind("YOUR TURN" if mine else "OPPONENT'S TURN", "Turn %d" % int(e["turn"]), UIStyle.GOLD_HI if mine else Color("d8c9a8"), mine)])
@@ -234,8 +238,13 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 	for s in sched:
 		last = maxf(last, s[0])
 	var k := 1.0 if last <= 3.0 else 3.0 / last
-	for s in sched:
-		_later(float(s[0]) * k * UIStyle.dur(1.0), s[1])
+	# Spotlight holds are added after the batch compression so they always last their full time.
+	var shift := 0.0
+	for i in sched.size():
+		while not spot_marks.is_empty() and spot_marks[0] <= i:
+			spot_marks.pop_front()
+			shift += SPOT_HOLD
+		_later((float(sched[i][0]) * k + shift) * UIStyle.dur(1.0), sched[i][1])
 
 
 func _prehide(p: int, zone: String, slot: int, t: float, sched: Array, fn: Callable) -> void:
@@ -652,6 +661,11 @@ func _shake_x(k: float, w: CardWidget, amp: float) -> void:
 # ---------------------------------------------------------------- spell / trap spotlight
 
 ## Queues a big centred view of a Spell/Trap that was cast or activated (fx event "spotlight").
+## How long a spotlight occupies the screen (fly-in + hold + exit, before UIStyle.dur scaling);
+## later effects of the same batch start once it has gone (reduced motion: ~1.24 s).
+const SPOT_HOLD := 1.85
+
+
 func _spotlight(e: Dictionary) -> void:
 	if _spot_q.size() >= 4:
 		_spot_q.pop_front()
@@ -717,6 +731,7 @@ func _show_spotlight(e: Dictionary) -> void:
 	bd.size = bsz
 	bd.position = centre - bsz / 2.0
 	bd.modulate.a = 0.0
+	bd.z_index = 95   # above lifted board cards, status glows and floating effect text
 	_add_node(bd, layer)
 	# The card.
 	var c := CardWidget.new()
@@ -725,6 +740,7 @@ func _show_spotlight(e: Dictionary) -> void:
 	c.setup(v, "big")
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.pivot_offset = c.size / 2.0
+	c.z_index = 96
 	_add_node(c, layer)
 	var home := centre - c.size / 2.0
 	# Caption pill above the card.
@@ -749,6 +765,7 @@ func _show_spotlight(e: Dictionary) -> void:
 	pill.pivot_offset = pill.size / 2.0
 	pill.position = Vector2(centre.x - pill.size.x / 2.0, home.y - pill.size.y - 12.0)
 	pill.modulate.a = 0.0
+	pill.z_index = 97
 	var done := func():
 		_free_node(bd)
 		_free_node(c)

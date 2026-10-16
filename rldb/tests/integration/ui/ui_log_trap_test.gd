@@ -32,8 +32,10 @@ func test_trap_activation_appears_in_both_logs() -> void:
 		if String(m.pending["options"][i]["label"]).begins_with("Activate"):
 			act = i
 	host.handle(o, {"t": "choose", "id": m.pending["id"], "indices": [act]})
+	gs.skip_effects()
 	await await_idle_frame()
 	assert_str(gs.log_label.get_parsed_text()).contains("activates Trap Mirror Force")
 	await gs.attach(host.seats[a])
+	gs.skip_effects()
 	await await_idle_frame()
 	assert_str(gs.log_label.get_parsed_text()).contains("activates Trap Mirror Force")

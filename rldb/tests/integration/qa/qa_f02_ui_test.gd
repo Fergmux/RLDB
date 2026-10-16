@@ -28,6 +28,7 @@ func _attach(seat: int) -> void:
 	gs.size = Vector2(1600, 1000)
 	add_child(gs)
 	await gs.attach(host.seats[seat])
+	gs.skip_effects()
 	await await_idle_frame()
 
 
@@ -79,15 +80,18 @@ func test_plan_b_second_multi_prompt_starts_with_no_stale_selection() -> void:
 	host.handle(1 - d, {"t": "attack", "uid": board[0]})
 	var pd: Dictionary = MatchView.build(m, 1 - d)["pending"]
 	host.handle(1 - d, {"t": "choose", "id": pd["id"], "indices": [_opt_slot(pd, d, 0)]})
+	gs.skip_effects()
 	await await_idle_frame()
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
 	# Act 1: first Plan B, ordered picks slot 2 then slot 1, confirmed
 	gs._pick_option(_opt(gs._pending(), "Plan B"))
+	gs.skip_effects()
 	await await_idle_frame()
 	assert_int(int(gs._pending()["max"])).is_greater(1)
 	gs._pick_option(_opt_slot(gs._pending(), d, 2))
 	gs._pick_option(_opt_slot(gs._pending(), d, 1))
 	gs._confirm_multi()
+	gs.skip_effects()
 	await await_idle_frame()
 	# Assert 1: destruction followed the clicked order
 	var i_earth := TB.log_index(m, "Basic Mage (Earth) is destroyed")
@@ -99,6 +103,7 @@ func test_plan_b_second_multi_prompt_starts_with_no_stale_selection() -> void:
 	var second := _opt(gs._pending(), "Plan B")
 	assert_int(second).is_not_equal(-1)
 	gs._pick_option(second)
+	gs.skip_effects()
 	await await_idle_frame()
 	assert_int(int(gs._pending().get("max", 1))).is_greater(1)
 	# Assert 2: the new prompt has nothing pre-selected from the first Plan B
@@ -111,6 +116,7 @@ func test_digits_and_enter_on_opponents_prompt_send_nothing() -> void:
 	var d := first
 	await _attach(d)
 	host.handle(1 - d, {"t": "attack", "uid": board[0]})
+	gs.skip_effects()
 	await await_idle_frame()
 	assert_bool(gs._pending()["mine"]).is_false()
 	var sent := gs.debug_sent
@@ -132,10 +138,13 @@ func test_enter_with_focused_confirm_sends_one_command() -> void:
 	host.handle(1 - d, {"t": "attack", "uid": board[0]})
 	var pd: Dictionary = MatchView.build(m, 1 - d)["pending"]
 	host.handle(1 - d, {"t": "choose", "id": pd["id"], "indices": [_opt_slot(pd, d, 0)]})
+	gs.skip_effects()
 	await await_idle_frame()
 	gs._pick_option(_opt(gs._pending(), "Plan B"))
+	gs.skip_effects()
 	await await_idle_frame()
 	gs._pick_option(_opt_slot(gs._pending(), d, 2))
+	gs.skip_effects()
 	await await_idle_frame()
 	var confirm: Button = null
 	for b in gs.banner_btns.get_children():
@@ -148,6 +157,7 @@ func test_enter_with_focused_confirm_sends_one_command() -> void:
 	host.seats[d].status_changed.connect(func(t): errs.append(t))
 	# Act
 	get_viewport().push_input(_key(KEY_ENTER))
+	gs.skip_effects()
 	await await_idle_frame()
 	# Assert
 	assert_int(gs.debug_sent).is_equal(sent + 1)
@@ -160,8 +170,10 @@ func test_stale_summon_click_after_card_left_hand_sends_nothing() -> void:
 	var uid := TB.card(m, first, TB.WATER)
 	m.players[first]["ap"] = 5
 	host.broadcast()
+	gs.skip_effects()
 	await await_idle_frame()
 	gs._select(uid)
+	gs.skip_effects()
 	await await_idle_frame()
 	var acts: Array = gs._actions_for_card(uid)
 	assert_int(acts.size()).is_equal(2)
@@ -170,6 +182,7 @@ func test_stale_summon_click_after_card_left_hand_sends_nothing() -> void:
 	m.cards[uid]["zone"] = "spent"
 	m.players[first]["spent"].append(uid)
 	host.broadcast()
+	gs.skip_effects()
 	await await_idle_frame()
 	var sent := gs.debug_sent
 	gs._run_action(uid, acts[0])
@@ -184,6 +197,7 @@ func test_stale_click_while_opponent_prompt_pending_sends_nothing() -> void:
 	var a := 1 - first
 	await _attach(a)
 	gs._select(board[0])
+	gs.skip_effects()
 	await await_idle_frame()
 	var acts: Array = gs._actions_for_card(board[0])
 	var atk: Array = acts.filter(func(x): return x["t"] == "attack")
@@ -191,6 +205,7 @@ func test_stale_click_while_opponent_prompt_pending_sends_nothing() -> void:
 	host.handle(a, {"t": "attack", "uid": board[0]})
 	var pd: Dictionary = MatchView.build(m, a)["pending"]
 	host.handle(a, {"t": "choose", "id": pd["id"], "indices": [_opt_slot(pd, first, 0)]})
+	gs.skip_effects()
 	await await_idle_frame()
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
 	var sent := gs.debug_sent

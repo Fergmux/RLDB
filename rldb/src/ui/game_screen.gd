@@ -523,6 +523,8 @@ func attach(c: SeatClient) -> void:
 	multi = []
 	_log_seq_shown = 0
 	_log_game = -1
+	_held = {}
+	_held_gen += 1
 	var same_game: bool = not c.last_view.is_empty() and int(c.last_view.get("game_no", -1)) == _fx_game
 	if not same_game:
 		_fx_seq = -1
@@ -1328,7 +1330,15 @@ func _show_log_toasts() -> void:
 		_toast("  ·  ".join(shown.slice(maxi(0, shown.size() - 2))), UIStyle.GOLD_HI, 4.5)
 
 
+## A view whose display is held back while a Spell/Trap spotlight plays: the board and log keep
+## showing the state before it until the card has left, then the effects apply.
+var _held: Dictionary = {}
+var _held_gen: int = 0
+
+
 func _on_view(v: Dictionary) -> void:
+	if not _held.is_empty():
+		_release_held()
 	prev_mv = mv
 	view = v
 	mv = v.get("match", {})
@@ -1353,12 +1363,57 @@ func _on_view(v: Dictionary) -> void:
 		_row_open = false
 	if _acting_uid != -1 and mv.get("pending", {}).is_empty():
 		_acting_uid = -1
+	var spots := events.filter(func(e): return e["k"] == "spotlight")
+	if not spots.is_empty() and not prev_mv.is_empty():
+		_hold_for_spotlight(spots, events.filter(func(e): return e["k"] != "spotlight"))
+		return
 	_render_all()
 	_show_log_toasts()
 	_maybe_coin_flip()
 	if not events.is_empty():
 		fx.play(events, prev_mv)
 
+
+## Shows the spotlight over the board as it was before the Spell/Trap (a Spell cast from your
+## hand already leaves the hand), then applies the new state and its effects once it has gone.
+func _hold_for_spotlight(spots: Array, rest: Array) -> void:
+	var shown: Dictionary = prev_mv.duplicate(true)
+	for e in spots:
+		if String(e.get("how", "")) == "cast" and int(e.get("p", -1)) == me():
+			var hand: Array = shown["players"][me()].get("hand", [])
+			for i in hand.size():
+				if int(hand[i].get("id", -1)) == int(e["id"]):
+					hand.remove_at(i)
+					break
+	_held = {"mv": mv, "prev": prev_mv, "events": rest}
+	_held_gen += 1
+	var gen := _held_gen
+	mv = shown
+	_render_all()
+	fx.play(spots, prev_mv)
+	get_tree().create_timer(UIStyle.dur(FxPlayer.SPOT_HOLD) * spots.size()).timeout.connect(func():
+		if gen == _held_gen and not _held.is_empty():
+			_release_held())
+
+
+## Skips running effects and any held spotlight at once, exactly like a click does (tests use it).
+func skip_effects() -> void:
+	fx.finish_all()
+	if not _held.is_empty():
+		_release_held()
+	fx.finish_all()
+
+
+func _release_held() -> void:
+	var h := _held
+	_held = {}
+	_held_gen += 1
+	mv = h["mv"]
+	prev_mv = h["prev"]
+	_render_all()
+	_show_log_toasts()
+	if not (h["events"] as Array).is_empty():
+		fx.play(h["events"], h["prev"])
 
 ## Game 1 of a series starts with a coin flip naming who goes first (once per series).
 func _maybe_coin_flip() -> void:
@@ -2221,11 +2276,15 @@ func _input(event: InputEvent) -> void:
 	if (event is InputEventMouseButton and event.pressed) or (event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_SPACE]):
 		if fx != null and fx.busy():
 			fx.finish_all()
+		if not _held.is_empty():
+			_release_held()   # a click skips the spotlight and applies its effects at once
 
 
 # ---------------------------------------------------------------- hover (inspection only) + selected-card actions
 
 func _locked() -> bool:
+	if not _held.is_empty():
+		return true   # a spotlight is showing; the board is not the current state yet
 	if mv.is_empty() or view.get("stage", "") != "game" or mv["winner"] != -1:
 		return true
 	if not mv.get("pending", {}).is_empty() or mv.get("resolving", false):
