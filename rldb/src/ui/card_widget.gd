@@ -52,12 +52,19 @@ var fx_glow: Color = Color(1, 1, 1, 0): set = _set_glow
 ## Ordered multi-select badge: 1, 2, 3... drawn on the card while > 0.
 var order_no: int = 0: set = _set_order
 
-## Hover lift (F04-05): the card grows to `lift_k` times its resting size and sits `lift_offset`
-## away, about its centre. It is a REAL size change, never the `scale` property: the face is
-## redrawn at the larger size, so text is rasterised at its final pixel size and stays crisp
-## (a scaled Control would stretch the already-rasterised glyphs and blur them). Tween these two.
+## Hover lift: the card grows to `lift_k` times its resting size and sits `lift_offset` away, about
+## its centre. Tween these two.
+## - The widget rect really grows (hit area, neighbours, F04-05), never the `scale` property.
+## - The face is NOT laid out again at the lifted size (F05-03: that reflowed the text, with line
+##   breaks and font sizes stepping mid-animation). It keeps its resting layout and is drawn scaled
+##   by `lift_k`, with the text rasterised at its on-screen size (CardPainter.text_os) so it stays crisp.
 var lift_k: float = 1.0: set = _set_lift_k
 var lift_offset: Vector2 = Vector2.ZERO: set = _set_lift_offset
+
+## Text oversampling is quantised to 1/TEXT_OS_STEPS of the on-screen scale: a lift animation then
+## rasterises a bounded set of glyph sizes (the font caches one set per size) while the mismatch
+## between raster and display size stays under 1/(2 * TEXT_OS_STEPS), i.e. below 1%.
+const TEXT_OS_STEPS := 64.0
 
 var _lifting := false
 var _lift_rest_pos := Vector2.ZERO
@@ -65,6 +72,8 @@ var _lift_rest_pos := Vector2.ZERO
 var _lift_applied_pos := Vector2.ZERO
 var _lift_applying := false
 var _self_hover := false
+## Quantised on-screen scale the face text was last rasterised for (1.0 = the viewport's own).
+var _text_k := 1.0
 var _is_ready := false
 var _pv_stat := ""
 var _pv_value := 0
@@ -77,6 +86,9 @@ func _init() -> void:
 	item_rect_changed.connect(_on_rect_changed)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	# A `scale` on the card or above it (FX pulses, the deck builder click, a scaled sidebar) changes the
+	# on-screen text size: redraw so the glyphs are rasterised for it (see _screen_text_k).
+	set_notify_transform(true)
 
 
 func _ready() -> void:
@@ -181,17 +193,45 @@ func has_preview() -> bool:
 ## The rect (widget space) the card face occupies: exactly 2:3 (3:2 when rotated), centred and
 ## letterboxed inside the widget rect, never stretched.
 func card_rect() -> Rect2:
+	return _card_rect_in(size)
+
+
+## card_rect() for a widget of size `sz` (the face is laid out in the resting size while lifted).
+func _card_rect_in(sz: Vector2) -> Rect2:
 	var aspect := 1.5 if rotated else (2.0 / 3.0)   # width / height
-	var w := size.x
-	var h := size.y
+	var w := sz.x
+	var h := sz.y
 	# 85x128 is 2:3 to within half a pixel; treat that as exact so the face is not offset by half a pixel.
 	if absf(w / maxf(h, 0.001) - aspect) < 0.006:
-		return Rect2(Vector2.ZERO, size)
+		return Rect2(Vector2.ZERO, sz)
 	if w / maxf(h, 0.001) > aspect:
 		w = h * aspect
 	else:
 		h = w / aspect
-	return Rect2((size.x - w) / 2.0, (size.y - h) / 2.0, w, h)
+	return Rect2((sz.x - w) / 2.0, (sz.y - h) / 2.0, w, h)
+
+
+## Scale the face is drawn at: `lift_k` while lifted, else 1 (laid out at size / draw_k).
+func draw_k() -> float:
+	return lift_k if _lifting else 1.0
+
+
+## The face's on-screen scale relative to the viewport (lift times any `scale` on the card or its
+## parents), quantised to 1/TEXT_OS_STEPS. 1.0 means the text needs no oversampling of its own.
+func _screen_text_k() -> float:
+	var xf := get_global_transform_with_canvas() if is_inside_tree() else get_transform()
+	var sk := maxf(xf.x.length(), xf.y.length()) * draw_k()
+	return maxf(1.0 / TEXT_OS_STEPS, roundf(sk * TEXT_OS_STEPS) / TEXT_OS_STEPS)
+
+
+## Raster oversampling for the face text (CardPainter.text_os): 0.0 (the viewport's own) at scale 1,
+## else the viewport's oversampling times the on-screen scale.
+func text_oversampling() -> float:
+	var k := _screen_text_k()
+	if is_equal_approx(k, 1.0):
+		return 0.0
+	var vp := get_viewport()
+	return (vp.get_oversampling() if vp != null else 1.0) * k
 
 
 func _set_hovered(v: bool) -> void:
@@ -209,8 +249,9 @@ func _set_lift_offset(v: Vector2) -> void:
 	_apply_lift()
 
 
-## Sizes and places the card for the current lift: whole-pixel size, growth about the centre, whole-pixel
-## position relative to where the card rested when the lift began.
+## Sizes and places the card for the current lift: growth about the centre, relative to where the card
+## rested when the lift began. Not rounded to whole pixels: the face is drawn scaled (see lift_k), so a
+## fractional size animates smoothly instead of in 1 px steps (Controls still snap to pixels on screen).
 func _apply_lift() -> void:
 	var rest := custom_minimum_size
 	if rest == Vector2.ZERO:
@@ -219,7 +260,7 @@ func _apply_lift() -> void:
 	if not neutral and not _lifting:
 		_lifting = true
 		_lift_rest_pos = position
-	var sz := rest if neutral else (rest * lift_k).round()
+	var sz := rest if neutral else rest * lift_k
 	_lift_applying = true
 	size = sz
 	if neutral:
@@ -227,7 +268,7 @@ func _apply_lift() -> void:
 			position = _lift_rest_pos
 		_lifting = false
 	else:
-		position = (_lift_rest_pos + lift_offset - (sz - rest) / 2.0).round()
+		position = _lift_rest_pos + lift_offset - (sz - rest) / 2.0
 	_lift_applied_pos = position
 	_lift_applying = false
 
@@ -272,6 +313,9 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		pivot_offset = size / 2.0
 		queue_redraw()
+	elif what == NOTIFICATION_TRANSFORM_CHANGED:
+		if not is_equal_approx(_screen_text_k(), _text_k):
+			queue_redraw()
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -295,13 +339,22 @@ func _draw() -> void:
 	pt.pv_stat = _pv_stat
 	pt.pv_value = _pv_value
 	pt.pv_bonus = _pv_bonus
+	# Lifted: lay out at the resting size, draw scaled by k (F05-03, see lift_k).
+	pt.k = draw_k()
+	# The exact resting size (size / k would carry float error into the layout's width keys).
+	var ls := custom_minimum_size if _lifting else size
+	_text_k = _screen_text_k()
+	pt.text_os = text_oversampling()
+	if pt.tracing:
+		pt.trace.clear()
 	if view.is_empty():
-		pt.s = clampf(minf(size.x, size.y) / 85.0, 0.5, 1.3)
-		pt.cr = Rect2(Vector2.ZERO, size)
-		CardLayouts.draw_empty(pt, size, highlighted)
+		pt.s = clampf(minf(ls.x, ls.y) / 85.0, 0.5, 1.3)
+		pt.cr = Rect2(Vector2.ZERO, ls)
+		pt.reset_transform()
+		CardLayouts.draw_empty(pt, ls, highlighted)
 		CardOverlays.draw(pt, self)
 		return
-	pt.cr = card_rect()
+	pt.cr = _card_rect_in(ls)
 	pt.ps = Vector2(pt.cr.size.y, pt.cr.size.x) if rotated else pt.cr.size
 	pt.s = maxf(0.2, pt.ps.x / _base().x)
 	pt.set_face_transform()
@@ -321,6 +374,23 @@ func _draw() -> void:
 			_: CardLayouts.draw_square(pt)
 	pt.reset_transform()
 	CardOverlays.draw(pt, self)
+
+
+## Tests (F05-03): records every text draw's layout (text, font size, face-space position, paragraph
+## line ranges) from the next redraw on; read it with text_trace().
+func set_text_tracing(on: bool) -> void:
+	_paint.tracing = on
+	queue_redraw()
+
+
+## The text layout recorded by the last redraw while tracing (see set_text_tracing).
+func text_trace() -> Array:
+	return _paint.trace.duplicate(true)
+
+
+## The painter's draw scale and text oversampling of the last redraw: [k, text_os].
+func last_draw_scale() -> Array:
+	return [_paint.k, _paint.text_os]
 
 
 ## Base (unscaled) portrait size the layout of this kind is authored in.

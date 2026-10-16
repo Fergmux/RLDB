@@ -54,7 +54,7 @@ static func draw_power(pt: CardPainter) -> void:
 	var txt := CardText.card_text(pt.view)
 	if txt != "":
 		var tp := CardTextLayout.para(txt, UIStyle.font_body(), "b", pt.fs(9.0), 77.0 * pt.s, 4)
-		tp.draw(pt.ci.get_canvas_item(), pt.p(4, 70), Color(UIStyle.TEXT, 0.9))
+		pt.para(tp, pt.p(4, 70), Color(UIStyle.TEXT, 0.9))
 	CardChips.draw(pt, 4, 81, 115.0, 10.0, 7.5, 1)
 
 
@@ -89,7 +89,7 @@ static func draw_tall(pt: CardPainter, big: bool) -> void:
 	if rules != "":
 		# The whole rules text always fits: the size steps down until it does (user feedback).
 		var tp := CardTextLayout.fit_para(rules, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(5, pt.fs(g["f_text"] * 0.55)), (float(t[2]) - 8.0) * s, (float(t[3]) - 3.0) * s)
-		tp.draw(pt.ci.get_canvas_item(), pt.p(t[0] + 4, t[1] + 2), UIStyle.TEXT)
+		pt.para(tp, pt.p(t[0] + 4, t[1] + 2), UIStyle.TEXT)
 	# Chips + stat badges + gem.
 	if is_unit:
 		var at: Array = g["atk"]

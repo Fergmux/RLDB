@@ -331,7 +331,7 @@ func _render_decks() -> void:
 	decks.restore_scroll()
 
 
-## Hover lift of a draft / reward card: eases its real size (lift_k, about its centre, F04-05) to `to`.
+## Hover lift of a draft / reward card: eases its lift (lift_k, about its centre: real size, resting text layout, F04-05 / F05-03) to `to`.
 func _lift(cw: CardWidget, to: float) -> void:
 	if not is_instance_valid(cw):
 		return
