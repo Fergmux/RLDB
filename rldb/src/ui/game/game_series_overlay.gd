@@ -6,6 +6,9 @@ extends RefCounted
 
 const DECK_SORT := ["basic_unit", "unit", "spell", "trap", "power", "fusion", "ritual", "arcane"]
 const PAUSE_W := 440.0
+## Draft offer: scale of a hovered card, and the row height that leaves room for it.
+const DRAFT_HOVER_SCALE := 1.06
+const DRAFT_CARD_ROOM := 400.0
 
 ## The host screen this component works on.
 var gs: GameScreen
@@ -292,17 +295,32 @@ func _render_decks() -> void:
 		return
 	var dr: Dictionary = view["draft"]
 	overlay_box.add_child(UIStyle.label("Pick %d of %d — %s" % [dr["step"] + 1, dr["total"], String(dr["category"]).capitalize()], 18, UIStyle.TEXT))
-	var flow := HFlowContainer.new()
-	overlay_box.add_child(flow)
+	# The offer is spread evenly across the modal (equal-width columns); clicking a card picks it.
+	# The cards picked so far are listed in the details panel.
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	overlay_box.add_child(row)
 	for i in dr["offer"].size():
 		var c: Dictionary = dr["offer"][i]
-		var cell := VBoxContainer.new()
-		cell.add_child(CardWidget.new().setup(MatchView.summary_view(c), "big"))
-		var b2 := UIStyle.primary_button("Pick", 14)
-		b2.pressed.connect(func(): gs.send({"t": "draft_pick", "index": i}))
-		cell.add_child(b2)
-		flow.add_child(cell)
-	overlay_box.add_child(UIStyle.label("Picked: " + ", ".join(dr["picked"].map(func(c): return c["name"])), 13, UIStyle.MUTED, true))
+		var col := CenterContainer.new()
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.custom_minimum_size = Vector2(0, DRAFT_CARD_ROOM)
+		row.add_child(col)
+		var cw := CardWidget.new().setup(MatchView.summary_view(c), "big")
+		cw.tooltip_text = "Pick %s" % c["name"]
+		var idx: int = i
+		cw.pressed.connect(func(_w): gs.send({"t": "draft_pick", "index": idx}))
+		cw.mouse_entered.connect(func(): _lift(cw, DRAFT_HOVER_SCALE))
+		cw.mouse_exited.connect(func(): _lift(cw, 1.0))
+		col.add_child(cw)
+
+
+## Hover lift of a draft card: eases its scale (about its centre) to `to`.
+func _lift(cw: CardWidget, to: float) -> void:
+	if not is_instance_valid(cw):
+		return
+	var t := cw.create_tween()
+	t.tween_property(cw, "scale", Vector2(to, to), 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 
 ## Two-column grid the deck tiles sit in.

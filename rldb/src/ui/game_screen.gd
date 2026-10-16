@@ -361,7 +361,9 @@ func render_all() -> void:
 	overlays.render()
 	overlays.render_pause()
 	action_row.refresh()
-	if details.pile_zone != "":
+	if details.is_drafting():
+		details.show_draft()
+	elif details.pile_zone != "":
 		if view.get("stage", "") != "game" or mv.is_empty():
 			details.close_pile()
 		else:

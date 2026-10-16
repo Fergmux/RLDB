@@ -119,7 +119,7 @@ func render_turnbar() -> void:
 	var in_game := not mv.is_empty() and stage == "game"
 	pips.visible = in_game
 	brow.visible = in_game
-	details_panel.visible = in_game
+	details_panel.visible = in_game or gs.details.is_drafting()
 	log_panel.visible = not mv.is_empty()
 	series_panel.visible = not in_game
 	gs.menu.update_conn()

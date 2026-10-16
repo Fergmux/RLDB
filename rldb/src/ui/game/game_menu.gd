@@ -152,7 +152,10 @@ func confirm_forfeit(quit: bool) -> void:
 	if not live:
 		go.call()
 		return
-	_dialog("Are you sure?", "Quitting will forfeit the match.", "Forfeit and %s" % ("quit" if quit else "leave"), go)
+	if gs.view.get("stage", "") == "decks":   # no game played yet (deck choice / draft)
+		_dialog("Abandon game?", "Are you sure you want to abandon your game?", "Abandon and %s" % ("quit" if quit else "leave"), go)
+	else:
+		_dialog("Are you sure?", "Quitting will forfeit the match.", "Forfeit and %s" % ("quit" if quit else "leave"), go)
 
 
 ## Opens the shared confirmation dialog over the screen (one at a time).

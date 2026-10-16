@@ -105,8 +105,10 @@ static func font_display(weight: int = 600) -> Font:
 const SETTINGS_PATH := "user://ui_settings.cfg"
 static var reduce_motion: bool = false
 static var fast_anim: bool = false
+## Window mode used until the player picks one in Settings.
+const DEFAULT_WINDOW_MODE := "fullscreen"
 ## Window mode: "windowed", "borderless" (borderless full screen) or "fullscreen" (exclusive).
-static var window_mode: String = "windowed"
+static var window_mode: String = DEFAULT_WINDOW_MODE
 ## 2D anti-aliasing (MSAA) level: 0 off, 2, 4 or 8 samples. Needs the Mobile/Forward renderer; on
 ## the OpenGL fallback it has no effect (lines and shapes are still drawn anti-aliased).
 static var aa_level: int = 8
@@ -124,7 +126,7 @@ static func load_settings() -> void:
 	if cf.load(SETTINGS_PATH) == OK:
 		reduce_motion = bool(cf.get_value("ui", "reduce_motion", false))
 		fast_anim = bool(cf.get_value("ui", "fast_anim", false))
-		window_mode = String(cf.get_value("ui", "window_mode", "windowed"))
+		window_mode = String(cf.get_value("ui", "window_mode", DEFAULT_WINDOW_MODE))
 		aa_level = int(cf.get_value("ui", "aa_level", 8))
 
 

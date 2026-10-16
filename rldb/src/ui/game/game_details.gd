@@ -2,8 +2,10 @@ class_name GameDetails
 extends RefCounted
 ## Sidebar card-details panel (inspection only) and the own-pile list that replaces it while
 ## a pile is open. Shows the hovered card, else the selected card, else a card opened from
-## the game log.
+## the game log. While drafting it lists the cards picked so far, in the same layout.
 
+## pile_zone value of the draft list.
+const DRAFT_ZONE := "draft"
 const PILE_NAMES := {"draw": "Draw pile", "spent": "Spent", "exhaust": "Exhaust", "extra": "Extra Deck"}
 const PILE_ROW_CARD := Vector2(64, 96)
 
@@ -25,6 +27,8 @@ var pile_list: VBoxContainer
 var pile_head: HBoxContainer
 ## Hint text above the pile list.
 var pile_hint: Label
+## Close button of the pile list (hidden for the draft list, which stays while drafting).
+var pile_close: Button
 
 ## Signature of the details last rendered ("" forces a re-render).
 var details_sig: String = ""
@@ -60,9 +64,9 @@ func build(col: VBoxContainer) -> PanelContainer:
 	pile_hint = UIStyle.label("", 13, UIStyle.MUTED, true)
 	pile_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pile_head.add_child(pile_hint)
-	var pclose := UIStyle.button("Close", 13)
-	pclose.pressed.connect(close_pile)
-	pile_head.add_child(pclose)
+	pile_close = UIStyle.button("Close", 13)
+	pile_close.pressed.connect(close_pile)
+	pile_head.add_child(pile_close)
 	pile_scroll = ScrollContainer.new()
 	pile_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	pile_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -186,6 +190,21 @@ func show_pile(zone: String, sel_uid: int = -1) -> void:
 	Sfx.play("select")
 
 
+## True while this seat is drafting its deck (the panel then lists the picks).
+func is_drafting() -> bool:
+	var view := gs.view
+	return view.get("stage", "") == "decks" and view.has("draft") and not view["deck_ready"][gs.me()]
+
+
+## While drafting: the cards picked so far, listed like a pile (read-only).
+func show_draft() -> void:
+	if pile_zone != DRAFT_ZONE:
+		pile_zone = DRAFT_ZONE
+		_pile_sel = -1
+		_pile_sig = 0
+	render_pile_list()
+
+
 ## Returns the panel from the pile list to card details.
 func close_pile() -> void:
 	pile_zone = ""
@@ -201,23 +220,32 @@ func close_pile() -> void:
 
 ## Lists the open pile's cards (rebuilt only when the pile, selection or actions changed).
 func render_pile_list() -> void:
-	var pv := gs.pv(gs.me())
-	var key := "draw_inspect" if pile_zone == "draw" else pile_zone
-	var cards: Array = pv.get(key, [])
+	var drafting := pile_zone == DRAFT_ZONE
+	var cards: Array
+	if drafting:
+		cards = gs.view.get("draft", {}).get("picked", []).map(func(c): return MatchView.summary_view(c))
+	else:
+		var key := "draw_inspect" if pile_zone == "draw" else pile_zone
+		cards = gs.pv(gs.me()).get(key, [])
 	var acts := gs.action_row.actions_for_card(_pile_sel) if _pile_sel != -1 else []
 	var sig := hash([pile_zone, _pile_sel, cards, acts, gs.board.ready_uids.keys()])
 	details_scroll.visible = false
 	pile_scroll.visible = true
 	pile_head.visible = true
-	pile_hint.text = "Shown in a random order; the real order is unchanged." if pile_zone == "draw" else "Hover a card to read it; click to select it."
-	details_title.text = "Your %s (%d)" % [PILE_NAMES.get(pile_zone, pile_zone.capitalize()), cards.size()]
+	pile_close.visible = not drafting
+	if drafting:
+		pile_hint.text = "The cards you have drafted so far."
+		details_title.text = "Your draft (%d)" % cards.size()
+	else:
+		pile_hint.text = "Shown in a random order; the real order is unchanged." if pile_zone == "draw" else "Hover a card to read it; click to select it."
+		details_title.text = "Your %s (%d)" % [PILE_NAMES.get(pile_zone, pile_zone.capitalize()), cards.size()]
 	if sig == _pile_sig:
 		return
 	_pile_sig = sig
 	var keep := pile_scroll.scroll_vertical
 	GameUi.clear(pile_list)
 	if cards.is_empty():
-		pile_list.add_child(UIStyle.label("Empty.", 14, UIStyle.MUTED))
+		pile_list.add_child(UIStyle.label("No cards picked yet." if drafting else "Empty.", 14, UIStyle.MUTED))
 	var sel_row: Control = null
 	for c in cards:
 		var r := _pile_row(c)
@@ -252,14 +280,15 @@ func _pile_row(c: Dictionary) -> Control:
 	sb.content_margin_bottom = 6
 	row.add_theme_stylebox_override("panel", sb)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	row.tooltip_text = CardWidget.tooltip_for(c)
-	var pick := func():
-		gs.selected_uid = uid
-		show_pile(pile_zone, -1 if sel else uid)
-	row.gui_input.connect(func(ev):
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			pick.call())
+	if pile_zone != DRAFT_ZONE:   # draft picks are read-only
+		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		var pick := func():
+			gs.selected_uid = uid
+			show_pile(pile_zone, -1 if sel else uid)
+		row.gui_input.connect(func(ev):
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				pick.call())
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 8)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
