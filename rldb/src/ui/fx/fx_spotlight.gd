@@ -53,31 +53,6 @@ func _caption(e: Dictionary) -> String:
 	return "Spell cast"
 
 
-## Soft radial dark vignette behind the card.
-func _make_backdrop(centre: Vector2, area: Rect2) -> TextureRect:
-	var g := Gradient.new()
-	g.set_color(0, Color(0, 0, 0, 0.62))
-	g.set_color(1, Color(0, 0, 0, 0.0))
-	var gt := GradientTexture2D.new()
-	gt.gradient = g
-	gt.fill = GradientTexture2D.FILL_RADIAL
-	gt.fill_from = Vector2(0.5, 0.5)
-	gt.fill_to = Vector2(1.0, 0.5)
-	gt.width = 128
-	gt.height = 128
-	var bd := TextureRect.new()
-	bd.texture = gt
-	bd.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bd.stretch_mode = TextureRect.STRETCH_SCALE
-	bd.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bsz := Vector2(area.size.x * 1.1, area.size.y * 1.2)
-	bd.size = bsz
-	bd.position = centre - bsz / 2.0
-	bd.modulate.a = 0.0
-	bd.z_index = UiLayers.SPOTLIGHT_DIM   # above lifted board cards, status glows and floating effect text
-	return bd
-
-
 ## Flies a big card from its origin (hand for a cast, else its slot) to the centre of the board over a
 ## soft dark backdrop, holds ~1 s with a caption pill above it, then shrinks and fades. Click-through;
 ## everything is removed by finish_all().

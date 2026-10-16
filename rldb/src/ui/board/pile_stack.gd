@@ -40,6 +40,7 @@ var _pop_tw: Tween
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	set_process(false)   # only while the ready glow animates
 	mouse_entered.connect(func() -> void: _hover = true; queue_redraw())
 	mouse_exited.connect(func() -> void: _hover = false; queue_redraw())
 
@@ -57,8 +58,13 @@ func set_pile(n: int, can_open: bool, is_ready: bool = false) -> void:
 	count = n
 	clickable = can_open
 	ready_mark = is_ready
+	set_process(ready_mark and not UIStyle.reduce_motion)
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if clickable else Control.CURSOR_ARROW
 	tooltip_text = "%s: %d card%s%s" % [title, n, "" if n == 1 else "s", " — click to look through it" if clickable else ""]
+	queue_redraw()
+
+
+func _process(_d: float) -> void:
 	queue_redraw()
 
 
@@ -120,11 +126,9 @@ func _draw() -> void:
 		h.set_corner_radius_all(7)
 		draw_style_box(h, top.grow(2))
 	if ready_mark:
-		# Same steady soft yellow glow as a ready CardWidget: thin ring plus fading bands outside.
-		_ring(Color(UIStyle.READY, 0.30), 3.5, top.grow(6.0), 12.0)
-		_ring(Color(UIStyle.READY, 0.15), 4.0, top.grow(9.5), 15.5)
-		_ring(Color(UIStyle.READY, 0.06), 4.5, top.grow(13.5), 19.5)
-		_ring(Color(UIStyle.READY, 0.9), 2.0, top.grow(3.0), 9.0)
+		# Same animated glow and bouncing chevrons as a ready CardWidget (F03-21).
+		CardOverlays.ready_glow(self, top, 9.0, 1.0, CardOverlays.ready_pulse())
+		CardOverlays.ready_badge_draw(self, top, 1.0, CardOverlays.ready_bounce())
 	# Count overlaid on the vertical centre of the top card: one fixed badge sized for "99" and one fixed
 	# font size, so the badge never grows when the count gains a digit (user feedback). 100+ steps down.
 	var font := UIStyle.font_display(700)
@@ -160,12 +164,3 @@ func _draw() -> void:
 	var base_y := pr.position.y + plate_h / 2.0 + (tf.get_ascent(tfs) - tf.get_descent(tfs)) / 2.0
 	draw_string(tf, Vector2(pr.position.x + (pr.size.x - tw) / 2.0, base_y), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, UIStyle.TEXT)
 
-
-## Unfilled rounded ring of width `w` around `rect`.
-func _ring(col: Color, w: float, rect: Rect2, radius: float) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.draw_center = false
-	sb.border_color = col
-	sb.set_border_width_all(maxi(1, roundi(w)))
-	sb.set_corner_radius_all(maxi(1, roundi(radius)))
-	draw_style_box(sb, rect)

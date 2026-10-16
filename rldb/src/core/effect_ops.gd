@@ -232,6 +232,13 @@ func _op_move(f: Dictionary, op: Dictionary) -> int:
 		if from == "backrow" and not is_face_up(u):
 			was_public = false
 		var label := public_label(u)
+		var xfx := {}
+		if op["to"] == "exhaust":
+			# Presentation only (F03-16). A card in a hidden pile is identified to its owner and to the
+			# effect's controller, who chose it from the revealed pile; everyone else sees a card back.
+			var owner0: int = cards[u]["owner"]
+			xfx = {"k": "exhaust", "p": owner0, "from": from, "at": fx_pos(u)}
+			xfx.merge(fx_identity(u, [0, 1] if was_public else [owner0, f["ctl"]]))
 		if from == "unit" or from == "backrow" or from == "power":
 			_leave_field(u, op["to"], "effect", f)
 		else:
@@ -244,6 +251,8 @@ func _op_move(f: Dictionary, op: Dictionary) -> int:
 			# Hidden source pile: the opponent learns only that a card moved.
 			add_log("%s moves a card from %s to %s." % [pname(owner), from.capitalize(), dest_name],
 				{owner: "%s moves from %s to %s." % [name_of(u), from.capitalize(), dest_name]})
+		if not xfx.is_empty():
+			add_fx(xfx)
 	return R.CONT
 
 

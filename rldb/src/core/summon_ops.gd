@@ -133,19 +133,27 @@ func _op_tribute(f: Dictionary, op: Dictionary) -> int:
 	var p: int = f["ctl"]
 	for m in refs(f, op["target"]):
 		var from: String = cards[m]["zone"]
+		# Presentation only (F03-17): where the material came from and where it goes, by summon kind.
+		var mfx := {"k": "material", "p": p, "from": from, "at": fx_pos(m),
+			"kind": "ritual" if op.get("ritual", false) else ("arcane" if op.get("to", "") == "exhaust" else "fusion"),
+			"to": "spent" if from == "unit" and not has_flag_raw(m, "exhaust_on_spent") else "exhaust"}
+		mfx.merge(fx_identity(m, [0, 1] if from == "unit" else [p]))
 		if op.get("ritual", false):
 			f["vars"]["runes_used"] = status_count(m, "rune")
 		if from == "unit":
 			var snap := _leave_field(m, op.get("to", "spent") if op.get("to", "") != "exhaust" else "spent", "tribute")
 			add_log("%s tributes %s." % [pname(p), name_of(m)])
+			add_fx(mfx)
 			emit("tribute_or_sacrifice", {"self": m, "ctl": p, "player": p, "tribute": true, "debilitated": snap["st"].get("debilitate", 0) > 0})
 		elif from == "hand":
 			move_to_pile(m, "exhaust")
 			add_log("%s tributes a card from Hand (exhausted)." % pname(p), {p: "%s tributes %s from Hand (exhausted)." % [pname(p), name_of(m)]})
+			add_fx(mfx)
 		else:
 			move_to_pile(m, "exhaust")
 			add_log("%s exhausts a card from %s as material." % [pname(p), from.capitalize()],
 				{p: "%s exhausts %s from %s as material." % [pname(p), name_of(m), from.capitalize()]})
+			add_fx(mfx)
 	if op.get("ritual", false) and d(f["src"])["cost"] == null:
 		var n: int = f["vars"]["runes_used"]
 		cards[f["src"]]["runes_used"] = n

@@ -133,6 +133,7 @@ func set_marks(is_target: bool, is_selected: bool, is_dimmed: bool = false, soft
 func set_ready(on: bool) -> void:
 	if _is_ready != on:
 		_is_ready = on
+		_update_process()   # F03-21: the glow pulses and the chevrons bounce while ready
 		queue_redraw()
 
 
@@ -204,7 +205,7 @@ func _set_order(v: int) -> void:
 ## Per-frame redraw only while something animates: the pulsing target ring or the breathing
 ## selection brackets. Static under reduce_motion.
 func _update_process() -> void:
-	set_process((highlighted or selected) and not UIStyle.reduce_motion)
+	set_process((highlighted or selected or _is_ready) and not UIStyle.reduce_motion)
 
 
 func _process(_d: float) -> void:

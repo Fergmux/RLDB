@@ -29,6 +29,12 @@ var _cards := FxCardEffects.new(self)
 var _resources := FxResourceEffects.new(self)
 var _spotlight := FxSpotlight.new(self)
 var _banner := FxBanner.new(self)
+var _piles := FxPileEffects.new(self)
+var _game_end := FxGameEnd.new(self)
+## True from the moment a view that ends the game arrives until its victory / defeat presentation has
+## finished (or been skipped): GameSeriesOverlay keeps the result modal back meanwhile (F03-13).
+var game_end_hold := false
+var _hold_gen := 0
 
 
 ## True while any effect, banner or spotlight is still running.
@@ -36,7 +42,31 @@ func busy() -> bool:
 	for t in _tweens:
 		if t is Tween and t.is_valid() and t.is_running():
 			return true
-	return _banner.is_active() or _spotlight.is_active()
+	return _banner.is_active() or _spotlight.is_active() or _game_end.is_active()
+
+
+## Called by the screen with the events of a NEW view before it renders: when they end the game the
+## result modal waits for the victory / defeat presentation. Safety net: released after 8 s regardless.
+func expect_game_end(events: Array) -> void:
+	for e in events:
+		if String(e.get("k", "")) == "game_over":
+			game_end_hold = true
+			_hold_gen += 1
+			var gen := _hold_gen
+			screen.get_tree().create_timer(8.0).timeout.connect(func():
+				if gen == _hold_gen:
+					release_game_end_hold())
+			return
+
+
+## Lets the result modal appear (idempotent).
+func release_game_end_hold() -> void:
+	if not game_end_hold:
+		return
+	game_end_hold = false
+	_hold_gen += 1
+	if screen != null and screen.overlays != null:
+		screen.overlays.render()
 
 
 ## Skips everything running: kills tweens, runs cleanups (resets transient offsets) and
@@ -60,6 +90,8 @@ func finish_all() -> void:
 	_nodes.clear()
 	_banner.reset()
 	_spotlight.reset()
+	_game_end.reset()
+	release_game_end_hold()
 
 
 # ---------------------------------------------------------------- scheduling
@@ -81,9 +113,21 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 		if e["k"] == "turn":
 			turn_in_batch = true
 	var fast := UIStyle.reduce_motion
-	for e in events:
+	var special := {}   # player -> kind of the special summon whose materials were just shown
+	for i in events.size():
+		var e: Dictionary = events[i]
+		# F03-17: a Fusion / Ritual / Arcane summon waits for its materials to be drawn in.
+		var summon_kind := ""
+		if e["k"] == "summon" and special.has(int(e["p"])):
+			summon_kind = String(special[int(e["p"])])
+			special.erase(int(e["p"]))
+			t += 0.55
 		# F02-13: each public event's sound starts with its animation (Sfx rate-limits bursts).
 		var snd := Sfx.for_fx(e, screen.me())
+		if summon_kind != "":
+			snd = FxPileEffects.KIND_SOUND[summon_kind]
+		elif e["k"] == "game_over":
+			snd = ""   # FxGameEnd plays the victory / defeat sound itself
 		if snd != "":
 			var st0 := maxf(t, attack_end) if e["k"] == "attack" else (t + 0.2 if e["k"] == "game_over" else t)
 			sched.append([st0, Sfx.play.bind(snd, 0.0, 0.04)])
@@ -96,8 +140,25 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 				attack_end = st + (0.2 if fast else 0.46)
 				t = st + (0.1 if fast else 0.2)
 			"summon":
-				_prehide(int(e["p"]), "unit", int(e["slot"]), t, sched, _cards.arrive.bind(int(e["p"]), "unit", int(e["slot"])))
+				var arrive_fn: Callable = _cards.arrive.bind(int(e["p"]), "unit", int(e["slot"]))
+				if summon_kind != "":
+					arrive_fn = _piles.arrive_special.bind(int(e["p"]), int(e["slot"]), summon_kind)
+				_prehide(int(e["p"]), "unit", int(e["slot"]), t, sched, arrive_fn)
 				t += 0.16
+			"material":
+				# Gather point: the slot of the summon that follows in this batch (else the unit block).
+				var mp := int(e["p"])
+				var gather: Vector2 = screen.side_center(mp)
+				for j in range(i + 1, events.size()):
+					if events[j]["k"] == "summon" and int(events[j]["p"]) == mp:
+						gather = screen.fx_slot_global_rect(mp, "unit", int(events[j]["slot"])).get_center()
+						break
+				special[mp] = String(e.get("kind", "fusion"))
+				sched.append([t, _piles.material.bind(e, prev_mv, gather)])
+				t += 0.14
+			"exhaust":
+				sched.append([t, _piles.exhaust.bind(e, prev_mv)])
+				t += 0.3
 			"play":
 				_prehide(int(e["p"]), String(e["zone"]), int(e["slot"]), t, sched, _cards.arrive.bind(int(e["p"]), String(e["zone"]), int(e["slot"])))
 				t += 0.16
@@ -113,7 +174,7 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			"discard":
 				sched.append([t, _resources.discard.bind(int(e["p"]), int(e["n"]))])
 			"destroy":
-				sched.append([t, _cards.destroy.bind(e["at"], prev_mv)])
+				sched.append([t, _piles.destroy.bind(e, prev_mv)])
 				t += 0.12
 			"status":
 				sched.append([t, _cards.status.bind(e["at"], String(e["s"]), int(e.get("n", 1)))])
@@ -141,7 +202,7 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 				if ph in ["battle", "main2"] or (ph == "main1" and not turn_in_batch):
 					sched.append([t, _banner.enqueue.bind(FxBanner.PHASE_NAMES[ph], "", Color("e8dcc0"), false)])
 			"game_over":
-				sched.append([t + 0.2, _banner.show_game_over.bind(int(e["winner"]))])
+				sched.append([t + 0.2, _game_end.start.bind(int(e["winner"]))])
 	var last := 0.0
 	for s in sched:
 		last = maxf(last, s[0])

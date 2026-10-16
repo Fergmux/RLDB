@@ -248,13 +248,37 @@ static func log_for(m: MatchEngine, viewer: int, since: int = 0) -> Array:
 			continue
 		var text: String = e["priv"].get(viewer, e["pub"])
 		if text != "":
-			var row := {"seq": e["seq"], "turn": e["turn"], "text": text, "fx": e.get("fx", [])}
+			var row := {"seq": e["seq"], "turn": e["turn"], "text": text, "fx": redact_fx(e.get("fx", []), viewer)}
 			if e.get("toast", false):
 				row["toast"] = true
 			out.append(row)
 		elif e["pub"] != "" and not e.get("fx", []).is_empty():
 			# Presentation-only events carry public board positions/amounts, never identities.
-			out.append({"seq": e["seq"], "turn": e["turn"], "text": "", "fx": e["fx"]})
+			out.append({"seq": e["seq"], "turn": e["turn"], "text": "", "fx": redact_fx(e["fx"], viewer)})
+	return out
+
+
+## Presentation events naming a card (`id` + `seen_by`) keep the identity only for the seats allowed to
+## see it; for every other viewer both fields are removed. Returns `events` itself when nothing needs it.
+static func redact_fx(events: Array, viewer: int) -> Array:
+	var need := false
+	for e in events:
+		if e.has("seen_by"):
+			need = true
+			break
+	if not need:
+		return events
+	var out := []
+	for e in events:
+		if e.has("seen_by"):
+			var c: Dictionary = e.duplicate()
+			var seen: Array = c["seen_by"]
+			c.erase("seen_by")
+			if not (viewer in seen):
+				c.erase("id")
+			out.append(c)
+		else:
+			out.append(e)
 	return out
 
 
