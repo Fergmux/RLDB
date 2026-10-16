@@ -1,0 +1,241 @@
+class_name CardInspector
+extends Control
+## Large, centred, read-only card inspection (F03-01): a big 2:3 card beside the full card
+## details (identity, tags, stats, Modifiers, rules, statuses, Rune counters), over a dimmed
+## screen. It only displays the redacted card view it is given; it never reads or changes game
+## state, so opening it can never select, target, play or cancel anything.
+##
+## Reusable anywhere a card view dictionary exists (match, pile browser, deck builder):
+##   var ins := CardInspector.open(some_control, card_view, func(): print("closed"))
+## `open` returns null for a view that must not be inspected (empty or hidden/face-down).
+## Close with the button, Esc or a click outside the panel; `close()` does the same from code.
+## A host that receives newer views can call `show_card(new_view)` or `refresh_open(finder)`.
+
+## Emitted once when the inspector closes.
+signal closed
+
+const DETAILS_W := 440.0
+const PAD := 22.0
+
+## Inspectors currently open, oldest first (the last one is on top).
+static var _stack: Array = []
+
+var _card: Dictionary = {}
+var _on_closed: Callable = Callable()
+var _closing: bool = false
+var _panel: PanelContainer
+var _card_box: Control
+var _card_widget: CardWidget
+var _details: CardDetailsPanel
+var _scroll: ScrollContainer
+var _sig: int = 0
+
+
+## True when `card` may be shown: a visible card view (not empty, not a hidden/face-down
+## placeholder, and carrying an identity).
+static func is_inspectable(card: Dictionary) -> bool:
+	return not card.is_empty() and not card.get("hidden", false) and (card.has("uid") or card.has("id"))
+
+
+## Opens an inspector as a full-rect child of `parent` showing `card`. Returns it, or null when
+## the card is not inspectable. `on_closed` is called once after it closes.
+static func open(parent: Node, card: Dictionary, on_closed: Callable = Callable()) -> CardInspector:
+	if parent == null or not is_inspectable(card):
+		return null
+	var ins := CardInspector.new()
+	ins._on_closed = on_closed
+	ins._build()
+	parent.add_child(ins)
+	ins.show_card(card)
+	ins._relayout()
+	ins._appear()
+	_stack.append(ins)
+	return ins
+
+
+## Number of inspectors open.
+static func open_count() -> int:
+	return _stack.size()
+
+
+## The topmost open inspector, or null.
+static func topmost() -> CardInspector:
+	return null if _stack.is_empty() else _stack[_stack.size() - 1]
+
+
+## Closes the topmost inspector; true when one was open.
+static func close_topmost() -> bool:
+	var t := topmost()
+	if t == null:
+		return false
+	t.close()
+	return true
+
+
+## Re-reads every open inspector's card: `finder` takes the card uid and returns the current
+## visible card view ({} when it is gone or no longer visible, which closes the inspector).
+## Definition views (negative uid, e.g. from the game log) have no live instance and are kept.
+static func refresh_open(finder: Callable) -> void:
+	for ins in _stack.duplicate():
+		var uid: int = ins.card_uid()
+		if uid < 0:
+			continue
+		var v: Dictionary = finder.call(uid)
+		if v.is_empty() or v.get("hidden", false):
+			ins.close()
+		else:
+			ins.show_card(v)
+
+
+## Closes every open inspector (screen teardown).
+static func close_all() -> void:
+	for ins in _stack.duplicate():
+		ins.close()
+
+
+## The card view currently shown.
+func card() -> Dictionary:
+	return _card
+
+
+## Uid of the shown card (-1 when none).
+func card_uid() -> int:
+	return int(_card.get("uid", -1))
+
+
+## The details panel (tests read its text).
+func details() -> CardDetailsPanel:
+	return _details
+
+
+## Shows `c` (rebuilds only when it changed). A non-inspectable view closes the inspector.
+func show_card(c: Dictionary) -> void:
+	if not is_inspectable(c):
+		close()
+		return
+	var sig := hash(c)
+	if sig == _sig:
+		return
+	_sig = sig
+	var same_card: bool = card_uid() == int(c.get("uid", -1))
+	_card = c
+	var face := c.duplicate()
+	face["face_up"] = true     # your own face-down Trap/Spell is read here, not drawn as a back
+	_card_widget.setup(face, "big")
+	_layout_card()
+	var keep := _scroll.scroll_vertical
+	_details.show_card(c)
+	_scroll.set_deferred("scroll_vertical", keep if same_card else 0)
+
+
+## Closes the inspector (idempotent), then runs the on_closed callback.
+func close() -> void:
+	if _closing:
+		return
+	_closing = true
+	_stack.erase(self)
+	visible = false
+	closed.emit()
+	if _on_closed.is_valid():
+		_on_closed.call()
+	queue_free()
+
+
+func _exit_tree() -> void:
+	_stack.erase(self)
+
+
+func _build() -> void:
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	z_index = UiLayers.CARD_INSPECTOR
+	z_as_relative = false
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.7)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+			close())
+	add_child(dim)
+	var cc := CenterContainer.new()
+	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(cc)
+	_panel = PanelContainer.new()
+	var sb := UIStyle.panel_style(Color(0.05, 0.045, 0.04, 0.99), UIStyle.GOLD, 12)
+	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		sb.set_content_margin(side, PAD)
+	sb.shadow_size = 24
+	sb.shadow_color = Color(0, 0, 0, 0.65)
+	_panel.add_theme_stylebox_override("panel", sb)
+	cc.add_child(_panel)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 24)
+	_panel.add_child(row)
+	_card_box = Control.new()
+	_card_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_card_box)
+	_card_widget = CardWidget.new()
+	_card_widget.auto_hover = false
+	_card_widget.show_tooltip = false
+	_card_widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_card_box.add_child(_card_widget)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 10)
+	col.custom_minimum_size.x = DETAILS_W
+	row.add_child(col)
+	var head := HBoxContainer.new()
+	col.add_child(head)
+	var hint := UIStyle.label("Esc or click outside to close", 13, UIStyle.TEXT_DIM)
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(hint)
+	var x := UIStyle.button("Close", 15)
+	x.custom_minimum_size = Vector2(100, 36)
+	x.pressed.connect(close)
+	head.add_child(x)
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(_scroll)
+	_details = CardDetailsPanel.new()
+	_details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_details)
+	resized.connect(_relayout)
+
+
+## Sizes the card (2:3, never stretched) and the details column for the current screen size.
+func _relayout() -> void:
+	if _card_box == null:
+		return
+	_layout_card()
+
+
+func _layout_card() -> void:
+	var s := size if size.x > 100.0 else Vector2(1600, 1000)
+	var card_h := clampf(s.y * 0.72, 340.0, 780.0)
+	var card_w := card_h * 2.0 / 3.0
+	var room := s.x * 0.96 - DETAILS_W - 24.0 - 2.0 * PAD
+	if card_w > room:
+		card_w = maxf(180.0, room)
+		card_h = card_w * 1.5
+	_card_box.custom_minimum_size = Vector2(card_w, card_h)
+	_card_box.size = Vector2(card_w, card_h)
+	GameUi.resize_card(_card_widget, Vector2(card_w, card_h))
+	_card_widget.position = Vector2.ZERO
+	_scroll.custom_minimum_size.y = card_h - 46.0
+	_panel.reset_size()
+
+
+func _appear() -> void:
+	if UIStyle.reduce_motion or not is_inside_tree():
+		return
+	modulate.a = 0.0
+	create_tween().tween_property(self, "modulate:a", 1.0, UIStyle.dur(0.12))
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var ke := event as InputEventKey
+	if ke != null and ke.pressed and not ke.echo and ke.keycode == KEY_ESCAPE and topmost() == self:
+		get_viewport().set_input_as_handled()
+		close()
