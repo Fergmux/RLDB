@@ -30,6 +30,11 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await _frames(20)
+	# Own saves folder (emptied first), so parallel scripted runs cannot change the save count under this one.
+	SeriesStore.DIR = "user://dev_saves_tutorial"
+	for f in DirAccess.get_files_at(SeriesStore.DIR):
+		DirAccess.remove_absolute(SeriesStore.DIR.path_join(f))
+	await _check_play_tutorial_entry()
 	var saves_before := SeriesStore.list().size()
 	var menu: MainMenu = main.menu
 	menu.pick("@play")
@@ -55,6 +60,7 @@ func _run() -> void:
 	await _click(_rect(back).get_center())
 	await _wait(1.5)
 	_check("back at the main menu", main.menu is MainMenu and main.screen == null and main.local_host == null)
+	print("saves before/after: %d / %d (dir %s)" % [saves_before, SeriesStore.list().size(), SeriesStore.DIR])
 	_check("tutorial wrote no save", SeriesStore.list().size() == saves_before)
 	await _shot("back_to_menu")
 	# Exit tutorial from inside a lesson.
@@ -65,6 +71,45 @@ func _run() -> void:
 	await _wait(1.5)
 	_check("Exit tutorial returns to the menu", main.menu is MainMenu and main.local_host == null)
 	_finish()
+
+
+## F04-09: a fresh profile (no saves, no flag) is offered Play tutorial at the top of the root
+## menu, it opens lesson 1, and afterwards the menu is back to normal.
+func _check_play_tutorial_entry() -> void:
+	var real_dir := SeriesStore.DIR
+	SeriesStore.DIR = "user://dev_empty_f04"
+	PlayerProgress.reset_cache()
+	main._show_menu()
+	await _wait(0.6)
+	var first := _first_item(main.menu)
+	_check("fresh profile: Play tutorial is the top menu item", first != null and first.label_text == "Play tutorial")
+	await _shot("menu_play_tutorial")
+	_check("scripted run does not persist the has-played flag", not PlayerProgress.persist)
+	if first != null:
+		await _click(_rect(first).get_center())
+		await _wait(1.6)
+		_check("Play tutorial opens lesson 1", _host() != null and _host().lesson_index == 0)
+		_check("starting the tutorial marks the profile as played", PlayerProgress.has_played())
+		await _click(_rect(_overlay().exit_btn).get_center())
+		await _wait(1.5)
+		var again := _first_item(main.menu)
+		_check("after the tutorial the menu no longer offers Play tutorial", again == null or again.label_text != "Play tutorial")
+	SeriesStore.DIR = real_dir
+	PlayerProgress.reset_cache()
+	main._show_menu()
+	await _wait(0.5)
+
+
+func _first_item(n: Node) -> MenuItem:
+	if n == null:
+		return null
+	if n is MenuItem:
+		return n
+	for ch in n.get_children():
+		var f := _first_item(ch)
+		if f != null:
+			return f
+	return null
 
 
 func _play_lesson(li: int) -> void:
@@ -79,6 +124,12 @@ func _play_lesson(li: int) -> void:
 		var si := h.step_index
 		await _settle()
 		await _shot("L%d_s%02d_%s" % [li + 1, si + 1, String(st["kind"])])
+		if String(st["kind"]) == "read":
+			_check_buttons_at_bottom("L%d s%d" % [li + 1, si + 1])
+		if String(st["kind"]) == "do":
+			await _check_arrow_stable("L%d s%d" % [li + 1, si + 1])
+		if li == 1 and si == 1:
+			await _check_ring_under_modals()
 		match String(st["kind"]):
 			"read":
 				await _click(_rect(_overlay().next_btn).get_center())
@@ -122,6 +173,41 @@ func _play_lesson(li: int) -> void:
 	await _wait(0.6)
 	_check("lesson %d complete" % (li + 1), h.is_complete())
 	await _shot("L%d_complete" % (li + 1))
+
+
+## F04-11: Restart / Exit / Next sit at the bottom of the guidance card.
+func _check_buttons_at_bottom(tag: String) -> void:
+	var o := _overlay()
+	var pr := _rect(o.panel)
+	var br := _rect(o.next_btn)
+	_check("%s: buttons at the bottom of the card" % tag, pr.end.y - br.end.y < 24.0 and br.position.y > pr.position.y + pr.size.y * 0.4)
+
+
+## F04-10: the arrow keeps one direction over a whole bob cycle.
+func _check_arrow_stable(tag: String) -> void:
+	var o := _overlay()
+	var dirs := {}
+	for i in 60:
+		await _frames(1)
+		dirs[o.ring.arrow_dir] = true
+	_check("%s: arrow direction never flips" % tag, dirs.size() == 1 and not dirs.has(0))
+
+
+## F04-08: the ring stays under the game menu and the pile browser.
+func _check_ring_under_modals() -> void:
+	var gs: GameScreen = main.screen
+	var o := _overlay()
+	gs.menu.toggle()
+	await _wait(0.5)
+	await _shot("ring_under_game_menu")
+	_check("ring layer is under the game menu", o.ring.z_index < gs.menu.game_menu.z_index)
+	gs.menu.toggle()
+	await _wait(0.3)
+	gs.inspect.open_pile("spent")
+	await _wait(0.5)
+	await _shot("ring_under_pile_browser")
+	gs.inspect.close_all()
+	await _wait(0.3)
 
 
 func _host() -> TutorialHost:
