@@ -25,13 +25,17 @@ func test_c054_strength_in_unity_scales_with_unique_races() -> void:
 func test_c089_nether_portal_fuses_for_one_ap() -> void:
 	var m := TB.make()
 	var np := TB.power(m, 0, 89)
-	TB.unit(m, 0, 4, 0)
-	TB.unit(m, 0, 2, 1)
+	var beast := TB.unit(m, 0, 4, 0)
+	var dragon := TB.unit(m, 0, 2, 1)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.ability(m, np)
 	TB.choose_uids(m, [wyrm])
+	# F04-22: materials are picked one by one, then the zone, stance and an explicit Confirm.
+	TB.choose_uids(m, [beast])
+	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
+	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 
 
@@ -80,8 +84,12 @@ func test_c137_unstable_fusions_uses_and_exhausts_hand_materials() -> void:
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.cast(m, 0, 82)
 	TB.choose_uids(m, [wyrm])
+	# F04-22: materials are picked one by one, then the zone, stance and an explicit Confirm.
+	TB.choose_uids(m, [beast])
+	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
+	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[beast]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[dragon]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
@@ -251,8 +259,10 @@ func test_c094_mirrorflesh_combines_material_stats_and_type() -> void:
 	TB.cast(m, 0, 82)
 	TB.choose_uids(m, [mf])
 	TB.choose_uids(m, [a])
+	TB.choose_uids(m, [b])                                 # F04-22: a sole legal material is still picked
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
+	TB.choose(m, ["Confirm"])
 	assert_int(m.atk_of(mf)).is_equal(16)
 	assert_int(m.def_of(mf)).is_equal(16)
 	assert_str(m.unit_type(mf)).is_equal("Fire")
