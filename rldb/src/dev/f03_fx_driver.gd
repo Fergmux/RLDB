@@ -129,7 +129,7 @@ func _auto_answer() -> void:
 		var idx := []
 		for i in mini(want, n):
 			idx.append(i)
-		m.submit(pd["player"], {"t": "choose", "id": pd["id"], "indices": idx})
+		host.handle(pd["player"], {"t": "choose", "id": pd["id"], "indices": idx})
 
 
 func _mode_destroy() -> void:
@@ -221,14 +221,13 @@ func _end_scene(viewer_wins: bool, series: bool) -> void:
 	m.players[o]["hp"] = 5
 	if series:
 		host.series.scores[a] = 1
-	m.submit(a, {"t": "next_phase"})
+	host.handle(a, {"t": "next_phase"})
 	_fresh_view(a if viewer_wins else o)
 	await _wait(0.5)
 	var uid: int = m.players[a]["units"][0]
-	m.submit(a, {"t": "attack", "uid": uid})
+	host.handle(a, {"t": "attack", "uid": uid})
 	_auto_answer()
-	host.broadcast()
-	await _seq("end", 16, 0.22)
+	await _seq("end", 24, 0.22)
 	_done()
 
 
