@@ -1838,73 +1838,24 @@ func _confirm_forfeit(quit: bool) -> void:
 	_dialog("Are you sure?", "Quitting will forfeit the match.", "Forfeit and %s" % ("quit" if quit else "leave"), go)
 
 
-var _dialog_root: Control
 
 
-## Small centred confirmation dialog over a dimmed screen: title, message, a confirm button and
-## "Keep playing". Esc / clicking outside closes it.
+var _dialog_root: ConfirmDialog
+
+
+## Opens the shared confirmation dialog over this screen (one at a time).
 func _dialog(title: String, text: String, confirm: String, on_yes: Callable) -> void:
 	_close_dialog()
-	_dialog_root = Control.new()
-	_dialog_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_dialog_root.z_index = 120
-	add_child(_dialog_root)
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.gui_input.connect(func(ev): if ev is InputEventMouseButton and ev.pressed: _close_dialog())
-	_dialog_root.add_child(dim)
-	var cc := CenterContainer.new()
-	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_dialog_root.add_child(cc)
-	var p := PanelContainer.new()
-	var sb := UIStyle.panel_style(Color(0.05, 0.045, 0.04, 0.99), UIStyle.GOLD, 12)
-	for side in [SIDE_LEFT, SIDE_RIGHT]:
-		sb.set_content_margin(side, 30)
-	for side in [SIDE_TOP, SIDE_BOTTOM]:
-		sb.set_content_margin(side, 22)
-	sb.shadow_size = 20
-	sb.shadow_color = Color(0, 0, 0, 0.6)
-	p.add_theme_stylebox_override("panel", sb)
-	p.custom_minimum_size = Vector2(420, 0)
-	cc.add_child(p)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
-	p.add_child(v)
-	var t := UIStyle.label(title, 26, UIStyle.GOLD, false, true)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
-	var m := UIStyle.label(text, 16, UIStyle.TEXT, true)
-	m.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(m)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
-	v.add_child(row)
-	var yes := UIStyle.primary_button(confirm, 15)
-	yes.custom_minimum_size = Vector2(170, 40)
-	yes.pressed.connect(func(): _close_dialog(); on_yes.call())
-	row.add_child(yes)
-	var no := UIStyle.button("Keep playing", 15)
-	no.custom_minimum_size = Vector2(150, 40)
-	no.pressed.connect(_close_dialog)
-	row.add_child(no)
+	_dialog_root = ConfirmDialog.open(self, title, text, confirm, on_yes)
 	_clear_hover()
-	if not UIStyle.reduce_motion:
-		p.modulate.a = 0.0
-		p.scale = Vector2(0.94, 0.94)
-		p.pivot_offset = Vector2(210, 70)
-		var tw := create_tween().set_parallel(true)
-		tw.tween_property(p, "modulate:a", 1.0, 0.15)
-		tw.tween_property(p, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _close_dialog() -> bool:
-	if _dialog_root != null and is_instance_valid(_dialog_root):
-		_dialog_root.queue_free()
+	if _dialog_root != null and is_instance_valid(_dialog_root) and not _dialog_root.is_queued_for_deletion():
+		_dialog_root.close()
 		_dialog_root = null
 		return true
+	_dialog_root = null
 	return false
 
 
