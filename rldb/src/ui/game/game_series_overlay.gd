@@ -39,11 +39,16 @@ var deck_open: Dictionary = {}
 var _overlay_want: Vector2 = Vector2(900, 600)
 var _overlay_max: Vector2 = Vector2(900, 600)
 var _overlay_stage: String = ""
+## Deck-select stage renderer (tabs, tiles, waiting state, draft).
+var decks: DeckSelectView
+## True while the modal keeps its full height (a scrolling list inside).
+var _fixed_height: bool = false
 
 
 func _init(screen: GameScreen) -> void:
 	gs = screen
 	rewards = GameRewardPanels.new(screen)
+	decks = DeckSelectView.new(self)
 
 
 ## Builds the pause veil (dim + panel); shown while a network match is paused.
@@ -69,17 +74,20 @@ func build_modals() -> void:
 	overlay_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	overlay_dim.visible = false
 	gs.add_child(overlay_dim)
-	overlay = PanelContainer.new()
-	overlay.add_theme_stylebox_override("panel", UIStyle.panel_style(Color(0.075, 0.065, 0.058, 0.99), UIStyle.GOLD, 12))
+	var op := OrnatePanel.new(14, 10)
+	op.box().shadow_size = 28
+	overlay = op
 	overlay.visible = false
 	gs.add_child(overlay)
-	var sc := ScrollContainer.new()
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var sc := SmoothScroll.new()
 	overlay.add_child(sc)
 	overlay_box = VBoxContainer.new()
 	overlay_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	overlay_box.add_theme_constant_override("separation", 10)
-	sc.add_child(GameUi.glow_room(overlay_box, 14))
+	overlay_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	overlay_box.add_theme_constant_override("separation", 12)
+	var wrap := GameUi.glow_room(overlay_box, 14)
+	wrap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc.add_child(wrap)
 	pile_popup = PanelContainer.new()
 	pile_popup.add_theme_stylebox_override("panel", UIStyle.panel_style(Color(0.07, 0.065, 0.06, 0.98), UIStyle.SELECT, 12))
 	pile_popup.visible = false
@@ -119,6 +127,12 @@ func _fit_overlay() -> void:
 	if not overlay.visible:
 		return
 	var need := overlay_box.get_combined_minimum_size().y + 68.0
+	if _fixed_height:
+		need = _overlay_max.y
+		var la := decks.list_area
+		if la != null and la.scroll.get_child_count() > 0:
+			# Hug the tile list when it is shorter than the screen allows.
+			need = overlay_box.get_combined_minimum_size().y - la.get_combined_minimum_size().y 				+ (la.scroll.get_child(0) as Control).get_combined_minimum_size().y + 68.0 + 26.0
 	_overlay_want = Vector2(_overlay_max.x, minf(need, _overlay_max.y))
 	place_modals()
 
@@ -214,7 +228,7 @@ func render() -> void:
 	var want := Vector2(1000, 800)
 	match stage:
 		"decks": want = Vector2(1180, 860)
-		"rewards": want = Vector2(1040, 900)
+		"rewards": want = Vector2(740, 900)
 		"first_player": want = Vector2(620, 420)
 		"over": want = Vector2(660, 760)
 	_overlay_max = want
@@ -225,23 +239,67 @@ func render() -> void:
 		_overlay_stage = stage
 	overlay_box.custom_minimum_size = Vector2(want.x - 84.0, 0)
 	if stage != "over":
-		var head := VBoxContainer.new()
-		head.add_theme_constant_override("separation", 2)
-		overlay_box.add_child(head)
-		head.add_child(UIStyle.label(stage_title(stage), 30, UIStyle.GOLD, false, true))
-		head.add_child(UIStyle.label("Score %d – %d  ·  best of %d" % [view["scores"][0], view["scores"][1], view["best_of"]], 16, UIStyle.MUTED))
+		overlay_box.add_child(_stage_header(stage))
+	_fixed_height = false
 	match stage:
 		"decks": _render_decks()
 		"rewards": rewards.render()
 		"first_player": _render_first()
 		"over": _render_over()
-	if stage in ["rewards", "first_player"] and view.has("deck"):
+	if stage == "first_player" and view.has("deck"):
 		var see := UIStyle.button("View your deck", 15)
 		see.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		see.pressed.connect(_show_deck)
 		overlay_box.add_child(see)
 	place_modals()
 	_fit_overlay()
+
+
+## Shared stage header: Cinzel title between flourished rules, then seat plates around the score.
+func _stage_header(stage: String) -> Control:
+	var view := gs.view
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 4)
+	var t := UIStyle.label(stage_title(stage), 30, UIStyle.GOLD, false, true)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	t.add_theme_constant_override("outline_size", 4)
+	v.add_child(t)
+	v.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.8), true, 16.0))
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 14)
+	v.add_child(row)
+	for i in 2:
+		if i == 1:
+			var sc := UIStyle.label("%d – %d" % [view["scores"][0], view["scores"][1]], 26, UIStyle.GOLD_HI, false, true)
+			sc.add_theme_font_override("font", UIStyle.font_display(700))
+			row.add_child(sc)
+		row.add_child(_seat_plate(String(view["names"][i]), i == gs.me()))
+	var bo := UIStyle.label("BEST OF %d" % int(view["best_of"]), 12, UIStyle.TEXT_DIM, false, true)
+	bo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(bo)
+	return v
+
+
+func _seat_plate(nm: String, mine: bool) -> Control:
+	var p := PanelContainer.new()
+	var col: Color = UIStyle.GOLD if mine else UIStyle.BRONZE
+	var sb := UIStyle.flat(Color(col.darkened(0.8), 0.95), col, 1, 14)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 3
+	sb.content_margin_bottom = 3
+	p.add_theme_stylebox_override("panel", sb)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 6)
+	p.add_child(h)
+	if mine:
+		var yt := UIStyle.label("YOU", 11, UIStyle.GOLD, false, true)
+		yt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(yt)
+	h.add_child(UIStyle.label(nm, 17, UIStyle.TEXT if mine else UIStyle.MUTED, false, true))
+	return p
 
 
 ## Forces the modal to rebuild now (after a local choice that the view does not reflect).
@@ -269,56 +327,8 @@ func game_result_line() -> String:
 
 
 func _render_decks() -> void:
-	var view := gs.view
-	var p := gs.me()
-	var net: Dictionary = view.get("net", {})
-	if not net.is_empty() and net.get("is_host", false) and not net.get("opponent_connected", true):
-		var lob := HBoxContainer.new()
-		lob.add_theme_constant_override("separation", 10)
-		overlay_box.add_child(lob)
-		var msg := UIStyle.label(net.get("message", "Waiting for an opponent to join…"), 16, UIStyle.ACCENT, true)
-		msg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		lob.add_child(msg)
-		if net.get("transport", "") == "steam":
-			var inv := UIStyle.primary_button("Invite a Steam friend", 15)
-			inv.pressed.connect(func(): gs.get_tree().call_group("net_session", "invite_friend"))
-			lob.add_child(inv)
-	if view["deck_ready"][p]:
-		overlay_box.add_child(UIStyle.label("Deck locked in: %s. Waiting for your opponent…" % view["deck_name"], 18, UIStyle.TEXT, true))
-		return
-	if view.has("starters"):
-		overlay_box.add_child(UIStyle.label("Pick a starter deck", 15, UIStyle.MUTED))
-		var grid := _deck_grid()
-		overlay_box.add_child(grid)
-		for i in view["starters"].size():
-			var s: Dictionary = view["starters"][i]
-			var idx: int = i
-			grid.add_child(_deck_tile("s%d" % i, s["name"], s["theme"], s["main"], s["extra"], "Choose %s" % s["name"], func(): gs.send({"t": "pick_starter", "index": idx})))
-		_render_custom_decks()
-		return
-	var dr: Dictionary = view["draft"]
-	overlay_box.add_child(UIStyle.label("Pick %d of %d — %s" % [dr["step"] + 1, dr["total"], String(dr.get("category_label", String(dr["category"]).capitalize()))], 18, UIStyle.TEXT))
-	if String(dr.get("composition", "")) != "":
-		overlay_box.add_child(UIStyle.label("Draft: " + String(dr["composition"]), 14, UIStyle.MUTED))    # F03-10
-	# The offer is spread evenly across the modal (equal-width columns); clicking a card picks it.
-	# The cards picked so far are listed in the details panel.
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	overlay_box.add_child(row)
-	for i in dr["offer"].size():
-		var c: Dictionary = dr["offer"][i]
-		var col := CenterContainer.new()
-		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		col.custom_minimum_size = Vector2(0, DRAFT_CARD_ROOM)
-		row.add_child(col)
-		var cw := CardWidget.new().setup(MatchView.summary_view(c), "big")
-		cw.tooltip_text = "Pick %s" % c["name"]
-		var idx: int = i
-		cw.pressed.connect(func(_w): gs.send({"t": "draft_pick", "index": idx}))
-		cw.right_pressed.connect(gs.inspect.inspect_widget)
-		cw.mouse_entered.connect(func(): _lift(cw, DRAFT_HOVER_SCALE))
-		cw.mouse_exited.connect(func(): _lift(cw, 1.0))
-		col.add_child(cw)
+	_fixed_height = decks.render()
+	decks.restore_scroll()
 
 
 ## Hover lift of a draft card: eases its scale (about its centre) to `to`.
@@ -327,48 +337,6 @@ func _lift(cw: CardWidget, to: float) -> void:
 		return
 	var t := cw.create_tween()
 	t.tween_property(cw, "scale", Vector2(to, to), 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-
-
-## Two-column grid the deck tiles sit in.
-func _deck_grid() -> GridContainer:
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	return grid
-
-
-## Saved custom decks (not offered in draft mode), as tiles like the starters.
-func _render_custom_decks() -> void:
-	if gs.view.get("deck_mode", "starter") == "draft":
-		return
-	var decks := DeckStore.list()
-	if decks.is_empty():
-		return
-	var rule := ColorRect.new()
-	rule.color = Color(UIStyle.GOLD, 0.4)
-	rule.custom_minimum_size = Vector2(0, 1)
-	overlay_box.add_child(rule)
-	overlay_box.add_child(UIStyle.label("Your saved decks", 22, UIStyle.GOLD, false, true))
-	var grid := _deck_grid()
-	overlay_box.add_child(grid)
-	var n := 0
-	for d in decks:
-		var main := []
-		var extra := []
-		for id in d["cards"]:
-			var def := CardDB.get_def(int(id))
-			if def.is_empty():
-				continue
-			var sm := Series.card_summary(int(id))
-			if CardDB.is_extra_category(def["category"]):
-				extra.append(sm)
-			else:
-				main.append(sm)
-		var deck: Dictionary = d
-		grid.add_child(_deck_tile("c%d" % n, d["name"], "Custom deck", main, extra, "Use this deck", func(): gs.send({"t": "custom_deck", "cards": deck["cards"], "name": deck["name"]})))
-		n += 1
 
 
 ## The one or two Types most units of a deck share (crest colours).
@@ -417,71 +385,6 @@ static func _grouped_names(cards: Array) -> String:
 			order.append(c)
 		n[c["id"]] = n.get(c["id"], 0) + 1
 	return ", ".join(order.map(func(c): return c["name"] + (" ×%d" % n[c["id"]] if n[c["id"]] > 1 else "")))
-
-
-## One deck tile: crest, name, theme blurb, Main/Extra counts, key cards and a full-list toggle.
-func _deck_tile(id: String, title: String, theme: String, main: Array, extra: Array, btn_text: String, on_pick: Callable) -> Control:
-	var tile := PanelContainer.new()
-	var sb := UIStyle.panel_style(Color(UIStyle.PANEL_LIGHT, 0.98), UIStyle.BRONZE, 10)
-	sb.content_margin_left = 14
-	sb.content_margin_right = 14
-	sb.content_margin_top = 12
-	sb.content_margin_bottom = 12
-	tile.add_theme_stylebox_override("panel", sb)
-	tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tile.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	tile.add_child(row)
-	var types := _dominant_types(main)
-	var crest := DeckCrest.new()
-	crest.types = types
-	crest.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	row.add_child(crest)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 6)
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(col)
-	col.add_child(UIStyle.label(title, 22, UIStyle.TEXT, true, true))
-	col.add_child(UIStyle.label(theme, 15, UIStyle.MUTED, true))
-	var chips := HFlowContainer.new()
-	chips.add_theme_constant_override("h_separation", 6)
-	chips.add_theme_constant_override("v_separation", 4)
-	col.add_child(chips)
-	chips.add_child(GameUi.pill("Main %d" % main.size(), UIStyle.GOLD))
-	chips.add_child(GameUi.pill("Extra %d" % extra.size(), Color("9d7ae8")))
-	for t in types:
-		chips.add_child(GameUi.pill(String(t), UIStyle.type_color(t)))
-	var keys := _key_cards(main, extra)
-	if not keys.is_empty():
-		col.add_child(UIStyle.label("Key cards", 13, UIStyle.GOLD))
-		var kf := HFlowContainer.new()
-		kf.add_theme_constant_override("h_separation", 5)
-		kf.add_theme_constant_override("v_separation", 4)
-		col.add_child(kf)
-		for c in keys:
-			var pill := GameUi.pill(c["name"], UIStyle.CATEGORY_COLORS.get(c["category"], UIStyle.BRONZE), 13)
-			pill.tooltip_text = "%s (%s)\n%s" % [c["name"], UIStyle.CATEGORY_NAMES.get(c["category"], ""), c["text"]]
-			kf.add_child(pill)
-	var open: bool = deck_open.get(id, false)
-	if open:
-		col.add_child(UIStyle.label("Main deck (%d)" % main.size(), 13, UIStyle.GOLD))
-		col.add_child(UIStyle.label(_grouped_names(main), 14, UIStyle.TEXT, true))
-		col.add_child(UIStyle.label("Extra Deck (%d)" % extra.size(), 13, UIStyle.GOLD))
-		col.add_child(UIStyle.label(_grouped_names(extra) if not extra.is_empty() else "None", 14, UIStyle.TEXT, true))
-	var brow2 := HBoxContainer.new()
-	brow2.add_theme_constant_override("separation", 8)
-	col.add_child(brow2)
-	var tog := UIStyle.button("Hide full list" if open else "View full list", 13)
-	tog.pressed.connect(func(): deck_open[id] = not deck_open.get(id, false); refresh())
-	brow2.add_child(tog)
-	var sp := Control.new()
-	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	brow2.add_child(sp)
-	var pick := UIStyle.primary_button(btn_text, 15)
-	pick.pressed.connect(on_pick)
-	brow2.add_child(pick)
-	return tile
 
 
 func _render_first() -> void:
