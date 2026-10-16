@@ -16,8 +16,9 @@ var status_label: Label
 
 func _ready() -> void:
 	theme = UIStyle.make_theme()
+	UIStyle.apply_aa()
 	# Saved window mode (scripted runs keep their own window size).
-	if not OS.get_cmdline_user_args().any(func(a): return String(a).contains("shots")):
+	if not " ".join(OS.get_cmdline_user_args()).contains("shots"):
 		UIStyle.apply_window_mode()
 	Music.start()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

@@ -100,6 +100,10 @@ static var reduce_motion: bool = false
 static var fast_anim: bool = false
 ## Window mode: "windowed", "borderless" (borderless full screen) or "fullscreen" (exclusive).
 static var window_mode: String = "windowed"
+## 2D anti-aliasing (MSAA) level: 0 off, 2, 4 or 8 samples. Needs the Mobile/Forward renderer; on
+## the OpenGL fallback it has no effect (lines and shapes are still drawn anti-aliased).
+static var aa_level: int = 4
+const AA_LEVELS := [[0, "Off"], [2, "2x"], [4, "4x"], [8, "8x"]]
 const WINDOW_MODES := [["windowed", "Windowed"], ["borderless", "Borderless"], ["fullscreen", "Fullscreen"]]
 static var _settings_loaded: bool = false
 
@@ -113,6 +117,7 @@ static func load_settings() -> void:
 		reduce_motion = bool(cf.get_value("ui", "reduce_motion", false))
 		fast_anim = bool(cf.get_value("ui", "fast_anim", false))
 		window_mode = String(cf.get_value("ui", "window_mode", "windowed"))
+		aa_level = int(cf.get_value("ui", "aa_level", 4))
 
 
 static func save_settings() -> void:
@@ -120,6 +125,7 @@ static func save_settings() -> void:
 	cf.set_value("ui", "reduce_motion", reduce_motion)
 	cf.set_value("ui", "fast_anim", fast_anim)
 	cf.set_value("ui", "window_mode", window_mode)
+	cf.set_value("ui", "aa_level", aa_level)
 	cf.save(SETTINGS_PATH)
 
 
@@ -151,20 +157,49 @@ static func apply_window_mode() -> void:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 
 
-## Row with a Display label and a Windowed / Borderless / Fullscreen picker.
+static func set_aa_level(n: int) -> void:
+	aa_level = n
+	save_settings()
+	apply_aa()
+
+
+## Applies the MSAA level to the main window.
+static func apply_aa() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	var v: Viewport.MSAA = Viewport.MSAA_DISABLED
+	match aa_level:
+		2: v = Viewport.MSAA_2X
+		4: v = Viewport.MSAA_4X
+		8: v = Viewport.MSAA_8X
+	tree.root.msaa_2d = v
+
+
+## Display and Anti-aliasing pickers (window mode, MSAA level).
 static func display_controls(fs: int) -> Control:
 	load_settings()
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	row.add_child(label("Display", fs, TEXT))
+	var g := GridContainer.new()
+	g.columns = 2
+	g.add_theme_constant_override("h_separation", 12)
+	g.add_theme_constant_override("v_separation", 6)
+	g.add_child(label("Display", fs, TEXT))
 	var ob := OptionButton.new()
 	for i in WINDOW_MODES.size():
 		ob.add_item(WINDOW_MODES[i][1], i)
 		if WINDOW_MODES[i][0] == window_mode:
 			ob.select(i)
 	ob.item_selected.connect(func(i): set_window_mode(WINDOW_MODES[i][0]))
-	row.add_child(ob)
-	return row
+	g.add_child(ob)
+	g.add_child(label("Anti-aliasing", fs, TEXT))
+	var ab := OptionButton.new()
+	for i in AA_LEVELS.size():
+		ab.add_item(AA_LEVELS[i][1], i)
+		if int(AA_LEVELS[i][0]) == aa_level:
+			ab.select(i)
+	ab.item_selected.connect(func(i): set_aa_level(int(AA_LEVELS[i][0])))
+	g.add_child(ab)
+	return g
 
 
 ## Scales an animation duration (seconds) by the "fast animations" option.
