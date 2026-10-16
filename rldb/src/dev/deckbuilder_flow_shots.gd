@@ -172,8 +172,30 @@ func run() -> void:
 	await _click_node(minus)
 	_check("cell minus removes one copy", int(db.counts.get(a, 0)) == 1)
 
+	# Deck grid: tiles exist for the deck, click removes one, right-click inspects, + adds.
+	var dw := db.deck_widget(b)
+	_check("deck grid has a tile for a deck card", dw != null)
+	await _scroll_into_view(dw)
+	await _shot("03b_deck_grid")
+	await _click_node(dw, MOUSE_BUTTON_RIGHT)
+	_check("deck tile right-click inspects", CardInspector.open_count() == 1)
+	await _key(KEY_ESCAPE)
+	var nb := int(db.counts.get(b, 0))
+	await _click_node(db.deck_widget(b))
+	_check("deck tile click removes one", int(db.counts.get(b, 0)) == nb - 1)
+	await _scroll_into_view(wb)
+	await _click_node(wb)
+	_check("catalogue click re-adds", int(db.counts.get(b, 0)) == nb)
+
+	# Unnamed save: inline error beside the name field, not at the bottom.
+	await _click_node(_find_button(db, "Save"))
+	_check("unnamed save shows inline error", db.name_error() != "" and not DeckStore.list().any(func(e): return e["name"] == ""))
+	_check("error sits under the name field", db._name_err.get_global_rect().position.y >= db.deck_name_edit.get_global_rect().end.y - 2 and absf(db._name_err.get_global_rect().position.x - db.deck_name_edit.get_global_rect().position.x) < 4)
+	await _shot("03c_name_error")
+
 	# Name, save.
 	await _type_name(DECK_A)
+	_check("typing clears the inline error", db.name_error() == "")
 	await _shot("04_named_unsaved")
 	await _click_node(_find_button(db, "Save"))
 	var saved := false
@@ -186,10 +208,10 @@ func run() -> void:
 	# New (clean, no prompt) then load back through the saved list.
 	await _click_node(_find_button(db, "New"))
 	_check("New empties the deck", db.counts.is_empty())
-	for i in db._saved_opt.item_count:
-		if String(db._saved_opt.get_item_metadata(i)) == DECK_A:
-			db._saved_opt.select(i)
-	await _click_node(_find_button(db, "Load"))
+	var row := db.saved_row(DECK_A)
+	_check("saved deck has a tile", row != null)
+	await _shot("05b_saved_tiles")
+	await _click_node(row)
 	_check("Load restores the deck", int(db.counts.get(b, 0)) == 1 and int(db.counts.get(a, 0)) == 1 and db.deck_name_edit.text == DECK_A)
 
 	# Filter + search in the grid.
@@ -201,6 +223,7 @@ func run() -> void:
 
 	# Rename then delete.
 	await _type_name(DECK_B)
+	await _shot("06b_rename_typed")
 	await _click_node(_find_button(db, "Rename"))
 	var names := DeckStore.list().map(func(e): return e["name"])
 	_check("Rename replaces the saved name", names.has(DECK_B) and not names.has(DECK_A))
@@ -210,6 +233,9 @@ func run() -> void:
 	names = DeckStore.list().map(func(e): return e["name"])
 	_check("Delete (confirmed) removes the deck", not names.has(DECK_B))
 	await _shot("08_after_delete")
+	db._tab_starters.pressed.emit()
+	await _frames(3)
+	await _shot("09_starters")
 
 	DeckStore.delete_deck(DECK_A)
 	DeckStore.delete_deck(DECK_B)
