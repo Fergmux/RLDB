@@ -95,7 +95,6 @@ var turn_title: Label
 var turn_note: Label
 var pips: PhasePips
 var phase_btn: Button
-var concede_btn: Button
 var details_box: VBoxContainer
 var prompt_panel: PanelContainer
 var prompt_box: VBoxContainer
@@ -738,10 +737,6 @@ func _build_side() -> void:
 	state_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	state_chip.add_child(state_label)
 	brow.add_child(state_chip)
-	concede_btn = UIStyle.button("Concede", 13)
-	concede_btn.custom_minimum_size = Vector2(80, 44)
-	concede_btn.pressed.connect(_confirm_concede)
-	brow.add_child(concede_btn)
 	turn_note = UIStyle.label("", 13, Color("ff9ff3"), true)
 	turn_note.visible = false
 	tv.add_child(turn_note)
@@ -1732,7 +1727,6 @@ func _render_turnbar() -> void:
 	phase_btn.text = label
 	phase_btn.disabled = not ok
 	phase_btn.tooltip_text = tip
-	concede_btn.disabled = mv["winner"] != -1
 	var note := ""
 	if mv["reversal"]:
 		note = "SNEAKY SNUNDAY: card-effect gains/losses reversed"
