@@ -135,6 +135,7 @@ static func _allow(name: String, now_ms: int) -> bool:
 	return true
 
 
+## Clears the rate limiter history (tests).
 static func _reset_limiter() -> void:
 	_last_by_name.clear()
 	_recent_starts.clear()

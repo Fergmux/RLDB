@@ -99,6 +99,7 @@ static func counts_to_cards(c: Dictionary) -> Array:
 	return out
 
 
+## Collapses a DeckStore id list into card id -> copies.
 static func cards_to_counts(cards: Array) -> Dictionary:
 	var c := {}
 	for id in cards:
@@ -108,6 +109,7 @@ static func cards_to_counts(cards: Array) -> Dictionary:
 
 # ------------------------------------------------------------ public editing API
 
+## Adds `n` copies of card `id` to the working deck.
 func add_card(id: int, n: int = 1) -> void:
 	counts[id] = int(counts.get(id, 0)) + n
 	dirty = true
@@ -115,6 +117,7 @@ func add_card(id: int, n: int = 1) -> void:
 	_refresh_catalogue_counts()
 
 
+## Removes one copy of card `id` (no-op when absent).
 func remove_card(id: int) -> void:
 	if not counts.has(id):
 		return
@@ -126,11 +129,13 @@ func remove_card(id: int) -> void:
 	_refresh_catalogue_counts()
 
 
+## Sets the search text and refreshes the catalogue.
 func set_filters(query: String) -> void:
 	_search.text = query
 	_refresh_catalogue()
 
 
+## Starts an empty, unnamed deck.
 func new_deck() -> void:
 	counts = {}
 	deck_name_edit.text = ""
@@ -140,6 +145,7 @@ func new_deck() -> void:
 	_refresh_catalogue_counts()
 
 
+## Replaces the working deck with `cards` under `name` (not dirty).
 func load_cards(name: String, cards: Array) -> void:
 	counts = cards_to_counts(cards)
 	deck_name_edit.text = name
@@ -148,6 +154,7 @@ func load_cards(name: String, cards: Array) -> void:
 	_refresh_catalogue_counts()
 
 
+## Saves the working deck under its name; false (with a message) when unnamed.
 func save() -> bool:
 	var n := deck_name_edit.text.strip_edges()
 	if n == "":
@@ -160,6 +167,7 @@ func save() -> bool:
 	return true
 
 
+## Shows card `id` big in the preview column with its details and rules text.
 func show_preview(id: int) -> void:
 	_preview_id = id
 	for c in _preview_holder.get_children():
