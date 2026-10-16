@@ -5,6 +5,8 @@ extends PanelContainer
 
 ## HP bar scale floor: the bar is never scaled to less than this maximum.
 const DEFAULT_MAX_HP := 60
+## Plate width (F03-06: slimmer than before so it keeps a gap from the zones and piles).
+const PLATE_W := 252.0
 
 
 ## Animated HP bar with the HP number.
@@ -22,7 +24,7 @@ class HpBar extends Control:
 	var _heal: bool = false
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(0, 30)
+		custom_minimum_size = Vector2(0, 26)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _set_flash(v: float) -> void:
@@ -143,7 +145,7 @@ class ApGems extends Control:
 	var _txt_pop: float = 0.0
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(0, 20)
+		custom_minimum_size = Vector2(0, 18)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _ready() -> void:
@@ -303,21 +305,23 @@ var _active: bool = false
 var _tween: Tween
 ## Player shown on this plate at the last update; a different one (seat switch) snaps instead of animating.
 var _who: String = ""
+## Game (series id + game number) this plate last showed; a new one resets the HP reference.
+var _game_key: String = ""
 
 
 func _init() -> void:
-	custom_minimum_size = Vector2(300, 0)
+	custom_minimum_size = Vector2(PLATE_W, 0)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	add_theme_stylebox_override("panel", UIStyle.panel_style(Color(UIStyle.PANEL, 0.94), UIStyle.BRONZE, 10))
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 3)
+	v.add_theme_constant_override("separation", 1)
 	add_child(v)
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 2)
 	v.add_child(head)
 	turn_mark = TurnMark.new()
 	head.add_child(turn_mark)
-	name_label = UIStyle.label("", 20, UIStyle.TEXT, false, true)
+	name_label = UIStyle.label("", 19, UIStyle.TEXT, false, true)
 	name_label.clip_text = true
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(name_label)
@@ -350,6 +354,22 @@ func update_from(pv: Dictionary, active: bool, mine: bool, label_suffix: String,
 	if active != _active:
 		_active = active
 		pulse()
+
+
+## F03-14: call before update_from with a key unique to the game being shown (series id + game
+## number). A different key means a fresh game: the HP reference capacity returns to 60 and the
+## next update snaps (no drain animation from last game's healed value). Same key = no change.
+func begin_game(key: String) -> void:
+	if key == _game_key:
+		return
+	_game_key = key
+	reset_hp_max()
+	_who = ""
+
+
+## Current HP reference capacity (the bar's full scale).
+func hp_capacity() -> int:
+	return _max_hp
 
 
 ## Resets the HP bar scale to the default (new match).
