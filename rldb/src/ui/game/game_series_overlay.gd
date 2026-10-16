@@ -331,12 +331,16 @@ func _render_decks() -> void:
 	decks.restore_scroll()
 
 
-## Hover lift of a draft card: eases its scale (about its centre) to `to`.
+## Hover lift of a draft / reward card: eases its real size (lift_k, about its centre, F04-05) to `to`.
 func _lift(cw: CardWidget, to: float) -> void:
 	if not is_instance_valid(cw):
 		return
+	var old = cw.get_meta("lift_tw", null)
+	if old is Tween and old.is_valid():
+		old.kill()
 	var t := cw.create_tween()
-	t.tween_property(cw, "scale", Vector2(to, to), 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	cw.set_meta("lift_tw", t)
+	t.tween_property(cw, "lift_k", to, UIStyle.dur(0.12)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 
 ## The one or two Types most units of a deck share (crest colours).
