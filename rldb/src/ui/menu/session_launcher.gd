@@ -201,6 +201,7 @@ func _attach_net(err: String = "") -> void:
 
 
 func _new_screen() -> void:
+	PlayerProgress.mark_played()   # F04-09: any game or tutorial screen means this profile has played
 	screen = GameScreen.new()
 	_root.add_child(screen)
 	screen.back_to_menu.connect(menu_requested.emit)

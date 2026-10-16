@@ -135,6 +135,7 @@ static func load_settings() -> void:
 ## Writes the UI settings to SETTINGS_PATH.
 static func save_settings() -> void:
 	var cf := ConfigFile.new()
+	cf.load(SETTINGS_PATH)   # keep other sections (e.g. [progress])
 	cf.set_value("ui", "reduce_motion", reduce_motion)
 	cf.set_value("ui", "fast_anim", fast_anim)
 	cf.set_value("ui", "window_mode", window_mode)
