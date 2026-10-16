@@ -26,6 +26,8 @@ var _running := false
 var _turn_key := ""
 var _moves_this_turn := 0
 var _last_err := ""
+## Consecutive refused commands; after a few the bot waits for the next view instead of retrying.
+var _refusals := 0
 var _thread: Thread
 
 
@@ -84,7 +86,12 @@ func _step() -> void:
 		moved.emit(cmd)
 		_moves_this_turn += 1
 		if _last_err != "":
+			_refusals += 1
+			if _refusals >= 3:
+				break
 			_recover()
+		else:
+			_refusals = 0
 	_running = false
 
 
@@ -94,6 +101,8 @@ func _recover() -> void:
 	if m == null:
 		return
 	if not m.pending.is_empty() and int(m.pending["player"]) == seat:
+		if m.pending["options"].is_empty() and not m.pending["cancellable"]:
+			return
 		if m.pending["cancellable"]:
 			host.handle(seat, {"t": "cancel", "id": m.pending["id"]})
 		else:
@@ -110,10 +119,11 @@ func _delay_for(cmd: Dictionary, m: MatchEngine) -> float:
 	return THINK_DELAY
 
 
-## Runs the brain on a worker thread (look-ahead copies the match, which can take a moment).
+## Runs the brain on a worker thread (look-ahead copies the match, which can take a moment). The
+## thread gets its own copy, made here on the main thread, so the live match can change meanwhile.
 func _think(m: MatchEngine) -> Dictionary:
 	_thread = Thread.new()
-	_thread.start(brain.decide.bind(m))
+	_thread.start(brain.decide.bind(m.clone_for_sim()))
 	while _thread.is_alive():
 		await get_tree().process_frame
 	var out: Dictionary = _thread.wait_to_finish()

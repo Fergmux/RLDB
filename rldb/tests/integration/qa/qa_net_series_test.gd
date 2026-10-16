@@ -184,3 +184,17 @@ func test_commands_sent_across_stage_transitions_are_refused_cleanly() -> void:
 	assert_str(await _client_err_after(n3)).is_not_empty()
 	assert_int(host.series.game_no).is_equal(2)
 	assert_int(host.series.game.active).is_equal(0)
+
+
+## Review fix: the host can forfeit (in-game menu Return / Quit) while the client is away; the
+## series ends instead of the command being refused as "paused".
+func test_host_can_forfeit_while_opponent_is_disconnected() -> void:
+	await _start()
+	client._reconnect_timer.stop()
+	client.host_gone = true
+	client.simulate_drop()
+	assert_bool(await _wait(func(): return host.paused)).is_true()
+	host.local_seat.send({"t": "forfeit_series"})
+	assert_bool(await _wait(func(): return host.series.stage == Series.STAGE_OVER)).is_true()
+	assert_int(host.series.forfeit_by).is_equal(0)
+	client.host_gone = false

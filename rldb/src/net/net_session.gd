@@ -574,7 +574,10 @@ func _apply(seat: int, seq: int, cmd: Dictionary) -> void:
 		# Duplicate or replayed command (e.g. resent after reconnect): never re-apply.
 		_send_view(seat)
 		return
-	if paused or (remote_peer == 0 and series.stage == Series.STAGE_GAME):
+	# Forfeiting is always possible (the in-game menu's Return to menu / Quit while the opponent
+	# is disconnected); everything else waits for the reconnection.
+	var forfeit: bool = String(cmd.get("t", "")) == "forfeit_series"
+	if not forfeit and (paused or (remote_peer == 0 and series.stage == Series.STAGE_GAME)):
 		_error(seat, "The match is paused until your opponent reconnects.")
 		return
 	last_seq[seat] = seq

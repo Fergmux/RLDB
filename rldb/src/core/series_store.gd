@@ -18,7 +18,9 @@ static func save(s: Series) -> void:
 	f.store_string(JSON.stringify(s.to_save()))
 
 
-## Saved series that are not finished, newest first: [{id, names, scores, best_of, saved_at, stage}].
+## Saved series that are not finished, newest first: [{id, names, scores, best_of, saved_at, stage,
+## mode, game_no}]. Malformed files are skipped (one bad file must not hide the others) and saves
+## of finished series are deleted.
 static func list() -> Array:
 	var out := []
 	var dir := DirAccess.open(DIR)
@@ -28,7 +30,10 @@ static func list() -> Array:
 		if not fn.ends_with(".json"):
 			continue
 		var d = JSON.parse_string(FileAccess.get_file_as_string("%s/%s" % [DIR, fn]))
-		if d == null or d.get("stage", "") == Series.STAGE_OVER:
+		if not Series.is_valid_save(d):
+			continue
+		if d["stage"] == Series.STAGE_OVER:
+			DirAccess.remove_absolute("%s/%s" % [DIR, fn])
 			continue
 		# How the series was played, so Resume can reopen it the same way (older bot saves are
 		# recognised by the "Bot" seat name).
@@ -42,7 +47,7 @@ static func list() -> Array:
 
 static func load_series(id: String) -> Series:
 	var d = JSON.parse_string(FileAccess.get_file_as_string("%s/%s.json" % [DIR, id]))
-	if d == null:
+	if not Series.is_valid_save(d) or d["stage"] == Series.STAGE_OVER:
 		return null
 	return Series.from_save(d)
 

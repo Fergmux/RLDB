@@ -1834,14 +1834,22 @@ func _toggle_game_menu() -> void:
 		_clear_hover()
 
 
+## True while a series is being played on this screen (leaving it would forfeit).
+func has_live_series() -> bool:
+	return view.get("stage", "") not in ["", "over"]
+
+
 ## Return to menu / Quit to desktop: an unfinished series is forfeited (after a warning).
 func _confirm_forfeit(quit: bool) -> void:
 	game_menu.visible = false
-	var live: bool = view.get("stage", "") not in ["", "over"]
+	var live := has_live_series()
 	var go := func():
 		if live:
 			_send({"t": "forfeit_series"})
 		if quit:
+			# A couple of frames so a network forfeit is flushed before the peer closes.
+			await get_tree().process_frame
+			await get_tree().process_frame
 			get_tree().quit()
 		else:
 			leave_to_menu.emit()

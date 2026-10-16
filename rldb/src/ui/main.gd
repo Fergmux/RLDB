@@ -17,6 +17,7 @@ var status_label: Label
 func _ready() -> void:
 	theme = UIStyle.make_theme()
 	UIStyle.apply_aa()
+	get_tree().set_auto_accept_quit(false)   # closing the window is handled in _notification
 	# Saved window mode (scripted runs keep their own window size).
 	if not " ".join(OS.get_cmdline_user_args()).contains("shots"):
 		UIStyle.apply_window_mode()
@@ -46,8 +47,13 @@ func _on_steam_join_requested(lobby: int, _friend: int) -> void:
 	join_steam_lobby(lobby)
 
 
+var _confirm_panel: Control
+
+
 func _confirm_leave(text: String, on_yes: Callable) -> void:
+	_close_confirm()
 	var p := UIStyle.panel(Color(0.06, 0.07, 0.09, 0.97))
+	_confirm_panel = p
 	p.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	p.custom_minimum_size = Vector2(520, 160)
 	p.position = Vector2(540, 380)
@@ -130,7 +136,24 @@ func _parse_cmdline() -> void:
 			call_deferred("_start_lan_join", hp[0], int(hp[1]))
 
 
+func _close_confirm() -> void:
+	if _confirm_panel != null and is_instance_valid(_confirm_panel):
+		_confirm_panel.queue_free()
+	_confirm_panel = null
+
+
+## The window's close button behaves like the in-game "Quit to desktop": a live series asks
+## first and is forfeited; anywhere else the game simply quits.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if screen != null and is_instance_valid(screen) and screen.has_live_series():
+			screen._confirm_forfeit(true)
+		else:
+			get_tree().quit()
+
+
 func _clear_screens() -> void:
+	_close_confirm()
 	for n in [menu, screen, local_host, privacy_overlay, net]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()

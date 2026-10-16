@@ -143,6 +143,24 @@ func at_checkpoint() -> bool:
 	return stage in [STAGE_REWARDS, STAGE_FIRST, STAGE_OVER]
 
 
+## True when `d` (parsed JSON) looks like a to_save() checkpoint this version can restore. Saves
+## are only ever written between games, so any other stage (e.g. a hand-edited "game") is refused.
+static func is_valid_save(d) -> bool:
+	if not (d is Dictionary):
+		return false
+	for k in ["save_id", "cfg", "names", "stage", "decks", "deck_names", "scores", "game_no", "last_loser",
+			"first_player", "history", "rewards", "series_log", "rng_state"]:
+		if not d.has(k):
+			return false
+	if not (d["cfg"] is Dictionary) or not d["cfg"].has("best_of"):
+		return false
+	if not (d["names"] is Array) or d["names"].size() != 2 or not (d["scores"] is Array) or d["scores"].size() != 2:
+		return false
+	if not (d["decks"] is Array) or d["decks"].size() != 2 or not (d["rewards"] is Array) or d["rewards"].size() != 2:
+		return false
+	return d["stage"] in [STAGE_REWARDS, STAGE_FIRST, STAGE_OVER]
+
+
 ## Restores a series saved with to_save(). JSON numbers come back as floats.
 static func from_save(d: Dictionary) -> Series:
 	var s := Series.new()
