@@ -1,5 +1,5 @@
 class_name BattleOps
-extends SpecialOps
+extends FusionOps
 ## Battle rules: who may attack and what, the attack command ops, damage resolution,
 ## type advantage, Burn, and the read-only battle preview shown to the attacker.
 
