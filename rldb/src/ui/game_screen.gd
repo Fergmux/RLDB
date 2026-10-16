@@ -1320,7 +1320,7 @@ func _on_view(v: Dictionary) -> void:
 	if pid != _multi_pid:
 		multi = []
 		_multi_pid = pid
-	seat_label.text = "You are %s  ·  Series %d-%d (best of %d)" % [v["names"][v["you"]], v["scores"][0], v["scores"][1], v["best_of"]]
+	seat_label.text = ""   # no "You are X · Series a-b (best of n)" line (user feedback)
 	var events := _collect_fx()
 	_draws_me = 0
 	for e in events:
@@ -1501,7 +1501,7 @@ func _render_board() -> void:
 				for m in pv["ap_next"]:
 					parts.append("%+d" % m["n"])
 				nxt = "next turn %s AP" % " ".join(parts)
-			pl.update_from(pv, active, pidx == p, "  (you)" if pidx == p else "", nxt)
+			pl.update_from(pv, active, pidx == p, "", nxt)
 			_update_piles(side, pidx, pv)
 	deco.glow_side = -1   # active player is shown by the plate's turn marker, not a table band
 	deco.queue_redraw()
@@ -1737,7 +1737,7 @@ func _show_wait(text: String) -> void:
 func _update_conn() -> void:
 	var net: Dictionary = view.get("net", {})
 	if net.is_empty():
-		conn_label.text = "Local match"
+		conn_label.text = ""
 	elif net.get("paused", false):
 		conn_label.text = "● Paused"
 	elif not net.get("opponent_connected", true):
