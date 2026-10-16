@@ -15,8 +15,10 @@ const HOLD_TIME := 1.5
 ## Half turns of spin; the coin lands on the winner's face (see _face).
 const HALF_TURNS := 9
 ## Peak opacity of the dark pool behind the coin and of its gold glow.
-const POOL_ALPHA := 0.78
-const GLOW_ALPHA := 0.55
+const POOL_ALPHA := 0.75
+const GLOW_ALPHA := 0.95
+## Uniform darkening of the whole play area (the vignette floor, so the field never competes with the coin).
+const DIM_ALPHA := 0.5
 
 static var _pool_tex: GradientTexture2D
 static var _glow_tex: GradientTexture2D
@@ -122,18 +124,20 @@ static func _radial(inner: Color, outer: Color, mid: float = -1.0, mid_col: Colo
 func _draw() -> void:
 	if _pool_tex == null:
 		_pool_tex = _radial(Color(0.03, 0.015, 0.0, 1.0), Color(0.03, 0.015, 0.0, 0.0), 0.5, Color(0.03, 0.015, 0.0, 0.55))
-		_glow_tex = _radial(Color(1.0, 0.78, 0.35, 1.0), Color(1.0, 0.7, 0.25, 0.0), 0.45, Color(1.0, 0.72, 0.28, 0.3))
+		_glow_tex = _radial(Color(1.0, 0.78, 0.35, 1.0), Color(1.0, 0.7, 0.25, 0.0), 0.45, Color(1.0, 0.72, 0.28, 0.5))
 	var mid := size / 2.0
 	# Dark pool over the field (ellipse, fades to nothing at the edges) and the warm glow around the coin.
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.025, 0.014, 0.006, DIM_ALPHA * backdrop_a))
 	draw_texture_rect(_pool_tex, Rect2(Vector2.ZERO, size), false, Color(1, 1, 1, POOL_ALPHA * backdrop_a))
-	var gr := R * (4.2 + 0.4 * sin(Time.get_ticks_msec() * 0.004))
+	var gr := R * (3.9 + 0.4 * sin(Time.get_ticks_msec() * 0.004))
 	var gc := mid + Vector2(0, -lift * 0.5)
 	draw_texture_rect(_glow_tex, Rect2(gc - Vector2(gr, gr), Vector2(gr, gr) * 2.0), false, Color(1, 1, 1, GLOW_ALPHA * backdrop_a))
 	# Shadow on the table.
 	var c := mid + Vector2(0, -lift)
 	var shrink := 1.0 - lift / 200.0
 	draw_set_transform(mid + Vector2(0, R + 18.0), 0.0, Vector2(1.0, 0.28))
-	draw_circle(Vector2.ZERO, R * shrink * 1.05, Color(0, 0, 0, 0.5))
+	for k in 5:
+		draw_circle(Vector2.ZERO, R * shrink * (1.45 - 0.1 * float(k)), Color(0, 0, 0, 0.16))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# Landing shockwave ring and sparks.
 	if land_t > 0.0 and land_t < 1.0:

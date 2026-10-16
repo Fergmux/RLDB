@@ -129,13 +129,19 @@ func _draw_mote() -> void:
 
 ## Turning light rays (victory): 14 wedges from the centre, fading in and out over `t`.
 func _draw_rays() -> void:
+	if material == null:
+		var mat := CanvasItemMaterial.new()
+		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		material = mat
 	var a := sin(clampf(t, 0.0, 1.0) * PI)
-	var n := 14
+	var n := 18
+	FxBlast.bloom(self, radius * 0.55, col.lightened(0.4), 0.55 * a)
 	for i in n:
-		var a0 := float(i) * TAU / float(n) + t * 0.9
-		var a1 := a0 + TAU / float(n) * 0.45
-		draw_colored_polygon(PackedVector2Array([Vector2.ZERO, Vector2(cos(a0), sin(a0)) * radius, Vector2(cos(a1), sin(a1)) * radius]), Color(col, 0.2 * a))
-	draw_circle(Vector2.ZERO, radius * 0.18, Color(col.lightened(0.5), 0.35 * a), true, -1.0, true)
+		var a0 := float(i) * TAU / float(n) + t * 0.3 + FxBlast.rnd(i, 1.0) * 0.25
+		var w := TAU / float(n) * (0.3 + 0.6 * FxBlast.rnd(i, 2.0))
+		var ln := radius * (0.7 + 0.5 * FxBlast.rnd(i, 3.0))
+		FxBlast.soft_ray(self, a0, w, ln, col.lightened(0.3), 0.55 * a)
+	draw_circle(Vector2.ZERO, radius * 0.1, Color(col.lightened(0.6), 0.3 * a), true, -1.0, true)
 
 
 ## Slowly falling ash (defeat): 36 grey flecks drifting down a band `radius` wide and 1.4 x tall.

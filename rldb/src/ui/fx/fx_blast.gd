@@ -38,6 +38,36 @@ static func rnd(i: int, s: float) -> float:
 	return fposmod(sin(float(i) * 12.9898 + s * 78.233) * 43758.5453, 1.0)
 
 
+## Draws one soft light ray from the origin of `ci`: a tapered wedge whose alpha fades along its length and
+## toward both edges (per-vertex colours; blend additively for a glow). `a` is the peak alpha near the origin.
+static func soft_ray(ci: CanvasItem, ang: float, width: float, length: float, col: Color, a: float) -> void:
+	var d0 := ang - width * 0.5
+	var d1 := ang + width * 0.5
+	var o := Vector2.ZERO
+	var l1 := Vector2(cos(d0), sin(d0)) * length * 0.55
+	var r1 := Vector2(cos(d1), sin(d1)) * length * 0.55
+	var c1 := Vector2(cos(ang), sin(ang)) * length * 0.55
+	var l2 := Vector2(cos(d0 * 0.5 + ang * 0.5), sin(d0 * 0.5 + ang * 0.5)) * length
+	var r2 := Vector2(cos(d1 * 0.5 + ang * 0.5), sin(d1 * 0.5 + ang * 0.5)) * length
+	var c2 := Vector2(cos(ang), sin(ang)) * length
+	var hot := Color(col, a)
+	var mid := Color(col, a * 0.5)
+	var none := Color(col, 0.0)
+	ci.draw_polygon(PackedVector2Array([o, l1, c1]), PackedColorArray([hot, none, mid]))
+	ci.draw_polygon(PackedVector2Array([o, c1, r1]), PackedColorArray([hot, mid, none]))
+	ci.draw_polygon(PackedVector2Array([l1, c1, c2]), PackedColorArray([none, mid, none]))
+	ci.draw_polygon(PackedVector2Array([l1, c2, l2]), PackedColorArray([none, none, none]))
+	ci.draw_polygon(PackedVector2Array([c1, r1, c2]), PackedColorArray([mid, none, none]))
+	ci.draw_polygon(PackedVector2Array([r1, r2, c2]), PackedColorArray([none, none, none]))
+
+
+## Soft radial bloom of `radius` at the origin of `ci`: stacked translucent discs, `a` = alpha of the centre.
+static func bloom(ci: CanvasItem, radius: float, col: Color, a: float) -> void:
+	for i in 10:
+		var u := float(i) / 9.0
+		ci.draw_circle(Vector2.ZERO, radius * (1.0 - 0.9 * u), Color(col, a * 0.12), true, -1.0, true)
+
+
 static func _out(x: float, p: float = 3.0) -> float:
 	return 1.0 - pow(1.0 - clampf(x, 0.0, 1.0), p)
 
@@ -66,13 +96,14 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, r2, 0.0, TAU, 72, Color(c2, 0.9 * (1.0 - tt)), 2.0 + 16.0 * (1.0 - tt) * (1.0 if big else 0.6), true)
 	# Light rays (killing blow).
 	if big:
-		var n := 14
-		var ra := sin(clampf(t, 0.0, 1.0) * PI) * 0.34
+		var n := 16
+		var ra := sin(clampf(t, 0.0, 1.0) * PI) * 0.7
+		bloom(self, radius * 1.1 * (0.5 + 0.5 * e), col.lightened(0.5), ra)
 		for i in n:
-			var a0 := float(i) * TAU / float(n) + t * 0.7 + rnd(i, 1.0) * 0.2
-			var w := TAU / float(n) * (0.16 + 0.16 * rnd(i, 2.0))
-			var ln := radius * (1.7 + 1.5 * rnd(i, 3.0)) * (0.3 + 0.7 * e)
-			draw_colored_polygon(PackedVector2Array([Vector2.ZERO, Vector2(cos(a0), sin(a0)) * ln, Vector2(cos(a0 + w), sin(a0 + w)) * ln]), Color(col.lightened(0.6), ra))
+			var a0 := float(i) * TAU / float(n) + t * 0.25 + rnd(i, 1.0) * 0.3
+			var w := TAU / float(n) * (0.25 + 0.55 * rnd(i, 2.0))
+			var ln := radius * (1.6 + 2.0 * rnd(i, 3.0)) * (0.3 + 0.7 * e)
+			soft_ray(self, a0, w, ln, col.lightened(0.55), ra)
 	# Radial streaks.
 	var ns := 44 if big else 22
 	for i in ns:

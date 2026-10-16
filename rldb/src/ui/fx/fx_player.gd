@@ -287,18 +287,40 @@ func camera_shake(amp: float, secs: float) -> void:
 
 
 ## Full-window colour flash: rises to `peak` alpha, holds, then fades (capped and slowed under reduced motion).
-func screen_flash(col: Color, peak: float, hold: float, fade: float) -> void:
+func screen_flash(col: Color, peak: float, hold: float, fade: float, origin: Vector2 = Vector2(-1.0e6, 0.0)) -> void:
 	var layer: Control = screen.banner_layer if screen.banner_layer != null else screen.fx_layer
-	var r := ColorRect.new()
-	r.color = col
+	# A radial flash from `origin` (global; the window centre by default), never fully opaque.
+	var win: Rect2 = screen.get_global_rect()
+	var o: Vector2 = win.get_center() if origin.x < -1.0e5 else origin
+	var g := Gradient.new()
+	g.set_color(0, Color(col, 1.0))
+	g.set_color(1, Color(col, 0.0))
+	g.add_point(0.3, Color(col, 0.55))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.0, 0.5)
+	gt.width = 256
+	gt.height = 256
+	var r := TextureRect.new()
+	r.texture = gt
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_SCALE
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var rad := win.size.length() * 0.9
+	r.size = Vector2(rad, rad) * 2.0
+	var ladd := CanvasItemMaterial.new()
+	ladd.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	r.material = ladd
 	r.z_index = UiLayers.SCREEN_FLASH
 	r.modulate.a = 0.0
 	add_node(r, layer)
+	r.position = layer.get_global_transform().affine_inverse() * o - r.size / 2.0
 	var reduced := UIStyle.reduce_motion
+	peak = minf(peak, 0.68)
 	var tw := new_tween()
-	tw.tween_property(r, "modulate:a", minf(peak, 0.3) if reduced else peak, 0.2 if reduced else UIStyle.dur(0.05))
+	tw.tween_property(r, "modulate:a", minf(peak, 0.3) if reduced else peak, 0.2 if reduced else UIStyle.dur(0.03))
 	tw.tween_interval(UIStyle.dur(hold))
 	tw.tween_property(r, "modulate:a", 0.0, UIStyle.dur(fade) * (1.5 if reduced else 1.0)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(free_node.bind(r))

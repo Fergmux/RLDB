@@ -217,7 +217,7 @@ func _impact(ctx: Dictionary) -> void:
 		_blast(FxBlast.Look.BLAST, c, tcol, reach * 0.3, 1.5)
 		_fx.burst(FxBurst.Kind.SPARK, c, tcol.lightened(0.5), 36, reach * 0.42, 0.9)
 		_fx.burst(FxBurst.Kind.EMBER, c, Color("ffd27a"), 40, reach * 0.34, 1.4)
-		_fx.screen_flash(FLASH_WHITE, 1.0, 0.1, 0.75)
+		_fx.screen_flash(FLASH_WHITE, 0.68, 0.02, 0.07, c)
 		_fx.camera_shake(24.0, 1.1)
 		_damage_number(_number_pos(c), int(ctx["dmg"]), tcol, 132)
 	else:
@@ -225,7 +225,7 @@ func _impact(ctx: Dictionary) -> void:
 		_blast(FxBlast.Look.HIT, c, tcol, reach * 0.2, 0.6)
 		_fx.burst(FxBurst.Kind.SPARK, c, tcol.lightened(0.5), 24, reach * 0.26, 0.5)
 		_fx.burst(FxBurst.Kind.EMBER, c, Color("ffd27a"), 10, reach * 0.09, 0.7)
-		_fx.screen_flash(FLASH_WHITE, 0.2, 0.02, 0.18)
+		_fx.screen_flash(FLASH_WHITE, 0.3, 0.01, 0.06, c)
 		_fx.camera_shake(6.0, 0.3)
 		_damage_number(_number_pos(c), int(ctx["dmg"]), tcol, 84)
 
@@ -245,7 +245,7 @@ func flourish(info: Dictionary) -> void:
 	Sfx.play("boom", -5.0, 0.0)
 	_blast(FxBlast.Look.FINAL, c, tcol, reach * 0.2, 0.95)
 	_fx.burst(FxBurst.Kind.SPARK, c, tcol.lightened(0.5), 26, reach * 0.26, 0.7)
-	_fx.screen_flash(FLASH_WHITE, 0.55, 0.05, 0.45)
+	_fx.screen_flash(FLASH_WHITE, 0.5, 0.03, 0.08, c)
 	_fx.camera_shake(12.0, 0.6)
 	_damage_number(_number_pos(c), int(info["d"]), tcol, 104)
 	var np := _number_pos(c)
