@@ -16,6 +16,8 @@ const ARROW_BOB := 8.0
 var rects: Array = []
 ## Draw the pointer arrow above the first rect.
 var arrow: bool = true
+## Point at the first rect from below instead of from above.
+var arrow_from_below: bool = false
 var _t: float = 0.0
 
 
@@ -35,13 +37,14 @@ func _draw() -> void:
 	for r in rects:
 		var rr: Rect2 = (r as Rect2).grow(RING_PAD + (0.0 if still else 3.0 * pulse))
 		# Soft outer glow, then the ring itself.
-		draw_rect(rr.grow(4.0), Color(UIStyle.GOLD, 0.18 + 0.2 * pulse), false, RING_W + 6.0)
-		draw_rect(rr, Color(UIStyle.GOLD_HI, 0.75 + 0.25 * pulse), false, RING_W)
+		draw_rect(rr.grow(5.0), Color(UIStyle.GOLD, 0.2 + 0.25 * pulse), false, RING_W + 8.0)
+		draw_rect(rr.grow(1.5), Color(0.12, 0.07, 0.0, 0.85), false, RING_W + 3.0)     # dark edge: reads on gold zones
+		draw_rect(rr, Color(1.0, 0.93, 0.68).lerp(UIStyle.GOLD_HI, 1.0 - pulse), false, RING_W)
 	if arrow and not rects.is_empty():
 		var first: Rect2 = rects[0]
 		var bob := 0.0 if still else ARROW_BOB * sin(_t * TAU * PULSE_HZ * 0.8)
 		var tip := Vector2(first.get_center().x, first.position.y - RING_PAD - ARROW_GAP + bob)
-		if tip.y - ARROW_H < 4.0:
+		if arrow_from_below or tip.y - ARROW_H < 4.0:
 			# No room above (e.g. a top-edge target): point up from below instead.
 			tip = Vector2(first.get_center().x, first.end.y + RING_PAD + ARROW_GAP - bob)
 			_arrow(tip, -1.0)

@@ -183,9 +183,13 @@ func _place_panel() -> void:
 		return
 	var r := _sidebar_rect()
 	var inv := get_global_transform().affine_inverse()
-	panel.size = Vector2(r.size.x, 0)
+	# Same scale as the sidebar, so the text grows with it on wide windows.
+	var k := gs.side_k
+	panel.scale = Vector2(k, k)
+	panel.size = Vector2(r.size.x / k, 0)
 	panel.reset_size()
-	panel.size = Vector2(r.size.x, maxf(panel.get_combined_minimum_size().y, minf(r.size.y, 180.0)))
+	# Covers the whole log panel (a half-hidden log reads as clutter); grows if the text needs it.
+	panel.size = Vector2(r.size.x / k, maxf(panel.get_combined_minimum_size().y, r.size.y / k))
 	panel.position = inv * r.position
 
 
@@ -199,6 +203,12 @@ func _process(_d: float) -> void:
 		if (r as Rect2).has_area():
 			rects.append(inv * (r as Rect2))
 	ring.rects = rects
+	# An action button under a field card: point at it from below so the arrow never covers the card.
+	ring.arrow_from_below = false
+	if not rects.is_empty() and gs.action_row.stack != null and is_instance_valid(gs.action_row.stack):
+		var sr: Rect2 = inv * _rect_of(gs.action_row.stack)
+		var cr: Rect2 = inv * _card_rect(gs.selected_uid)
+		ring.arrow_from_below = (rects[0] as Rect2).is_equal_approx(sr) and cr.has_area() and sr.get_center().y > cr.get_center().y
 	ring.visible = complete_card == null
 
 
@@ -216,6 +226,12 @@ func target_rects() -> Array:
 	if st.get("kind", "") == "do" and out.is_empty():
 		for pat in st.get("expect", []):
 			out.append(_expect_rect(pat))
+			if String(pat.get("t", "")) == "choose":
+				# A card option that also has a banner button (e.g. "Activate <Trap>"): ring both,
+				# the button first (it carries the arrow).
+				var b := _option_button_rect(TutorialScript.option_index(host.game(), host.keys, pat.get("opt", {})))
+				if b.has_area() and b != out[-1]:
+					out.insert(out.size() - 1, b)
 	return out.filter(func(r): return (r as Rect2).has_area())
 
 
@@ -286,7 +302,9 @@ func _expect_rect(pat: Dictionary) -> Rect2:
 	if t == "next_phase":
 		return _rect_of(gs.sidebar.phase_btn)
 	if t == "choose":
-		return _option_rect(TutorialScript.option_index(host.game(), host.keys, pat.get("opt", {})))
+		var i := TutorialScript.option_index(host.game(), host.keys, pat.get("opt", {}))
+		var r := _option_rect(i)
+		return r if r.has_area() else _option_button_rect(i)
 	var uid: int = int(host.keys.get(String(pat.get("card", "")), -1))
 	if uid == gs.selected_uid and gs.action_row.stack != null and is_instance_valid(gs.action_row.stack) \
 			and gs.action_row.stack.get_child_count() > 0:
@@ -310,10 +328,21 @@ func _option_rect(i: int) -> Rect2:
 	if o.has("slot"):
 		return gs.board.slot_global_rect(gs.me(), GameSelection.mapped_zone(String(o.get("zone", ""))), int(o["slot"]))
 	if o.has("card"):
-		var r := _card_rect(int(o["card"].get("uid", -1)))
-		if r.has_area():
-			return r
-	var label := String(o.get("label", ""))
+		return _card_rect(int(o["card"].get("uid", -1)))
+	return Rect2()
+
+
+## Rect of the banner button of my pending option i (Rect2() when it has none).
+func _option_button_rect(i: int) -> Rect2:
+	var pd := gs.pending()
+	if i < 0 or pd.is_empty() or not pd.get("mine", false):
+		return Rect2()
+	var label := ""
+	for x in pd["options"]:
+		if int(x["i"]) == i:
+			label = String(x.get("label", ""))
+	if label == "":
+		return Rect2()
 	for box in [gs.prompt.banner_btns, gs.prompt.banner_flow]:
 		if box == null:
 			continue
