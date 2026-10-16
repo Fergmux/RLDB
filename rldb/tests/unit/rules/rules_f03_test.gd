@@ -418,3 +418,25 @@ func test_f03_18_pending_choice_carries_its_effect_source() -> void:
 	var opp_view: Dictionary = MatchView.build(m, 1)["pending"]
 	assert_dict(opp_view["source"]).is_equal({"p": 0, "zone": "backrow", "slot": 1})
 	assert_bool(opp_view.has("options")).is_false()
+
+
+# ---------------------------------------------------------------- F03-09 basic-unit names
+
+func test_f03_09_basic_unit_names_drop_the_type_suffix_and_keep_identity() -> void:
+	var water := CardDB.get_def(TB.WATER)
+	var fire := CardDB.get_def(TB.FIRE)
+	assert_str(String(water["name"])).is_equal("Basic Mage")
+	assert_str(String(fire["name"])).is_equal("Basic Mage")
+	assert_str(String(water["type"])).is_equal("Water")
+	assert_str(String(fire["type"])).is_equal("Fire")
+	assert_int(int(water["id"])).is_not_equal(int(fire["id"]))
+	for d in CardDB.all():
+		if d["category"] == "basic_unit":
+			assert_bool(String(d["name"]).contains("(")).is_false()
+	# Type changes still map to the right variant by Type, not by name.
+	assert_int(Series.basic_variant(TB.WATER, "Fire")).is_equal(TB.FIRE)
+
+
+func test_f03_09_non_basic_names_are_unchanged() -> void:
+	assert_str(String(CardDB.get_def(48)["name"])).is_equal("Overextend")
+	assert_str(String(CardDB.get_def(8)["name"])).is_equal("Tag Team - S")

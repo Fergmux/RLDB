@@ -294,7 +294,9 @@ func _render_decks() -> void:
 		_render_custom_decks()
 		return
 	var dr: Dictionary = view["draft"]
-	overlay_box.add_child(UIStyle.label("Pick %d of %d — %s" % [dr["step"] + 1, dr["total"], String(dr["category"]).capitalize()], 18, UIStyle.TEXT))
+	overlay_box.add_child(UIStyle.label("Pick %d of %d — %s" % [dr["step"] + 1, dr["total"], String(dr.get("category_label", String(dr["category"]).capitalize()))], 18, UIStyle.TEXT))
+	if String(dr.get("composition", "")) != "":
+		overlay_box.add_child(UIStyle.label("Draft: " + String(dr["composition"]), 14, UIStyle.MUTED))    # F03-10
 	# The offer is spread evenly across the modal (equal-width columns); clicking a card picks it.
 	# The cards picked so far are listed in the details panel.
 	var row := HBoxContainer.new()
