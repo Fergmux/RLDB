@@ -72,7 +72,7 @@ of both files. Live check: `godot --path rldb -- --bot-shots=<dir>`.
 godot --headless --path rldb -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode -c
 ```
 
-419 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
+434 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
 summons, per-card behaviour (every effect card), series flow, review regressions, and
 two-client ENet integration tests (trap suspension, illegal input, payload redaction,
 reconnect during a pending prompt, duplicate-command replay, and complete best-of-3 /
@@ -83,9 +83,16 @@ Do not pass `-d` headless: the debugger pauses on script errors.
 
 | Path | Contents |
 | --- | --- |
-| `rldb/src/core/` | Deterministic rules authority: `game_core` → `effect_engine` → `special_ops` → `match_engine`; `card_scripts` (all 183 cards as typed ops), `match_view` (per-player redaction), `series` (decks/draft/rewards/score) |
+| `rldb/src/core/` | Deterministic rules authority: `game_core` → `effect_engine` → `effect_ops` → `special_ops` → `fusion_ops` → `battle_ops` → `summon_ops` → `match_engine`; `card_scripts` (all 183 cards as typed ops), `match_view` (per-player redaction), `series` (decks/draft/rewards/score) |
 | `rldb/src/net/` | `net_session` (ENet/Steam transport, pause/reconnect, sequence numbers), `steam_bridge`, `local_host` (hot-seat) |
-| `rldb/src/ui/` | Code-built UI: `main` (menu), `game_screen`, `card_widget` |
+| `rldb/src/ui/` | Code-built UI: `main` (screen flow), `game_screen` (match coordinator), `card_widget`, `deck_builder`, `ui_style`, `zones`, `ui_layers` |
+| `rldb/src/ui/game/` | Game screen components: board, hand, hover, selection, targeting, prompt banner, action row, sidebar, log, details, series overlay, reward panels, in-game menu, plus the board drawing classes |
+| `rldb/src/ui/card/` | Card widget parts: geometry, layouts, painter, art, text layout, stat badges, chips, overlays, back |
+| `rldb/src/ui/menu/` | Main menu, menu items, session options/launcher, saved-series list, lobby list, card list, screen fader |
+| `rldb/src/ui/fx/` | `fx_player` (effect queue) and its effects: bursts, rune rings, spotlight, banners, card and resource effects |
+| `rldb/src/ui/widgets/` | Shared widgets such as `confirm_dialog` |
+| `rldb/src/ai/` | `bot_brain` (one-ply look-ahead heuristic), `bot_player` (threaded driver) |
+| `rldb/src/dev/` | Windowed screenshot/check drivers (`--f02-shots`, `--bot-shots`, `--shots`, `--deckbuilder-shots`) |
 | `rldb/data/` | `cards.json` (generated), `mode_config.json`, `starter_decks.json` |
 | `tools/` | `import_cards.py` (CSV → JSON with confirmed corrections), `card_ledger.py` |
 | `docs/card-support-ledger.md` | Per-card implementation/test status and interpretation notes |
