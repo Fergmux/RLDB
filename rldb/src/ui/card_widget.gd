@@ -992,8 +992,7 @@ func _draw_empty() -> void:
 	_round_rect(r, fill, rad, Color(UIStyle.BRONZE, 0.55), maxf(1.0, _s))
 	_vgrad(Rect2(2 * _s, 2 * _s, size.x - 4 * _s, 12 * _s), Color(0, 0, 0, 0.35), Color(0, 0, 0, 0))
 	_draw_glyph({"unit": "sword", "trap": "eye", "power": "crown"}[role], r.get_center(), minf(size.x, size.y) * 0.22, Color(1, 1, 1, 0.09))
-	if empty_text != "" and (highlighted or show_label):
-		_text_c(UIStyle.font_body(), empty_text, Vector2(size.x / 2.0, size.y - 12.0 * _s), _fs(12), Color(UIStyle.TEXT, 0.55))
+	# Zones never show a text label ("Front 1", "Trap / Spell 2", ...) — user feedback 2026-10-16.
 
 
 func _draw_back() -> void:

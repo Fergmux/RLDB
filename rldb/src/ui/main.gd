@@ -201,167 +201,385 @@ func _section(parent: Control, heading: String, note: String = "") -> VBoxContai
 	return v
 
 
-func _hero_button(text: String, primary: bool, tip: String = "") -> Button:
-	var b := UIStyle.primary_button(text, 22) if primary else UIStyle.button(text, 21)
-	b.custom_minimum_size = Vector2(0, 72)
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.tooltip_text = tip
-	return b
+## One entry of the left-hand menu: large Cinzel text, left-aligned. Hover slides it a touch
+## right, turns it gold and draws a gold rule with a diamond marker; the item whose content is
+## shown stays marked. `slide` is animated when a menu level appears.
+class MenuItem extends Button:
+	const MENU_FONT := preload("res://assets/fonts/Cinzel-Variable.ttf")
+	var label_text := ""
+	var fs := 30
+	var muted := false
+	var active := false: set = _set_active
+	var slide := 0.0: set = _set_slide
+	var hl := 0.0: set = _set_hl
+	var _tw: Tween
+
+	func _init(t: String, size_px: int = 30, is_muted: bool = false) -> void:
+		label_text = t
+		fs = size_px
+		muted = is_muted
+		focus_mode = Control.FOCUS_NONE
+		custom_minimum_size = Vector2(0, fs * 1.75)
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		for st in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]:
+			add_theme_stylebox_override(st, StyleBoxEmpty.new())
+		mouse_entered.connect(func(): _to_hl(1.0); Sfx.play("select", 0.0, 0.03))
+		mouse_exited.connect(func(): _to_hl(0.0))
+
+	func _set_active(v: bool) -> void:
+		active = v
+		queue_redraw()
+
+	func _set_slide(v: float) -> void:
+		slide = v
+		queue_redraw()
+
+	func _set_hl(v: float) -> void:
+		hl = v
+		queue_redraw()
+
+	func _to_hl(v: float) -> void:
+		if _tw != null and _tw.is_valid():
+			_tw.kill()
+		if UIStyle.reduce_motion:
+			hl = v
+			return
+		_tw = create_tween()
+		_tw.tween_property(self, "hl", v, 0.14).set_trans(Tween.TRANS_SINE)
+
+	func _draw() -> void:
+		var font: Font = MENU_FONT
+		var tw := font.get_string_size(label_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var mark := maxf(hl, 1.0 if active else 0.0)
+		var x := 30.0 + 8.0 * hl + slide
+		var base := size.y / 2.0 + (font.get_ascent(fs) - font.get_descent(fs)) / 2.0
+		var col := (Color("a79c88") if muted else Color("ece4d2")).lerp(UIStyle.GOLD_HI, maxf(hl, 0.85 if active else 0.0))
+		draw_string(font, Vector2(x + 2, base + 2), label_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.55 * modulate.a))
+		draw_string(font, Vector2(x, base), label_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+		if mark > 0.01:
+			var y := base + 8.0
+			draw_line(Vector2(x - 4.0, y), Vector2(x + tw, y), Color(UIStyle.GOLD, 0.55 * mark), 1.5, true)
+			var c := Vector2(12.0 + slide, size.y / 2.0)
+			var r := 5.0 + 1.5 * mark
+			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]), Color(UIStyle.GOLD_HI, mark))
+
+
+## Menu tree: level -> items [label, target]. A target starting with "@" opens a sub-level;
+## anything else is a leaf shown in the centre (or an action).
+const MENU := {
+	"root": [["Resume", "resume"], ["Play", "@play"], ["Decks", "@decks"], ["Settings", "settings"], ["Quit", "quit"]],
+	"play": [["Play online", "@online"], ["Play local", "@local"]],
+	"online": [["Host game", "host_online"], ["Join game", "join_online"]],
+	"local": [["Play vs Bot", "bot"], ["Hot-seat", "hotseat"], ["Host LAN", "host_lan"], ["Join LAN", "join_lan"]],
+	"decks": [["Deck builder", "builder"], ["Card list", "cards"]],
+}
+const MENU_TITLES := {"root": "", "play": "Play", "online": "Play · Online", "local": "Play · Local", "decks": "Decks"}
+const BAND_W := 520.0
+
+var _menu_path: Array = ["root"]
+var _menu_list: VBoxContainer
+var _menu_crumb: Label
+var _menu_center: CenterContainer
+var _menu_leaf: String = ""
+var _lan_addr: String = "127.0.0.1:24680"
 
 
 func _show_menu() -> void:
 	_clear_screens()
+	_menu_path = ["root"]
+	_menu_leaf = ""
 	menu = Control.new()
 	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(menu)
-	menu.add_child(UIStyle.background(0.1, UIStyle.MENU_BACKGROUND))
-	# Translucent band behind the menu column so its text reads over the table art.
-	var table := ColorRect.new()
-	table.color = Color(0.04, 0.03, 0.025, 0.72)
-	table.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	table.anchor_left = 0.12
-	table.anchor_right = 0.88
-	table.offset_left = 0
-	table.offset_right = 0
-	menu.add_child(table)
-	var scroll := ScrollContainer.new()
-	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	menu.add_child(scroll)
-	var center := CenterContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.add_child(center)
-	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(780, 0)
-	box.add_theme_constant_override("separation", 12)
-	center.add_child(box)
+	menu.add_child(UIStyle.background(0.05, UIStyle.MENU_BACKGROUND))
+	# Darkened band on the left, fading out toward the right edge.
+	var g := Gradient.new()
+	g.set_color(0, Color(0.02, 0.018, 0.025, 0.9))
+	g.set_color(1, Color(0.02, 0.018, 0.025, 0.0))
+	g.add_point(0.68, Color(0.02, 0.018, 0.025, 0.78))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill_from = Vector2(0, 0)
+	gt.fill_to = Vector2(1, 0)
+	gt.width = 256
+	gt.height = 4
+	var band := TextureRect.new()
+	band.texture = gt
+	band.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	band.stretch_mode = TextureRect.STRETCH_SCALE
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	band.anchor_bottom = 1.0
+	band.offset_right = BAND_W + 160.0
+	menu.add_child(band)
+	# Menu column (left-aligned, user feedback).
+	var col := VBoxContainer.new()
+	col.anchor_bottom = 1.0
+	col.offset_left = 56.0
+	col.offset_right = BAND_W - 60.0
+	col.offset_top = 80.0
+	col.offset_bottom = -40.0
+	col.add_theme_constant_override("separation", 4)
+	menu.add_child(col)
+	var title := _title_label("RLDB", 88, M_GOLD)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	title.add_theme_constant_override("shadow_offset_y", 3)
+	col.add_child(title)
+	var sub := _title_label("A TWO-PLAYER ROGUELIKE DECK BATTLER", 14, M_DIM)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	col.add_child(sub)
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, 54)
+	col.add_child(gap)
+	_menu_crumb = _title_label("", 16, M_BRONZE.lightened(0.3))
+	_menu_crumb.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_menu_crumb.custom_minimum_size = Vector2(0, 24)
+	col.add_child(_menu_crumb)
+	_menu_list = VBoxContainer.new()
+	_menu_list.add_theme_constant_override("separation", 2)
+	col.add_child(_menu_list)
+	var fill := Control.new()
+	fill.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(fill)
+	status_label = UIStyle.label(SteamBridge.describe(), 13, M_DIM, true)
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	col.add_child(status_label)
+	# Centre content area (right of the band).
+	_menu_center = CenterContainer.new()
+	_menu_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_menu_center.offset_left = BAND_W
+	_menu_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu.add_child(_menu_center)
+	_build_menu_level(false)
 
-	# Title treatment
-	var title := _title_label("RLDB", 84, M_GOLD)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(title)
-	var sub := _title_label("A TWO-PLAYER ROGUELIKE DECK BATTLER", 17, M_DIM)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(sub)
-	var rule := ColorRect.new()
-	rule.color = M_BRONZE
-	rule.custom_minimum_size = Vector2(0, 2)
-	box.add_child(rule)
 
-	# Hero: the play actions
-	var saves := SeriesStore.list()
-	var row_a := HBoxContainer.new()
-	row_a.add_theme_constant_override("separation", 12)
-	box.add_child(row_a)
-	var host_b := _hero_button("Host Steam lobby", true, "Host a lobby and invite a friend through Steam.")
-	host_b.pressed.connect(_start_steam_host)
-	row_a.add_child(host_b)
-	var find_b := _hero_button("Find lobbies", false, "Browse public RLDB lobbies.")
-	find_b.pressed.connect(_start_steam_browse)
-	row_a.add_child(find_b)
-	var row_b := HBoxContainer.new()
-	row_b.add_theme_constant_override("separation", 12)
-	box.add_child(row_b)
-	var bot_b := _hero_button("Play vs Bot", true, "Play a series against the computer.")
-	bot_b.pressed.connect(func(): _start_bot(opts.duplicate(true)))
-	row_b.add_child(bot_b)
-	var local_b := _hero_button("Hot-seat match", false, "Two players, one screen.")
-	local_b.pressed.connect(func(): _start_local(opts.duplicate(true)))
-	row_b.add_child(local_b)
-	var resume_b := _hero_button("Resume saved series", false, ("%d saved series. " % saves.size() if not saves.is_empty() else "") + "Continue an unfinished series.")
-	resume_b.disabled = saves.is_empty()
-	row_b.add_child(resume_b)
-	status_label = UIStyle.label(SteamBridge.describe(), 14, M_DIM, true)
-	box.add_child(status_label)
-	var saved_holder := VBoxContainer.new()
-	saved_holder.visible = false
-	box.add_child(saved_holder)
-	if not saves.is_empty():
-		_add_saved_series(saved_holder, saves)
-		resume_b.pressed.connect(func(): saved_holder.visible = not saved_holder.visible)
+## Builds the items of the current menu level; `animate` slides them in one after another.
+func _build_menu_level(animate: bool = true) -> void:
+	for ch in _menu_list.get_children():
+		_menu_list.remove_child(ch)
+		ch.queue_free()
+	var level: String = _menu_path[-1]
+	_menu_crumb.text = String(MENU_TITLES.get(level, "")).to_upper()
+	var items: Array = MENU[level].duplicate()
+	if level == "root" and SeriesStore.list().is_empty():
+		items = items.filter(func(it): return it[1] != "resume")
+	var i := 0
+	for it in items:
+		var mi := MenuItem.new(it[0], 34 if level == "root" else 30)
+		mi.active = it[1] == _menu_leaf
+		var target: String = it[1]
+		mi.pressed.connect(func(): _menu_pick(target))
+		_menu_list.add_child(mi)
+		_slide_in(mi, i, animate)
+		i += 1
+	if level != "root":
+		var back := MenuItem.new("Back", 22, true)
+		back.pressed.connect(_menu_back)
+		_menu_list.add_child(back)
+		_slide_in(back, i, animate)
 
-	# Match options
-	var cfg_box := _section(box, "Match options")
+
+func _slide_in(mi: MenuItem, i: int, animate: bool) -> void:
+	if not animate or UIStyle.reduce_motion:
+		return
+	mi.modulate.a = 0.0
+	mi.slide = -60.0
+	var tw := mi.create_tween()
+	tw.tween_interval(0.045 * i)
+	tw.set_parallel(true)
+	tw.tween_property(mi, "modulate:a", 1.0, 0.22)
+	tw.tween_property(mi, "slide", 0.0, 0.32).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+
+
+func _menu_pick(target: String) -> void:
+	Sfx.play("confirm")
+	if target.begins_with("@"):
+		_menu_path.append(target.substr(1))
+		_menu_leaf = ""
+		_set_center(null)
+		_build_menu_level()
+		return
+	match target:
+		"quit":
+			get_tree().quit()
+		"builder":
+			_show_deck_builder()
+		"cards":
+			_show_card_list()
+		_:
+			_menu_leaf = target
+			for mi in _menu_list.get_children():
+				if mi is MenuItem:
+					(mi as MenuItem).active = false
+			_build_menu_level(false)
+			_set_center(_leaf_panel(target))
+
+
+func _menu_back() -> void:
+	Sfx.play("cancel")
+	if _menu_path.size() > 1:
+		_menu_path.pop_back()
+	_menu_leaf = ""
+	_set_center(null)
+	_build_menu_level()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if menu == null or not is_instance_valid(menu) or _menu_list == null or not is_instance_valid(_menu_list):
+		return
+	if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_ESCAPE:
+		if _menu_leaf != "":
+			_menu_leaf = ""
+			_set_center(null)
+			_build_menu_level(false)
+		elif _menu_path.size() > 1:
+			_menu_back()
+		get_viewport().set_input_as_handled()
+
+
+## Shows `panel` in the centre area with a short fade/rise (or clears it when null).
+func _set_center(panel: Control) -> void:
+	for ch in _menu_center.get_children():
+		_menu_center.remove_child(ch)
+		ch.queue_free()
+	if panel == null:
+		return
+	_menu_center.add_child(panel)
+	if UIStyle.reduce_motion:
+		return
+	panel.modulate.a = 0.0
+	var tw := panel.create_tween()
+	tw.tween_property(panel, "modulate:a", 1.0, 0.25).set_trans(Tween.TRANS_SINE)
+
+
+## A dark panel for centre content: returns [panel, content VBox].
+func _center_panel(title: String, note: String = "") -> Array:
+	var p := PanelContainer.new()
+	var sb := UIStyle.flat(Color(0.035, 0.03, 0.04, 0.9), Color(UIStyle.GOLD, 0.5), 1, 12)
+	for side in [SIDE_LEFT, SIDE_RIGHT]:
+		sb.set_content_margin(side, 30)
+	for side in [SIDE_TOP, SIDE_BOTTOM]:
+		sb.set_content_margin(side, 24)
+	sb.shadow_color = Color(0, 0, 0, 0.55)
+	sb.shadow_size = 18
+	p.add_theme_stylebox_override("panel", sb)
+	p.custom_minimum_size = Vector2(560, 0)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 14)
+	p.add_child(v)
+	v.add_child(_title_label(title, 30, M_GOLD))
+	if note != "":
+		v.add_child(UIStyle.label(note, 15, M_DIM, true))
+	return [p, v]
+
+
+func _labelled(v: VBoxContainer, text: String, ctl: Control) -> void:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	cfg_box.add_child(row)
-	row.add_child(UIStyle.label("Best of", 16, M_PARCH))
+	row.add_theme_constant_override("separation", 14)
+	var l := UIStyle.label(text, 17, M_PARCH)
+	l.custom_minimum_size = Vector2(150, 0)
+	row.add_child(l)
+	row.add_child(ctl)
+	v.add_child(row)
+
+
+## Best-of / deck mode pickers shared by every "start a series" panel.
+func _series_options(v: VBoxContainer) -> void:
 	var bo := OptionButton.new()
 	for n in [1, 3, 5, 7]:
 		bo.add_item(str(n), n)
 	bo.select([1, 3, 5, 7].find(opts["best_of"]))
 	bo.item_selected.connect(func(i): opts["best_of"] = bo.get_item_id(i))
-	row.add_child(bo)
-	row.add_child(UIStyle.label("   Decks", 16, M_PARCH))
+	_labelled(v, "Best of", bo)
 	var dm := OptionButton.new()
 	dm.add_item("Starter decks")
 	dm.add_item("Draft")
 	dm.select(0 if opts["deck_mode"] == "starter" else 1)
 	dm.item_selected.connect(func(i): opts["deck_mode"] = "starter" if i == 0 else "draft")
-	row.add_child(dm)
-	var opts_row := HBoxContainer.new()
-	opts_row.add_theme_constant_override("separation", 18)
-	cfg_box.add_child(opts_row)
-	var pub := CheckBox.new()
-	pub.text = "List my lobby publicly"
-	pub.add_theme_font_size_override("font_size", 15)
-	pub.tooltip_text = "Off: friends-only, joined by invite. On: also visible under Find lobbies."
-	pub.button_pressed = opts.get("public_lobby", false)
-	pub.toggled.connect(func(on): opts["public_lobby"] = on)
-	opts_row.add_child(pub)
-	var priv := CheckBox.new()
-	priv.text = "Privacy screen between seats (hot-seat)"
-	priv.add_theme_font_size_override("font_size", 15)
-	priv.button_pressed = _privacy
-	priv.toggled.connect(func(on): _privacy = on)
-	opts_row.add_child(priv)
-	cfg_box.add_child(UIStyle.label("Starter-deck series can also use your saved custom decks (pick one on the deck screen).", 14, M_DIM, true))
-	cfg_box.add_child(GameScreen.audio_controls(15))
+	_labelled(v, "Decks", dm)
 
-	# Collection
-	var coll := _section(box, "Collection")
-	var crow := HBoxContainer.new()
-	crow.add_theme_constant_override("separation", 10)
-	coll.add_child(crow)
-	var builder := UIStyle.button("Deck builder", 17)
-	builder.custom_minimum_size = Vector2(0, 44)
-	builder.pressed.connect(_show_deck_builder)
-	crow.add_child(builder)
-	var ledger := UIStyle.button("Card list & implementation ledger", 17)
-	ledger.custom_minimum_size = Vector2(0, 44)
-	ledger.pressed.connect(_show_card_list)
-	crow.add_child(ledger)
 
-	# Advanced / LAN (dev): collapsed by default
-	var adv_toggle := UIStyle.button("Advanced / LAN (dev)  +", 15)
-	adv_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	box.add_child(adv_toggle)
-	var dev_box := _section(box, "Development harness", "Not a substitute for Steam play.")
-	dev_box.get_parent().visible = false
-	var lan := HBoxContainer.new()
-	lan.add_theme_constant_override("separation", 8)
-	dev_box.add_child(lan)
-	var addr := LineEdit.new()
-	addr.text = "127.0.0.1:24680"
-	addr.custom_minimum_size = Vector2(220, 0)
-	var lan_host := UIStyle.button("Host LAN (ENet)", 15)
-	lan_host.pressed.connect(func(): _start_lan_host(int(addr.text.split(":")[-1]), opts.duplicate(true)))
-	var lan_join := UIStyle.button("Join LAN", 15)
-	lan_join.pressed.connect(func():
-		var hp := addr.text.split(":")
-		_start_lan_join(hp[0], int(hp[1])))
-	lan.add_child(addr)
-	lan.add_child(lan_host)
-	lan.add_child(lan_join)
-	adv_toggle.pressed.connect(func():
-		dev_box.get_parent().visible = not dev_box.get_parent().visible
-		adv_toggle.text = "Advanced / LAN (dev)  −" if dev_box.get_parent().visible else "Advanced / LAN (dev)  +")
-	var quit := UIStyle.button("Quit", 16)
-	quit.custom_minimum_size = Vector2(120, 40)
-	quit.pressed.connect(func(): get_tree().quit())
-	quit.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	box.add_child(quit)
+func _start_button(v: VBoxContainer, text: String, fn: Callable) -> void:
+	var b := UIStyle.primary_button(text, 19)
+	b.custom_minimum_size = Vector2(0, 52)
+	b.pressed.connect(fn)
+	v.add_child(b)
+
+
+## Centre content for a leaf of the menu tree.
+func _leaf_panel(target: String) -> Control:
+	var pv: Array
+	match target:
+		"bot":
+			pv = _center_panel("Play vs Bot", "A series against the computer. The bot picks a random starter deck.")
+			_series_options(pv[1])
+			_start_button(pv[1], "Start series", func(): _start_bot(opts.duplicate(true)))
+		"hotseat":
+			pv = _center_panel("Hot-seat", "Two players take turns on this screen.")
+			_series_options(pv[1])
+			var priv := CheckBox.new()
+			priv.text = "Privacy screen between turns"
+			priv.button_pressed = _privacy
+			priv.toggled.connect(func(on): _privacy = on)
+			pv[1].add_child(priv)
+			_start_button(pv[1], "Start series", func(): _start_local(opts.duplicate(true)))
+		"host_lan":
+			pv = _center_panel("Host LAN", "Your friend joins with your computer's local IP address and this port.")
+			_series_options(pv[1])
+			var port := LineEdit.new()
+			port.text = _lan_addr.split(":")[-1]
+			port.custom_minimum_size = Vector2(160, 0)
+			_labelled(pv[1], "Port", port)
+			_start_button(pv[1], "Host series", func(): _start_lan_host(int(port.text), opts.duplicate(true)))
+		"join_lan":
+			pv = _center_panel("Join LAN", "Enter the host's address and port (for example 192.168.1.20:24680).")
+			var addr := LineEdit.new()
+			addr.text = _lan_addr
+			addr.custom_minimum_size = Vector2(260, 0)
+			_labelled(pv[1], "Address", addr)
+			_start_button(pv[1], "Join", func():
+				_lan_addr = addr.text
+				var hp := addr.text.split(":")
+				_start_lan_join(hp[0], int(hp[1]) if hp.size() > 1 else 24680))
+		"host_online":
+			pv = _center_panel("Host game", "Creates a Steam lobby and opens the invite dialog.")
+			_series_options(pv[1])
+			var pub := CheckBox.new()
+			pub.text = "List my lobby publicly"
+			pub.tooltip_text = "Off: friends-only, joined by invite. On: also visible under Join game."
+			pub.button_pressed = opts.get("public_lobby", false)
+			pub.toggled.connect(func(on): opts["public_lobby"] = on)
+			pv[1].add_child(pub)
+			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, M_DIM, true))
+			_start_button(pv[1], "Host and invite", func(): _start_steam_host())
+		"join_online":
+			pv = _center_panel("Join game", "Accept a friend's invite in the Steam overlay, or browse public lobbies.")
+			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, M_DIM, true))
+			_start_button(pv[1], "Browse public lobbies", _start_steam_browse)
+		"resume":
+			pv = _center_panel("Resume", "Series saved between games. Resume one as hot-seat or as the host.")
+			_add_saved_series(pv[1], SeriesStore.list())
+		"settings":
+			pv = _center_panel("Settings")
+			pv[1].add_child(GameScreen.audio_controls(16))
+			var rm := CheckBox.new()
+			rm.text = "Reduced motion (no travel, shake or particles)"
+			rm.button_pressed = UIStyle.reduce_motion
+			rm.toggled.connect(func(on): UIStyle.set_reduce_motion(on))
+			pv[1].add_child(rm)
+			var fa := CheckBox.new()
+			fa.text = "Fast animations (half duration)"
+			fa.button_pressed = UIStyle.fast_anim
+			fa.toggled.connect(func(on): UIStyle.set_fast_anim(on))
+			pv[1].add_child(fa)
+			var priv2 := CheckBox.new()
+			priv2.text = "Privacy screen between turns (hot-seat)"
+			priv2.button_pressed = _privacy
+			priv2.toggled.connect(func(on): _privacy = on)
+			pv[1].add_child(priv2)
+		_:
+			return null
+	return pv[0]
 
 
 func _new_screen() -> GameScreen:
@@ -582,8 +800,10 @@ func _on_menu_requested() -> void:
 ## Lists unfinished series saved at between-game checkpoints, each resumable as
 ## hot-seat, LAN host or Steam host (the opponent rejoins as before).
 func _add_saved_series(box: VBoxContainer, saves: Array) -> void:
-	var sec := _section(box, "Resume a saved series")
-	for sv in saves.slice(0, 4):
+	var sec := box
+	if saves.is_empty():
+		sec.add_child(UIStyle.label("No saved series.", 15, M_DIM))
+	for sv in saves.slice(0, 6):
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
 		sec.add_child(row)
