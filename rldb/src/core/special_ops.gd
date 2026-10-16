@@ -308,7 +308,7 @@ func _op_mirrorflesh(f: Dictionary, op: Dictionary) -> int:
 
 func _op_roma(f: Dictionary, op: Dictionary) -> int:
 	var me: int = f["src"]
-	var n: int = cards[me].get("runes_used", 1)
+	var n: int = cards[me].get("runes_used", 0)   # any non-Ritual summon (e.g. from Spent) used no Runes
 	cards[me]["base_atk"] = 12 * n
 	cards[me]["base_def"] = 12 * n
 	add_log("Roma uses %d Rune(s): becomes %d/%d." % [n, 12 * n, 12 * n])

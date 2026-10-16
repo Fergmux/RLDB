@@ -120,6 +120,14 @@ func test_roma_with_three_rune_material_becomes_36() -> void:
 	assert_int(m.def_of(roma)).is_equal(36)
 
 
+func test_roma_summoned_without_a_ritual_is_0_0() -> void:
+	# Ruling: revived from Spent (or summoned any non-Ritual way) no Runes were used, so 0/0.
+	var m := TB.make()
+	var roma := TB.special(m, 0, 96, 0)
+	assert_int(m.atk_of(roma)).is_equal(0)
+	assert_int(m.def_of(roma)).is_equal(0)
+
+
 func test_roma_with_zero_rune_material_is_illegal() -> void:
 	var m := TB.make()
 	TB.unit(m, 0, TB.WATER, 0)

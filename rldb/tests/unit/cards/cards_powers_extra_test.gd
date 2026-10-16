@@ -320,6 +320,17 @@ func test_c147_demented_apparition_forces_attacks_onto_itself() -> void:
 	assert_bool(other in targets).is_false()
 
 
+func test_c147_demented_apparition_overrides_direct_attack() -> void:
+	# Ruling: a unit that can attack directly (Diggie, Flying Sandworm) must still attack
+	# Demented Apparition if it attacks at all.
+	var m := TB.make()
+	TB.p1_battle(m)
+	var app := TB.unit(m, 0, 147, 1)
+	for id in [162, 171]:
+		var a := TB.unit(m, 1, id, 0 if id == 162 else 2)
+		assert_array(m.attack_targets(a)).is_equal([app])
+
+
 func test_c147_demented_apparition_paralyses_unprotected_foes_on_summon() -> void:
 	var m := TB.make()
 	var foe := TB.unit(m, 1, TB.WATER, 0)

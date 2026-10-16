@@ -30,7 +30,8 @@ func _cannot_attack_reason(uid: int) -> String:
 	return ""
 
 
-## Legal attack targets: opposing unit uids, plus -1 for a direct attack.
+## Legal attack targets: opposing unit uids, plus -1 for a direct attack. A forcing unit
+## (Demented Apparition) overrides everything, including "can attack directly".
 func attack_targets(uid: int) -> Array:
 	var p: int = cards[uid]["ctl"]
 	var foes := field_units(opp(p))
@@ -40,7 +41,7 @@ func attack_targets(uid: int) -> Array:
 			out.append(u)
 	var forced := out.filter(func(u): return has_flag(u, "taunt"))
 	if not forced.is_empty():
-		out = forced
+		return forced
 	if foes.is_empty() or has_flag(uid, "direct_attack"):
 		out.append(-1)
 	return out
@@ -273,7 +274,7 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 		add_log("The attack does not resolve (attacker no longer able to attack).")
 		return R.END
 	if target == -1:
-		if not field_units(q).is_empty() and not has_flag(a, "direct_attack"):
+		if not (-1 in attack_targets(a)):
 			add_log("The direct attack is no longer legal.")
 			return R.END
 		var dburn := status_count(a, "burn")
