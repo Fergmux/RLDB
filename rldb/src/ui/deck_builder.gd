@@ -586,7 +586,8 @@ func _refresh_catalogue_counts() -> void:
 ## Category colour strip at the start of a deck row.
 static func _swatch(d: Dictionary) -> ColorRect:
 	var swatch := ColorRect.new()
-	swatch.color = UIStyle.CATEGORY_COLORS.get(d["category"], Color.GRAY)
+	# F04-06: Spell / Trap / Power rows show no coloured square (the strip stays as a transparent spacer).
+	swatch.color = Color.TRANSPARENT if d["category"] in ["spell", "trap", "power"] else UIStyle.CATEGORY_COLORS.get(d["category"], Color.GRAY)
 	swatch.custom_minimum_size = Vector2(SWATCH_W, 0)
 	return swatch
 

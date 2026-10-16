@@ -52,6 +52,15 @@ var fx_glow: Color = Color(1, 1, 1, 0): set = _set_glow
 ## Ordered multi-select badge: 1, 2, 3... drawn on the card while > 0.
 var order_no: int = 0: set = _set_order
 
+## Hover lift (F04-05): the card grows to `lift_k` times its resting size and sits `lift_offset`
+## away, about its centre. It is a REAL size change, never the `scale` property: the face is
+## redrawn at the larger size, so text is rasterised at its final pixel size and stays crisp
+## (a scaled Control would stretch the already-rasterised glyphs and blur them). Tween these two.
+var lift_k: float = 1.0: set = _set_lift_k
+var lift_offset: Vector2 = Vector2.ZERO: set = _set_lift_offset
+
+var _lifting := false
+var _lift_rest_pos := Vector2.ZERO
 var _self_hover := false
 var _is_ready := false
 var _pv_stat := ""
@@ -184,6 +193,36 @@ func card_rect() -> Rect2:
 func _set_hovered(v: bool) -> void:
 	hovered = v
 	queue_redraw()
+
+
+func _set_lift_k(v: float) -> void:
+	lift_k = v
+	_apply_lift()
+
+
+func _set_lift_offset(v: Vector2) -> void:
+	lift_offset = v
+	_apply_lift()
+
+
+## Sizes and places the card for the current lift: whole-pixel size, growth about the centre, whole-pixel
+## position relative to where the card rested when the lift began.
+func _apply_lift() -> void:
+	var rest := custom_minimum_size
+	if rest == Vector2.ZERO:
+		return
+	var neutral := is_equal_approx(lift_k, 1.0) and lift_offset.is_zero_approx()
+	if not neutral and not _lifting:
+		_lifting = true
+		_lift_rest_pos = position
+	var sz := rest if neutral else (rest * lift_k).round()
+	size = sz
+	if neutral:
+		if _lifting:
+			position = _lift_rest_pos
+		_lifting = false
+	else:
+		position = (_lift_rest_pos + lift_offset - (sz - rest) / 2.0).round()
 
 
 func _set_flash(v: float) -> void:
