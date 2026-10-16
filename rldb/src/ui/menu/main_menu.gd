@@ -56,6 +56,8 @@ var status_label: Label
 var _options: SessionOptions
 ## True while building a panel that carries the series pickers (its Start checks the draft counts).
 var _series_panel_active := false
+## Emitted when the deck mode or draft counts change, so the Start button can enable / disable itself.
+signal series_options_changed
 var _menu_path: Array = ["root"]
 var _menu_list: VBoxContainer
 var _menu_center: CenterContainer
@@ -270,13 +272,24 @@ func _start_button(v: VBoxContainer, text: String, fn: Callable) -> void:
 	var b := UIStyle.primary_button(text, 19)
 	b.custom_minimum_size = Vector2(0, 52)
 	var guarded := _series_panel_active
+	if guarded:
+		var upd := func(): b.disabled = not _series_start_ok()
+		series_options_changed.connect(upd)
+		b.tree_exiting.connect(func(): series_options_changed.disconnect(upd))
+		upd.call()
 	b.pressed.connect(func():
 		# F03-10: an unusable draft composition is explained by the pickers and blocks the start.
 		var so: Dictionary = _options.series
-		if guarded and so.get("deck_mode", "") == "draft" and Series.validate_draft_quota(so.get("draft_quota", Series.default_draft_quota())) != "":
+		if guarded and not _series_start_ok():
 			return
 		fn.call())
 	v.add_child(b)
+
+
+## False while Draft is chosen with an unusable composition (F03-10).
+func _series_start_ok() -> bool:
+	var so: Dictionary = _options.series
+	return not (so.get("deck_mode", "") == "draft" and Series.validate_draft_quota(so.get("draft_quota", Series.default_draft_quota())) != "")
 
 
 static func _check_box(text: String, on: bool, toggled: Callable) -> CheckBox:
@@ -308,7 +321,8 @@ func _series_options(v: VBoxContainer) -> void:
 	v.add_child(dq)
 	dm.item_selected.connect(func(i):
 		opts["deck_mode"] = "starter" if i == 0 else "draft"
-		dq.visible = i == 1)
+		dq.visible = i == 1
+		series_options_changed.emit())
 	_series_panel_active = true
 
 
@@ -331,6 +345,7 @@ func _draft_quota_box(opts: Dictionary) -> VBoxContainer:
 		for c in Series.DRAFT_CATEGORIES:
 			n += int(q.get(c, 0))
 		total_l.text = "%d picks in total" % n
+		series_options_changed.emit()
 	for cat in Series.DRAFT_CATEGORIES:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
