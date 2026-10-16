@@ -14,6 +14,8 @@ const BRONZE := Color("7a5a30")
 const GOLD := Color("d4a64a")
 const GOLD_HI := Color("f0cf7a")
 const TEXT := Color("ece4d2")
+## Dimmer parchment for subtitles, notes and captions (menu, deck builder).
+const TEXT_DIM := Color("a79c88")
 const MUTED := Color("c2b8a2")
 const DISABLED := Color("918874")
 const ON_GOLD := Color("1a1208")
@@ -81,6 +83,11 @@ static func font_bold() -> Font:
 
 static func font_italic() -> Font:
 	return _font(FONT_ITALIC)
+
+
+## Cinzel at its default weight, unvaried (menu items and screen titles).
+static func font_title() -> Font:
+	return _font(FONT_DISPLAY)
 
 
 ## Cinzel at a given weight (600 names/titles, 700 numbers).
@@ -231,6 +238,23 @@ static func label(text: String, size: int = 14, color: Color = TEXT, wrap: bool 
 	if wrap:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return l
+
+
+## Title label in the Cinzel display face at its default weight (menu and deck-builder headings).
+## Unlike `label(..., display = true)`, which uses the 600-weight variation.
+static func title_label(text: String, size: int, color: Color = GOLD) -> Label:
+	var l := label(text, size, color)
+	l.add_theme_font_override("font", font_title())
+	return l
+
+
+## Full-rect MarginContainer with the same margin on every side (screen-level layouts).
+static func full_rect_margin(px: int) -> MarginContainer:
+	var m := MarginContainer.new()
+	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right", "top", "bottom"]:
+		m.add_theme_constant_override("margin_" + side, px)
+	return m
 
 
 static func button(text: String, size: int = 14) -> Button:
