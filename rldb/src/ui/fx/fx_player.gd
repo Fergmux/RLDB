@@ -31,10 +31,13 @@ var _spotlight := FxSpotlight.new(self)
 var _banner := FxBanner.new(self)
 var _piles := FxPileEffects.new(self)
 var _game_end := FxGameEnd.new(self)
+var _strike := FxStrike.new(self)
 ## True from the moment a view that ends the game arrives until its victory / defeat presentation has
 ## finished (or been skipped): GameSeriesOverlay keeps the result modal back meanwhile (F03-13).
 var game_end_hold := false
 var _hold_gen := 0
+var _cam_users := 0
+var _cam_rest := {}
 
 
 ## True while any effect, banner or spotlight is still running.
@@ -46,14 +49,16 @@ func busy() -> bool:
 
 
 ## Called by the screen with the events of a NEW view before it renders: when they end the game the
-## result modal waits for the victory / defeat presentation. Safety net: released after 8 s regardless.
+## result modal waits for the victory / defeat presentation. Safety net: released after 8 s regardless
+## (plus the extra seconds a killing-blow sequence adds, F04-07).
 func expect_game_end(events: Array) -> void:
 	for e in events:
 		if String(e.get("k", "")) == "game_over":
 			game_end_hold = true
 			_hold_gen += 1
 			var gen := _hold_gen
-			screen.get_tree().create_timer(8.0).timeout.connect(func():
+			var safety := 8.0 + FxStrike.hold_extra(FxStrike.detect(events))
+			screen.get_tree().create_timer(safety).timeout.connect(func():
 				if gen == _hold_gen:
 					release_game_end_hold())
 			return
@@ -113,6 +118,8 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 		if e["k"] == "turn":
 			turn_in_batch = true
 	var fast := UIStyle.reduce_motion
+	var lethal := FxStrike.detect(events)   # F04-07: the killing blow of this batch, if it has one
+	var claimed := {}   # hp event index -> true when a direct attack shows that damage itself
 	var special := {}   # player -> kind of the special summon whose materials were just shown
 	for i in events.size():
 		var e: Dictionary = events[i]
@@ -128,6 +135,8 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			snd = FxPileEffects.KIND_SOUND[summon_kind]
 		elif e["k"] == "game_over":
 			snd = ""   # FxGameEnd plays the victory / defeat sound itself
+		elif e["k"] == "hp" and not lethal.is_empty() and i == int(lethal["hp"]):
+			snd = ""   # the killing blow plays its own boom
 		if snd != "":
 			var st0 := maxf(t, attack_end) if e["k"] == "attack" else (t + 0.2 if e["k"] == "game_over" else t)
 			sched.append([st0, Sfx.play.bind(snd, 0.0, 0.04)])
@@ -136,9 +145,22 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 		match String(e["k"]):
 			"attack":
 				var st := maxf(t, attack_end)
-				sched.append([st, _cards.attack.bind(e)])
-				attack_end = st + (0.2 if fast else 0.46)
-				t = st + (0.1 if fast else 0.2)
+				if bool(e["to"].get("direct", false)):
+					# F04-07: a bigger direct attack; the killing one plays the slow-motion explosion.
+					var hi := FxStrike.hp_after(events, i)
+					var dmg := -int(events[hi]["d"]) if hi >= 0 else 0
+					if hi >= 0:
+						claimed[hi] = true
+					if not lethal.is_empty() and int(lethal["attack"]) == i:
+						sched.append([st, _strike.lethal.bind(e, lethal)])
+					else:
+						sched.append([st, _strike.direct.bind(e, dmg)])
+					attack_end = st + (0.3 if fast else 0.9)
+					t = st + (0.1 if fast else 0.3)
+				else:
+					sched.append([st, _cards.attack.bind(e)])
+					attack_end = st + (0.2 if fast else 0.46)
+					t = st + (0.1 if fast else 0.2)
 			"summon":
 				var arrive_fn: Callable = _cards.arrive.bind(int(e["p"]), "unit", int(e["slot"]))
 				if summon_kind != "":
@@ -163,7 +185,12 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 				_prehide(int(e["p"]), String(e["zone"]), int(e["slot"]), t, sched, _cards.arrive.bind(int(e["p"]), String(e["zone"]), int(e["slot"])))
 				t += 0.16
 			"hp":
-				sched.append([t, _resources.hp.bind(int(e["p"]), int(e["d"]))])
+				if not lethal.is_empty() and i == int(lethal["hp"]):
+					if String(lethal["mode"]) == "effect":
+						sched.append([t, _strike.flourish.bind(lethal)])   # smaller final-blow flourish
+					# a killing direct attack shows this damage itself
+				else:
+					sched.append([t, _resources.hp.bind(int(e["p"]), int(e["d"]), claimed.has(i))])
 				t += 0.06
 			"ap":
 				sched.append([t, _resources.ap.bind(int(e["p"]), int(e["d"]))])
@@ -205,7 +232,9 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 				if ph in ["battle", "main2"] or (ph == "main1" and not turn_in_batch):
 					sched.append([t, _banner.enqueue.bind(FxBanner.PHASE_NAMES[ph], "", Color("e8dcc0"), false)])
 			"game_over":
-				sched.append([t + 0.2, _game_end.start.bind(int(e["winner"]))])
+				if lethal.is_empty():
+					sched.append([t + 0.2, _game_end.start.bind(int(e["winner"]))])
+				# else: the killing blow starts the victory / defeat look when it has played
 	var last := 0.0
 	for s in sched:
 		last = maxf(last, s[0])
@@ -217,6 +246,84 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			spot_marks.pop_front()
 			shift += SPOT_HOLD
 		_later((float(sched[i][0]) * k + shift) * UIStyle.dur(1.0), sched[i][1])
+
+
+## Starts the victory / defeat presentation for `winner` (the killing blow calls this when it is done).
+func start_game_end(winner: int) -> void:
+	_game_end.start(winner)
+
+
+## Camera-shake equivalent (F04-07): jolts the whole screen node (board, sidebar and hand) with a decaying
+## wobble, scaled up just enough that the window edge never shows. Skipped under reduced motion.
+func camera_shake(amp: float, secs: float) -> void:
+	if UIStyle.reduce_motion or screen == null:
+		return
+	var n: Control = screen
+	if _cam_users == 0:
+		_cam_rest = {"pos": n.position, "scale": n.scale, "pivot": n.pivot_offset}
+		n.pivot_offset = n.size / 2.0
+	_cam_users += 1
+	var restore := func():
+		if is_instance_valid(n) and not _cam_rest.is_empty():
+			n.position = _cam_rest["pos"]
+			n.scale = _cam_rest["scale"]
+			n.pivot_offset = _cam_rest["pivot"]
+	add_cleanup(func():
+		_cam_users = 0
+		restore.call())
+	var wobble := func(p: float):
+		if not is_instance_valid(n):
+			return
+		var k := pow(1.0 - p, 2.0) * amp
+		n.position = _cam_rest["pos"] + Vector2(sin(p * 97.0) * k, cos(p * 83.0) * k * 0.8)
+		var sc: float = 1.0 + 2.4 * k / maxf(n.size.x, 1.0)
+		n.scale = Vector2(sc, sc) * (_cam_rest["scale"] as Vector2)
+	var tw := new_tween()
+	tw.tween_method(wobble, 0.0, 1.0, UIStyle.dur(secs))
+	tw.tween_callback(func():
+		_cam_users = maxi(_cam_users - 1, 0)
+		if _cam_users == 0:
+			restore.call())
+
+
+## Full-window colour flash: rises to `peak` alpha, holds, then fades (capped and slowed under reduced motion).
+func screen_flash(col: Color, peak: float, hold: float, fade: float, origin: Vector2 = Vector2(-1.0e6, 0.0)) -> void:
+	var layer: Control = screen.banner_layer if screen.banner_layer != null else screen.fx_layer
+	# A radial flash from `origin` (global; the window centre by default), never fully opaque.
+	var win: Rect2 = screen.get_global_rect()
+	var o: Vector2 = win.get_center() if origin.x < -1.0e5 else origin
+	var g := Gradient.new()
+	g.set_color(0, Color(col, 1.0))
+	g.set_color(1, Color(col, 0.0))
+	g.add_point(0.3, Color(col, 0.55))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.0, 0.5)
+	gt.width = 256
+	gt.height = 256
+	var r := TextureRect.new()
+	r.texture = gt
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_SCALE
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var rad := win.size.length() * 0.9
+	r.size = Vector2(rad, rad) * 2.0
+	var ladd := CanvasItemMaterial.new()
+	ladd.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	r.material = ladd
+	r.z_index = UiLayers.SCREEN_FLASH
+	r.modulate.a = 0.0
+	add_node(r, layer)
+	r.position = layer.get_global_transform().affine_inverse() * o - r.size / 2.0
+	var reduced := UIStyle.reduce_motion
+	peak = minf(peak, 0.68)
+	var tw := new_tween()
+	tw.tween_property(r, "modulate:a", minf(peak, 0.3) if reduced else peak, 0.2 if reduced else UIStyle.dur(0.03))
+	tw.tween_interval(UIStyle.dur(hold))
+	tw.tween_property(r, "modulate:a", 0.0, UIStyle.dur(fade) * (1.5 if reduced else 1.0)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(free_node.bind(r))
 
 
 ## Runs `fn` after `delay` seconds (at once when the delay is negligible), on a tracked tween.
