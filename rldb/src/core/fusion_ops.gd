@@ -39,22 +39,39 @@ func _req_ok(u: int, req: Dictionary, chosen: Array) -> bool:
 	return true
 
 
-func _assignable(reqs: Array, pool: Array, chosen: Array) -> bool:
+## True when `chosen` can be completed into a distinct assignment of `reqs` from `pool`.
+## `need_field`: the assignment must use at least one Field material, because only a Field
+## material leaving frees a zone for the Fusion unit (P-16, F03-08).
+func _assignable(reqs: Array, pool: Array, chosen: Array, need_field: bool = false) -> bool:
 	var i := chosen.size()
 	if i >= reqs.size():
-		return true
+		if not need_field:
+			return true
+		for c in chosen:
+			if unit_on_field(c):
+				return true
+		return false
 	for u in pool:
 		if u in chosen:
 			continue
 		if _req_ok(u, reqs[i], chosen):
-			if _assignable(reqs, pool, chosen + [u]):
+			if _assignable(reqs, pool, chosen + [u], need_field):
 				return true
 	return false
+
+
+## True when p has no free unit zone, so a Fusion summon needs a Field material to free one.
+## A method unit that leaves the Field to pay (`exclude`, e.g. Void Basilisk) frees its own zone.
+func _fusion_needs_field_mat(p: int, exclude: int = -1) -> bool:
+	if not free_unit_slots(p).is_empty():
+		return false
+	return not (exclude != -1 and unit_on_field(exclude) and cards[exclude]["ctl"] == p)
 
 
 ## Fusion materials player p could use among `sources`, optionally excluding one uid.
 func fusion_candidates(p: int, sources: Array, exclude: int = -1) -> Array:
 	var pool := _fusion_pool(p, sources).filter(func(u): return u != exclude)
+	var need_field := _fusion_needs_field_mat(p, exclude)
 	var out := []
 	for u in players[p]["extra"]:
 		if category(u) != "fusion" or _summon_blocked(p, unit_type(u)):
@@ -62,7 +79,7 @@ func fusion_candidates(p: int, sources: Array, exclude: int = -1) -> Array:
 		var reqs: Array = script_of(u).get("fusion", [])
 		if reqs.is_empty():
 			continue
-		if _assignable(reqs, pool, []):
+		if _assignable(reqs, pool, [], need_field):
 			out.append(u)
 	return out
 
@@ -129,11 +146,12 @@ func _op_fusion_mat(f: Dictionary, op: Dictionary) -> int:
 		return R.CONT
 	var ex: int = f["vars"].get("fusion_exclude", -1)
 	var pool := _fusion_pool(f["ctl"], f["vars"]["fsources"]).filter(func(u): return u != ex)
+	var need_field := _fusion_needs_field_mat(f["ctl"], ex)
 	var ok := []
 	for u in pool:
 		if u in chosen or not _req_ok(u, reqs[op["i"]], chosen):
 			continue
-		if _assignable(reqs, pool, chosen + [u]):
+		if _assignable(reqs, pool, chosen + [u], need_field):
 			ok.append(u)
 	if ok.is_empty():
 		add_log("Fusion materials are no longer available.")

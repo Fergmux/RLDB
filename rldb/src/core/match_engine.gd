@@ -337,7 +337,8 @@ func validate(p: int, cmd: Dictionary) -> String:
 			if not main: return "Special summons from the Extra Deck follow normal summon timing (Setup or Recovery Phase)."
 			if _summon_blocked_by_type(p, unit_type(uid)): return "Your opponent's Bahatia prevents summoning %s units." % unit_type(uid)
 			if t == "ritual" and _ritual_materials(p, uid).is_empty(): return "No unit with enough Runes."
-			if t == "arcane" and _arcane_total(p) < df["cost"]: return "Spent units' current costs total %d; %d required." % [_arcane_total(p), df["cost"]]
+			# F03-04: some Spent units' current costs must total exactly the requirement.
+			if t == "arcane" and not arcane_payable(p, int(df["cost"])): return "No Spent units' current costs total exactly %d." % int(df["cost"])
 			return ""
 	return "Unknown command."
 
@@ -382,6 +383,45 @@ func _spell_target_check(p: int, uid: int) -> String:
 		if op["op"] == "fusion" and fusion_candidates(p, op["sources"]).is_empty():
 			return "No Fusion unit can be summoned."
 	return ""
+
+
+## F03-08: the Fusion methods player p can activate right now that have a summonable Fusion
+## unit. One entry per method: {"t": "cast" | "activate_set" | "ability", "uid": method card,
+## "idx": ability index (abilities only), "targets": [Fusion units in p's Extra Deck]}.
+## Legality is the activation's own: validate() (timing, phase, AP, once-per-turn, Debilitate,
+## pending choices / resolving effects) and the same fusion_candidates() the summon uses
+## (distinct current-stat materials, no Debilitated materials, zone after Field materials leave).
+func fusion_methods(p: int) -> Array:
+	var cmds := []
+	for u in players[p]["hand"]:
+		if category(u) == "spell":
+			cmds.append({"t": "cast", "uid": u})
+	for u in backrow_cards(p):
+		if category(u) == "spell":
+			cmds.append({"t": "activate_set", "uid": u})
+	for u in field_units(p) + power_cards(p):
+		var abs: Array = script_of(u).get("abilities", [])
+		for i in abs.size():
+			cmds.append({"t": "ability", "uid": u, "idx": i})
+	var out := []
+	for c in cmds:
+		var ops: Array = script_of(c["uid"]).get("spell", []) if c["t"] != "ability" else script_of(c["uid"])["abilities"][c["idx"]]["ops"]
+		var fop := {}
+		var leaves := false
+		for op in ops:
+			if c["t"] == "ability" and op["op"] in ["move", "destroy"] and op.get("target", "") == "self":
+				leaves = true
+			if op["op"] == "fusion":
+				fop = op
+				break
+		if fop.is_empty() or validate(p, c) != "":
+			continue
+		var targets := fusion_candidates(p, fop["sources"], c["uid"] if leaves else -1)
+		if not targets.is_empty():
+			var e: Dictionary = c.duplicate()
+			e["targets"] = targets
+			out.append(e)
+	return out
 
 
 func _ability_check(p: int, uid: int, idx: int, ab: Dictionary) -> String:

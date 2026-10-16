@@ -139,7 +139,11 @@ func answer_choice(player: int, choice_id: int, values: Array) -> String:
 		var total := 0
 		for v in values:
 			total += maxi(current_cost(v), 0)
-		if total < pending["min_total"]:
+		# F03-04: Arcane materials must match the requirement exactly (no overpayment).
+		if pending.get("total_exact", false):
+			if total != int(pending["total_required"]):
+				return "Selected materials total %d; exactly %d required." % [total, int(pending["total_required"])]
+		elif total < pending["min_total"]:
 			return "Selected materials total %d; %d required." % [total, pending["min_total"]]
 	var f: Dictionary = stack.back()
 	f["_ans"] = values

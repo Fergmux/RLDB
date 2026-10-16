@@ -66,18 +66,16 @@ func test_newly_summoned_unit_cannot_be_sacrificed_but_can_be_tributed() -> void
 	assert_str(m.validate(0, {"t": "ritual", "uid": inferno})).is_empty()
 
 
-func test_arcane_three_with_spent_costs_two_and_two_is_legal_overpayment() -> void:
+func test_arcane_three_with_spent_costs_two_and_two_is_unavailable_no_overpayment() -> void:
+	# F03-04 supersedes the original "overpayment is allowed" rule: totals must be exact.
 	var m := TB.make()
 	var a := TB.card(m, 0, 28, "spent")               # Guardian of the Forest (cost 2)
 	var b := TB.card(m, 0, 32, "spent")               # Frost Wyvern (cost 2)
 	var boom := TB.card(m, 0, 175, "extra")           # Boom 3A
-	assert_str(m.submit(0, {"t": "arcane", "uid": boom})).is_empty()
-	assert_str(TB.choose_uids(m, [a, b])).is_empty()
-	TB.choose(m, ["Front row, column 1"])
-	TB.choose(m, ["Attack"])
-	assert_str(m.cards[a]["zone"]).is_equal("exhaust")
-	assert_str(m.cards[b]["zone"]).is_equal("exhaust")
-	assert_str(m.cards[boom]["zone"]).is_equal("unit")
+	assert_str(m.submit(0, {"t": "arcane", "uid": boom})).contains("exactly")
+	assert_str(m.cards[a]["zone"]).is_equal("spent")
+	assert_str(m.cards[b]["zone"]).is_equal("spent")
+	assert_str(m.cards[boom]["zone"]).is_equal("extra")
 	assert_int(m.players[0]["ap"]).is_equal(2)
 
 
@@ -96,7 +94,7 @@ func test_extra_deck_unit_is_not_arcane_material() -> void:
 	TB.card(m, 0, 93, "spent")                       # Fusion unit in Spent
 	TB.card(m, 0, 174, "spent")                      # Arcane unit (2A) in Spent
 	var kaya := TB.card(m, 0, 170, "extra")          # 1A
-	assert_str(m.validate(0, {"t": "arcane", "uid": kaya})).contains("required")
+	assert_str(m.validate(0, {"t": "arcane", "uid": kaya})).contains("exactly")
 
 
 func test_extra_deck_unit_does_not_match_ordinary_cost_two() -> void:

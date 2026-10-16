@@ -190,7 +190,7 @@ func pick_option(i: int) -> void:
 ## Sends the multi-selection once it has at least the minimum number of picks.
 func confirm_multi() -> void:
 	var pd := gs.pending()
-	if pd.is_empty() or gs.multi.size() < int(pd["min"]):
+	if pd.is_empty() or MatchView.multi_pick_error(pd, gs.multi) != "":   # F03-04 exact totals
 		return
 	Sfx.play("confirm")
 	var picks := gs.multi.duplicate()
