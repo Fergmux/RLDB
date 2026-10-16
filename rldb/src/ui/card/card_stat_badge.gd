@@ -13,11 +13,15 @@ const PREVIEW_TEXT := Color("eafcff")
 const LOWERED := Color("ff8a84")
 ## Gold rim width (base units) inside the badge outline.
 const RIM := 2.4
+## F03-20: the badge is drawn at this fraction of the layout rect (about its centre), which leaves a
+## margin to the card edge and the art; the font size scales with it.
+const SHRINK := 0.86
 
 
 ## Draws the ATK (`is_atk`) or DEF badge filling `rect`. Shows the live value, or the preview value
 ## in a provisional cyan style while the painter's pv_stat targets this stat.
-static func draw(pt: CardPainter, rect: Rect2, is_atk: bool, fs_max: float) -> void:
+static func draw(pt: CardPainter, slot_rect: Rect2, is_atk: bool, fs_max: float) -> void:
+	var rect := Rect2(slot_rect.get_center() - slot_rect.size * SHRINK / 2.0, slot_rect.size * SHRINK)
 	var ci := pt.ci
 	var s := pt.s
 	var view := pt.view
