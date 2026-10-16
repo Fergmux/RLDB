@@ -105,39 +105,6 @@ func attack(e: Dictionary) -> void:
 	tw.tween_callback(_fx.reset_widget.bind(w, holder))
 
 
-## A card at `at` is destroyed: embers, plus a dissolving ghost of its previous view (from `prev_mv`)
-## when it is already gone from the board.
-func destroy(at: Dictionary, prev_mv: Dictionary) -> void:
-	var p := int(at["p"])
-	var zone := String(at["zone"])
-	var slot := int(at["slot"])
-	var rect: Rect2 = _fx.screen.fx_slot_global_rect(p, zone, slot)
-	var prev_view = null
-	if not prev_mv.is_empty() and Zones.KEY.has(zone):
-		var arr: Array = prev_mv["players"][p][Zones.KEY[zone]]
-		if slot < arr.size():
-			prev_view = arr[slot]
-	_fx.burst(FxBurst.Kind.EMBER, rect.get_center(), Color("ff8a3a"), 8, 50.0, 0.5)
-	if prev_view == null:
-		return
-	# The ghost is the same 2:3 card, turned like it was (Defense units, Trap/Spell zone).
-	var rot: bool = zone == "backrow" or (zone == "unit" and String(prev_view.get("stance", "atk")) == "def")
-	var g := CardWidget.new().setup(prev_view, Zones.KIND[zone], "", rot)
-	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	g.auto_hover = false
-	g.position = _fx.fx_pos(rect.get_center() - g.size / 2.0)
-	_fx.add_node(g)
-	var tw := _fx.new_tween()
-	if UIStyle.reduce_motion:
-		tw.tween_property(g, "modulate:a", 0.0, 0.2)
-	else:
-		var mat := ShaderMaterial.new()
-		mat.shader = load(DISSOLVE_SHADER)
-		g.material = mat
-		tw.tween_method(func(v: float): mat.set_shader_parameter("dissolve", v), 0.0, 1.0, UIStyle.dur(0.45))
-	tw.tween_callback(_fx.free_node.bind(g))
-
-
 ## A status `s` is gained on the card at `at`: coloured glow plus a floating label.
 func status(at: Dictionary, s: String, _n: int) -> void:
 	var p := int(at["p"])

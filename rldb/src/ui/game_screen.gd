@@ -245,6 +245,7 @@ func _on_view(v: Dictionary) -> void:
 		multi = []
 		_multi_pid = pid
 	var events := _collect_fx()
+	fx.expect_game_end(events)   # F03-13: the result modal waits for the victory / defeat presentation
 	hand.draws_me = 0
 	for e in events:
 		if e["k"] == "draw" and int(e["p"]) == me():

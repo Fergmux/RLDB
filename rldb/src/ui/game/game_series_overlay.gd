@@ -190,6 +190,8 @@ func _show_deck() -> void:
 func render() -> void:
 	var view := gs.view
 	var stage: String = view.get("stage", "")
+	if stage != "game" and stage != "" and gs.fx != null and gs.fx.game_end_hold:
+		return   # F03-13: held back until the victory / defeat presentation has played
 	var sig := 1
 	if stage != "game":
 		var vv := view.duplicate()

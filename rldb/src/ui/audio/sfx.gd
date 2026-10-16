@@ -11,7 +11,7 @@ const SETTINGS_PATH := "user://audio_settings.cfg"
 const NAMES: PackedStringArray = [
 	"card_draw", "card_play", "card_set", "summon", "select", "confirm", "cancel", "deny",
 	"attack", "impact", "damage", "heal", "destroy", "buff", "debuff", "turn", "phase",
-	"notice", "victory", "defeat",
+	"notice", "victory", "defeat", "exhaust", "fuse", "ritual", "arcane", "victory_big",
 ]
 const POOL_SIZE := 8
 const MIN_INTERVAL_MS := 70
@@ -72,7 +72,9 @@ static func for_fx(e: Dictionary, me: int) -> String:
 		"hp":
 			return "heal" if float(e.get("d", 0)) > 0.0 else "damage"
 		"destroy":
-			return "destroy"
+			return "exhaust" if String(e.get("dest", "spent")) == "exhaust" else "destroy"
+		"exhaust":
+			return "exhaust"
 		"status":
 			var s: String = String(e.get("s", ""))
 			return "buff" if (s == "rune" or CardDB.is_buff(s)) else "debuff"

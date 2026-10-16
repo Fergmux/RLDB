@@ -343,6 +343,49 @@ def s_defeat(r):
     return finish(lowpass(mix(*parts), 3000), tail_kw=dict(wet=0.4, extra_s=0.3, delay_s=0.055))
 
 
+def s_exhaust(r):
+    """F03-16: hollow void pull. A low tone sliding down under a reversed airy swell, then a dull thud."""
+    n = n_samples(0.8)
+    sw = mul(sweep(420, 60, 0.8), [math.sin(math.pi * min(1.0, i / n)) ** 0.7 for i in range(n)])
+    air = mul(lowpass(noise(r, 0.8), 1800), [(i / n) ** 2 * (1 - i / n) * 4 for i in range(n)])
+    thud = mul(sweep(90, 40, 0.3), env_exp(n_samples(0.3), 0.12, 0.002))
+    return finish(mix(scale(sw, 0.8), scale(air, 0.55), (0.5, scale(thud, 0.8))), tail_kw=dict(wet=0.5, extra_s=0.35, delay_s=0.07))
+
+
+def s_fuse(r):
+    """F03-17 Fusion: rising shimmer converging into a bright strike."""
+    up = mul(sweep(300, 1400, 0.55), [(i / n_samples(0.55)) ** 1.5 for i in range(n_samples(0.55))])
+    up2 = mul(sweep(450, 2100, 0.55), [(i / n_samples(0.55)) ** 1.8 for i in range(n_samples(0.55))])
+    hit = bell(880.0, 0.6, 0.2)
+    return finish(mix(scale(up, 0.5), scale(up2, 0.3), (0.55, scale(hit, 0.9))), tail_kw=dict(wet=0.4, extra_s=0.3, delay_s=0.05))
+
+
+def s_ritual(r):
+    """F03-17 Ritual: low pulsing drone with a deep strike."""
+    n = n_samples(0.9)
+    dr = mix(tone(110.0, 0.9, 0.9, ((1, 1), (2, 0.5), (3, 0.25)), 0.05), tone(164.8, 0.9, 0.9, ((1, 0.6), (2, 0.2)), 0.05))
+    pulse = [0.55 + 0.45 * math.sin(TWO_PI * 5.0 * i / SR) for i in range(len(dr))]
+    strike = mul(sweep(180, 45, 0.5), env_exp(n_samples(0.5), 0.2, 0.002))
+    return finish(mix(scale(mul(dr, pulse), 0.5), (0.45, scale(strike, 0.9))), tail_kw=dict(wet=0.45, extra_s=0.3, delay_s=0.06))
+
+
+def s_arcane(r):
+    """F03-17 Arcane: glassy ascending chime arpeggio."""
+    notes = [(0.0, 659.25), (0.1, 783.99), (0.2, 987.77), (0.3, 1318.5), (0.42, 1760.0)]
+    parts = [(o, scale(bell(f, 0.8, 0.25), 0.7)) for o, f in notes]
+    return finish(mix(*parts), tail_kw=dict(wet=0.5, extra_s=0.4, delay_s=0.045))
+
+
+def s_victory_big(r):
+    """F03-13 series victory: a longer rising fanfare."""
+    notes = [(0.0, 392.0), (0.18, 523.25), (0.36, 659.25), (0.54, 783.99), (0.8, 1046.5)]
+    parts = [(o, bell(f, 1.0, 0.3)) for o, f in notes]
+    chord = scale(mix(tone(261.6, 1.6, 0.8, ((1, 1), (2, 0.3)), 0.02), tone(392.0, 1.6, 0.8, ((1, 1), (2, 0.3)), 0.02),
+                      tone(523.25, 1.6, 0.8, ((1, 1), (2, 0.2)), 0.02)), 0.4)
+    parts.append((0.8, chord))
+    return finish(mix(*parts), tail_kw=dict(wet=0.45, extra_s=0.5, delay_s=0.05))
+
+
 SOUNDS = [
     ("card_draw", s_card_draw), ("card_play", s_card_play), ("card_set", s_card_set),
     ("summon", s_summon), ("select", s_select), ("confirm", s_confirm),
@@ -351,11 +394,12 @@ SOUNDS = [
     ("destroy", s_destroy), ("buff", s_buff), ("debuff", s_debuff),
     ("turn", s_turn), ("phase", s_phase), ("notice", s_notice),
     ("victory", s_victory), ("defeat", s_defeat),
+    ("exhaust", s_exhaust), ("fuse", s_fuse), ("ritual", s_ritual), ("arcane", s_arcane), ("victory_big", s_victory_big),
 ]
 
 
 # Hard duration caps (seconds); longer renders are trimmed and re-faded.
-MAX_LEN = {"victory": 1.4, "defeat": 1.4, "turn": 0.9, "heal": 0.9, "summon": 0.8}
+MAX_LEN = {"victory_big": 2.6, "exhaust": 1.3, "fuse": 1.3, "ritual": 1.4, "arcane": 1.3, "victory": 1.4, "defeat": 1.4, "turn": 0.9, "heal": 0.9, "summon": 0.8}
 
 
 def write_wav(path, x):

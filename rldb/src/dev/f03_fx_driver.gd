@@ -116,3 +116,133 @@ func _mode_ready() -> void:
 	await _wait(0.6)
 	await _seq("ready", 8, 0.22)
 	_done()
+
+
+## Answers every pending choice with its first legal picks (dev staging only).
+func _auto_answer() -> void:
+	var guard := 0
+	while not m.pending.is_empty() and guard < 12:
+		guard += 1
+		var pd := m.pending
+		var n: int = pd["options"].size()
+		var want: int = n if int(pd.get("min_total", 0)) > 0 else maxi(int(pd["min"]), 1)
+		var idx := []
+		for i in mini(want, n):
+			idx.append(i)
+		m.submit(pd["player"], {"t": "choose", "id": pd["id"], "indices": idx})
+
+
+func _mode_destroy() -> void:
+	_turn2()
+	var a := m.active
+	var o := 1 - a
+	var victim := TB.unit(m, o, 36, 0)
+	TB.unit(m, o, 1, 2)
+	_fresh_view(a)
+	await _wait(0.5)
+	m.destroy(victim, "effect", -1, a)
+	host.broadcast()
+	await _seq("destroy", 12, 0.09)
+	_done()
+
+
+func _mode_exhaust() -> void:
+	_turn2()
+	var a := m.active
+	var o := 1 - a
+	TB.unit(m, a, 1, 0)
+	TB.unit(m, o, 110, 1)
+	TB.card(m, o, 36, "spent")
+	TB.card(m, o, 1, "spent")
+	var viewer := a
+	for x in OS.get_cmdline_user_args():
+		if x == "--viewer=other":
+			viewer = o
+	_fresh_view(viewer)
+	await _wait(0.5)
+	TB.cast(m, a, 101)
+	_auto_answer()
+	host.broadcast()
+	await _seq("exhaust", 28, 0.12)
+	_done()
+
+
+func _summon_scene(kind: String) -> void:
+	_turn2()
+	var a := m.active
+	var o := 1 - a
+	TB.unit(m, o, 110, 1)
+	m.players[a]["ap"] = 6
+	match kind:
+		"fusion":
+			var mag := TB.unit(m, a, 69, 0)
+			TB.unit(m, a, 34, 1)
+			TB.card(m, a, 142, "extra")
+			_fresh_view(a)
+			await _wait(0.5)
+			m.submit(a, {"t": "ability", "uid": mag, "idx": 0})
+		"ritual":
+			var u := TB.unit(m, a, 1, 0)
+			m.apply_status(u, "rune", 1)
+			var r := TB.card(m, a, 98, "extra")
+			_fresh_view(a)
+			await _wait(0.5)
+			m.submit(a, {"t": "ritual", "uid": r})
+		"arcane":
+			TB.card(m, a, 1, "spent")
+			TB.card(m, a, 110, "spent")
+			var ar := TB.card(m, a, 172, "extra")
+			_fresh_view(a)
+			await _wait(0.5)
+			m.submit(a, {"t": "arcane", "uid": ar})
+	_auto_answer()
+	host.broadcast()
+	await _seq(kind, 22, 0.1)
+	_done()
+
+
+func _mode_fusion() -> void:
+	_summon_scene("fusion")
+
+
+func _mode_ritual() -> void:
+	_summon_scene("ritual")
+
+
+func _mode_arcane() -> void:
+	_summon_scene("arcane")
+
+
+func _end_scene(viewer_wins: bool, series: bool) -> void:
+	_turn2()
+	var a := m.active
+	var o := 1 - a
+	TB.unit(m, a, 36, 0)
+	m.players[o]["hp"] = 5
+	if series:
+		host.series.scores[a] = 1
+	m.submit(a, {"t": "next_phase"})
+	_fresh_view(a if viewer_wins else o)
+	await _wait(0.5)
+	var uid: int = m.players[a]["units"][0]
+	m.submit(a, {"t": "attack", "uid": uid})
+	_auto_answer()
+	host.broadcast()
+	await _seq("end", 16, 0.22)
+	_done()
+
+
+func _mode_win() -> void:
+	_end_scene(true, false)
+
+
+func _mode_lose() -> void:
+	_end_scene(false, false)
+
+
+func _mode_serieswin() -> void:
+	_end_scene(true, true)
+
+
+func _mode_serieslose() -> void:
+	_end_scene(false, true)
