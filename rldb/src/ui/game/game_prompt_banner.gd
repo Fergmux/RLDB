@@ -13,7 +13,6 @@ const BANNER_MAX_W := 380.0
 ## Narrowest free column beside the board the banner may sit in (F03-25), and its margin to the zones.
 const BANNER_SIDE_MIN_W := 220.0
 const BANNER_SIDE_MAX_W := 300.0
-var _fit_gen := 0
 const BANNER_GAP := 12.0
 ## Breathing border period (s).
 const BANNER_BREATH := 1.4
@@ -66,13 +65,12 @@ func _init(screen: GameScreen) -> void:
 func build() -> void:
 	# F02-07 / F03-25 context banner: a tall, narrow card with a gold pulse. It sits in the free
 	# column beside the board (or the top strip when there is none) so it never covers a target.
-	ctx_banner = PanelContainer.new()
-	var bs := UIStyle.flat(Color(0.1, 0.075, 0.04, 0.98), UIStyle.GOLD, 3, 12)
-	bs.border_width_left = 8
-	bs.content_margin_left = 18
-	bs.content_margin_right = 14
-	bs.content_margin_top = 12
-	bs.content_margin_bottom = 12
+	ctx_banner = PromptPlate.new()
+	var bs := UIStyle.flat(Color(0, 0, 0, 0), UIStyle.GOLD, 3, 12)
+	bs.content_margin_left = 20
+	bs.content_margin_right = 16
+	bs.content_margin_top = 3
+	bs.content_margin_bottom = 14
 	bs.shadow_color = Color(UIStyle.GOLD, 0.35)
 	bs.shadow_size = 14
 	bs.shadow_offset = Vector2(0, 2)
@@ -82,15 +80,23 @@ func build() -> void:
 	ctx_banner.z_index = UiLayers.BANNER
 	gs.add_child(ctx_banner)
 	var bcol := VBoxContainer.new()
-	bcol.add_theme_constant_override("separation", 6)
+	bcol.add_theme_constant_override("separation", 7)
 	ctx_banner.add_child(bcol)
-	banner_tag = UIStyle.label("", 12, UIStyle.GOLD, false, true)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 6)
+	head.custom_minimum_size = Vector2(40, PromptPlate.HEAD_H - 3.0)
+	bcol.add_child(head)
+	head.add_child(PromptPlate.Pip.new())
+	banner_tag = UIStyle.label("", 12, UIStyle.GOLD_HI, false, true)
 	banner_tag.clip_text = true
 	banner_tag.custom_minimum_size = Vector2(40, 0)
-	bcol.add_child(banner_tag)
+	banner_tag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	banner_tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(banner_tag)
 	banner_title = UIStyle.label("", 21, UIStyle.GOLD_HI, true, true)
 	banner_title.custom_minimum_size = Vector2(40, 0)
 	bcol.add_child(banner_title)
+	bcol.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 8.0))
 	banner_sub = RichTextLabel.new()
 	banner_sub.bbcode_enabled = true
 	banner_sub.fit_content = true
@@ -149,7 +155,15 @@ func build_notices() -> void:
 	wait_chip.visible = false
 	wait_label = UIStyle.label("", 22, UIStyle.GOLD_HI, false, true)
 	wait_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wait_chip.add_child(wait_label)
+	var wrow := HBoxContainer.new()
+	wrow.add_theme_constant_override("separation", 10)
+	wrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wait_chip.add_child(wrow)
+	var rune := WaitPlate.Rune.new()
+	rune.custom_minimum_size = Vector2(30, 30)
+	rune.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	wrow.add_child(rune)
+	wrow.add_child(wait_label)
 	gs.add_child(wait_chip)
 	toast = UIStyle.label("", 15, UIStyle.BAD, true)
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -301,20 +315,9 @@ func place_banner() -> void:
 
 
 func _size_banner(w: float) -> void:
-	ctx_banner.size = Vector2(w, 0)
-	ctx_banner.size = Vector2(w, ctx_banner.get_combined_minimum_size().y)
-	ctx_banner.pivot_offset = ctx_banner.size / 2.0
-	# Wrapped labels report their height for the width they had before this layout; measure again
-	# once they have been laid out at `w`, so the banner hugs its content instead of staying tall.
-	_fit_gen += 1
-	var gen := _fit_gen
-	if not ctx_banner.is_inside_tree():
-		return
-	ctx_banner.get_tree().process_frame.connect(func():
-		if gen == _fit_gen and is_instance_valid(ctx_banner):
-			ctx_banner.size = Vector2(w, 0)
-			ctx_banner.size = Vector2(w, ctx_banner.get_combined_minimum_size().y)
-			ctx_banner.pivot_offset = ctx_banner.size / 2.0, CONNECT_ONE_SHOT)
+	# F04-13: the plate measures itself in passes after layout (see PromptPlate.fit), so wrapped
+	# labels that were laid out at a stale width cannot leave it too tall.
+	(ctx_banner as PromptPlate).fit(w)
 
 
 ## Attention treatment (F03-25): a pop and gold flare when a new choice appears, then a gentle
