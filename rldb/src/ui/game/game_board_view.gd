@@ -12,7 +12,7 @@ const POWER_W := 85.0
 const TRAP_H := 85.0
 const PILE_GAP := 24.0
 const BOARD_H := 730.0
-const PLATE_W := 300.0
+const PLATE_W := PlayerPlate.PLATE_W
 const OPP_HAND_MAX := 10
 ## Slots per zone, in render order.
 const ZONE_SLOTS := {"unit": 6, "backrow": 3, "power": 4}
@@ -216,10 +216,10 @@ func layout(w: float, h: float) -> void:
 			var ps: PileStack = piles[side][PILE_ZONES[i][0]]
 			ps.position = Vector2(px + (i % 2) * (POWER_W + SLOT_GAP), _y0 + rows[int(i / 2)])
 			ps.size = Vector2(POWER_W, UNIT_SIZE)
-	(plates[0] as Control).position = Vector2(area.end.x - PLATE_W - 14.0, _y0 - 6.0)
+	(plates[0] as Control).position = Vector2(area.end.x - PLATE_W - 14.0, _y0 - 10.0)
 	(plates[0] as Control).size = Vector2(PLATE_W, 0)
 	var ph := (plates[1] as Control).get_combined_minimum_size().y
-	(plates[1] as Control).position = Vector2(14.0, _y0 + BOARD_H - ph + 6.0)
+	(plates[1] as Control).position = Vector2(14.0, _y0 + BOARD_H - ph + 8.0)
 	(plates[1] as Control).size = Vector2(PLATE_W, 0)
 	opp_hand_count_label.position = Vector2(14.0, GameScreen.TOP_H + 4.0)
 	opp_hand_box.position = Vector2(14.0, GameScreen.TOP_H + 26.0)
@@ -275,6 +275,7 @@ func render() -> void:
 				for m in pv["ap_next"]:
 					parts.append("%+d" % m["n"])
 				nxt = "next turn %s AP" % " ".join(parts)
+			pl.begin_game("%s:%d" % [String(gs.view.get("save_id", "local")), int(gs.view.get("game_no", 0))])
 			pl.update_from(pv, active, pidx == p, "", nxt)
 			_update_piles(side, pidx, pv)
 	deco.glow_side = -1   # active player is shown by the plate's turn marker, not a table band
