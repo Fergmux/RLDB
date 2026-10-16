@@ -187,12 +187,10 @@ func _show_menu() -> void:
 	menu = Control.new()
 	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(menu)
-	var bg := ColorRect.new()
-	bg.color = M_DEEP
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	menu.add_child(bg)
+	menu.add_child(UIStyle.background(0.15))
+	# Translucent band behind the menu column so its text reads over the table art.
 	var table := ColorRect.new()
-	table.color = M_WOOD
+	table.color = Color(0.04, 0.03, 0.025, 0.72)
 	table.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	table.anchor_left = 0.12
 	table.anchor_right = 0.88

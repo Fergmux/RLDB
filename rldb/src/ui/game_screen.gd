@@ -79,7 +79,7 @@ var _seen_toast_seq: int = -1
 var _multi_pid: int = -1           # pending choice the current multi-pick belongs to
 
 # Layers / nodes
-var table: ColorRect
+var table: Control
 var deco: BoardDeco
 var board_layer: Control
 var hand_layer: Control
@@ -561,13 +561,20 @@ func _passive_layer() -> Control:
 # ---------------------------------------------------------------- build
 
 func _build_table() -> void:
-	table = ColorRect.new()
-	table.color = UIStyle.TABLE_WOOD
-	table.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	table.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Brown candle-lit gradient behind everything (the sidebar column shows it) ...
+	var base := ColorRect.new()
+	base.color = UIStyle.TABLE_WOOD
+	base.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	base.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://assets/shaders/table.gdshader")
-	table.material = mat
+	base.material = mat
+	add_child(base)
+	# ... and the table art covering only the play field (sized in _relayout), with a light veil
+	# so zones and cards stay readable over it.
+	table = UIStyle.background(0.32)
+	table.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	table.clip_contents = true
 	add_child(table)
 
 
@@ -1073,6 +1080,8 @@ func _relayout() -> void:
 	_side_k = clampf(w / 1600.0, 1.0, 1.2)
 	_sbw = SIDEBAR_W * _side_k
 	_area = Rect2(0, TOP_H, w - _sbw, h - TOP_H - HAND_H)
+	table.position = Vector2.ZERO
+	table.size = Vector2(w - _sbw, h)   # the field only; the sidebar keeps the brown gradient
 	_y0 = _area.position.y + maxf(0.0, (_area.size.y - BOARD_H) / 2.0)
 	_ux = _area.position.x + (_area.size.x - (3.0 * U + 2.0 * G)) / 2.0
 	for key in _slots.keys():

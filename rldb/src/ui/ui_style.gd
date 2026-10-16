@@ -198,6 +198,32 @@ static func primary_button(text: String, size: int = 15) -> Button:
 	return b
 
 
+const BACKGROUND := "res://assets/art/background.jpg"   # full 4096x4096 original (a JPEG), kept for 4K screens
+
+
+## Full-screen background (user-supplied wood table art): scaled to cover the whole rect with the
+## overflow cropped, plus an optional dark veil (`dim` 0..1) so cards and text keep their contrast.
+static func background(dim: float = 0.0) -> Control:
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tr := TextureRect.new()
+	tr.texture = load(BACKGROUND)
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	tr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # crisp when scaled below 4K
+	tr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(tr)
+	if dim > 0.0:
+		var veil := ColorRect.new()
+		veil.color = Color(0, 0, 0, dim)
+		veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(veil)
+	return root
+
+
 ## Drop shadow / glow on a button style (depth instead of a flat slab).
 static func _lift(sb: StyleBoxFlat, col: Color, sz: int, dy: int) -> void:
 	sb.shadow_color = col
