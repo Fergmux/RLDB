@@ -30,7 +30,7 @@ func _frames(n: int) -> void:
 
 
 func _shot(name: String) -> void:
-	await _frames(3)
+	await create_timer(0.45).timeout
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png(out_dir.path_join(name + ".png"))
 
@@ -91,7 +91,7 @@ func run() -> void:
 		TB.card(m, me, id, "extra")
 	m.players[me]["ap"] = 4
 	host.broadcast()
-	await _frames(6)
+	await create_timer(4.0).timeout      # let the coin flip finish
 	await _shot("00_board_no_empty_hand_text_default")
 
 	# F03-01: right-click a field card.
