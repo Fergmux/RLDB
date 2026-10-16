@@ -93,7 +93,8 @@ func test_stat_markers_and_flags() -> void:
 	assert_bool(t.contains("Attacked this turn")).is_false()
 	assert_bool(t.contains("Controlled until end of turn 5")).is_true()
 	assert_bool(t.contains("No statuses.")).is_false()         # nothing shown when there are none
-	assert_bool(t.contains("No effect text.")).is_true()
+	assert_bool(t.contains("No effect text.")).is_false()
+	assert_bool(p.sections.has("rules")).is_false()          # no effect: no Rules section
 	assert_int(p.count_text("Base: 10")).is_equal(2)
 	assert_int(p.count_text("printed 10")).is_equal(0)
 

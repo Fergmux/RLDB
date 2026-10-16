@@ -211,3 +211,26 @@ func test_trap_with_a_legal_target_is_offered() -> void:
 	var a := TB.unit(m, 1, TB.WATER, 1, "atk", 10)
 	TB.attack(m, a, guard)
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
+
+
+## Feedback 09 report: Mirror Force destroys only the attacker's Attack-stance units; the
+## attacker's set Traps and Powers stay (destruction effects of the destroyed units aside).
+func test_mirror_force_leaves_the_attackers_traps_and_powers() -> void:
+	var m := TB.make()
+	TB.to_turn2(m)
+	TB.set_card(m, 0, 46, 0)                                  # defender's Mirror Force
+	var a1 := TB.unit(m, 1, TB.WATER, 0, "atk")
+	var a2 := TB.unit(m, 1, TB.FIRE, 1, "atk")
+	var d1 := TB.unit(m, 1, TB.EARTH, 2, "def")
+	var t1 := TB.set_card(m, 1, 45, 0)
+	var t2 := TB.set_card(m, 1, 50, 1)
+	var pw := TB.power(m, 1, 88)
+	TB.to_battle(m)
+	TB.attack(m, a1, -1)
+	assert_str(TB.choose(m, ["Activate Mirror Force"])).is_empty()
+	assert_str(m.cards[a1]["zone"]).is_equal("spent")
+	assert_str(m.cards[a2]["zone"]).is_equal("spent")
+	assert_str(m.cards[d1]["zone"]).is_equal("unit")             # Defense stance survives
+	assert_str(m.cards[t1]["zone"]).is_equal("backrow")
+	assert_str(m.cards[t2]["zone"]).is_equal("backrow")
+	assert_str(m.cards[pw]["zone"]).is_equal("power")
