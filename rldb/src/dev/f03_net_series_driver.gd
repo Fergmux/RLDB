@@ -168,11 +168,15 @@ func _run() -> void:
 	await _wait(0.2)
 	var hold := screen.fx.game_end_hold
 	_check("F03-13 result modal held while the presentation plays", hold)
-	await _wait(1.0)
+	# The killing-blow sequence (F04-07) plays first; wait for the title to appear.
+	var find_titles := func() -> Array:
+		return screen.find_children("*", "Label", true, false).filter(func(l): return l.is_visible_in_tree() and (l.text == "DEFEAT" or l.text == "VICTORY"))
+	await _until(func(): return not find_titles.call().is_empty(), 8.0)
+	await _wait(0.6)
 	await _shot("02_client_game_end_presentation")
-	var titles := screen.find_children("*", "Label", true, false).filter(func(l): return l.is_visible_in_tree() and (l.text == "DEFEAT" or l.text == "VICTORY"))
+	var titles: Array = find_titles.call()
 	_check("F03-13 client sees its own outcome", not titles.is_empty() and titles[0].text == ("DEFEAT" if a == 0 else "VICTORY"), str(titles.map(func(l): return l.text)))
-	await _until(func(): return not screen.fx.game_end_hold, 9.0)
+	await _until(func(): return not screen.fx.game_end_hold, 15.0)
 	await _wait(0.5)
 	await _shot("03_client_result_modal")
 	_check("F03-13 result modal appears after the presentation", screen.overlays.overlay_box != null and screen.overlays.overlay_box.is_visible_in_tree())
