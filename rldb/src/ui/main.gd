@@ -16,6 +16,9 @@ var status_label: Label
 
 func _ready() -> void:
 	theme = UIStyle.make_theme()
+	# Saved window mode (scripted runs keep their own window size).
+	if not OS.get_cmdline_user_args().any(func(a): return String(a).contains("shots")):
+		UIStyle.apply_window_mode()
 	Music.start()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if not ("--no-steam" in OS.get_cmdline_user_args()):
@@ -565,6 +568,7 @@ func _leaf_panel(target: String) -> Control:
 			_add_saved_series(pv[1], SeriesStore.list())
 		"settings":
 			pv = _center_panel("Settings")
+			pv[1].add_child(UIStyle.display_controls(16))
 			pv[1].add_child(GameScreen.audio_controls(16))
 			var rm := CheckBox.new()
 			rm.text = "Reduced motion (no travel, shake or particles)"

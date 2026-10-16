@@ -1027,6 +1027,7 @@ func _build_overlays() -> void:
 	fa.button_pressed = UIStyle.fast_anim
 	fa.toggled.connect(func(on): UIStyle.set_fast_anim(on))
 	sv.add_child(fa)
+	sv.add_child(UIStyle.display_controls(14))
 	sv.add_child(audio_controls(14))
 	var cl := UIStyle.button("Close", 13)
 	cl.pressed.connect(func(): settings_popup.visible = false)

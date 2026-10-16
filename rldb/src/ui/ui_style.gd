@@ -98,6 +98,9 @@ static func font_display(weight: int = 600) -> Font:
 const SETTINGS_PATH := "user://ui_settings.cfg"
 static var reduce_motion: bool = false
 static var fast_anim: bool = false
+## Window mode: "windowed", "borderless" (borderless full screen) or "fullscreen" (exclusive).
+static var window_mode: String = "windowed"
+const WINDOW_MODES := [["windowed", "Windowed"], ["borderless", "Borderless"], ["fullscreen", "Fullscreen"]]
 static var _settings_loaded: bool = false
 
 
@@ -109,12 +112,14 @@ static func load_settings() -> void:
 	if cf.load(SETTINGS_PATH) == OK:
 		reduce_motion = bool(cf.get_value("ui", "reduce_motion", false))
 		fast_anim = bool(cf.get_value("ui", "fast_anim", false))
+		window_mode = String(cf.get_value("ui", "window_mode", "windowed"))
 
 
 static func save_settings() -> void:
 	var cf := ConfigFile.new()
 	cf.set_value("ui", "reduce_motion", reduce_motion)
 	cf.set_value("ui", "fast_anim", fast_anim)
+	cf.set_value("ui", "window_mode", window_mode)
 	cf.save(SETTINGS_PATH)
 
 
@@ -126,6 +131,40 @@ static func set_reduce_motion(on: bool) -> void:
 static func set_fast_anim(on: bool) -> void:
 	fast_anim = on
 	save_settings()
+
+
+## Applies and saves the window mode (persisted; applied at start-up by main).
+static func set_window_mode(mode: String) -> void:
+	window_mode = mode
+	save_settings()
+	apply_window_mode()
+
+
+static func apply_window_mode() -> void:
+	match window_mode:
+		"fullscreen":
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
+		"borderless":
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)   # borderless full screen in Godot 4
+		_:
+			if DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_WINDOWED:
+				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+
+## Row with a Display label and a Windowed / Borderless / Fullscreen picker.
+static func display_controls(fs: int) -> Control:
+	load_settings()
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.add_child(label("Display", fs, TEXT))
+	var ob := OptionButton.new()
+	for i in WINDOW_MODES.size():
+		ob.add_item(WINDOW_MODES[i][1], i)
+		if WINDOW_MODES[i][0] == window_mode:
+			ob.select(i)
+	ob.item_selected.connect(func(i): set_window_mode(WINDOW_MODES[i][0]))
+	row.add_child(ob)
+	return row
 
 
 ## Scales an animation duration (seconds) by the "fast animations" option.

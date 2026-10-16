@@ -45,10 +45,10 @@ Extra command-line flags (after `--`): `--no-steam`, `--seed=N`, `--draft`, `--b
 logged into a different Steam account, the accounts being Steam friends. Copy the whole
 `build/windows/` folder (RLDB.exe, RLDB.pck, steam_api64.dll, libgodotsteam…dll, steam_appid.txt) to both.
 
-1. Both: start Steam, log in, run `RLDB.exe`; the menu shows "Steam ready as …".
+1. Both: start Steam, log in, run `RLDB.exe`.
 2. B: keep RLDB open on the main menu (with dev App ID 480 an invite cannot launch RLDB — Steam would start Spacewar).
-3. A: *Host Steam lobby* (tick *List my lobby publicly* as a fallback) → invite B from the overlay (Shift+Tab if it does not open).
-4. B: accept the invite in the Steam overlay/chat → B joins. Fallback: B → *Find lobbies* → *Join A's lobby*.
+3. A: *Play → Play online → Host game* (tick *List my lobby publicly* as a fallback) → *Host and invite* → invite B from the overlay (Shift+Tab if it does not open).
+4. B: accept the invite in the Steam overlay/chat → B joins. Fallback: B → *Play → Play online → Join game → Browse public lobbies*.
 5. Both pick decks; play a turn each: summon in Defense, use an ability, attack with a combat preview; let A attack into B's set Trap and confirm A's screen says it is waiting while B gets the response prompt.
 6. Disconnect B's network ~10 s → A shows *MATCH PAUSED*; reconnect → the same prompt returns. After 60 s A may claim the current game only.
 7. Quit and relaunch B, rejoin through *Find lobbies*/invite → B gets its seat back.
@@ -72,7 +72,7 @@ of both files. Live check: `godot --path rldb -- --bot-shots=<dir>`.
 godot --headless --path rldb -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode -c
 ```
 
-412 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
+419 GdUnit4 tests (rules, decisions, cards, series, UI stores, network, adversarial QA): rules acceptance checks from `rules/05`, Sneaky Snunday checks, statuses,
 summons, per-card behaviour (every effect card), series flow, review regressions, and
 two-client ENet integration tests (trap suspension, illegal input, payload redaction,
 reconnect during a pending prompt, duplicate-command replay, and complete best-of-3 /
