@@ -3,14 +3,17 @@ extends PanelContainer
 ## Player info plate (match-board.md section 4): name with turn marker, HP bar with number,
 ## AP gems and pile chips. Pile chips for the local player are clickable (inspection only).
 
+## HP bar scale floor: the bar is never scaled to less than this maximum.
+const DEFAULT_MAX_HP := 60
 
 
+## Animated HP bar with the HP number.
 class HpBar extends Control:
 	## `hp` is the real value; `shown` is what is drawn and tweens towards it (number counts up/down).
 	## Damage leaves a pale ghost segment that drains after a beat; healing shows the gained segment in
 	## green that the fill grows into. `tint` flashes the number red (damage) or green (heal).
 	var hp: int = 0
-	var max_hp: int = 60
+	var max_hp: int = DEFAULT_MAX_HP
 	var flash: float = 0.0: set = _set_flash
 	var shown: float = 0.0: set = _set_shown
 	var ghost: float = 0.0: set = _set_ghost
@@ -61,6 +64,7 @@ class HpBar extends Control:
 		if dmg:
 			_tw.tween_property(self, "ghost", float(v), UIStyle.dur(0.35)).set_delay(UIStyle.dur(0.35)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
+	## Rounded segment of the bar `r` between HP values `a` and `b` (skipped when under half a pixel).
 	func _seg(r: Rect2, a: float, b: float, col: Color) -> void:
 		var m := float(maxi(1, max_hp))
 		var x0 := r.position.x + r.size.x * clampf(minf(a, b) / m, 0.0, 1.0)
@@ -111,6 +115,7 @@ class HpBar extends Control:
 		draw_string(small, Vector2(8 + sz.x + 5, pos.y - 1), "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(UIStyle.TEXT, 0.7))
 
 
+## Row of AP gems and sockets with the "AP x/y" label.
 class ApGems extends Control:
 	## AP slot display policy (F02-06). The row shows the player's real AP capacity, not a fixed
 	## number of sockets:
@@ -193,23 +198,25 @@ class ApGems extends Control:
 	func _prog(rem: float, total: float) -> float:
 		return clampf(1.0 - rem / UIStyle.dur(total), 0.0, 1.0)
 
+	## Slots shown: max(ap_start, ap_peak, ap), never negative.
 	static func capacity_for(p_ap: int, p_start: int, p_peak: int) -> int:
 		return maxi(0, maxi(p_ap, maxi(p_start, p_peak)))
 
+	## Filled (unspent) slots: ap clamped to the capacity.
 	static func filled_for(p_ap: int, p_start: int, p_peak: int) -> int:
 		return clampi(p_ap, 0, capacity_for(p_ap, p_start, p_peak))
 
+	## Spent (cracked socket) slots: capacity - filled.
 	static func spent_for(p_ap: int, p_start: int, p_peak: int) -> int:
 		return capacity_for(p_ap, p_start, p_peak) - filled_for(p_ap, p_start, p_peak)
 
+	## capacity_for() of the current values.
 	func capacity() -> int:
 		return capacity_for(ap, ap_start, ap_peak)
 
+	## filled_for() of the current values.
 	func filled() -> int:
 		return filled_for(ap, ap_start, ap_peak)
-
-	func spent() -> int:
-		return spent_for(ap, ap_start, ap_peak)
 
 	## Label text: "AP 1/2" (or just "AP 0" when there are no slots yet).
 	func ap_text() -> String:
@@ -255,6 +262,7 @@ class ApGems extends Control:
 		draw_string(font, tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, tcol)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+	## One AP gem of radius `r` at alpha `a` (skipped when invisible).
 	func _gem(c: Vector2, r: float, amber: Color, a: float) -> void:
 		if r <= 0.2 or a <= 0.0:
 			return
@@ -271,6 +279,7 @@ class ApGems extends Control:
 				c + Vector2(-0.2, 0.25) * rad, c + Vector2(0.1, 0.75) * rad]), Color(amber, 0.55), 1.0, true)
 
 
+## Gold triangle shown beside the name of the player whose turn it is.
 class TurnMark extends Control:
 	var on: bool = false
 
@@ -289,7 +298,7 @@ var next_label: Label
 var hp_bar: HpBar
 var ap_gems: ApGems
 var turn_mark: TurnMark
-var _max_hp: int = 60
+var _max_hp: int = DEFAULT_MAX_HP
 var _active: bool = false
 var _tween: Tween
 ## Player shown on this plate at the last update; a different one (seat switch) snaps instead of animating.
@@ -331,7 +340,7 @@ func update_from(pv: Dictionary, active: bool, mine: bool, label_suffix: String,
 	var who := String(pv["name"])
 	var snap := who != _who
 	_who = who
-	_max_hp = maxi(_max_hp, maxi(int(pv["hp"]), 60))
+	_max_hp = maxi(_max_hp, maxi(int(pv["hp"]), DEFAULT_MAX_HP))
 	hp_bar.max_hp = _max_hp
 	hp_bar.set_hp(int(pv["hp"]), snap)
 	hp_bar.queue_redraw()
@@ -343,8 +352,9 @@ func update_from(pv: Dictionary, active: bool, mine: bool, label_suffix: String,
 		pulse()
 
 
+## Resets the HP bar scale to the default (new match).
 func reset_hp_max() -> void:
-	_max_hp = 60
+	_max_hp = DEFAULT_MAX_HP
 
 
 ## Brief highlight (turn change / damage).
@@ -358,15 +368,13 @@ func pulse() -> void:
 	_tween.tween_property(hp_bar, "flash", 0.0, UIStyle.dur(0.3))
 
 
+## Global point for HP change popups: over the right end of the HP bar, never over the player
+## name at the top-left of the plate.
 func hp_anchor() -> Vector2:
-	# Over the right end of the HP bar: never over the player name at the top-left of the plate.
 	var r := hp_bar.get_global_rect()
 	return Vector2(r.end.x - 56.0, r.get_center().y)
 
 
+## Global point for AP change popups (right of the gem row's centre).
 func ap_anchor() -> Vector2:
 	return ap_gems.get_global_rect().get_center() + Vector2(60, 0)
-
-
-func portrait_center() -> Vector2:
-	return get_global_rect().get_center()
