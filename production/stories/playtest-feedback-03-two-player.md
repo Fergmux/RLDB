@@ -25,9 +25,9 @@ retained evidence under `production/qa/evidence/2026-10-16-f03/`).
 
 | Item | Status | Owner | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| F03-01 Right-click inspection | In progress | I | | |
-| F03-02 Near-full-screen pile browser | In progress | I | | |
-| F03-03 Consistent tags with contained icons | In progress | I | | |
+| F03-01 Right-click inspection | Implemented — unverified | I + lead | `CardInspector` (big 2:3 card + details panel), `GameInspect`; right-click on Field/Hand/pile rows/browser/deck builder; lead added draft, reward, deck-choice and choice-tray cards (`bab0f2e`). Hidden cards not inspectable; refreshes or closes on new views | `ui_f03_inspect_test.gd` (22); `inspect/01..03` |
+| F03-02 Near-full-screen pile browser | Implemented — unverified | I | `PileBrowser`: own Draw/Spent/Exhaust/Extra, `best_layout` grid, Draw in shown-random order, card inspection returns to the same scroll | Tests in `ui_f03_inspect_test.gd`; `inspect/04..08` |
+| F03-03 Consistent tags with contained icons | Implemented — unverified | I | One tag height (line height + padding); Type icon sized to the line | `card_details_f03_test.gd` (equal heights) |
 | F03-04 Exact Arcane total | In progress | R | | |
 | F03-05 Hide zero-cost Arcane materials | In progress | R | | |
 | F03-06 Smaller player panels | Implemented — unverified | B | Plates 300→252 px wide, 89 px tall; `PlayerPlate.PLATE_W` | Rect check: no plate/zone overlap, ~24 px gap at 1600x900; long name / 120 HP / 9 AP fit (`board/plates_*`) |
@@ -36,21 +36,21 @@ retained evidence under `production/qa/evidence/2026-10-16-f03/`).
 | F03-09 Basic-unit names without Type suffix | In progress | R | | |
 | F03-10 Draft composition controls | In progress | R | | |
 | F03-11 One Extra Deck category (draft, rewards) | In progress | R | | |
-| F03-12 No empty-Hand text | In progress | I | | |
-| F03-13 Victory / defeat presentation | In progress | V | | |
+| F03-12 No empty-Hand text | Implemented — unverified | I | Label removed from `game_hand_view.gd` | `inspect/00` |
+| F03-13 Victory / defeat presentation | Implemented — unverified | V + lead | `FxGameEnd`: game/series win and loss variants; result modal held until it ends (click skips, 8 s safety). Lead: hot-seat hand-over waits for it (`4ce74a0`) | `fx_f03_test.gd`; win/series-win frames; lead re-ran defeat in a bot game: DEFEAT plays, then the modal |
 | F03-14 HP display reset between games | Implemented — unverified | B | Cause: reset only ran on `GameScreen.attach()`, which a series keeps across games. `PlayerPlate.begin_game(save_id:game_no)` resets each new game | `hp_reset_test.gd`; live two-game series still to run |
 | F03-15 Guided tutorial | Captured | T | | |
-| F03-16 Destroy / Exhaust animations | In progress | V | | |
-| F03-17 Special-summon sequences | In progress | V | | |
+| F03-16 Destroy / Exhaust animations | Implemented — unverified | V | Destroy: flash, cracks, ember dissolve to its pile. Exhaust: front and centre, "EXHAUSTED", violet void ring into Exhaust. Identity only for seats that may see it | `fx_f03_test.gd` (routing, redaction); `fx/destroy_*`, `fx/exhaust_*` |
+| F03-17 Special-summon sequences | Implemented — unverified | V | Material ghosts fly from their sources, motes to Spent/Exhaust; Fusion swirl, Ritual light column, Arcane hexagram | `fx_f03_test.gd`; `fx/fusion_*`, `ritual_*`, `arcane_*`; two-client run pending |
 | F03-18 Effect arrow from its source | In progress | R | | |
 | F03-19 Overextend chooses its target | In progress | R | | |
-| F03-20 Smaller ATK/DEF badges | In progress | V | | |
-| F03-21 Animated action glow and bouncing cue | In progress | V | | |
-| F03-22 No base stats in Modifiers | In progress | I | | |
-| F03-23 Protecting tag | In progress | I | | |
-| F03-24 Deck builder grid with art | Captured | D | | |
+| F03-20 Smaller ATK/DEF badges | Implemented — unverified | V | Badges drawn at 0.86 of their rect with margin | `fx/ready_strip.png`; 3-digit / rotated checks pending |
+| F03-21 Animated action glow and bouncing cue | Implemented — unverified | V | Pulsing ready glow, bouncing chevrons; Extra pile too; steady under reduced motion | `fx/ready_strip.png`; Power-card case pending |
+| F03-22 No base stats in Modifiers | Implemented — unverified | I | `modifier_parts()` drops the base line; no section when unmodified | `card_details_f03_test.gd`; `inspect/02` |
+| F03-23 Protecting tag | Implemented — unverified | I | `protecting` in `match_view.card_view` (reuses `protected_by`); tag beside Protected | `card_details_f03_test.gd` (rear behind / empty / diagonal); `inspect/01` |
+| F03-24 Deck builder grid with art | Implemented — unverified | D | Catalogue grid of card images with Type captions, click adds, right-click inspects, in-deck border and count, Rename, replace guard, unsaved marker | `deck_builder_grid_test.gd` (4); live flow 15/15 (`deckbuilder/`) |
 | F03-25 Prominent input-required banner | Implemented — unverified | B | Tall narrow banner in the free left column (top-centre fallback), actor tag, pop-in glow, breathing border | Rect test: clear of zones/piles/plates; `board/banner_*` |
-| F03-26 Empty-space click closes passive viewer | In progress | I | | |
+| F03-26 Empty-space click closes passive viewer | Implemented — unverified | I | Click reaching the GameScreen root calls `dismiss_passive()`; never cancels a pending choice | `ui_f03_inspect_test.gd`; `inspect/09..10` |
 | F03-27 Type-coloured declaration buttons | Implemented — unverified | B | Type choices (kind `mode`, all labels Type names) get Type colour, icon, contrast-checked text | `ui_f03_prompt_test.gd` (Waang 4 Types, Chaos Witch 7, click sets Earth, contrast) |
 
 ## Deviations for user review
@@ -60,6 +60,12 @@ Where an implementation departs from a suggestion in the feedback (not a confirm
 | Item | Suggested | Implemented | Why |
 | --- | --- | --- | --- |
 | F03-25 | Banner slightly lower, narrower and taller (top of screen) | Tall narrow banner in the free left column below the opponent's hand; top centre only when that column is narrower than 220 px | At 900 px height a top banner cannot clear the Trap/Spell row; the side column covers no zones |
+| F03-02 | Opponent piles browsable where permitted | No browser for opponent piles (the view only gives their counts) | Nothing to show without revealing hidden cards |
+| F03-16 | Distinct destroy / Exhaust outcomes | Burn orange for destruction, cold violet for Exhaust | No palette was given; constants in `fx_pile_effects.gd` |
+| F03-16 | Who sees an exhausted card | The owner and the effect's controller see its identity | The controller picked it from a revealed pile; owner-only is a one-argument change |
+| F03-17 | Materials consumed into the summon | A glowing mote carries each material to its pile, not the card itself | Avoids a card visibly passing through the summon slot |
+| F03-13 | Victory / defeat then the result modal | Game end plays its own sound; the old top game-over banner is no longer used | One presentation per outcome |
+| F03-24 | Responsive grid | Fixed "hand"-size cards; the hover Preview column kept; removal via "-" buttons (right-click now inspects); Rename and a replace-deck guard added | Right-click is inspection everywhere |
 
 ## Agent ledger
 
@@ -67,3 +73,6 @@ Where an implementation departs from a suggestion in the feedback (not a confirm
 | --- | --- | --- | --- |
 | Lobby browser fix (user report) | lead | opus | Fixed, `b43562f` |
 | Package B (06, 07, 14, 25, 27) | ui-programmer | sonnet | Done, 455/455 on branch, merged `8524b8b` |
+| Package I (01, 02, 03, 12, 22, 23, 26) | ui-programmer | sonnet | Done, 475/475 on branch, merged `76e93f1` |
+| Package V (13, 16, 17, 20, 21) | technical-artist | sonnet | Done, 450/450 on branch, merged `6097b19`; defeat re-checked by lead |
+| Package D (24) | ui-programmer | sonnet | Done, 490/490 on branch, merged `88cab9b` |
