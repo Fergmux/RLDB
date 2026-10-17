@@ -61,6 +61,10 @@ var type_grid: GridContainer
 var cost_pips: CostPips
 ## F05: the card the choice is about (image, name and rules text), hidden when there is none.
 var subject_box: PanelContainer
+var _has_subject := false
+## True while the panel sits in the top strip (the side column cannot hold it): it is then a
+## compact bar over the opponent's hand, without the card strip, so it never hides their zones.
+var _in_top_strip := false
 var subject_card: CardWidget
 var subject_name: Label
 var subject_text: Label
@@ -225,7 +229,8 @@ func subject_for(pd: Dictionary) -> Dictionary:
 
 func _render_subject(pd: Dictionary) -> void:
 	var c := subject_for(pd)
-	subject_box.visible = not c.is_empty()
+	_has_subject = not c.is_empty()
+	subject_box.visible = _has_subject and not _in_top_strip
 	if c.is_empty():
 		return
 	subject_card.setup(c, "mini")
@@ -484,6 +489,7 @@ func place_banner() -> void:
 	var bottom := (board.plates[1] as Control).position.y - BANNER_GAP if board.plates.size() > 1 else area.end.y
 	var key := hash([prompt_sig, banner_title.text, side_w, bottom - top])
 	if have_zones and side_w >= BANNER_SIDE_MIN_W and key != _side_overflow_key:
+		_set_top_strip(false)
 		ctx_banner.position = Vector2(col_left, top)
 		_size_banner(side_w, key == _compact_key)
 		_check_side_fit(key, bottom)
@@ -493,9 +499,16 @@ func place_banner() -> void:
 	var plates := board.plates
 	var right := (plates[0] as Control).position.x - 10.0 if not plates.is_empty() else area.end.x - 230.0
 	var bw := clampf(right - left, BANNER_MIN_W, BANNER_MAX_W)
-	_size_banner(bw)
+	_set_top_strip(true)
+	_size_banner(bw, true)
 	ctx_banner.position = Vector2(maxf(area.position.x + 8.0, (left + right) / 2.0 - bw / 2.0), 10.0)
 	_after_banner_settles()
+
+
+func _set_top_strip(on: bool) -> void:
+	_in_top_strip = on
+	if subject_box != null:
+		subject_box.visible = _has_subject and not on
 
 
 ## Once the panel has settled (HousePanel.fit takes a few frames), a side-column panel taller than

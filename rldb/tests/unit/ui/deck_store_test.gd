@@ -127,3 +127,8 @@ func test_series_start_rejects_over_cap_custom_deck() -> void:
 	assert_bool(s.deck_ready[0]).is_false()
 	assert_str(s.submit(0, {"t": "custom_deck", "cards": _fill(m, 84) + _fill(e, 15)})).is_empty()
 	assert_bool(s.deck_ready[0]).is_true()
+
+
+func test_automated_runs_never_use_the_players_deck_file() -> void:
+	assert_str(DeckStore.PATH).is_equal(DeckStore.TEST_PATH)
+	assert_str(DeckStore.PATH).is_not_equal(DeckStore.PLAYER_PATH)

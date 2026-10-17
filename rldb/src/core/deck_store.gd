@@ -11,7 +11,23 @@ extends RefCounted
 ## check (Series `custom_deck` calls `validate`). Loading never trims a deck: an oversized save
 ## from before the cap is listed and opened intact, can only shrink, and saves again once legal.
 
-const PATH := "user://decks.json"
+## The player's saved decks. Automated runs (GdUnit, `-s` dev scripts and `--*-shots` drivers) use
+## TEST_PATH instead, so a test can never overwrite or delete the player's real decks. Parallel
+## test runs used to back up and restore the real file and could lose it.
+static var PATH := _default_path()
+const PLAYER_PATH := "user://decks.json"
+const TEST_PATH := "user://test_decks.json"
+
+
+static func _default_path() -> String:
+	var args := OS.get_cmdline_args()
+	for i in args.size():
+		if args[i] == "-s" or args[i] == "--script" or String(args[i]).contains("GdUnitCmdTool"):
+			return TEST_PATH
+	for a in OS.get_cmdline_user_args():
+		if String(a).contains("shots"):
+			return TEST_PATH
+	return PLAYER_PATH
 ## Most cards in a deck, Main and Extra Deck combined.
 const MAX_CARDS := 99
 ## Most Extra Deck (Fusion / Ritual / Arcane) cards, counted within MAX_CARDS.
