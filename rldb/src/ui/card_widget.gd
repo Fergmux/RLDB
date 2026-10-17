@@ -60,6 +60,11 @@ var order_no: int = 0: set = _set_order
 ##   by `lift_k`, with the text rasterised at its on-screen size (CardPainter.text_os) so it stays crisp.
 var lift_k: float = 1.0: set = _set_lift_k
 var lift_offset: Vector2 = Vector2.ZERO: set = _set_lift_offset
+## Transient FX displacement (F02): effects (shakes, lunges, arrivals) animate this, never `position`.
+## It is composed on top of the resting position and the hover lift, so an effect can never become
+## the card's resting place (a shake writing `position.x` while lifted used to be taken for a new
+## resting place every frame, and the lifted card crept upward with its status label).
+var fx_offset: Vector2 = Vector2.ZERO: set = _set_fx_offset
 
 ## Text oversampling is quantised to 1/TEXT_OS_STEPS of the on-screen scale: a lift animation then
 ## rasterises a bounded set of glyph sizes (the font caches one set per size) while the mismatch
@@ -249,6 +254,25 @@ func _set_lift_offset(v: Vector2) -> void:
 	_apply_lift()
 
 
+func _set_fx_offset(v: Vector2) -> void:
+	if v.is_equal_approx(fx_offset):
+		return
+	var d := v - fx_offset
+	fx_offset = v
+	if _lifting:
+		_apply_lift()
+		return
+	_lift_applying = true
+	position += d
+	_lift_applied_pos = position
+	_lift_applying = false
+
+
+## The position the card rests at, without the hover lift and the FX offset (layout space).
+func rest_position() -> Vector2:
+	return _lift_rest_pos if _lifting else position - fx_offset
+
+
 ## Sizes and places the card for the current lift: growth about the centre, relative to where the card
 ## rested when the lift began. Not rounded to whole pixels: the face is drawn scaled (see lift_k), so a
 ## fractional size animates smoothly instead of in 1 px steps (Controls still snap to pixels on screen).
@@ -259,16 +283,16 @@ func _apply_lift() -> void:
 	var neutral := is_equal_approx(lift_k, 1.0) and lift_offset.is_zero_approx()
 	if not neutral and not _lifting:
 		_lifting = true
-		_lift_rest_pos = position
+		_lift_rest_pos = position - fx_offset
 	var sz := rest if neutral else rest * lift_k
 	_lift_applying = true
 	size = sz
 	if neutral:
 		if _lifting:
-			position = _lift_rest_pos
+			position = _lift_rest_pos + fx_offset
 		_lifting = false
 	else:
-		position = _lift_rest_pos + lift_offset - (sz - rest) / 2.0
+		position = _lift_rest_pos + lift_offset - (sz - rest) / 2.0 + fx_offset
 	_lift_applied_pos = position
 	_lift_applying = false
 

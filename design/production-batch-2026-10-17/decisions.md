@@ -40,3 +40,7 @@ Full list with the options considered: `card-ledger.md` (Decisions section). The
 - **Importer:** the exact Arcane requirement text (F03-04) is now an importer correction (it had only been hand-edited into cards.json). Overrides 90 and 183 dropped as obsolete; 45, 47, 48, 169 kept.
 - **F07:** the stance choice commits every Fusion method; the separate Confirm is gone everywhere it existed (only Fusion had one).
 - **F09:** not reproduced; Sanctified Blade's Medic waits for activation and a target. Recorded in `card-ledger.md`.
+- **F13 (A6):** a legacy saved 8x AA (written by the old always-save behaviour) is treated as the old default and becomes 4x. Other saved levels are kept. (Toss-up: it could keep 8x.)
+- **F22 (A6):** the back sound is chosen by button label (Back / Exit / Leave / Cancel / Close) unless a button sets an `sfx` meta. Main-menu hover ticks are kept.
+- **F12 (A6):** the HP-change cause (direct / battle / pierce) is read from the authoritative log text. A1 should eventually add a structured cause field; a test guards the wording.
+- **F09 (A1):** not reproduced. The Medic only activates by deliberate use, with a target choice. The owner probably saw the Medic status healing at turn start.

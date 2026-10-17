@@ -195,6 +195,7 @@ func _on_filters_changed() -> void:
 func _on_back() -> void:
 	if _leaving:
 		return
+	Sfx.play("back")   # F22: Back button and Esc alike; one sound (coalesced with the button's)
 	_leaving = true
 	closed.emit()
 

@@ -32,14 +32,14 @@ func arrive(p: int, zone: String, slot: int) -> void:
 		tr.tween_callback(_fx.reset_widget.bind(w, holder))
 		return
 	var origin: Vector2 = _fx.screen.hand_anchor(p)
-	w.position = origin - rect.get_center()
+	w.fx_offset = origin - rect.get_center()
 	w.scale = Vector2(1.18, 1.18)
 	w.modulate.a = 0.0
 	holder.z_index = UiLayers.FX_CARD
 	var tw := _fx.new_tween()
 	tw.set_parallel(true)
 	tw.tween_property(w, "modulate:a", 1.0, UIStyle.dur(0.08))
-	tw.tween_property(w, "position", Vector2.ZERO, UIStyle.dur(0.22)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "fx_offset", Vector2.ZERO, UIStyle.dur(0.22)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
 	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.22)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
 	tw.chain().tween_callback(func():
 		_dust_puff(Vector2(rect.get_center().x, rect.end.y - 6))
@@ -84,7 +84,7 @@ func attack(e: Dictionary) -> void:
 			if not UIStyle.reduce_motion:
 				var sh := _fx.new_tween()
 				for dx in [6.0, -6.0, 4.0, -2.0, 0.0]:
-					sh.tween_property(tw_w, "position:x", dx, UIStyle.dur(0.03))
+					sh.tween_property(tw_w, "fx_offset:x", dx, UIStyle.dur(0.03))
 				sh.tween_callback(_fx.reset_widget.bind(tw_w, tw_h))
 				_fx.add_cleanup(_fx.reset_widget.bind(tw_w, tw_h))
 		_fx.burst(FxBurst.Kind.SPARK, start_c + dir * (0.6 if not direct else 0.55), Color("ffe08a"), 8, 36.0, 0.25)
@@ -100,11 +100,11 @@ func attack(e: Dictionary) -> void:
 	var lunge := dir * 0.6
 	holder.z_index = UiLayers.FX_CARD_FRONT
 	var tw := _fx.new_tween()
-	tw.tween_property(w, "position", wind, UIStyle.dur(0.08)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.tween_property(w, "position", lunge, UIStyle.dur(0.11)).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+	tw.tween_property(w, "fx_offset", wind, UIStyle.dur(0.08)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "fx_offset", lunge, UIStyle.dur(0.11)).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
 	tw.tween_callback(impact)
 	tw.tween_interval(UIStyle.dur(0.04))
-	tw.tween_property(w, "position", Vector2.ZERO, UIStyle.dur(0.13)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "fx_offset", Vector2.ZERO, UIStyle.dur(0.13)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(_fx.reset_widget.bind(w, holder))
 
 
@@ -249,7 +249,8 @@ func _clear_glow_on_finish(w: CardWidget) -> void:
 	_fx.add_cleanup(func(): if is_instance_valid(w): w.fx_glow = NO_GLOW)
 
 
-## Damped horizontal shake of a slot widget about its rest position (x = 0); `k` runs 0 -> 1.
+## Damped horizontal shake of a slot widget about its rest position; `k` runs 0 -> 1. Drives the
+## widget's fx_offset (F02), so a lifted (hovered) card is shaken in place and never re-anchored.
 func _shake_x(k: float, w: CardWidget, amp: float) -> void:
 	if is_instance_valid(w):
-		w.position.x = amp * sin(k * TAU * 3.0) * (1.0 - k)
+		w.fx_offset = Vector2(amp * sin(k * TAU * 3.0) * (1.0 - k), 0.0)
