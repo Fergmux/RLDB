@@ -1,10 +1,11 @@
 class_name CostPips
 extends Control
 ## F08: the exact cost of an Arcane material choice as a row of circles (wrapping when needed).
-## Each circle is one point of the required total: empty sockets while unpaid, filled silver gems
-## for the points the selected materials pay (a material fills as many circles as its current
-## cost, each material its own shade so the split reads), and a gold rim on every circle once the
-## total is paid exactly. The fill eases in; with UIStyle.reduce_motion it is immediate.
+## Each circle is one point of the required total: hollow dark sockets while unpaid, filled gold
+## coins for the points the selected materials pay (a material fills as many circles as its current
+## cost, each material its own shade of gold so the split reads), and a bright rim on every circle
+## once the total is paid exactly. A newly paid circle grows in with a small overshoot and a flash
+## (UI review F08); with UIStyle.reduce_motion it is immediate.
 ##
 ##     var pips := CostPips.new()
 ##     pips.set_payment(5, [2, 3])     # 5 required, two materials of cost 2 and 3: exact
@@ -87,12 +88,20 @@ func owner_of(i: int) -> int:
 	return -1
 
 
+## Coin radius factor for a circle `f` (0..1) of the way through its fill: an ease-out with a small
+## overshoot (peaks about 1.1 near f = 0.75), exactly 1 when filled.
+static func pop(f: float) -> float:
+	f = clampf(f, 0.0, 1.0)
+	var c1 := 1.70158
+	var t := f - 1.0
+	return 1.0 + (c1 + 1.0) * t * t * t + c1 * t * t
+
+
 func _draw() -> void:
 	if need <= 0:
 		return
 	var cols := columns()
 	var exact := paid() == need
-	var silver: Color = UIStyle.COST_COLORS["arcane"]
 	for i in need:
 		var row := i / cols
 		var in_row := mini(cols, need - row * cols)
@@ -101,15 +110,22 @@ func _draw() -> void:
 		var c := Vector2(x0 + (i % cols) * (D + GAP) + D / 2.0, 2.0 + row * (D + GAP) + D / 2.0)
 		var r := D / 2.0
 		var fill := clampf(shown - float(i), 0.0, 1.0)
-		# Socket.
+		# Empty socket: a dark hollow with a dim bronze rim and an inner shadow ring, so it reads as
+		# a place still to fill.
 		draw_circle(c, r, Color(0.05, 0.04, 0.03, 0.95))
-		draw_arc(c, r - 1.0, 0.0, TAU, 28, Color(UIStyle.BRONZE, 0.9), 2.0, true)
+		draw_arc(c, r - 1.0, 0.0, TAU, 28, Color(UIStyle.BRONZE, 0.7), 1.5, true)
+		draw_arc(c, r - 4.0, 0.0, TAU, 24, Color(0, 0, 0, 0.6), 2.0, true)
 		if fill > 0.0:
 			var k := owner_of(i)
-			var col := silver.lightened(0.12) if k % 2 == 0 else silver.darkened(0.12)
-			var rr := (r - 3.0) * fill
-			draw_circle(c, rr + 1.5, Color(silver, 0.25 * fill))
+			var col := UIStyle.GOLD if k % 2 == 0 else UIStyle.GOLD.lerp(Color("c9822e"), 0.45)
+			var rr := (r - 1.5) * pop(fill)
 			draw_circle(c, rr, col)
-			draw_circle(c + Vector2(-rr * 0.3, -rr * 0.35), rr * 0.32, Color(1, 1, 1, 0.55 * fill))
+			draw_arc(c, rr - 0.8, 0.0, TAU, 24, col.darkened(0.35), 1.6, true)
+			draw_circle(c, rr * 0.55, col.lightened(0.18))
+			draw_circle(c + Vector2(-rr * 0.32, -rr * 0.36), rr * 0.26, Color(1, 1, 1, 0.6 * fill))
+			# The fill flash: a bright ring that blooms and fades while the coin grows in.
+			var fl := sin(PI * fill)
+			if fl > 0.01:
+				draw_arc(c, r + 1.5, 0.0, TAU, 28, Color(UIStyle.GOLD_HI, 0.8 * fl), 2.0, true)
 		if exact:
-			draw_arc(c, r, 0.0, TAU, 28, UIStyle.GOLD_HI, 1.6, true)
+			draw_arc(c, r, 0.0, TAU, 28, UIStyle.GOLD_HI, 1.8, true)

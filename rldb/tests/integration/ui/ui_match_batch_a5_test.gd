@@ -72,6 +72,16 @@ func test_options_that_would_overpay_are_refused_and_picks_stay_deselectable() -
 	assert_bool(GamePromptBanner.would_overpay(pd, [0, 1], 3)).is_true()   # nothing remains
 
 
+## UI review F08: a paid circle grows in with a small overshoot and settles exactly full.
+func test_paid_circle_fill_overshoots_slightly_and_settles() -> void:
+	assert_float(CostPips.pop(0.0)).is_equal_approx(0.0, 0.001)
+	assert_float(CostPips.pop(1.0)).is_equal_approx(1.0, 0.001)
+	var peak := 0.0
+	for i in 101:
+		peak = maxf(peak, CostPips.pop(i / 100.0))
+	assert_float(peak).is_between(1.05, 1.15)
+
+
 func test_material_tray_marks_overpay_and_confirm_needs_the_exact_total() -> void:
 	var r := await _screen()
 	var gs: GameScreen = r[0]
