@@ -31,6 +31,8 @@ const MAX_RESOLVE_STEPS := 40
 var me: int = 1
 ## Random source.
 var rng := RandomNumberGenerator.new()
+## Explanation of the last best_action decision (move, margin, stance score breakdown).
+var last_debug := ""
 
 
 func _init(seat: int = 1, seed_value: int = -1) -> void:
@@ -60,6 +62,7 @@ func best_action(m: MatchEngine) -> Dictionary:
 	var base := evaluate(m)
 	var best := {"t": "next_phase"}
 	var best_s := base + MARGIN
+	var best_sim: MatchEngine = null
 	for c in candidates(m):
 		var sim := m.clone_for_sim()
 		if sim.submit(me, c) != "":
@@ -69,7 +72,20 @@ func best_action(m: MatchEngine) -> Dictionary:
 		if s > best_s:
 			best_s = s
 			best = c
+			best_sim = sim
+	last_debug = _debug_text(best, best_sim, best_s - base)
 	return best
+
+
+## Debug string for the last decision of best_action: the move, its margin over doing nothing
+## and, for stance moves and summons, the stance score breakdown of the unit (F11).
+func _debug_text(cmd: Dictionary, sim: MatchEngine, margin: float) -> String:
+	var s := "%s margin %+.2f" % [cmd.get("t", "?"), margin]
+	if sim != null and cmd.has("uid") and (cmd["t"] in ["stance", "summon", "ritual", "arcane"]):
+		var u: int = int(cmd["uid"])
+		if sim.unit_on_field(u):
+			s += " :: " + BotStance.compare_text(sim, u, me)
+	return s
 
 
 ## Legal actions of the bot right now, as commands (next_phase excluded).
@@ -186,11 +202,7 @@ func unit_value(m: MatchEngine, u: int) -> float:
 	var atk := float(m.atk_of(u))
 	var def := float(m.def_of(u))
 	var v := W_UNIT + W_ATK * atk + W_DEF * def
-	var in_def: bool = m.cards[u]["stance"] == "def"
-	if in_def and def > atk:
-		v += 0.25 * def
-	elif not in_def and atk >= def:
-		v += 0.25 * atk
+	v += float(BotStance.explain(m, u, me)["total"])   # F11: stance value (offense, threat, protection)
 	for s in m.cards[u]["st"]:
 		var n := float(m.cards[u]["st"][s])
 		v += (W_STATUS if CardDB.is_buff(String(s)) else -W_STATUS) * minf(n, 4.0)
