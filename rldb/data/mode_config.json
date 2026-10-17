@@ -8,14 +8,13 @@
  "reward_add_offer_count": 3,
  "reward_add_offer_note": "PROPOSAL: an add-card reward offers 3 random cards; pick one.",
  "first_player_rule": "CONFIRMED C-01: loser of the previous game chooses who goes first. PROPOSAL P-01: game 1 coin flip.",
- "basic_change_all_copies": true,
- "basic_change_note": "PROPOSAL: changing a basic unit's type changes every copy of that basic unit in the deck.",
+ "basic_change_note": "F06-04 (user): the Change basic units reward turns EVERY basic unit in the deck into the chosen Type and Race, for one pick.",
  "deck_mode": "starter",
  "deck_mode_options": ["starter", "draft"],
  "draft": {
-  "_note": "PROPOSAL P-03: category draft, pick 1 of `offer` each time.",
+  "_note": "PROPOSAL P-03: category draft, pick 1 of `offer` each time. F06-05: each player orders the categories before drafting. F06-06: no basic-unit category; each player chooses a basic unit by Type and Race and gets `basic_copies` copies.",
   "offer": 3,
-  "quota": {"basic": 1, "unit": 9, "spell": 3, "trap": 3, "power": 2, "extra": 3},
+  "quota": {"unit": 9, "spell": 3, "trap": 3, "power": 2, "extra": 3},
   "basic_copies": 3
  },
  "fatigue_damage": 2,
