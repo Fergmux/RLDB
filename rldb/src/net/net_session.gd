@@ -59,6 +59,15 @@ var raw_received: Array = []    # client: decoded payloads, kept for redaction t
 var _disconnected_at := 0       # host: when the client dropped (msec)
 var claim_wait_seconds := 60    # P-02: host may claim the current game after this wait
 var _resume_token := ""         # host: seat-1 token from a resumed save
+## G01 Save and quit: the host left with the series saved (host: about to leave; client: told so).
+var host_suspended := false
+## G01: the client left with Save and quit (host side; cleared when the client rejoins).
+var opponent_suspended := false
+
+## Player-facing text for a host that saved and left (shown to the client).
+const HOST_SAVED_MESSAGE := "The host saved this series and left. When they resume it, join their game again to continue. Use Menu to return to the main menu."
+## Player-facing text for a client that saved and left (shown to the host).
+const OPPONENT_SAVED_MESSAGE := "Your opponent saved the series and left. Wait for them to rejoin, or use Menu to save and leave; you can resume it later from Resume on the main menu."
 
 
 ## Seconds until the host may claim the current game (0 = available now).
@@ -346,6 +355,17 @@ func _on_connection_failed() -> void:
 
 
 func _on_server_disconnected() -> void:
+	if host_suspended:
+		# G01: the host saved and left on purpose; there is nothing to reconnect to.
+		host_gone = true
+		_reconnect_timer.stop()
+		_watchdog.stop()
+		var sv := local_seat.last_view.duplicate()
+		if not sv.is_empty():
+			sv["net"] = {"paused": true, "opponent_connected": false, "host_gone": true, "suspended": true, "message": HOST_SAVED_MESSAGE}
+			local_seat.deliver(sv)
+		_status("The host saved the series and left.")
+		return
 	_status("Lost connection to the host. Reconnecting…")
 	var v := local_seat.last_view.duplicate()
 	if not v.is_empty():
@@ -445,6 +465,7 @@ func _c2s_hello(token: String, player_name: String, have_log_seq: int) -> void:
 	remote_peer = sender
 	paused = false
 	opponent_ever_joined = true
+	opponent_suspended = false
 	if not rejoin and series.game_no == 0:
 		series.names[CLIENT_SEAT] = player_name.substr(0, 24)
 		if series.game != null:
@@ -527,6 +548,8 @@ func _s2c_view(data: PackedByteArray, raw_size: int) -> void:
 		raw_received.pop_front()
 	_merge_client_log(v)
 	_awaiting_view = false
+	if v.get("net", {}).get("suspended", false):
+		host_suspended = true
 	_status("")
 	local_seat.deliver(v)
 	# After delivery, so the statistics observer can never delay or break the player's view.
@@ -590,6 +613,9 @@ func _apply(seat: int, seq: int, cmd: Dictionary) -> void:
 		# Duplicate or replayed command (e.g. resent after reconnect): never re-apply.
 		_send_view(seat)
 		return
+	if String(cmd.get("t", "")) == "suspend":
+		_suspend(seat, seq)
+		return
 	# Forfeiting is always possible (the in-game menu's Return to menu / Quit while the opponent
 	# is disconnected); everything else waits for the reconnection.
 	var forfeit: bool = String(cmd.get("t", "")) == "forfeit_series"
@@ -600,6 +626,22 @@ func _apply(seat: int, seq: int, cmd: Dictionary) -> void:
 	var err := series.submit(seat, cmd)
 	if err != "":
 		_error(seat, err)
+	_broadcast()
+
+
+## G01 Save and quit from `seat`: allowed between duels only (the series is saved there). The
+## save is written again now, nothing is forfeited, and the other seat is told why its opponent
+## is leaving. Like forfeiting, it works while the opponent is away.
+func _suspend(seat: int, seq: int) -> void:
+	last_seq[seat] = seq
+	if not series.at_checkpoint() or series.stage == Series.STAGE_OVER:
+		_error(seat, "A series can only be saved between duels.")
+		return
+	SeriesStore.save(series)
+	if seat == HOST_SEAT:
+		host_suspended = true
+	else:
+		opponent_suspended = true
 	_broadcast()
 
 
@@ -622,9 +664,12 @@ func _net_info(seat: int) -> Dictionary:
 	var msg := ""
 	if not connected:
 		msg = "Opponent disconnected — match paused, waiting for them to reconnect." if opponent_ever_joined else "Waiting for an opponent to join…"
+		if opponent_suspended:
+			msg = OPPONENT_SAVED_MESSAGE
 	return {"paused": not connected and opponent_ever_joined, "opponent_connected": connected, "message": msg if seat == HOST_SEAT else "",
 		"transport": transport, "is_host": seat == HOST_SEAT, "lobby": lobby_id,
-		"claim_in": claim_seconds_left() if seat == HOST_SEAT and paused else -1}
+		"claim_in": claim_seconds_left() if seat == HOST_SEAT and paused else -1,
+		"suspended": host_suspended and seat == CLIENT_SEAT}
 
 
 func _send_view(seat: int) -> void:

@@ -59,6 +59,8 @@ func test_series_resumes_from_save_with_same_client_and_refuses_other_token() ->
 	client.local_seat.send({"t": "first_player", "who": 1})            # winner may not choose
 	assert_str(await _client_err_after(n)).contains("loser")
 	host.local_seat.send({"t": "first_player", "who": 1})
+	host.local_seat.send({"t": "start_duel"})                          # G05: each seat starts the duel
+	client.local_seat.send({"t": "start_duel"})
 	assert_bool(await _wait(func(): return host.series.stage == Series.STAGE_GAME and host.series.game_no == 2)).is_true()
 	assert_int(host.series.game.active).is_equal(1)
 	assert_bool(await _wait(func(): return cview().get("game_no", 0) == 2 and cview().has("match"))).is_true()
@@ -100,6 +102,8 @@ func test_host_claim_awards_current_game_only_then_client_returns_and_series_con
 	client.local_seat.send({"t": "reward_finish"})
 	assert_bool(await _wait(func(): return host.series.stage == Series.STAGE_FIRST)).is_true()
 	client.local_seat.send({"t": "first_player", "who": 1})
+	client.local_seat.send({"t": "start_duel"})                        # G05
+	host.local_seat.send({"t": "start_duel"})
 	assert_bool(await _wait(func(): return host.series.game_no == 2 and host.series.stage == Series.STAGE_GAME)).is_true()
 	assert_array(host.series.scores).is_equal([1, 0])
 
@@ -178,6 +182,10 @@ func test_commands_sent_across_stage_transitions_are_refused_cleanly() -> void:
 	host.local_seat.send({"t": "reward_finish"})
 	assert_bool(await _wait(func(): return host.series.stage == Series.STAGE_FIRST)).is_true()
 	host.local_seat.send({"t": "first_player", "who": 0})            # host lost: may choose
+	assert_bool(await _wait(func(): return cview().get("next", {}).get("first_chosen", false))).is_true()
+	assert_str(host.series.stage).is_equal(Series.STAGE_FIRST)        # G05: not started by the choice
+	host.local_seat.send({"t": "start_duel"})
+	client.local_seat.send({"t": "start_duel"})
 	assert_bool(await _wait(func(): return host.series.stage == Series.STAGE_GAME)).is_true()
 	var n3 := client_errors.size()
 	client.local_seat.send({"t": "first_player", "who": 1})          # stale transition command

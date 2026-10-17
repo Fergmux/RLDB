@@ -42,6 +42,11 @@ var game_no: int = 0
 var game: MatchEngine
 var last_loser: int = -1
 var first_player: int = -1
+## G05: at the who-goes-first stage, true once the loser has chosen (`first_player` then holds the
+## choice), and which seats have pressed Start next duel. The duel starts when both are true.
+## The choice is saved; readiness is not (a resumed series asks both seats again).
+var first_chosen: bool = false
+var duel_ready: Array = [false, false]
 var rng := RandomNumberGenerator.new()
 var history: Array = []              # finished game summaries
 var deck_ready: Array = [false, false]
@@ -290,7 +295,7 @@ func to_save() -> Dictionary:
 	return {"version": 1, "save_id": save_id, "cfg": cfg, "names": names, "stage": stage,
 		"decks": decks, "deck_names": deck_names, "scores": scores, "game_no": game_no,
 		"last_loser": last_loser, "first_player": first_player, "history": history,
-		"rewards": rewards, "series_log": series_log, "forfeit_by": forfeit_by,
+		"rewards": rewards, "series_log": series_log, "forfeit_by": forfeit_by, "first_chosen": first_chosen,
 		"rng_state": str(rng.state), "seat_ids": seat_ids.map(func(x): return str(x)), "client_token": client_token,
 		"telemetry_series_id": String(telemetry_ids.get("series", "")),
 		"saved_at": Time.get_datetime_string_from_system()}
@@ -332,6 +337,7 @@ static func from_save(d: Dictionary) -> Series:
 	s.game_no = int(d["game_no"])
 	s.last_loser = int(d["last_loser"])
 	s.first_player = int(d["first_player"])
+	s.first_chosen = bool(d.get("first_chosen", false)) and s.stage == STAGE_FIRST
 	s.history = d["history"]
 	for h in s.history:
 		h["winner"] = int(h["winner"])
@@ -667,6 +673,8 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 	note("reward", {"p": p, "t": t, "cmd": cmd.duplicate(true), "offer": r["offer"].duplicate(), "deck": decks[p].duplicate(), "done": r["done"]})
 	if rewards[0]["done"] and rewards[1]["done"]:
 		stage = STAGE_FIRST
+		first_chosen = false
+		duel_ready = [false, false]
 	checkpoint.emit()
 	return ""
 
@@ -712,18 +720,34 @@ static func basic_variant(from_id: int, to_type: String, to_race: String = "") -
 	return -1
 
 
+## Who-goes-first stage (G05). "first_player" {who}: the loser of the last game chooses, and may
+## change the choice until they are ready. "start_duel": the seat is ready for the next duel (the
+## loser only after choosing). The duel starts once the choice is made and both seats are ready.
 func _first_command(p: int, cmd: Dictionary) -> String:
-	if cmd.get("t", "") != "first_player":
-		return "Waiting for the first-player choice."
-	if p != last_loser:
-		return "The loser of the previous game chooses who goes first."
-	var w := int(cmd.get("who", -1))
-	if w != 0 and w != 1:
-		return "Choose a player."
-	first_player = w
-	note("first_choice", {"p": p, "who": w})
-	_log("%s chooses %s to go first." % [names[p], names[w]])
-	_start_game()
+	match String(cmd.get("t", "")):
+		"first_player":
+			if p != last_loser:
+				return "The loser of the previous game chooses who goes first."
+			if duel_ready[p]:
+				return "You are ready; the next duel starts when your opponent is."
+			var w := int(cmd.get("who", -1))
+			if w != 0 and w != 1:
+				return "Choose a player."
+			first_player = w
+			first_chosen = true
+			checkpoint.emit()
+		"start_duel":
+			if duel_ready[p]:
+				return "You are already ready for the next duel."
+			if p == last_loser and not first_chosen:
+				return "Choose who goes first, then start the next duel."
+			duel_ready[p] = true
+		_:
+			return "Waiting for the first-player choice."
+	if first_chosen and duel_ready[0] and duel_ready[1]:
+		note("first_choice", {"p": last_loser, "who": first_player})
+		_log("%s chose %s to go first." % [names[last_loser], names[first_player]])
+		_start_game()
 	return ""
 
 
@@ -734,7 +758,8 @@ func view_for(p: int) -> Dictionary:
 		"best_of": cfg["best_of"], "names": names.duplicate(), "series_log": series_log.duplicate(),
 		"history": history.duplicate(true), "last_loser": last_loser, "deck_mode": cfg["deck_mode"],
 		"deck_ready": deck_ready.duplicate(), "deck_name": deck_names[p], "forfeit_by": forfeit_by,
-		"save_id": save_id, "at_checkpoint": at_checkpoint(), "tel_ids": telemetry_ids.duplicate()}
+		"save_id": save_id, "at_checkpoint": at_checkpoint(), "tel_ids": telemetry_ids.duplicate(),
+		"mode": String(cfg.get("mode", ""))}
 	if game != null:
 		v["match"] = MatchView.build(game, p)
 	match stage:
@@ -756,6 +781,9 @@ func view_for(p: int) -> Dictionary:
 				"offer_type": r.get("offer_type", ""), "types": types,
 				"opponent_done": rewards[1 - p]["done"], "basic_types": CardDB.ELEMENTS, "basic_races": races,
 				"basic_options": basic_options()}
+		STAGE_FIRST:
+			v["next"] = {"first_chosen": first_chosen, "first_player": first_player if first_chosen else -1,
+				"you_ready": duel_ready[p], "opponent_ready": duel_ready[1 - p]}
 	if stage in [STAGE_REWARDS, STAGE_FIRST, STAGE_OVER, STAGE_DECKS]:
 		v["deck"] = decks[p].map(func(i): return card_summary(i))
 	return v

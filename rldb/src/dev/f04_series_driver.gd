@@ -71,6 +71,7 @@ func run(main_node: Node, dir: String) -> void:
 	var r := ov.overlay.get_global_rect()
 	_check("deck panel inside the window", get_viewport().get_visible_rect().grow(1).encloses(r), str(r))
 	await _shot("series_05_custom_scrolled")
+	await _g02_toggle_in_place(area)
 	ov.decks.tab = "structured"
 	ov.deck_open["s2"] = true
 	ov.refresh()
@@ -197,6 +198,7 @@ func run(main_node: Node, dir: String) -> void:
 	_view_seat(loser)
 	await _frames(8)
 	await _shot("series_08_first_player")
+	await _g01_g05_hotseat(loser)
 	await _draft_phase()
 	DeckStore._write([])
 	if saved_file != "":
@@ -529,3 +531,72 @@ func _put(m: MatchEngine, p: int, id: int, slot: int, stance: String) -> void:
 	m.cards[uid]["zone"] = "limbo"
 	m.place_unit(uid, p, slot, stance)
 	m.cards[uid]["summoned_turn"] = m.turn - 1
+
+
+## G02: opening and closing a deck's full list (a real click on its toggle) changes the tile in
+## place: the same tile node, the same scroll position, its rim gold from the first frame. Frames
+## 1 and 2 after each click are saved as evidence that nothing flashes.
+func _g02_toggle_in_place(area: ScrollArea) -> void:
+	var ov: GameSeriesOverlay = main.screen.overlays
+	var tile: DeckTile = null
+	for k in ov.decks._tiles:
+		var t: DeckTile = ov.decks._tiles[k]
+		if area.get_global_rect().has_point(t.get_global_rect().get_center()):
+			tile = t
+			break
+	_check("G02 a tile is visible in the scrolled list", tile != null)
+	if tile == null:
+		return
+	await get_tree().create_timer(0.8).timeout     # let the earlier smooth wheel scroll settle
+	var scroll_before: int = area.scroll.scroll_vertical
+	var tog: Button = tile.find_children("*", "Button", true, false).filter(func(b): return b.text.ends_with("full list"))[0]
+	var box_before: Node = ov.overlay_box.get_child(0)
+	tog.pressed.emit()
+	await _shot("g02_open_frame1")
+	await _shot("g02_open_frame2")
+	await _frames(6)
+	await _shot("g02_open_settled")
+	_check("G02 opening keeps the same tile node and modal content", is_instance_valid(tile) and tile.selected and is_instance_valid(box_before) and box_before.get_parent() == ov.overlay_box)
+	# Within 2 px: SmoothScroll settles on a float target (the old rebuild jumped to 0 for 2 frames).
+	_check("G02 opening keeps the list's scroll position", absi(area.scroll.scroll_vertical - scroll_before) <= 2, "%d vs %d" % [area.scroll.scroll_vertical, scroll_before])
+	var sb := tile.get_theme_stylebox("panel") as StyleBoxFlat
+	_check("G02 the opened tile's rim is gold at once", sb.border_color.is_equal_approx(UIStyle.GOLD_HI), str(sb.border_color))
+	tog.pressed.emit()
+	await _shot("g02_close_frame1")
+	await _shot("g02_close_frame2")
+	await _frames(6)
+	_check("G02 closing keeps the same tile node and closes its list", is_instance_valid(tile) and not tile.selected and box_before.get_parent() == ov.overlay_box)
+	ov.render()   # an unrelated re-render must not rebuild for the toggle
+	_check("G02 the next render does not rebuild for the toggle", is_instance_valid(box_before) and box_before.get_parent() == ov.overlay_box)
+
+
+## G05 / G06 / G01 in hot-seat at the who-goes-first stage: the loser's centred choice, the
+## Start next duel button (enabled once chosen) and the three-choice leave dialog.
+func _g01_g05_hotseat(loser: int) -> void:
+	var gs: GameScreen = main.screen
+	var start := _overlay_button(gs, "Start next duel")
+	_check("G05 Start next duel waits for the loser's choice", start != null and start.disabled)
+	var mine := _overlay_button(gs, "I go first")
+	_check("G06 the choice buttons are centred in the modal", mine != null and absf(mine.get_parent().get_global_rect().get_center().x - gs.overlays.overlay.get_global_rect().get_center().x) < 4.0)
+	if mine != null:
+		mine.pressed.emit()
+	await _frames(8)
+	await _shot("g05_first_chosen")
+	_check("G05 choosing alone does not start the duel", host.series.stage == Series.STAGE_FIRST and host.series.first_chosen)
+	gs.menu.confirm_forfeit(true)
+	await _frames(8)
+	await _shot("g01_hotseat_quit_dialog")
+	var d := gs.menu.dialog()
+	_check("G01 hot-seat dialog: Save and quit / Forfeit and quit / Keep playing", d != null and d.choices.map(func(c): return c["text"]) == ["Save and quit", "Forfeit and quit", "Keep playing"])
+	if d != null:
+		d.press("Keep playing")
+	await _frames(4)
+	start = _overlay_button(gs, "Start next duel")
+	_check("G05 Start next duel is enabled after the choice", start != null and not start.disabled)
+
+
+func _overlay_button(gs: GameScreen, text: String) -> Button:
+	for b in gs.overlays.overlay_box.find_children("*", "Button", true, false):
+		if (b as Button).text == text and b.is_visible_in_tree():
+			return b
+	return null

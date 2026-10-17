@@ -208,6 +208,8 @@ func test_lethal_and_next_duel_get_distinct_game_ids() -> void:
 	for p in 2:
 		s.submit(p, {"t": "reward_finish"})
 	s.submit(s.last_loser, {"t": "first_player", "who": 0})
+	for q in 2:
+		s.submit(q, {"t": "start_duel"})   # G05
 	var second := String(s.telemetry_ids["game"])
 	assert_str(second).is_not_equal(first)
 	assert_int(int(items["game_" + second]["body"]["game"]["duel_index"])).is_equal(2)
@@ -226,6 +228,8 @@ func test_host_timeout_victory_and_forfeit_are_distinct_reasons() -> void:
 	for p in 2:
 		s.submit(p, {"t": "reward_finish"})
 	s.submit(s.last_loser, {"t": "first_player", "who": 0})
+	for q in 2:
+		s.submit(q, {"t": "start_duel"})   # G05
 	var g2 := String(s.telemetry_ids["game"])
 	s.submit(1, {"t": "forfeit_series"})
 	assert_str(String(items["game_" + g2]["body"]["game"]["reason"])).is_equal("forfeit")

@@ -29,7 +29,19 @@ func start(overrides: Dictionary) -> void:
 
 
 func handle(p: int, cmd: Dictionary) -> void:
+	if String(cmd.get("t", "")) == "suspend":
+		# G01 Save and quit: the series is already saved at its checkpoint; refresh the save and
+		# leave it resumable (nothing is forfeited). Refused during a duel, like a network host.
+		if series.at_checkpoint() and series.stage != Series.STAGE_OVER:
+			SeriesStore.save(series)
+		else:
+			error.emit(p, "A series can only be saved between duels.")
+		return
 	var err := series.submit(p, cmd)
+	if err == "" and String(cmd.get("t", "")) == "start_duel" and is_hotseat() and series.stage == Series.STAGE_FIRST:
+		# G05: hot-seat players share one screen, so one Start next duel press starts it for both.
+		if not series.duel_ready[1 - p]:
+			series.submit(1 - p, {"t": "start_duel"})
 	if err != "":
 		error.emit(p, err)
 		seats[p].status_changed.emit(err)
@@ -39,6 +51,11 @@ func handle(p: int, cmd: Dictionary) -> void:
 func broadcast() -> void:
 	for p in 2:
 		seats[p].deliver(series.view_for(p))
+
+
+## True for a hot-seat series (both seats are people at this screen; not the bot, not a tutorial).
+func is_hotseat() -> bool:
+	return String(series.cfg.get("mode", "")) == "local"
 
 
 ## The seat whose input the series is currently waiting on (for hot-seat switching).

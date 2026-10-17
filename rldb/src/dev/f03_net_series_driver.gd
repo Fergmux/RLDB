@@ -191,7 +191,21 @@ func _run() -> void:
 	client.local_seat.send({"t": "reward_finish"})
 	await _until(func(): return host.series.stage == Series.STAGE_FIRST, 5.0)
 	var loser := host.series.last_loser
+	await _wait(0.8)
+	await _shot("03b_client_next_duel")
 	(host.local_seat if loser == 0 else client.local_seat).send({"t": "first_player", "who": loser})
+	await _until(func(): return client.local_seat.last_view.get("next", {}).get("first_chosen", false), 4.0)
+	await _wait(0.6)
+	_check("G05 the first-player choice alone does not start the next duel", host.series.stage == Series.STAGE_FIRST, host.series.stage)
+	var start := _button("Start next duel")
+	_check("G05 the client sees Start next duel, enabled", start != null and not start.disabled)
+	if start != null:
+		start.pressed.emit()
+	await _until(func(): return host.series.duel_ready[1], 4.0)
+	await _wait(0.6)
+	await _shot("03c_client_ready_waiting")
+	_check("G05 the client's press readies only the client", host.series.duel_ready[1] and not host.series.duel_ready[0] and host.series.stage == Series.STAGE_FIRST)
+	host.local_seat.send({"t": "start_duel"})
 	await _until(func(): return host.series.stage == Series.STAGE_GAME and host.series.game_no == 2, 6.0)
 	await _wait(1.5)
 	screen.skip_effects()
@@ -199,9 +213,77 @@ func _run() -> void:
 	pl = _plates()
 	var hp1: int = int(host.series.game.players[1]["hp"])
 	_check("F03-14 client plates show 60/60 at game 2 start", int(pl[0]["cap"]) == 60 and int(pl[1]["cap"]) == 60 and hp1 == 60, "%s hp=%d" % [str(pl), hp1])
+	await _g01_save_and_leave()
 	var f := FileAccess.open(out_dir.path_join("checks.json"), FileAccess.WRITE)
 	f.store_string(JSON.stringify(results, "  "))
 	f.close()
 	var fails := results.filter(func(r): return not r["pass"]).size()
 	print("F03 NET DONE: %d passed, %d failed" % [results.size() - fails, fails])
 	quit()
+
+
+## The button with `text` in the client screen's series modal, or null.
+func _button(text: String) -> Button:
+	for b in screen.overlays.overlay_box.find_children("*", "Button", true, false):
+		if (b as Button).text == text and b.is_visible_in_tree():
+			return b
+	return null
+
+
+## G01 over the network: game 2 ends (1-1, the series goes on); the client leaves with Save and
+## leave (the host keeps the save, nothing is forfeited, the host is told), rejoins, and then the
+## host saves and leaves (the client is told the series was saved, not lost).
+func _g01_save_and_leave() -> void:
+	# The winner of game 1 concedes game 2: 1-1, so the series goes on.
+	var leader: int = 0 if int(host.series.scores[0]) > int(host.series.scores[1]) else 1
+	(host.local_seat if leader == 0 else client.local_seat).send({"t": "concede"})
+	await _until(func(): return host.series.stage == Series.STAGE_REWARDS or host.series.stage == Series.STAGE_OVER, 6.0)
+	if host.series.stage != Series.STAGE_REWARDS:
+		_check("G01 game 2 leaves the series open (rewards)", false, host.series.stage)
+		return
+	await _until(func(): return not screen.fx.game_end_hold, 15.0)
+	screen.skip_effects()
+	await _wait(1.0)
+	screen.menu.confirm_forfeit(false)
+	await _wait(0.5)
+	await _shot("05_client_leave_dialog")
+	var d := screen.menu.dialog()
+	var texts: Array = d.choices.map(func(c): return String(c["text"])) if d != null else []
+	_check("G01 client dialog offers Save / Forfeit / Keep playing", texts == ["Save and leave", "Forfeit and leave", "Keep playing"], str(texts))
+	if d != null:
+		d.press("Save and leave")
+	await _until(func(): return host.opponent_suspended, 4.0)
+	_check("G01 client Save and leave: host told, nothing forfeited, series saved",
+		host.opponent_suspended and host.series.forfeit_by == -1 and host.series.stage == Series.STAGE_REWARDS
+		and SeriesStore.list().any(func(e): return e["id"] == host.series.save_id), "dir=%s" % SeriesStore.DIR)
+	client._reconnect_timer.stop()
+	client.host_gone = true
+	client.simulate_drop()
+	await _until(func(): return host.paused, 6.0)
+	screen.attach(host.local_seat)
+	await _wait(1.0)
+	await _shot("06_host_sees_opponent_saved")
+	_check("G01 host's pause veil says the opponent saved and left", String(host.local_seat.last_view.get("net", {}).get("message", "")) == NetSession.OPPONENT_SAVED_MESSAGE)
+	# The client comes back, then the host saves and leaves.
+	client.host_gone = false
+	client.join_enet("127.0.0.1", PORT)
+	await _until(func(): return not host.paused and host.remote_peer != 0, 15.0)
+	_check("G01 a rejoining client clears the saved-and-left note", not host.opponent_suspended)
+	await _wait(0.8)
+	screen.menu.confirm_forfeit(true)
+	await _wait(0.5)
+	await _shot("07_host_quit_dialog")
+	var hd := screen.menu.dialog()
+	_check("G01 host dialog explains Resume on the main menu", hd != null and screen.menu.save_text().contains("Resume"), screen.menu.save_text())
+	screen.menu.close_dialog()          # pressing Save and quit would end this run: send it directly
+	host.local_seat.send({"t": "suspend"})
+	await _until(func(): return client.host_suspended, 4.0)
+	host.api.multiplayer_peer.close()
+	screen.attach(client.local_seat)
+	await _until(func(): return client.host_gone, 6.0)
+	await _wait(1.0)
+	await _shot("08_client_sees_host_saved")
+	_check("G01 client is told the host saved and left (no reconnect loop)", client.host_gone and String(client.local_seat.last_view.get("net", {}).get("message", "")) == NetSession.HOST_SAVED_MESSAGE)
+	_check("G01 host Save and quit forfeits nothing", host.series.forfeit_by == -1 and host.series.stage == Series.STAGE_REWARDS)
+	screen.menu.confirm_forfeit(false)
+	_check("G01 with the host gone, leaving asks nothing", screen.menu.dialog() == null)

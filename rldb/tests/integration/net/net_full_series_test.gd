@@ -83,7 +83,10 @@ func _decide(p: int) -> Dictionary:
 							return {"t": "reward_basic", "to_type": types[rng.randi_range(0, types.size() - 1)], "to_race": c["race"]}
 			return {"t": "reward_type", "category": r["types"][0]}
 		"first_player":
-			return {"t": "first_player", "who": rng.randi_range(0, 1)} if v["last_loser"] == p else {}
+			# G05: the loser chooses, then each seat starts the next duel.
+			if v["last_loser"] == p and not v["next"]["first_chosen"]:
+				return {"t": "first_player", "who": rng.randi_range(0, 1)}
+			return {"t": "start_duel"} if not v["next"]["you_ready"] else {}
 		"game":
 			var mv: Dictionary = v["match"]
 			if mv["winner"] != -1:

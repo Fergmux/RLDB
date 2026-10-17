@@ -136,6 +136,7 @@ func run(main_node: Node, dir: String) -> void:
 	await _frames(4)
 	await _shot("11_loser_chooses_first_player")
 	host.handle(loser, {"t": "first_player", "who": loser})
+	host.handle(loser, {"t": "start_duel"})     # G05: hot-seat, one press starts it for both
 	await _frames(3)
 	_view_seat(host.series.game.active)
 	await _frames(3)
@@ -145,6 +146,7 @@ func run(main_node: Node, dir: String) -> void:
 		host.handle(0, {"t": "reward_finish"})
 		host.handle(1, {"t": "reward_finish"})
 		host.handle(host.series.last_loser, {"t": "first_player", "who": 0})
+		host.handle(host.series.last_loser, {"t": "start_duel"})
 		host.handle(host.series.game.active, {"t": "concede_series"})
 	_view_seat(0)
 	await _frames(4)

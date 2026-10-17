@@ -13,6 +13,8 @@ const ATTACK_DELAY := 1.3
 const PHASE_DELAY := 0.8
 const CHOICE_DELAY := 0.8
 const STAGE_DELAY := 1.2
+## Pause before the bot presses Start next duel (G05): short, so the player never waits on it.
+const START_DELAY := 0.4
 ## Safety valve: a turn never takes more bot moves than this.
 const MAX_MOVES_PER_TURN := 40
 
@@ -82,6 +84,8 @@ func _step() -> void:
 			cmd = brain.series_command(s)
 			if cmd.is_empty():
 				break
+			if String(cmd.get("t", "")) == "start_duel":
+				delay = START_DELAY
 		await _wait(delay)
 		if not is_inside_tree() or host.series != s:
 			break

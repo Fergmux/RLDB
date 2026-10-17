@@ -84,6 +84,8 @@ func test_series_result_is_recorded_once_from_the_local_seat() -> void:
 			for p in 2:
 				s.submit(p, {"t": "reward_finish"})
 			s.submit(s.last_loser, {"t": "first_player", "who": 0})
+			for q in 2:
+				s.submit(q, {"t": "start_duel"})   # G05
 	var series: Array = PlayerStats.load_data()["series"]
 	assert_int(series.size()).is_equal(1)
 	assert_bool(series[0]["won"]).is_true()

@@ -140,27 +140,69 @@ func _show_popup(p: Control) -> void:
 	(p as HousePanel).appear()
 
 
-## Return to menu / Quit to desktop: an unfinished series is forfeited (after a warning).
+## Return to menu / Quit to desktop (and the window's close button). G01: between duels (rewards,
+## who goes first) the series is saved, so the dialog offers Save and quit / Forfeit and quit /
+## Keep playing ("leave" instead of "quit" for Return to menu). During a duel there is no save
+## point, so leaving forfeits; during the deck choice nothing has been played, so it abandons.
 func confirm_forfeit(quit: bool) -> void:
 	game_menu.visible = false
-	var live := gs.has_live_series()
-	var go := func():
-		if live:
-			gs.send({"t": "forfeit_series"})
-		if quit:
-			# A couple of frames so a network forfeit is flushed before the peer closes.
-			await gs.get_tree().process_frame
-			await gs.get_tree().process_frame
-			gs.get_tree().quit()
-		else:
-			gs.leave_to_menu.emit()
-	if not live:
-		go.call()
+	var verb := "quit" if quit else "leave"
+	var net: Dictionary = gs.view.get("net", {})
+	if not gs.has_live_series() or net.get("host_gone", false):
+		_leave(quit, "")     # nothing to keep or forfeit (or the host is gone: nobody to tell)
 		return
-	if gs.view.get("stage", "") == "decks":   # no game played yet (deck choice / draft)
-		_dialog("Abandon game?", "Are you sure you want to abandon your game?", "Abandon and %s" % ("quit" if quit else "leave"), go)
+	var stage := String(gs.view.get("stage", ""))
+	if stage == "decks":   # no game played yet (deck choice / draft)
+		_choices("Abandon game?", "Are you sure you want to abandon your game?", [
+			ConfirmDialog.choice("Abandon and %s" % verb, func(): _leave(quit, "forfeit_series"), "danger"),
+			ConfirmDialog.choice("Keep playing")])
+	elif bool(gs.view.get("at_checkpoint", false)):
+		_choices("Leave the series?", save_text(), [
+			ConfirmDialog.choice("Save and %s" % verb, func(): _leave(quit, "suspend"), "primary"),
+			ConfirmDialog.choice("Forfeit and %s" % verb, func(): _leave(quit, "forfeit_series"), "danger"),
+			ConfirmDialog.choice("Keep playing")])
 	else:
-		_dialog("Are you sure?", "Quitting will forfeit the match.", "Forfeit and %s" % ("quit" if quit else "leave"), go)
+		_choices("Forfeit the series?", "Series are saved between duels, not during one, so leaving now forfeits the whole series. To resume later, leave from the rewards screen after this duel.", [
+			ConfirmDialog.choice("Forfeit and %s" % verb, func(): _leave(quit, "forfeit_series"), "danger"),
+			ConfirmDialog.choice("Keep playing")])
+
+
+## The Save and quit explanation for this kind of series (G01).
+func save_text() -> String:
+	var tail := " Forfeiting ends the series now as a loss."
+	if not gs.is_network():
+		return "The series is saved here, so you can resume it later from Resume on the main menu." + tail
+	if gs.view.get("net", {}).get("is_host", false):
+		return "The series is saved on this computer. Resume it later from Resume on the main menu, and your opponent can join again to continue." + tail
+	return "The series is saved on the host's computer. When %s resumes it, join their game again to continue." % String(gs.view["names"][0]) + tail
+
+
+## Leaves the screen after sending `cmd` ("suspend": saved, "forfeit_series", or "" for nothing).
+func _leave(quit: bool, cmd: String) -> void:
+	if cmd != "":
+		gs.send({"t": cmd})
+	if quit or gs.is_network():
+		# A couple of frames so a network command is flushed before the connection closes.
+		await gs.get_tree().process_frame
+		await gs.get_tree().process_frame
+	if quit:
+		gs.get_tree().quit()
+	else:
+		gs.leave_to_menu.emit()
+
+
+## Opens the shared dialog with `list` choices (one at a time).
+func _choices(title: String, text: String, list: Array, tag: String = "Leave game") -> void:
+	close_dialog()
+	_dialog_root = ConfirmDialog.open_choices(gs, title, text, list, tag)
+	gs.hover.clear()
+
+
+## The open confirmation dialog, or null.
+func dialog() -> ConfirmDialog:
+	if _dialog_root != null and is_instance_valid(_dialog_root) and not _dialog_root.is_queued_for_deletion():
+		return _dialog_root
+	return null
 
 
 ## Opens the shared confirmation dialog over the screen (one at a time).
