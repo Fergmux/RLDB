@@ -623,3 +623,20 @@ func test_c181_solomon_tyrannical_keeps_summon_pierce_and_death_hp_loss() -> voi
 	var hp0: int = m.players[0]["hp"]
 	TB.kill(m, sol)
 	assert_int(m.players[0]["hp"]).is_equal(hp0 - 12)
+
+
+## Review 2026-10-17: "Exhaust this unit: ..." is a cost of the unit on the Field. If Neva leaves
+## the Field in the response window, the ability ends: Neva stays in Spent and deals nothing
+## (before the fix its cost then pulled it from Spent to Exhaust).
+func test_c161_neva_destroyed_in_response_window_is_not_exhausted_from_spent() -> void:
+	var m := TB.make(7, 20, true)
+	TB.set_card(m, 1, 85, 0)                                   # a face-down card: hidden window opens
+	var neva := TB.unit(m, 0, 161, 0)
+	var hp1: int = m.players[1]["hp"]
+	assert_str(TB.ability(m, neva)).is_empty()
+	assert_str(TB.pend_kind(m)).is_equal("trap_response")
+	m.destroy(neva, "effect", -1, 1)                           # stands in for an opponent's response
+	while not m.pending.is_empty() and TB.pend_kind(m) == "trap_response":
+		TB.choose(m, ["Pass"])
+	assert_str(m.cards[neva]["zone"]).is_equal("spent")
+	assert_int(m.players[1]["hp"]).is_equal(hp1)

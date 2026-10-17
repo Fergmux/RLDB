@@ -232,6 +232,11 @@ func _op_draw(f: Dictionary, op: Dictionary) -> int:
 
 
 func _op_move(f: Dictionary, op: Dictionary) -> int:
+	# "Exhaust this unit: ..." (`cost`): a source that already left the Field cannot pay, so the
+	# effect ends instead of pulling the card out of a pile (review 2026-10-17).
+	if op.get("cost", false) and op["target"] == "self" and cards.has(f["src"]) and not on_field(f["src"]):
+		add_log("%s is no longer on the Field, so its effect ends." % name_of(f["src"]))
+		return R.END
 	for u in refs(f, op["target"]):
 		var from: String = cards[u]["zone"]
 		var was_public := not (from in HIDDEN_PILES)

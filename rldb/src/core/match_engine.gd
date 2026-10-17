@@ -495,8 +495,14 @@ func _execute(p: int, cmd: Dictionary) -> void:
 			var ab: Dictionary = script_of(uid)["abilities"][idx]
 			# Targets/modes first and cancellable; the cost is paid once they are confirmed.
 			var split := _lead_choices(ab["ops"])
-			split[0] += _fusion_lead(ab["ops"], split[0], true)
+			var flead := _fusion_lead(ab["ops"], split[0], true)
+			split[0] += flead
 			var ops: Array = split[0] + [{"op": "ability_cost", "idx": idx}]
+			# F04-22: a Fusion method's self-destruction / exhaustion (Sepukku, Void Basilisk) is a
+			# cost, paid with the AP/HP cost right after the committing stance, before the window.
+			if not flead.is_empty():
+				while not split[1].is_empty() and split[1][0]["op"] in ["move", "destroy"] and split[1][0].get("target", "") == "self":
+					ops.append(split[1].pop_front())
 			ops.append({"op": "window", "event": {"name": "activate", "player": p, "card": uid, "text": "%s activates %s" % [pname(p), name_of(uid)]}})
 			ops.append({"op": "check_negated"})
 			ops += split[1]
