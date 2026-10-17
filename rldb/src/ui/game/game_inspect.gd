@@ -7,7 +7,7 @@ extends RefCounted
 ## and the opponent's piles (the view carries counts only) have no browser.
 
 ## Hint beside the title of every browser except Draw.
-const BROWSE_HINT := "Right-click a card to read it. Esc or click outside to close."
+const BROWSE_HINT := "Right-click a card to read it."
 const DRAW_HINT := "Shown in a random order; the real order is unchanged. Right-click a card to read it."
 
 ## The host screen this component works on.
