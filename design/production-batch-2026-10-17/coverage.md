@@ -6,7 +6,7 @@ Status values: pending, in progress, merged (unverified), verified.
 
 - **Card changes:** the per-card ledger is `card-ledger.md` (written by A1). It covers the 101 changed IDs and 319 cells; the 82 unchanged cards are retained.
 - **Import:** reads the dated CSV, handles `temp`, uses source-aware summon fields, audited TEXT_CORRECTIONS, and regenerates deterministically. Status: merged `16dea57`. 101 changed cards and 319 cells reconciled (34 behaviour, 26 balance, 169 wording, 61 reference, 29 already correct, 0 pending); suite 658/658 and f02 75/75 on the branch.
-- **Per-card tests (F26):** all 183 IDs, with a manifest and runner. Part 1 merged (`207bd63`): the framework plus tests for the 82 unchanged cards and all basics; suite 694/694 on the branch. The 101 changed cards are pending until A1 is reconciled.
+- **Per-card tests (F26):** all 183 IDs, with a manifest and runner. Merged (`207bd63`, `d788db5`): **183/183 covered, 0 pending**; suite 812/812 on the A2 branch after merging bb600f7.
 
 ## Workstream 2: Firebase metrics (A3)
 
@@ -26,16 +26,16 @@ Status values: pending, in progress, merged (unverified), verified.
 
 | Item | Owner | Status | Evidence |
 | --- | --- | --- | --- |
-| F01 Stable deck-select modal | A5 | in progress | |
+| F01 Stable deck-select modal | A5 | merged `9120580` | |
 | F02 Self-buff animation regression | A6 | merged `bb600f7` | |
-| F03 Type-choice icon alignment | A5 | in progress | |
-| F04 Actionable Extra Deck viewer | A5 | in progress | |
-| F05 Card context in the input prompt | A5 | in progress | |
-| F06 No hover during zone selection | A5 | in progress | |
+| F03 Type-choice icon alignment | A5 | merged `9120580` | |
+| F04 Actionable Extra Deck viewer | A5 | merged `9120580` | |
+| F05 Card context in the input prompt | A5 | merged `9120580` | |
+| F06 No hover during zone selection | A5 | merged `9120580` | |
 | F07 Stance is the final special-summon step | A1 | merged `16dea57` | |
-| F08 Arcane payment circles | A5 | in progress | |
+| F08 Arcane payment circles | A5 | merged `9120580` | |
 | F09 Sanctified Blade optional Medic | A1 + A2 | merged `16dea57` | |
-| F10 Click a card to take a reward | A5 | in progress | |
+| F10 Click a card to take a reward | A5 | merged `9120580` | |
 | F11 Bot stance decisions | A7 | merged `3ab50c7` | `bot_stance_test.gd` (6 positions); bot-vs-bot 4/4 completed, summons 29 Attack / 23 Defense; suite 621/621 on branch |
 | F12 Winning attack on a unit, cinematic | A6 | merged `bb600f7` | |
 | F13 4x AA default | A6 | merged `bb600f7` | |
@@ -51,5 +51,5 @@ Status values: pending, in progress, merged (unverified), verified.
 | F23 Delete only for saved decks | A4 | merged `cb4b9e4` | |
 | F24 Animated and audible deck edits | A4 (+ A6 sounds) | merged `cb4b9e4` | |
 | F25 Button click sounds | A6 | merged `bb600f7` | |
-| F26 Per-card tests | A2 | in progress | |
-| Q8 Remove draft drag | A5 | in progress | |
+| F26 Per-card tests | A2 | merged `d788db5`: 183/183 covered, 0 pending | |
+| Q8 Remove draft drag | A5 | merged `9120580` | |
