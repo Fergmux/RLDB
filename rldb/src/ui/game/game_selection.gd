@@ -209,22 +209,23 @@ func confirm_multi() -> void:
 func cancel() -> bool:
 	var menu := gs.menu
 	var details := gs.details
+	# F22: closing a screen-level panel (inspector, dialog, menu, pile, settings) is a "back".
 	if gs.inspect.close_top():
-		return true
+		return _went_back()
 	if menu.close_dialog():
-		return true
+		return _went_back()
 	if menu.game_menu.visible:
 		menu.game_menu.visible = false
-		return true
+		return _went_back()
 	if gs.overlays.pile_popup.visible:
 		gs.overlays.pile_popup.visible = false
-		return true
+		return _went_back()
 	if details.pile_zone != "" and gs.pending().is_empty():
 		details.close_pile()
-		return true
+		return _went_back()
 	if menu.settings_popup.visible:
 		menu.settings_popup.visible = false
-		return true
+		return _went_back()
 	var did := false
 	var pd := gs.pending()
 	if not pd.is_empty() and pd["mine"] and pd["cancellable"]:
@@ -237,3 +238,9 @@ func cancel() -> bool:
 		did = true
 	gs.hover.clear()
 	return did
+
+
+## The back sound of a closed panel (F22); always true.
+func _went_back() -> bool:
+	Sfx.play("back")
+	return true

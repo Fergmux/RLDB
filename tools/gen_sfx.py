@@ -405,6 +405,58 @@ def s_charge(r):
     return finish(x, tail_kw=dict(wet=0.25, extra_s=0.05))
 
 
+# ---------------------------------------------------------------- UI clicks (F22 / F25 / F24)
+# One family: a short transient, a pitched body and a wooden "thock", so every control sounds like the
+# same table. Gold (primary) buttons ring brighter and brassier; brown (secondary) ones are a darker,
+# softer leather-and-wood knock; Back is a two-knock descending close; deck edits are a card slide.
+def _thock(f0, f1, sec, decay):
+    return mul(sweep(f0, f1, sec), env_exp(n_samples(sec), decay, 0.0008))
+
+
+def s_click_primary(r):
+    """F25 gold button: crisp brass tick over a short wooden thock."""
+    tick = mul(highpass(noise(r, 0.012), 2500), env_exp(n_samples(0.012), 0.0018, 0.0003))
+    body = tone(1320, 0.09, 0.016, ((1, 1), (2.71, 0.35), (4.13, 0.12)), 0.0008)
+    low = _thock(420, 260, 0.05, 0.012)
+    return finish(mix(scale(tick, 0.55), body, scale(low, 0.5)), tail_kw=dict(wet=0.1, extra_s=0.05))
+
+
+def s_click_secondary(r):
+    """F25 brown button: darker leather-and-wood knock, same envelope family as the gold click."""
+    tick = mul(lowpass(noise(r, 0.014), 3200), env_exp(n_samples(0.014), 0.0025, 0.0004))
+    body = tone(760, 0.07, 0.012, ((1, 1), (2.3, 0.25)), 0.0008)
+    low = _thock(300, 180, 0.05, 0.014)
+    return finish(lowpass(mix(scale(tick, 0.6), scale(body, 0.8), scale(low, 0.7)), 5000), tail_kw=dict(wet=0.08, extra_s=0.04))
+
+
+def s_back(r):
+    """F22 back / close: two muted knocks stepping down a fifth over a soft page-close swish."""
+    swish = mul(bandpass_sweep(noise(r, 0.09), 2600, 900, q=1.4), [math.sin(math.pi * i / n_samples(0.09)) ** 1.5 for i in range(n_samples(0.09))])
+    k1 = mix(tone(660, 0.07, 0.013, ((1, 1), (2.3, 0.22)), 0.0008), scale(_thock(280, 170, 0.05, 0.013), 0.6))
+    k2 = mix(tone(440, 0.09, 0.018, ((1, 1), (2.3, 0.2)), 0.0008), scale(_thock(220, 130, 0.06, 0.016), 0.7))
+    x = mix(scale(swish, 0.35), k1, (0.058, scale(k2, 0.85)))
+    return finish(lowpass(x, 4200), tail_kw=dict(wet=0.12, extra_s=0.06))
+
+
+def s_deck_add(r):
+    """F24 card added to the deck: a quick upward card slide landing on a soft gold tick."""
+    n = n_samples(0.09)
+    slide = mul(bandpass_sweep(noise(r, 0.09), 900, 3600, q=1.6), [math.sin(math.pi * i / n) ** 1.5 for i in range(n)])
+    tick = tone(1480, 0.08, 0.015, ((1, 1), (2.71, 0.3)), 0.0008)
+    low = _thock(360, 240, 0.05, 0.012)
+    x = mix(scale(slide, 0.55), (0.06, scale(tick, 0.7)), (0.06, scale(low, 0.45)))
+    return finish(x, tail_kw=dict(wet=0.12, extra_s=0.05))
+
+
+def s_deck_remove(r):
+    """F24 card taken out of the deck: a downward slide into a muted low thock."""
+    n = n_samples(0.1)
+    slide = mul(bandpass_sweep(noise(r, 0.1), 3200, 800, q=1.6), [math.sin(math.pi * i / n) ** 1.5 for i in range(n)])
+    knock = mix(tone(520, 0.08, 0.014, ((1, 1), (2.3, 0.2)), 0.0008), scale(_thock(240, 140, 0.06, 0.016), 0.8))
+    x = mix(scale(slide, 0.55), (0.07, scale(knock, 0.8)))
+    return finish(lowpass(x, 4500), tail_kw=dict(wet=0.1, extra_s=0.05))
+
+
 SOUNDS = [
     ("card_draw", s_card_draw), ("card_play", s_card_play), ("card_set", s_card_set),
     ("summon", s_summon), ("select", s_select), ("confirm", s_confirm),
@@ -415,7 +467,12 @@ SOUNDS = [
     ("victory", s_victory), ("defeat", s_defeat),
     ("exhaust", s_exhaust), ("fuse", s_fuse), ("ritual", s_ritual), ("arcane", s_arcane), ("victory_big", s_victory_big),
     ("boom", s_boom), ("charge", s_charge),
+    ("click_primary", s_click_primary), ("click_secondary", s_click_secondary), ("back", s_back),
+    ("deck_add", s_deck_add), ("deck_remove", s_deck_remove),
 ]
+
+# Per-sound peak level (dBFS); default PEAK_DBFS. UI clicks sit well under the game sounds.
+PEAK = {"click_primary": -11.0, "click_secondary": -12.0, "back": -10.5, "deck_add": -10.0, "deck_remove": -10.5}
 
 
 # Hard duration caps (seconds); longer renders are trimmed and re-faded.
@@ -456,7 +513,7 @@ def main():
         cap = n_samples(MAX_LEN.get(name, 0.9))
         if len(x) > cap:
             x = fade(x[:cap], 0.001, 0.08)
-        x = normalise(x)
+        x = normalise(x, PEAK.get(name, PEAK_DBFS))
         path = os.path.join(out, name + ".wav")
         write_wav(path, x)
         a = analyse(path)

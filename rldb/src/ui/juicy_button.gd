@@ -15,6 +15,7 @@ var _tw: Tween
 
 
 func _init() -> void:
+	Sfx.install_button_sounds()   # F25: the click comes from the shared hook (Sfx.button_sound)
 	mouse_entered.connect(func(): _hover = true; _settle(); queue_redraw())
 	mouse_exited.connect(func(): _hover = false; _down = false; _settle(); queue_redraw())
 	button_down.connect(func(): _down = true; _settle(); queue_redraw())

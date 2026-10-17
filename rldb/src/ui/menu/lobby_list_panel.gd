@@ -84,5 +84,6 @@ func _unhandled_input(event: InputEvent) -> void:
 func _back() -> void:
 	if is_queued_for_deletion():
 		return
+	Sfx.play("back")   # F22: Back button and Esc alike (one sound: coalesced with the button's)
 	queue_free()
 	back_chosen.emit()

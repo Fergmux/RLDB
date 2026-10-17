@@ -67,12 +67,22 @@ func set_title_size(px: int) -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_click()
 		pressed.emit()
 		accept_event()
 	elif has_focus() and event.is_action_pressed("ui_accept"):
 		# Keyboard use when a host makes the tile focusable (F06-05 / F06-06 pickers).
+		_click()
 		pressed.emit()
 		accept_event()
+
+
+## F25: a choice is a gold-family click (coalesced with any sound the host plays for the same pick);
+## meta Sfx.BUTTON_META overrides it ("none" = silent).
+func _click() -> void:
+	var s := String(get_meta(Sfx.BUTTON_META, "click_primary"))
+	if s != "none":
+		Sfx.play(s, 0.0, 0.03)
 
 
 func _notification(what: int) -> void:
