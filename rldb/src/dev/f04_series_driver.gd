@@ -29,23 +29,23 @@ func run(main_node: Node, dir: String) -> void:
 	var gs: GameScreen = main.screen
 	var ov: GameSeriesOverlay = gs.overlays
 	await _shot("series_01_structured")
-	_f01_rect = ov.overlay.get_global_rect()
+	_f01_rect = Rect2(ov.overlay.position, ov.overlay.size)
 	ov.deck_open["s0"] = true
 	ov.refresh()
 	await _frames(8)
 	await _shot("series_02_structured_selected")
-	_check("F01 opening a deck tile keeps the modal's size", ov.overlay.get_global_rect().is_equal_approx(_f01_rect), str(ov.overlay.get_global_rect()))
+	_check("F01 opening a deck tile keeps the modal's size", Rect2(ov.overlay.position, ov.overlay.size).is_equal_approx(_f01_rect), str(ov.overlay.get_global_rect()))
 	ov.deck_open.clear()
 	ov.decks.tab = "custom"
 	ov.refresh()
 	await _frames(8)
 	await _shot("series_03_custom_empty")
-	_check("F01 empty Custom tab keeps the modal's size and place", ov.overlay.get_global_rect().is_equal_approx(_f01_rect), "%s vs %s" % [ov.overlay.get_global_rect(), _f01_rect])
+	_check("F01 empty Custom tab keeps the modal's size and place", Rect2(ov.overlay.position, ov.overlay.size).is_equal_approx(_f01_rect), "%s vs %s" % [ov.overlay.get_global_rect(), _f01_rect])
 	# F01: one saved deck (sparse tab) must not shrink the modal either.
 	DeckStore.save_deck("Lone Deck", [112, 112, 36, 34])
 	ov.refresh()
 	await _frames(10)
-	_check("F01 sparse Custom tab keeps the modal's size and place", ov.overlay.get_global_rect().is_equal_approx(_f01_rect), str(ov.overlay.get_global_rect()))
+	_check("F01 sparse Custom tab keeps the modal's size and place", Rect2(ov.overlay.position, ov.overlay.size).is_equal_approx(_f01_rect), str(ov.overlay.get_global_rect()))
 	await _shot("series_03b_custom_sparse")
 	DeckStore.delete_deck("Lone Deck")
 	var ids := [112, 112, 36, 34, 70, 162, 29, 54, 51, 37, 28, 13, 102]
@@ -89,6 +89,7 @@ func run(main_node: Node, dir: String) -> void:
 	await _frames(6)
 	var m: MatchEngine = host.series.game
 	# --- prompts in game 1 ---
+	await get_tree().create_timer(4.5).timeout   # the who-goes-first coin plays over the board first
 	_stage_board(m)
 	host.broadcast()
 	_view_seat(m.active)
@@ -104,8 +105,22 @@ func run(main_node: Node, dir: String) -> void:
 		await _frames(8)
 		await _shot("prompt_01_zone")
 		_fit("zone prompt", gs)
+		_check("F05 zone prompt shows the summoned card", gs.prompt.subject_box.visible and int(gs.prompt.subject_card.view.get("uid", -1)) == hand_unit)
+		# F06: a field card under the pointer does not lift while a zone is being chosen.
+		var fit := gs.selection.item_for_uid(m.field_units(a)[0])
+		var fat: Vector2 = (fit["holder"] as Control).get_global_rect().get_center()
+		gs.hover.update(fat)
+		await _frames(4)
+		_check("F06 no field hover during the zone choice", gs.hover.hv.is_empty())
+		await _shot("prompt_01b_zone_no_hover")
 		host.handle(a, {"t": "cancel", "id": m.pending["id"]})
 		await _frames(4)
+		gs.hover.update(fat)
+		await _frames(6)
+		_check("F06 field hover returns after cancel", not gs.hover.hv.is_empty())
+		gs.hover.clear()
+		await _frames(2)
+	await _extra_shots(gs, m, a)
 	# Fake prompt kinds for a deterministic look at long text and many buttons.
 	var base := {"id": 999, "mine": true, "player": a, "cancellable": true, "min": 1, "max": 1, "options": [], "kind": "mode"}
 	await _fake(gs, "prompt_02_type", base.merged({"kind": "mode", "prompt": "Choose a Type for Waang until end of turn.", "options": [
@@ -160,8 +175,19 @@ func run(main_node: Node, dir: String) -> void:
 	host.handle(0, {"t": "reward_type", "category": "spell"})
 	await _frames(8)
 	await _shot("rewards_06_offer")
-	host.handle(0, {"t": "reward_add", "index": 0})
+	# F10: no Take card button; clicking the card takes it, a second click does nothing more.
+	_check("F10 no Take card button", _find_button(ov.overlay_box, "Take card") == null)
+	var offer_w: CardWidget = null
+	for n in _nodes(ov.overlay_box):
+		if n is CardWidget and n.has_meta("reward_offer") and int(n.get_meta("reward_offer")) == 0:
+			offer_w = n
+	var left_before := int(host.series.rewards[0]["left"])
+	var taken_before: int = host.series.rewards[0]["taken"].size()
+	if offer_w != null:
+		offer_w.pressed.emit(offer_w)
+		offer_w.pressed.emit(offer_w)
 	await _frames(8)
+	_check("F10 clicking the card takes exactly one card", host.series.rewards[0]["taken"].size() == taken_before + 1 and int(host.series.rewards[0]["left"]) == left_before, "%d %d" % [host.series.rewards[0]["taken"].size(), int(host.series.rewards[0]["left"])])
 	await _shot("rewards_07_after_pick")
 	host.handle(0, {"t": "reward_finish"})
 	await _frames(8)
@@ -390,6 +416,101 @@ func _shot(name: String) -> void:
 
 
 ## Arranges a readable mid-game board (same as the shot driver).
+## F04 / F08 / F05: the Extra Deck list with its Summon buttons, the Fusion-method picker, the
+## method's next step, then the exact-cost Arcane material circles.
+func _extra_shots(gs: GameScreen, m: MatchEngine, a: int) -> void:
+	_put(m, a, 28, 2, "atk")                     # Beast (with the Dragon of the Cave: Bastion Wyrm)
+	_put(m, a, 40, 5, "atk")                     # Aleister: a second Fusion method
+	_add(m, a, 82, "hand")
+	var wyrm := _add(m, a, 93, "extra")
+	var kaya := _add(m, a, 175, "extra")         # Arcane, cost 3
+	for id in [34, 27, 13, 162]:          # costs 1, 2, 3 and 0
+		_add(m, a, id, "spent")
+	m.players[a]["ap"] = 3
+	host.broadcast()
+	await _frames(6)
+	gs.details.show_pile("extra")
+	await _frames(10)
+	var row := gs.details.pile_row(wyrm)
+	var fb: Button = null
+	if row != null:
+		for n in _nodes(row):
+			if n is Button and n.has_meta("summon_kind") and n.get_meta("summon_kind") == "fusion":
+				fb = n
+	_check("F04 Fusion Summon button on the Wyrm row without selecting it", fb != null and not fb.disabled)
+	var krow := gs.details.pile_row(kaya)
+	_check("F04 Arcane summon buttons on the Arcane row", krow != null and _nodes(krow).any(func(n): return n is Button and n.has_meta("summon_kind") and n.get_meta("summon_kind") == "arcane"))
+	if row != null:
+		gs.details.pile_scroll.ensure_control_visible(row)
+	await _frames(6)
+	await _shot("f04_01_extra_list")
+	if fb != null:
+		fb.pressed.emit()
+	await _frames(12)
+	_check("F04 two methods open the method picker", gs.details.method_picker_open())
+	await _shot("f04_02_method_picker")
+	var pm: Array = gs.details.fusion_methods_for(wyrm).filter(func(x): return String(x["t"]) == "cast")
+	if not pm.is_empty():
+		gs.details.run_fusion(wyrm, pm[0])
+	await _frames(12)
+	_check("F04 the chosen Fusion unit is answered for the player", not m.pending.is_empty() and not String(m.pending.get("prompt", "")).begins_with("Choose a Fusion unit"), str(m.pending.get("prompt", "")))
+	await _shot("f04_03_fusion_next_step")
+	_check("F05 Fusion step shows a card", gs.prompt.subject_box.visible)
+	if not m.pending.is_empty():
+		host.handle(a, {"t": "cancel", "id": m.pending["id"]})
+	await _frames(6)
+	# F08: Arcane Summon of the cost-3 Arcane unit; pay 1 then try to overpay.
+	var acts: Array = gs.action_row.actions_for_card(kaya).filter(func(x): return x["t"] == "arcane")
+	if not acts.is_empty():
+		gs.action_row.run_action(kaya, acts[0])
+	await _frames(12)
+	_check("F08 material circles shown", gs.prompt.cost_pips.visible and gs.prompt.cost_pips.need == 3, str(m.pending.get("prompt", "")))
+	await _shot("f08_01_materials_empty")
+	var pd := gs.pending()
+	var one := -1
+	for o in pd.get("options", []):
+		if GamePromptBanner.option_value(pd, int(o["i"])) == 1 and one == -1:
+			one = int(o["i"])
+	if one != -1:
+		gs.selection.pick_option(one)
+	await _frames(12)
+	await _shot("f08_02_materials_partial")
+	var bnr := gs.prompt.ctx_banner
+	var tray_c := gs.prompt.tray
+	_check("F05 the input panel does not cover the material tray", tray_c.visible and not Rect2(bnr.position, bnr.size).intersects(Rect2(tray_c.position, tray_c.size)), "%s %s" % [Rect2(bnr.position, bnr.size), Rect2(tray_c.position, tray_c.size)])
+	var overs := 0
+	for w in _nodes(gs.prompt.tray_box):
+		if w is CardWidget and w.has_meta("overpay") and w.get_meta("overpay"):
+			overs += 1
+	_check("F08 overpaying materials disabled after a partial payment", overs > 0, str(overs))
+	for o in pd.get("options", []):
+		if GamePromptBanner.option_value(pd, int(o["i"])) == 2:
+			gs.selection.pick_option(int(o["i"]))
+			break
+	await _frames(12)
+	_check("F08 exact total enables Confirm", MatchView.multi_pick_error(gs.pending(), gs.multi) == "")
+	await _shot("f08_03_materials_exact")
+	gs.multi = []
+	if not m.pending.is_empty():
+		host.handle(a, {"t": "cancel", "id": m.pending["id"]})
+	gs.details.close_pile()
+	await _frames(6)
+
+
+func _add(m: MatchEngine, p: int, id: int, zone: String) -> int:
+	var uid := m._create_instance(id, p)
+	m.cards[uid]["zone"] = zone
+	m.players[p][zone].append(uid)
+	return uid
+
+
+func _nodes(n: Node) -> Array:
+	var out := [n]
+	for c in n.get_children():
+		out.append_array(_nodes(c))
+	return out
+
+
 func _stage_board(m: MatchEngine) -> void:
 	m.submit(m.active, {"t": "next_phase"})
 	m.submit(m.active, {"t": "next_phase"})

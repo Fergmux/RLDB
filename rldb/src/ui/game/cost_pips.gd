@@ -74,6 +74,7 @@ func _update_height() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		_update_height()
+		queue_redraw()
 
 
 ## Index of the material paying circle `i` (-1 when unpaid).

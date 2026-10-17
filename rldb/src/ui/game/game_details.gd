@@ -416,11 +416,17 @@ func extra_summons(uid: int) -> Array:
 	return out
 
 
-## F04: the Fusion methods that can summon Fusion unit `fu` right now (from `extra_avail`).
+## F04: the Fusion methods that can summon Fusion unit `fu` right now (from `extra_avail`). Two
+## copies of the same card used the same way (two Polymerizations in Hand) are one choice.
 func fusion_methods_for(fu: int) -> Array:
 	var out := []
+	var seen := {}
 	for m in gs.mv.get("extra_avail", {}).get("methods", []):
 		if String(m.get("kind", "")) == "fusion" and fu in m.get("targets", []).map(func(x): return int(x)):
+			var key := "%s|%d|%d|%s" % [m.get("t", ""), int(find_card(int(m.get("via", -1))).get("id", -1)), int(m.get("idx", -1)), str(m.get("targets", []))]
+			if seen.has(key):
+				continue
+			seen[key] = true
 			out.append(m)
 	return out
 

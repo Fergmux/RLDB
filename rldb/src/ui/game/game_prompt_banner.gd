@@ -22,9 +22,6 @@ const OPTION_H := 32
 ## (the full text is its tooltip and the right-click inspection).
 const SUBJECT_CARD := Vector2(64, 96)
 const SUBJECT_LINES := 6
-## F05: prompts that name the card being placed when it is not the effect's source (a Fusion
-## unit placed by a Fusion Spell): "Choose a zone for <name>." / "Choose a stance for <name>.".
-const SUBJECT_LEADS := ["Choose a zone for ", "Choose a stance for "]
 ## Type-choice buttons (F03): the icon box's left inset and its largest side (the left content
 ## margin of 42 px holds it with a gap before the label).
 const TYPE_ICON_X := 9.0
@@ -177,25 +174,20 @@ func subject_for(pd: Dictionary) -> Dictionary:
 		return {}
 	var src := gs.details.find_card(int(pd.get("source_uid", -1)))
 	var prompt := String(pd.get("prompt", ""))
-	var named := ""
-	for lead in SUBJECT_LEADS:
-		if prompt.begins_with(lead) and prompt.ends_with("."):
-			named = prompt.substr(lead.length(), prompt.length() - lead.length() - 1)
-	if named != "" and String(src.get("name", "")) != named:
-		var own := _own_visible_named(named)
-		if not own.is_empty():
-			return own
-	return src
-
-
-## One of my own visible cards named `nm` (Extra Deck and Hand first), or {}.
-func _own_visible_named(nm: String) -> Dictionary:
+	if not src.is_empty() and prompt.contains(String(src.get("name", "~"))):
+		return src
+	# The prompt names another card of mine (the Fusion unit being summoned with a Spell's
+	# materials, zone and stance): show that one. Longest name wins ("Dragon" vs "Ultimate Dragon").
+	var best := {}
 	var pv := gs.pv(gs.me())
-	for z in ["extra", "hand", "spent", "units", "exhaust"]:
+	for z in ["extra", "hand"]:
 		for c in pv.get(z, []):
-			if c != null and not c.get("hidden", false) and String(c.get("name", "")) == nm:
-				return c
-	return {}
+			if c == null or c.get("hidden", false):
+				continue
+			var nm := String(c.get("name", ""))
+			if nm != "" and prompt.contains(nm) and nm.length() > String(best.get("name", "")).length():
+				best = c
+	return best if not best.is_empty() else src
 
 
 func _render_subject(pd: Dictionary) -> void:
@@ -451,6 +443,7 @@ func place_banner() -> void:
 	if have_zones and side_w >= BANNER_SIDE_MIN_W:
 		_size_banner(side_w)
 		ctx_banner.position = Vector2(col_left, top)
+		_after_banner_settles()
 		return
 	var left := area.position.x + 230.0
 	var plates := board.plates
@@ -458,6 +451,18 @@ func place_banner() -> void:
 	var bw := clampf(right - left, BANNER_MIN_W, BANNER_MAX_W)
 	_size_banner(bw)
 	ctx_banner.position = Vector2(maxf(area.position.x + 8.0, (left + right) / 2.0 - bw / 2.0), 10.0)
+	_after_banner_settles()
+
+
+## Re-places the tray once the banner has measured itself (HousePanel.fit settles over frames).
+func _after_banner_settles() -> void:
+	if tray == null or not tray.visible or not is_instance_valid(gs) or not gs.is_inside_tree():
+		return
+	var tree := gs.get_tree()
+	await tree.process_frame
+	await tree.process_frame
+	if is_instance_valid(gs) and gs.is_inside_tree() and is_instance_valid(tray) and tray.visible:
+		place_tray()
 
 
 func _size_banner(w: float) -> void:
@@ -602,6 +607,13 @@ func place_tray() -> void:
 		w += 12.0   # room for the scroll bar
 	tray.size = Vector2(w, h)
 	tray.position = (area.position + (area.size - tray.size) / 2.0).round()
+	# The input panel (taller with its card context, F05) must never cover the offered cards: when
+	# it sits over the tray (the top-strip fallback), the tray moves down below it.
+	if ctx_banner != null and ctx_banner.visible:
+		var br := Rect2(ctx_banner.position, ctx_banner.size)
+		if br.intersects(Rect2(tray.position, tray.size)):
+			tray.position.y = roundf(br.end.y + BANNER_GAP)
+			tray.size.y = maxf(chrome.y + 60.0, minf(tray.size.y, area.end.y - tray.position.y - 8.0))
 
 
 ## F02-10 tray of the cards offered from a pile (Spent, Draw, Extra, an opponent's pile when
