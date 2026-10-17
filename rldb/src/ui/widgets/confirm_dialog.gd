@@ -9,6 +9,9 @@ extends Control
 ## the order given, so long labels never crowd the plate.
 
 const PANEL_W := 420.0
+## Dim over everything behind the dialog: strong enough that a gold-rimmed modal underneath (a
+## series window) recedes instead of competing with the dialog (playtest feedback 08).
+const DIM_ALPHA := 0.7
 ## Width of each stacked button in a dialog with three or more choices.
 const STACK_W := 280.0
 
@@ -62,7 +65,7 @@ func _build(title: String, text: String, list: Array, tag: String) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	z_index = UiLayers.CONFIRM_DIALOG
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
+	dim.color = Color(0, 0, 0, DIM_ALPHA)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.gui_input.connect(func(ev): if ev is InputEventMouseButton and ev.pressed: close())
 	add_child(dim)
