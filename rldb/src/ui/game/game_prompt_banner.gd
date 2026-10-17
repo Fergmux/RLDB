@@ -30,7 +30,7 @@ var banner_sub: RichTextLabel
 var banner_btns: HFlowContainer
 ## Banner flow of option buttons.
 var banner_flow: HFlowContainer
-## Tray offering pile cards for a choice.
+## Tray offering pile cards for a choice (a HousePanel).
 var tray: PanelContainer
 ## Container of the tray cards.
 var tray_box: VBoxContainer
@@ -48,10 +48,8 @@ var prompt_sig: int = 0
 var seen_toast_seq: int = -1
 
 var _banner_how: String = ""
-## Who must act and that input is needed (small caps line above the headline).
+## Who must act and that input is needed (the header strip title of the plate).
 var banner_tag: Label
-var _banner_style: StyleBoxFlat
-var _banner_tween: Tween
 var _banner_pid: int = -2
 var _wait_tween: Tween
 var _toast_game: int = -99
@@ -65,38 +63,14 @@ func _init(screen: GameScreen) -> void:
 func build() -> void:
 	# F02-07 / F03-25 context banner: a tall, narrow card with a gold pulse. It sits in the free
 	# column beside the board (or the top strip when there is none) so it never covers a target.
-	ctx_banner = PromptPlate.new()
-	var bs := UIStyle.flat(Color(0, 0, 0, 0), UIStyle.GOLD, 3, 12)
-	bs.content_margin_left = 20
-	bs.content_margin_right = 16
-	bs.content_margin_top = 3
-	bs.content_margin_bottom = 14
-	bs.shadow_color = Color(UIStyle.GOLD, 0.35)
-	bs.shadow_size = 14
-	bs.shadow_offset = Vector2(0, 2)
-	_banner_style = bs
-	ctx_banner.add_theme_stylebox_override("panel", bs)
+	var plate := PromptPlate.new()
+	ctx_banner = plate
 	ctx_banner.visible = false
 	ctx_banner.z_index = UiLayers.BANNER
 	gs.add_child(ctx_banner)
-	var bcol := VBoxContainer.new()
-	bcol.add_theme_constant_override("separation", 7)
-	ctx_banner.add_child(bcol)
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 6)
-	head.custom_minimum_size = Vector2(40, PromptPlate.HEAD_H - 3.0)
-	bcol.add_child(head)
-	head.add_child(PromptPlate.Pip.new())
-	banner_tag = UIStyle.label("", 12, UIStyle.GOLD_HI, false, true)
-	banner_tag.clip_text = true
-	banner_tag.custom_minimum_size = Vector2(40, 0)
-	banner_tag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	banner_tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(banner_tag)
-	banner_title = UIStyle.label("", 21, UIStyle.GOLD_HI, true, true)
-	banner_title.custom_minimum_size = Vector2(40, 0)
-	bcol.add_child(banner_title)
-	bcol.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 8.0))
+	var bcol := plate.body
+	banner_tag = plate.title_label
+	banner_title = plate.add_headline("", 21)
 	banner_sub = RichTextLabel.new()
 	banner_sub.bbcode_enabled = true
 	banner_sub.fit_content = true
@@ -118,19 +92,14 @@ func build() -> void:
 	banner_btns.add_theme_constant_override("v_separation", 6)
 	bcol.add_child(banner_btns)
 	# F02-10 pile tray: cards offered only for this choice; click a card to choose it.
-	tray = PanelContainer.new()
-	var tsb := UIStyle.panel_style(Color(0.07, 0.062, 0.056, 0.97), UIStyle.GOLD, 12)
-	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		tsb.set_content_margin(side, TRAY_PAD)
-	tsb.shadow_size = 14
-	tsb.shadow_color = Color(0, 0, 0, 0.6)
-	tray.add_theme_stylebox_override("panel", tsb)
+	tray = HousePanel.new("Choose a card", "", Vector2(TRAY_PAD, TRAY_PAD), 8)
 	tray.visible = false
 	tray.z_index = UiLayers.TRAY
 	gs.add_child(tray)
 	var tsc := ScrollContainer.new()
 	tsc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	tray.add_child(tsc)
+	tsc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	(tray as HousePanel).body.add_child(tsc)
 	tray_box = VBoxContainer.new()
 	tray_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tray_box.add_theme_constant_override("separation", 8)
@@ -317,50 +286,22 @@ func place_banner() -> void:
 
 
 func _size_banner(w: float) -> void:
-	# F04-13: the plate measures itself in passes after layout (see PromptPlate.fit), so wrapped
+	# F04-13: the plate measures itself in passes after layout (see HousePanel.fit), so wrapped
 	# labels that were laid out at a stale width cannot leave it too tall.
-	(ctx_banner as PromptPlate).fit(w)
+	(ctx_banner as HousePanel).fit(w)
 
 
 ## Attention treatment (F03-25): a pop and gold flare when a new choice appears, then a gentle
-## breathing border and glow. Static (bright border, no motion) with UIStyle.reduce_motion.
+## breathing border and glow (HousePanel.attend). Static with UIStyle.reduce_motion.
 func _animate_banner(on: bool, pid: int) -> void:
-	if _banner_tween != null and _banner_tween.is_valid():
-		_banner_tween.kill()
+	var plate := ctx_banner as HousePanel
 	if not on:
+		plate.calm()
 		_banner_pid = -2
-		return
-	_banner_style.border_color = UIStyle.GOLD_HI
-	_banner_style.shadow_color = Color(UIStyle.GOLD, 0.45)
-	_banner_style.shadow_size = 14
-	ctx_banner.scale = Vector2.ONE
-	if UIStyle.reduce_motion:
 		return
 	var fresh := pid != _banner_pid
 	_banner_pid = pid
-	if not fresh:
-		_breathe()
-		return
-	ctx_banner.scale = Vector2(0.92, 0.92)
-	_banner_style.shadow_color = Color(UIStyle.GOLD_HI, 0.95)
-	_banner_style.shadow_size = 34
-	_banner_tween = gs.create_tween()
-	_banner_tween.set_parallel(true)
-	_banner_tween.tween_property(ctx_banner, "scale", Vector2.ONE, UIStyle.dur(0.35)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_banner_tween.tween_property(_banner_style, "shadow_size", 14, UIStyle.dur(0.7)).set_trans(Tween.TRANS_SINE)
-	_banner_tween.tween_property(_banner_style, "shadow_color", Color(UIStyle.GOLD, 0.45), UIStyle.dur(0.7)).set_trans(Tween.TRANS_SINE)
-	_banner_tween.chain().tween_callback(_breathe)
-
-
-func _breathe() -> void:
-	if _banner_tween != null and _banner_tween.is_valid():
-		_banner_tween.kill()
-	_banner_tween = gs.create_tween().set_loops()
-	var half := UIStyle.dur(BANNER_BREATH) / 2.0
-	_banner_tween.tween_property(_banner_style, "border_color", UIStyle.GOLD.darkened(0.25), half).set_trans(Tween.TRANS_SINE)
-	_banner_tween.parallel().tween_property(_banner_style, "shadow_color", Color(UIStyle.GOLD, 0.12), half).set_trans(Tween.TRANS_SINE)
-	_banner_tween.tween_property(_banner_style, "border_color", UIStyle.GOLD_HI, half).set_trans(Tween.TRANS_SINE)
-	_banner_tween.parallel().tween_property(_banner_style, "shadow_color", Color(UIStyle.GOLD, 0.5), half).set_trans(Tween.TRANS_SINE)
+	plate.attend(fresh)
 
 
 ## True when every option of a choice is a Type name (Waang, Chaos Witch, ...): those render as
@@ -463,10 +404,11 @@ func place_tray() -> void:
 	var cols := _tray_cols(n)
 	var cw: float = CardWidget.SIZES["mini"].x
 	var grid_w := cols * cw + (cols - 1) * TRAY_GAP
-	var w := maxf(grid_w, TRAY_MIN_W) + 2.0 * TRAY_PAD
+	var chrome := (tray as HousePanel).chrome_size()
+	var w := maxf(grid_w, TRAY_MIN_W) + chrome.x
 	var need := tray_box.get_combined_minimum_size()
-	var h := minf(need.y + 2.0 * TRAY_PAD, area.size.y - 40.0)
-	if need.y + 2.0 * TRAY_PAD > area.size.y - 40.0:
+	var h := minf(need.y + chrome.y, area.size.y - 40.0)
+	if need.y + chrome.y > area.size.y - 40.0:
 		w += 12.0   # room for the scroll bar
 	tray.size = Vector2(w, h)
 	tray.position = (area.position + (area.size - tray.size) / 2.0).round()
@@ -480,13 +422,15 @@ func _render_tray() -> void:
 	var opts: Array = gs.selection.tray_options(pd) if gs.selection.board_targeting() else []
 	tray_cards.clear()
 	GameUi.clear(tray_box)
+	var was_open := tray.visible
 	tray.visible = not opts.is_empty() and not gs.overlays.overlay.visible
 	if not tray.visible:
 		return
-	var head := "Choose %s" % ("a card" if int(pd["max"]) <= 1 else "cards")
-	var hl := UIStyle.label(head, 16, UIStyle.GOLD, true, true)
-	hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tray_box.add_child(hl)
+	var house := tray as HousePanel
+	house.set_title("Choose %s" % ("a card" if int(pd["max"]) <= 1 else "cards"))
+	house.set_tag("%d offered" % opts.size())
+	if not was_open:
+		house.appear()   # pops in when it opens, not on every pick of a multi-choice
 	var flow := GridContainer.new()
 	flow.columns = _tray_cols(opts.size())
 	flow.add_theme_constant_override("h_separation", int(TRAY_GAP))

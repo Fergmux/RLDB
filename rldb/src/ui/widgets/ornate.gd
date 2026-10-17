@@ -17,6 +17,47 @@ static func hgradient(ci: CanvasItem, rect: Rect2, left: Color, right: Color) ->
 		PackedColorArray([left, right, right, left]))
 
 
+## Points of a rounded rectangle, clockwise from the left end of the top-left arc: radius `rt` on
+## the two top corners and `rb` on the two bottom ones (0 keeps a corner square). The outline is
+## convex, so it can be filled in one `draw_polygon` call.
+static func rounded_points(rect: Rect2, rt: float, rb: float, seg: int = 6) -> PackedVector2Array:
+	var half := minf(rect.size.x, rect.size.y) / 2.0
+	rt = clampf(rt, 0.0, half)
+	rb = clampf(rb, 0.0, half)
+	var arcs := [
+		[Vector2(rect.position.x + rt, rect.position.y + rt), rt, PI],
+		[Vector2(rect.end.x - rt, rect.position.y + rt), rt, PI * 1.5],
+		[Vector2(rect.end.x - rb, rect.end.y - rb), rb, 0.0],
+		[Vector2(rect.position.x + rb, rect.end.y - rb), rb, PI * 0.5],
+	]
+	var pts := PackedVector2Array()
+	for a in arcs:
+		var c: Vector2 = a[0]
+		var r: float = a[1]
+		if r <= 0.0:
+			pts.append(c)
+			continue
+		for i in seg + 1:
+			var ang: float = a[2] + PI * 0.5 * float(i) / float(seg)
+			pts.append(c + Vector2(cos(ang), sin(ang)) * r)
+	return pts
+
+
+## Fills a rounded rectangle (see `rounded_points`) with a gradient from `from` to `to`: top to
+## bottom, or left to right when `horizontal`. The colour is set per outline point, so the
+## gradient stays exact across the rounded corners.
+static func rounded_gradient(ci: CanvasItem, rect: Rect2, rt: float, rb: float, from: Color, to: Color, horizontal: bool = false) -> void:
+	if rect.size.x <= 0.5 or rect.size.y <= 0.5:
+		return
+	var pts := rounded_points(rect, rt, rb)
+	var cols := PackedColorArray()
+	cols.resize(pts.size())
+	for i in pts.size():
+		var k := (pts[i].x - rect.position.x) / rect.size.x if horizontal else (pts[i].y - rect.position.y) / rect.size.y
+		cols[i] = from.lerp(to, clampf(k, 0.0, 1.0))
+	ci.draw_polygon(pts, cols)
+
+
 ## A small diamond centred on `c` (half-diagonal `r`).
 static func diamond(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
 	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]), col)
