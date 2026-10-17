@@ -35,7 +35,7 @@ const MENU := {
 	"play": [["Tutorial", "tutorial"], ["Play online", "@online"], ["Play local", "@local"]],
 	"online": [["Host game", "host_online"], ["Join game", "join_online"]],
 	"local": [["Play vs Bot", "bot"], ["Hot-seat", "hotseat"], ["Host LAN", "host_lan"], ["Join LAN", "join_lan"]],
-	"decks": [["Deck builder", "builder"], ["Card list", "cards"]],
+	"decks": [["Deck builder", "builder"], ["Card list", "cards"], ["Statistics", "stats"]],
 }
 ## Top item of the root level for a profile that has not played yet (F04-09); opens lesson 1.
 const PLAY_TUTORIAL_ITEM := ["Play tutorial", "play_tutorial"]
@@ -181,7 +181,7 @@ func _slide_in(mi: MenuItem, i: int, animate: bool) -> void:
 	tw.tween_property(mi, "slide", 0.0, SLIDE_TIME).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
 
 
-## Chooses menu target `target`: "@level" opens a sub-level, "quit"/"builder"/"cards" act, any
+## Chooses menu target `target`: "@level" opens a sub-level, "quit"/"builder"/"cards"/"stats" act, any
 ## other target shows its leaf panel in the centre.
 func pick(target: String) -> void:
 	# F25: the menu item's own click is the sound (MenuItem through Sfx.install_button_sounds).
@@ -198,6 +198,8 @@ func pick(target: String) -> void:
 			deck_builder_requested.emit()
 		"cards":
 			card_list_requested.emit()
+		"stats":
+			StatsDialog.open(self)
 		"play_tutorial":
 			tutorial_requested.emit(0)
 		_:

@@ -138,6 +138,7 @@ func _start_series(cfg: Dictionary) -> void:
 		series.setup(c)
 	series.checkpoint.connect(func(): SeriesStore.save(series))
 	Telemetry.attach_series(series, String(series.cfg.get("mode", "lan")), "host")
+	StatsObserver.attach(series, String(series.cfg.get("mode", "lan")), "host")
 
 
 func host_enet(port: int, cfg: Dictionary) -> String:
@@ -530,6 +531,7 @@ func _s2c_view(data: PackedByteArray, raw_size: int) -> void:
 	local_seat.deliver(v)
 	# After delivery, so the statistics observer can never delay or break the player's view.
 	Telemetry.client_view(v, transport)
+	StatsObserver.client_view(v, transport)
 
 
 ## Disconnects a refused peer after its error message has been sent.

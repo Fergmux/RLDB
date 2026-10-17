@@ -24,7 +24,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/godotsteam/plugin.cfg")
+enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/godotsteam/plugin.cfg", "res://addons/rldb_export/plugin.cfg")
 
 [physics]
 

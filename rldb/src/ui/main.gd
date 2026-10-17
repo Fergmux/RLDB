@@ -69,6 +69,12 @@ func _ready() -> void:
 	# Saved window mode (scripted runs keep their own window size).
 	if not " ".join(args).contains("shots"):
 		UIStyle.apply_window_mode()
+	if "--telemetry-status" in args or "--telemetry-status" in OS.get_cmdline_args():
+		# Developer check of which label this build records (RLDB.exe vs RLDB-dev.exe); no UI.
+		var c := TelemetryConfig.resolve()
+		print("telemetry: environment=%s target=%s enabled=%s" % [c.environment, c.target, c.enabled])
+		get_tree().quit()
+		return
 	Music.start()
 	Telemetry.boot(self)   # background statistics; silent, never blocks (docs/telemetry)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

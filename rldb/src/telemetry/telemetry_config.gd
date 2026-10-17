@@ -1,10 +1,12 @@
 class_name TelemetryConfig
 extends RefCounted
-## Resolved telemetry settings: the shipped file res://data/telemetry_config.json, then a
-## developer override file (user://telemetry/dev.cfg), then command-line user args, then the
+## Resolved telemetry settings: the shipped file res://data/telemetry_config.json, then the
+## executable name (an exported "<name>-dev.exe" records `dev`), then a developer override file (user://telemetry/dev.cfg), then command-line user args, then the
 ## RLDB_TELEMETRY environment variable. Players never see or edit any of this.
 ##
-## environment: dev (editor), playtest (exported builds), production (public release, only when
+## environment: dev (editor, or an exported build whose executable name ends in "-dev"; the export
+## plugin addons/rldb_export writes build/windows-dev/RLDB-dev.exe beside every export), playtest
+## (exported builds), production (public release, only when
 ## the shipped file says so), test (GdUnit / dev driver runs / --telemetry-env=test).
 ## target: "live" (Firebase), "emulator" (local emulators) or "none" (collect nothing). Under
 ## `test` the target is "none" unless --telemetry-emulator or --telemetry-live is given, so
@@ -47,6 +49,8 @@ static func resolve(args: PackedStringArray = OS.get_cmdline_user_args(), all_ar
 		c.enabled = false
 		c.off_reason = "config file missing"
 	var env_req := String(raw.get("environment", "auto")) if raw is Dictionary else "auto"
+	if not OS.has_feature("editor") and is_dev_executable(OS.get_executable_path()):
+		env_req = "dev"
 	var target_req := ""
 	var dev := ConfigFile.new()
 	if dev.load(DEV_OVERRIDE) == OK:
@@ -73,6 +77,11 @@ static func resolve(args: PackedStringArray = OS.get_cmdline_user_args(), all_ar
 	if not c.enabled and c.off_reason == "":
 		c.off_reason = "disabled in config"
 	return c
+
+
+## True for an exported developer build: the executable is named "<name>-dev" (RLDB-dev.exe).
+static func is_dev_executable(path: String) -> bool:
+	return path.get_file().get_basename().to_lower().ends_with("-dev")
 
 
 ## Environment for a request ("auto" or a label) and the process' arguments.

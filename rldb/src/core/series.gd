@@ -59,12 +59,16 @@ var _seed: int = 0
 var telemetry_ids: Dictionary = {}
 ## Optional telemetry observer (TelemetryCollector); it only reads.
 var observer: Object = null
+## Optional local statistics observer (StatsObserver); it only reads.
+var stats_observer: Object = null
 
 
 ## Reports a series event to the telemetry observer, if any. No effect on play.
 func note(kind: String, data: Dictionary) -> void:
 	if observer != null:
 		observer.on_series_event(self, kind, data)
+	if stats_observer != null:
+		stats_observer.on_series_event(self, kind, data)
 
 
 ## A fresh random telemetry id (128 bits, hex).

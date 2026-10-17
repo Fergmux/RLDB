@@ -50,12 +50,16 @@ var _next_log_seq: int = 1
 ## Optional telemetry observer (TelemetryCollector): it only reads, the rules never depend on it,
 ## and clone_for_sim() does not copy it, so look-ahead copies stay silent.
 var observer: Object = null
+## Optional local statistics observer (StatsObserver), same contract; clone_for_sim() skips it too.
+var stats_observer: Object = null
 
 
 ## Reports a committed rules event to the telemetry observer, if any. No effect on play.
 func note(kind: String, data: Dictionary) -> void:
 	if observer != null:
 		observer.on_core_event(self, kind, data)
+	if stats_observer != null:
+		stats_observer.on_core_event(self, kind, data)
 
 
 # ---------------------------------------------------------------- setup

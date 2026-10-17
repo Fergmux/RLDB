@@ -104,9 +104,11 @@ Records already uploaded stay until the owner runs `delete-uid`.
 |---|---|---|
 | Editor (`OS.has_feature("editor")`) | `dev` | live |
 | Exported build | `playtest` | live |
+| Exported `RLDB-dev.exe` (any executable named `*-dev`), written to `build/windows-dev/` by `addons/rldb_export` beside every Windows export | `dev` | live |
 | Public release | set `"environment": "production"` in `rldb/data/telemetry_config.json` for that build | live |
 | GdUnit, dev drivers (`*shots*`, `*driver*`), `--telemetry-env=test` | `test` | none (add `--telemetry-emulator` or `--telemetry-live`) |
 
+- Every Windows export (editor or `--export-release`) writes two builds from the same files: `build/windows/RLDB.exe` (`playtest`) and `build/windows-dev/RLDB-dev.exe` (`dev`). The name check beats the shipped `environment` value, so the dev copy stays `dev` in a production build; `dev.cfg` and `--telemetry-env=` still override it. `RLDB.exe --telemetry-status` prints the label a build uses and quits.
 - The environment is stamped on every record when it is queued, so a later build never relabels old records.
 - The admin tool partitions by environment and defaults to `production`. Labels are not a security boundary, and
   they share one database and one quota. Separate Firebase projects would be the stronger option and are not
