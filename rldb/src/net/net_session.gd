@@ -137,6 +137,7 @@ func _start_series(cfg: Dictionary) -> void:
 		c["names"] = [cfg.get("host_name", "Host"), "Waiting for opponent"]
 		series.setup(c)
 	series.checkpoint.connect(func(): SeriesStore.save(series))
+	Telemetry.attach_series(series, String(series.cfg.get("mode", "lan")), "host")
 
 
 func host_enet(port: int, cfg: Dictionary) -> String:
@@ -325,6 +326,7 @@ func _on_peer_disconnected(id: int) -> void:
 		_status("Opponent disconnected. The match is paused until they reconnect.")
 		if series.game != null:
 			series.game.add_log("Connection: %s disconnected; match paused." % series.names[CLIENT_SEAT])
+			Telemetry.net_pause(true)
 		_broadcast()
 
 
@@ -448,6 +450,7 @@ func _c2s_hello(token: String, player_name: String, have_log_seq: int) -> void:
 			series.game.players[CLIENT_SEAT]["name"] = series.names[CLIENT_SEAT]
 	elif series.game != null:
 		series.game.add_log("Connection: %s reconnected; match resumed." % series.names[CLIENT_SEAT])
+		Telemetry.net_pause(false)
 	_log_sent[CLIENT_SEAT] = have_log_seq if rejoin else 0
 	if not rejoin or have_log_seq == 0:
 		_log_game_sent[CLIENT_SEAT] = -1
@@ -522,6 +525,7 @@ func _s2c_view(data: PackedByteArray, raw_size: int) -> void:
 	if raw_received.size() > 8:
 		raw_received.pop_front()
 	_merge_client_log(v)
+	Telemetry.client_view(v, transport)
 	_awaiting_view = false
 	_status("")
 	local_seat.deliver(v)

@@ -1,0 +1,32 @@
+{
+	"_doc": "Gameplay telemetry configuration (docs/telemetry/README.md). enabled=false is the developer kill switch. environment: auto | dev | playtest | production | test (auto: editor=dev, exported=playtest, GdUnit/driver runs=test). Set production only for the public release build. The Firebase web API key identifies the app and is public by design; it grants no database access.",
+	"schema_version": 1,
+	"enabled": true,
+	"environment": "auto",
+	"build": "0.9.0",
+	"firebase": {
+		"project_id": "rldb-b5593",
+		"api_key": "AIzaSyAAP2b-X1agiZYWFY_dlyMptFrAFzox_Mg",
+		"database": "(default)"
+	},
+	"emulator": {
+		"firestore": "127.0.0.1:8180",
+		"auth": "127.0.0.1:9199"
+	},
+	"steam_hash_salt": "964c075d041ae7035b51a1b16873b9de4c2e8680df76b891",
+	"outbox": {
+		"max_items": 400,
+		"max_bytes": 8388608,
+		"quarantine_max": 25,
+		"abandon_after_hours": 12
+	},
+	"upload": {
+		"backoff_base_s": 5,
+		"backoff_cap_s": 900,
+		"idle_poll_s": 60,
+		"http_timeout_s": 15
+	},
+	"collect": {
+		"max_events_per_game": 3000
+	}
+}

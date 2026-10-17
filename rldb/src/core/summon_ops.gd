@@ -83,6 +83,7 @@ func _op_place(f: Dictionary, op: Dictionary) -> int:
 			add_log("No free zone; the summon fails.")
 			return R.END
 		slot = free[0]
+	note("summon", {"uid": uid, "p": f["ctl"], "from": cards[uid]["zone"], "frame": f})
 	place_unit(uid, f["ctl"], slot, stance)
 	add_log("%s summons %s in %s stance (%s row, column %d)." % [pname(f["ctl"]), name_of(uid),
 		"Attack" if stance == "atk" else "Defense", "front" if slot_row(slot) == 0 else "back", slot_col(slot) + 1])
@@ -136,6 +137,7 @@ func _op_tribute(f: Dictionary, op: Dictionary) -> int:
 	var p: int = f["ctl"]
 	for m in refs(f, op["target"]):
 		var from: String = cards[m]["zone"]
+		note("material", {"uid": m, "from": from})
 		# Presentation only (F03-17): where the material came from and where it goes, by summon kind.
 		var mfx := {"k": "material", "p": p, "from": from, "at": fx_pos(m),
 			"kind": "ritual" if op.get("ritual", false) else ("arcane" if op.get("to", "") == "exhaust" else "fusion"),

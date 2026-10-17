@@ -54,6 +54,22 @@ var seat_ids: Array = [0, 0]         # optional platform ids (e.g. SteamIDs) bou
 var client_token: String = ""        # network seat-1 token, kept so a resumed series binds the same player
 var starters: Array = []
 var _seed: int = 0
+## Opaque random ids for telemetry: {"series": id, "game": id of the current duel}. Saved with the
+## series and sent in views so both network seats report the same duel. Never drawn from `rng`.
+var telemetry_ids: Dictionary = {}
+## Optional telemetry observer (TelemetryCollector); it only reads.
+var observer: Object = null
+
+
+## Reports a series event to the telemetry observer, if any. No effect on play.
+func note(kind: String, data: Dictionary) -> void:
+	if observer != null:
+		observer.on_series_event(self, kind, data)
+
+
+## A fresh random telemetry id (128 bits, hex).
+static func new_telemetry_id() -> String:
+	return Crypto.new().generate_random_bytes(16).hex_encode()
 
 
 static func load_mode_config() -> Dictionary:
@@ -196,6 +212,7 @@ func setup(overrides: Dictionary = {}) -> void:
 	if cfg.has("names"):
 		names = cfg["names"]
 	starters = load_starters()
+	telemetry_ids = {"series": new_telemetry_id()}
 	save_id = "%d_%04d" % [int(Time.get_unix_time_from_system()), rng.randi_range(0, 9999)]
 	stage = STAGE_DECKS
 	if cfg["deck_mode"] == "draft":
@@ -257,6 +274,7 @@ func submit(p: int, cmd: Dictionary) -> String:
 func award_game(p: int, reason: String) -> String:
 	if stage != STAGE_GAME or game == null or game.winner != -1:
 		return "There is no game in progress."
+	note("award", {"p": p})
 	game.end_game(p, reason)
 	_on_game_over()
 	changed.emit()
@@ -270,6 +288,7 @@ func to_save() -> Dictionary:
 		"last_loser": last_loser, "first_player": first_player, "history": history,
 		"rewards": rewards, "series_log": series_log, "forfeit_by": forfeit_by,
 		"rng_state": str(rng.state), "seat_ids": seat_ids.map(func(x): return str(x)), "client_token": client_token,
+		"telemetry_series_id": String(telemetry_ids.get("series", "")),
 		"saved_at": Time.get_datetime_string_from_system()}
 
 
@@ -327,6 +346,9 @@ static func from_save(d: Dictionary) -> Series:
 	s.seat_ids = d.get("seat_ids", ["0", "0"]).map(func(x): return int(x))
 	s.client_token = String(d.get("client_token", ""))
 	s.rng.state = int(d["rng_state"])
+	s.telemetry_ids = {"series": String(d.get("telemetry_series_id", ""))}
+	if s.telemetry_ids["series"] == "":
+		s.telemetry_ids["series"] = new_telemetry_id()
 	s.starters = load_starters()
 	s.deck_ready = [true, true]
 	s._log("Series resumed from save (%s)." % d.get("saved_at", "?"))
@@ -339,10 +361,12 @@ func forfeit(p: int, reason: String) -> void:
 	if stage == STAGE_OVER:
 		return
 	forfeit_by = p
+	note("forfeit", {"p": p})
 	if game != null and game.winner == -1:
 		game.end_game(1 - p, reason)
 		history.append({"game": game_no, "winner": 1 - p, "turns": game.turn, "hp": [game.players[0]["hp"], game.players[1]["hp"]], "forfeit": true})
 	stage = STAGE_OVER
+	note("series_over", {})
 	_log("%s forfeits the series (%s)." % [names[p], reason])
 	changed.emit()
 
@@ -368,6 +392,7 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 			decks[p] = starters[i]["main"] + starters[i]["extra"]
 			deck_names[p] = starters[i]["name"]
 			deck_ready[p] = true
+			note("deck_locked", {"p": p, "source": "prebuilt", "name": deck_names[p]})
 			_log("%s locks in a deck." % names[p])
 		"custom_deck":
 			if cfg["deck_mode"] == "draft":
@@ -391,6 +416,7 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 			decks[p] = ids        # Main/Extra placement follows each card's category at game start
 			deck_names[p] = String(cmd.get("name", "Custom deck")).substr(0, 40)
 			deck_ready[p] = true
+			note("deck_locked", {"p": p, "source": "custom", "name": ""})
 			_log("%s locks in a custom deck." % names[p])
 		"draft_setup":
 			if cfg["deck_mode"] != "draft":
@@ -456,6 +482,7 @@ func _draft_setup(p: int, cmd: Dictionary) -> String:
 	st["order"] = _expand_order(cats)
 	st["basic"] = basic
 	st["setup_done"] = true
+	note("draft_setup", {"p": p})
 	st["step"] = 0
 	st["offer"] = []
 	st["picked"] = []
@@ -474,6 +501,7 @@ func _finish_draft(p: int) -> void:
 	decks[p] = draft[p]["picked"].duplicate()
 	deck_names[p] = "Drafted deck"
 	deck_ready[p] = true
+	note("draft_done", {"p": p})
 	_log("%s finishes drafting." % names[p])
 
 
@@ -512,6 +540,7 @@ func _draft_pick(p: int, index: int) -> String:
 	if index < 0 or index >= st["offer"].size():
 		return "Invalid draft choice."
 	var id: int = st["offer"][index]
+	note("draft_pick", {"p": p, "offer": st["offer"].duplicate(), "picked": id, "category": st["order"][st["step"]], "step": st["step"]})
 	st["picked"].append(id)
 	st["step"] += 1
 	st["offer"] = []
@@ -528,6 +557,8 @@ func _start_game() -> void:
 	game_no += 1
 	stage = STAGE_GAME
 	game = MatchEngine.new()
+	telemetry_ids["game"] = new_telemetry_id()
+	note("game_create", {})
 	game.setup(decks.duplicate(true), first_player, rng.randi(), {"names": names, "start_hp": int(cfg["start_hp"]), "hidden_response_windows": cfg.get("hidden_response_windows", false), "fatigue_damage": int(cfg.get("fatigue_damage", 2))})
 	_log("Game %d begins. %s goes first." % [game_no, names[first_player]])
 
@@ -536,6 +567,7 @@ func _on_game_over() -> void:
 	var w: int = game.winner
 	if w == -1:
 		return
+	note("game_over", {})
 	scores[w] += 1
 	last_loser = 1 - w
 	history.append({"game": game_no, "winner": w, "turns": game.turn, "hp": [game.players[0]["hp"], game.players[1]["hp"]]})
@@ -543,6 +575,7 @@ func _on_game_over() -> void:
 	if scores[w] >= wins_needed():
 		stage = STAGE_OVER
 		_log("%s wins the series %d-%d." % [names[w], scores[0], scores[1]])
+		note("series_over", {})
 		checkpoint.emit()
 		return
 	stage = STAGE_REWARDS
@@ -624,6 +657,7 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 	if r["left"] <= 0 and not r.get("pending", false):
 		r["done"] = true
 		_log("%s finishes choosing rewards." % names[p])
+	note("reward", {"p": p, "t": t, "cmd": cmd.duplicate(true), "offer": r["offer"].duplicate(), "deck": decks[p].duplicate(), "done": r["done"]})
 	if rewards[0]["done"] and rewards[1]["done"]:
 		stage = STAGE_FIRST
 	checkpoint.emit()
@@ -680,6 +714,7 @@ func _first_command(p: int, cmd: Dictionary) -> String:
 	if w != 0 and w != 1:
 		return "Choose a player."
 	first_player = w
+	note("first_choice", {"p": p, "who": w})
 	_log("%s chooses %s to go first." % [names[p], names[w]])
 	_start_game()
 	return ""
@@ -692,7 +727,7 @@ func view_for(p: int) -> Dictionary:
 		"best_of": cfg["best_of"], "names": names.duplicate(), "series_log": series_log.duplicate(),
 		"history": history.duplicate(true), "last_loser": last_loser, "deck_mode": cfg["deck_mode"],
 		"deck_ready": deck_ready.duplicate(), "deck_name": deck_names[p], "forfeit_by": forfeit_by,
-		"save_id": save_id, "at_checkpoint": at_checkpoint()}
+		"save_id": save_id, "at_checkpoint": at_checkpoint(), "tel_ids": telemetry_ids.duplicate()}
 	if game != null:
 		v["match"] = MatchView.build(game, p)
 	match stage:

@@ -444,6 +444,7 @@ func _leaf_panel(target: String) -> Control:
 			pv = _center_panel("Settings", "", "Main menu")
 			pv[1].add_child(UIStyle.display_controls(16))
 			pv[1].add_child(GameMenu.audio_controls(16))
+			pv[1].add_child(Telemetry.settings_control(15))
 			pv[1].add_child(_check_box("Reduced motion (no travel, shake or particles)", UIStyle.reduce_motion,
 					func(on): UIStyle.set_reduce_motion(on)))
 			pv[1].add_child(_check_box("Fast animations (half duration)", UIStyle.fast_anim,
