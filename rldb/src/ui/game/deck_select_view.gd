@@ -671,6 +671,12 @@ class OrderRow extends PanelContainer:
 	func _can_drop_data(at: Vector2, data: Variant) -> bool:
 		var ok: bool = data is Dictionary and data.has("draft_cat") and String(data["draft_cat"]) != cat
 		var m := (1 if at.y >= size.y / 2.0 else -1) if ok else 0
+		# Only one insertion line at a time: rows passed over during the drag may not get a mouse
+		# exit, so their marks are cleared here.
+		for sib in get_parent().get_children():
+			if sib != self and sib is OrderRow and sib._mark != 0:
+				sib._mark = 0
+				sib.queue_redraw()
 		if m != _mark:
 			_mark = m
 			queue_redraw()

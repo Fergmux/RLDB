@@ -250,6 +250,8 @@ func _draft_phase() -> void:
 		guard += 1
 	await _frames(10)
 	_check("F06 seat 0 deck drafted", host.series.deck_ready[0] and host.series.decks[0].size() == 23, str(host.series.decks[0].size()))
+	_view_seat(0)        # hot-seat follows the seat that still has to act; look at seat 0's wait
+	await _frames(6)
 	await _shot("draft_09_waiting")
 	# Rewards: Change basic units after a game.
 	while not host.series.deck_ready[1] and guard < 200:
@@ -320,7 +322,7 @@ func _mouse(at: Vector2, down: bool) -> void:
 	ev.button_index = MOUSE_BUTTON_LEFT
 	ev.pressed = down
 	ev.button_mask = MOUSE_BUTTON_MASK_LEFT if down else 0
-	get_viewport().push_input(ev)
+	get_viewport().push_input(ev, true)   # canvas coordinates: no window stretch applied
 	await _frames(2)
 
 
@@ -332,7 +334,7 @@ func _motion(at: Vector2, rel: Vector2) -> void:
 	ev.relative = rel
 	ev.screen_relative = rel
 	ev.button_mask = MOUSE_BUTTON_MASK_LEFT
-	get_viewport().push_input(ev)
+	get_viewport().push_input(ev, true)   # canvas coordinates: no window stretch applied
 	await _frames(2)
 
 
@@ -373,6 +375,8 @@ func _frames(n: int) -> void:
 func _shot(name: String) -> void:
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
+	if img == null or img.is_empty():
+		return   # headless (dummy renderer): the checks still run, there is nothing to save
 	img.save_png(out_dir.path_join(name + ".png"))
 
 
