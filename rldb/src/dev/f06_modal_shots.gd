@@ -1,6 +1,8 @@
 extends SceneTree
 ## Dev-only windowed evidence for F06-01 (every modal on the HousePanel house plate). Run NOT headless:
-##   godot --path rldb -s res://src/dev/f06_modal_shots.gd -- <absolute output dir> [WxH]
+##   godot --path rldb -s res://src/dev/f06_modal_shots.gd -- <absolute output dir> [WxH] [second WxH]
+## With a second size, the window is resized at the end and the rewards modal, the in-game menu,
+## a confirmation and the inspector are shot again at that size (prefix "big_").
 ## Opens each modal and popover in turn (menu settings, lobby list, deck select, in-game menu,
 ## settings, confirm, inspector, pile browser, pause veil, privacy screen, rewards) and saves a
 ## screenshot of each. Quits itself (and after a 200 s safety limit).
@@ -9,6 +11,7 @@ var out_dir: String = ""
 var main: Node
 var gs: GameScreen
 var host: LocalHost
+var big := Vector2i.ZERO
 
 
 func _initialize() -> void:
@@ -19,6 +22,9 @@ func _initialize() -> void:
 		var p := String(args[1]).split("x")
 		sz = Vector2i(int(p[0]), int(p[1]))
 	DirAccess.make_dir_recursive_absolute(out_dir)
+	if args.size() > 2:
+		var q := String(args[2]).split("x")
+		big = Vector2i(int(q[0]), int(q[1]))
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DisplayServer.window_set_size(sz)
 	create_timer(200.0).timeout.connect(func(): quit(1))
@@ -127,5 +133,21 @@ func run() -> void:
 	host.handle(me, {"t": "concede"})
 	await create_timer(9.0).timeout
 	await _shot("13_rewards")
+	if big != Vector2i.ZERO:
+		DisplayServer.window_set_size(big)
+		await create_timer(1.5).timeout
+		await _shot("big_13_rewards")
+		gs.menu.toggle()
+		await _shot("big_06_game_menu")
+		gs.menu.game_menu.visible = false
+		gs.menu.confirm_forfeit(false)
+		await _shot("big_08_confirm_leave")
+		gs.menu.close_dialog()
+		await _frames(2)
+		var ws2 := _widgets()
+		if not ws2.is_empty():
+			CardInspector.open(gs, (ws2[0] as CardWidget).view)
+			await _shot("big_09_card_inspector")
+			CardInspector.close_all()
 	print("F06 MODAL SHOTS DONE")
 	quit(0)

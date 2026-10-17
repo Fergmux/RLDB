@@ -5,7 +5,8 @@ extends RefCounted
 ## notice and the short toast.
 
 const TRAY_GAP := 10.0
-const TRAY_PAD := 14.0
+## Padding inside the tray's house plate (clears the corner flourishes).
+const TRAY_PAD := 20.0
 const TRAY_MAX_COLS := 8
 const TRAY_MIN_W := 280.0
 const BANNER_MIN_W := 300.0
@@ -431,6 +432,10 @@ func _render_tray() -> void:
 	house.set_tag("%d offered" % opts.size())
 	if not was_open:
 		house.appear()   # pops in when it opens, not on every pick of a multi-choice
+	var lead := Control.new()   # room above the cards for their order badges (the scroll clips)
+	lead.custom_minimum_size = Vector2(0, 6)
+	lead.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tray_box.add_child(lead)
 	var flow := GridContainer.new()
 	flow.columns = _tray_cols(opts.size())
 	flow.add_theme_constant_override("h_separation", int(TRAY_GAP))
