@@ -6,7 +6,7 @@ Status values: pending, in progress, merged (unverified), verified.
 
 - **Card changes:** the per-card ledger is `card-ledger.md` (written by A1). It covers the 101 changed IDs and 319 cells; the 82 unchanged cards are retained.
 - **Import:** reads the dated CSV, handles `temp`, uses source-aware summon fields, audited TEXT_CORRECTIONS, and regenerates deterministically. Status: in progress (A1).
-- **Per-card tests (F26):** all 183 IDs, with a manifest and runner. Status: in progress (A2).
+- **Per-card tests (F26):** all 183 IDs, with a manifest and runner. Part 1 merged (`207bd63`): the framework plus tests for the 82 unchanged cards and all basics; suite 694/694 on the branch. The 101 changed cards are pending until A1 is reconciled.
 
 ## Workstream 2: Firebase metrics (A3)
 
@@ -39,17 +39,17 @@ Status values: pending, in progress, merged (unverified), verified.
 | F11 Bot stance decisions | A7 | merged `3ab50c7` | `bot_stance_test.gd` (6 positions); bot-vs-bot 4/4 completed, summons 29 Attack / 23 Defense; suite 621/621 on branch |
 | F12 Winning attack on a unit, cinematic | A6 | in progress | |
 | F13 4x AA default | A6 | in progress | |
-| F14 Catalogue redesign | A4 | in progress | |
-| F15 No count or instruction text | A4 | in progress | |
-| F16 Fixed-width tags; 99 / 15 caps | A4 | in progress | |
-| F17 Canonical deck order | A4 | in progress | |
-| F18 Add/remove only in the preview; quantity under the card | A4 | in progress | |
-| F19 Simple ATK/DEF in the builder preview | A4 | in progress | |
-| F20 Saved/Starter buttons | A4 | in progress | |
-| F21 Escape = Back; inspection first | A4 | in progress | |
+| F14 Catalogue redesign | A4 | merged `cb4b9e4` | |
+| F15 No count or instruction text | A4 | merged `cb4b9e4` | |
+| F16 Fixed-width tags; 99 / 15 caps | A4 | merged `cb4b9e4` | |
+| F17 Canonical deck order | A4 | merged `cb4b9e4` | |
+| F18 Add/remove only in the preview; quantity under the card | A4 | merged `cb4b9e4` | |
+| F19 Simple ATK/DEF in the builder preview | A4 | merged `cb4b9e4` | |
+| F20 Saved/Starter buttons | A4 | merged `cb4b9e4` | |
+| F21 Escape = Back; inspection first | A4 | merged `cb4b9e4` | |
 | F22 Back sound | A6 | in progress | |
-| F23 Delete only for saved decks | A4 | in progress | |
-| F24 Animated and audible deck edits | A4 (+ A6 sounds) | in progress | |
+| F23 Delete only for saved decks | A4 | merged `cb4b9e4` | |
+| F24 Animated and audible deck edits | A4 (+ A6 sounds) | merged `cb4b9e4` | |
 | F25 Button click sounds | A6 | in progress | |
 | F26 Per-card tests | A2 | in progress | |
 | Q8 Remove draft drag | A5 | in progress | |
