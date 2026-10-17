@@ -556,64 +556,27 @@ func _show_complete() -> void:
 	var c := CenterContainer.new()
 	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.add_child(c)
-	# Outer frame: gold border and a warm glow.
-	var p := PanelContainer.new()
-	var sb := UIStyle.flat(Color(0.06, 0.05, 0.035, 0.99), UIStyle.GOLD_HI, 2, 12)
-	# Children sit inside the 2 px border (inner radius 10), so the header band never squares off
-	# the frame's rounded corners.
-	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		sb.set_content_margin(side, 2)
-	sb.shadow_color = Color(UIStyle.GOLD, 0.35)
-	sb.shadow_size = 28
-	p.add_theme_stylebox_override("panel", sb)
+	# House plate (F06-01): the header strip carries the lesson count; every layer follows the
+	# rim's rounded corners, so nothing squares off the frame.
+	var p := HousePanel.new("Tutorial complete" if last else "Lesson %d of %d" % [idx + 1, total], "Tutorial", Vector2(28, 24), 10)
+	p.arm = 18.0
 	p.custom_minimum_size = Vector2(COMPLETE_W, 0)
-	p.clip_contents = true
 	c.add_child(p)
-	var outer := VBoxContainer.new()
-	outer.add_theme_constant_override("separation", 0)
-	p.add_child(outer)
-	# Header band: "Lesson n of N", flourish, headline, lesson name, progress.
-	var hb := PanelContainer.new()
-	var hs := UIStyle.flat(Color(0.17, 0.125, 0.055, 1.0), Color(UIStyle.GOLD, 0.6), 0, 10)
-	hs.corner_radius_bottom_left = 0
-	hs.corner_radius_bottom_right = 0
-	hs.border_width_bottom = 1
-	hs.content_margin_left = 30
-	hs.content_margin_right = 30
-	hs.content_margin_top = 18
-	hs.content_margin_bottom = 14
-	hb.add_theme_stylebox_override("panel", hs)
-	outer.add_child(hb)
-	var hv := VBoxContainer.new()
-	hv.add_theme_constant_override("separation", 6)
-	hb.add_child(hv)
-	var count := UIStyle.label("TUTORIAL COMPLETE" if last else "LESSON %d OF %d" % [idx + 1, total], 13, UIStyle.GOLD, false, true)
-	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hv.add_child(count)
-	hv.add_child(TutorialDeco.divider(UIStyle.GOLD, 12.0))
+	var bv := p.body
 	var head := UIStyle.title_label("Tutorial complete" if last else "Lesson complete", 34, UIStyle.GOLD_HI)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
 	head.add_theme_constant_override("shadow_offset_y", 2)
-	hv.add_child(head)
+	bv.add_child(head)
 	var lt := String(host.lesson["title"])
 	var name_l := UIStyle.label(lt.get_slice("·", 1).strip_edges() if lt.contains("·") else lt, 18, UIStyle.TEXT, true, true)
 	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hv.add_child(name_l)
+	bv.add_child(name_l)
 	var bar := TutorialDeco.steps(total, idx + 1)
 	bar.custom_minimum_size = Vector2(0, 6)
 	bar.highlight = false
-	hv.add_child(bar)
-	# Body: summary and what was learned.
-	var bm := MarginContainer.new()
-	for side in ["left", "right"]:
-		bm.add_theme_constant_override("margin_" + side, 32)
-	bm.add_theme_constant_override("margin_top", 18)
-	bm.add_theme_constant_override("margin_bottom", 16)
-	outer.add_child(bm)
-	var bv := VBoxContainer.new()
-	bv.add_theme_constant_override("separation", 10)
-	bm.add_child(bv)
+	bv.add_child(bar)
+	bv.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 12.0))
 	var sum := TutorialMarkup.rich_label(17)
 	sum.text = "[center]%s[/center]" % TutorialMarkup.to_bbcode(String(host.lesson["summary"]))
 	bv.add_child(sum)
@@ -638,14 +601,10 @@ func _show_complete() -> void:
 		done.text = "You have played every lesson. Start a series against the bot or a friend from [b]Play[/b]."
 		bv.add_child(done)
 	# Buttons: the way forward on top, the other two below it.
-	var fm := MarginContainer.new()
-	for side in ["left", "right"]:
-		fm.add_theme_constant_override("margin_" + side, 32)
-	fm.add_theme_constant_override("margin_bottom", 24)
-	outer.add_child(fm)
 	var fv := VBoxContainer.new()
 	fv.add_theme_constant_override("separation", 10)
-	fm.add_child(fv)
+	bv.add_child(Control.new())   # a little more air above the buttons
+	bv.add_child(fv)
 	var main_b: Button
 	if last:
 		main_b = UIStyle.primary_button("Back to menu", 18)
@@ -672,13 +631,8 @@ func _show_complete() -> void:
 		ex.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		ex.pressed.connect(_on_exit)
 		row.add_child(ex)
+	p.appear()
 	if not UIStyle.reduce_motion:
-		p.modulate.a = 0.0
-		p.scale = Vector2(0.94, 0.94)
-		p.pivot_offset = Vector2(COMPLETE_W / 2.0, 200.0)
-		var tw := create_tween().set_parallel(true)
-		tw.tween_property(p, "modulate:a", 1.0, UIStyle.dur(0.3))
-		tw.tween_property(p, "scale", Vector2.ONE, UIStyle.dur(0.35)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		# What-you-learned lines arrive one after another.
 		for i in rows.size():
 			var rw: Control = rows[i]

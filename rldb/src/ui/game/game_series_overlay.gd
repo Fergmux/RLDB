@@ -58,13 +58,11 @@ func build_pause() -> void:
 	pause_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	pause_dim.visible = false
 	gs.add_child(pause_dim)
-	pause_panel = PanelContainer.new()
-	pause_panel.add_theme_stylebox_override("panel", UIStyle.panel_style(Color(UIStyle.PANEL, 0.98), UIStyle.GOLD))
+	var pp := HousePanel.new("Match paused", "Network", Vector2(22, 18), 8)
+	pause_panel = pp
 	pause_panel.custom_minimum_size = Vector2(PAUSE_W, 0)
 	pause_dim.add_child(pause_panel)
-	pause_box = VBoxContainer.new()
-	pause_box.add_theme_constant_override("separation", 8)
-	pause_panel.add_child(pause_box)
+	pause_box = pp.body
 
 
 ## Builds the stage modal (dim + scrolling panel) and the deck popup.
@@ -74,13 +72,14 @@ func build_modals() -> void:
 	overlay_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	overlay_dim.visible = false
 	gs.add_child(overlay_dim)
-	var op := OrnatePanel.new(14, 10)
-	op.box().shadow_size = 28
+	var op := HousePanel.new("Series", "", Vector2(10, 10), 4)
+	op.arm = 22.0
 	overlay = op
 	overlay.visible = false
 	gs.add_child(overlay)
 	var sc := SmoothScroll.new()
-	overlay.add_child(sc)
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	op.body.add_child(sc)
 	overlay_box = VBoxContainer.new()
 	overlay_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	overlay_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -88,13 +87,14 @@ func build_modals() -> void:
 	var wrap := GameUi.glow_room(overlay_box, 14)
 	wrap.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.add_child(wrap)
-	pile_popup = PanelContainer.new()
-	pile_popup.add_theme_stylebox_override("panel", UIStyle.panel_style(Color(0.07, 0.065, 0.06, 0.98), UIStyle.SELECT, 12))
+	var pp := HousePanel.new("Your deck", "", Vector2(12, 12), 6)
+	pile_popup = pp
 	pile_popup.visible = false
 	gs.add_child(pile_popup)
 	var ps := ScrollContainer.new()
 	ps.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	pile_popup.add_child(ps)
+	ps.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	pp.body.add_child(ps)
 	pile_box = VBoxContainer.new()
 	pile_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pile_box.add_theme_constant_override("separation", 6)
@@ -126,26 +126,37 @@ func _fit_overlay() -> void:
 	await gs.get_tree().process_frame
 	if not overlay.visible:
 		return
-	var need := overlay_box.get_combined_minimum_size().y + 68.0
+	var need := overlay_box.get_combined_minimum_size().y + _chrome_h()
 	if _fixed_height:
 		need = _overlay_max.y
 		var la := decks.list_area
 		if la != null and la.scroll.get_child_count() > 0:
 			# Hug the tile list when it is shorter than the screen allows.
-			need = overlay_box.get_combined_minimum_size().y - la.get_combined_minimum_size().y 				+ (la.scroll.get_child(0) as Control).get_combined_minimum_size().y + 68.0 + 26.0
+			need = overlay_box.get_combined_minimum_size().y - la.get_combined_minimum_size().y 				+ (la.scroll.get_child(0) as Control).get_combined_minimum_size().y + _chrome_h() + 26.0
 	_overlay_want = Vector2(_overlay_max.x, minf(need, _overlay_max.y))
 	place_modals()
+
+
+## Height the modal adds around its content: the house plate's margins and header strip, the glow
+## room around the content (14 px a side) and 20 px of slack.
+func _chrome_h() -> float:
+	return (overlay as HousePanel).chrome_size().y + 28.0 + 20.0
 
 
 ## Pause veil: shown while the network match is paused, with the host's claim button.
 func render_pause() -> void:
 	var net: Dictionary = gs.view.get("net", {})
 	var paused: bool = not net.is_empty() and net.get("paused", false)
+	var opening := paused and not pause_dim.visible
 	pause_dim.visible = paused
 	GameUi.clear(pause_box)
 	if not paused:
 		return
-	pause_box.add_child(UIStyle.label("MATCH PAUSED", 26, UIStyle.BAD, false, true))
+	if opening:
+		(pause_panel as HousePanel).appear()
+	var head := UIStyle.label("Match paused", 26, UIStyle.BAD, true, true)
+	pause_box.add_child(head)
+	pause_box.add_child(Ornate.Rule.new(Color(UIStyle.BAD, 0.55), true, 10.0))
 	pause_box.add_child(UIStyle.label(net["message"] if net.get("message", "") != "" else "Waiting for the connection to be restored. Nothing can happen until both players are connected.", 14, UIStyle.TEXT, true))
 	if net.get("is_host", false) and gs.view.get("stage", "") == "game" and net.get("claim_in", -1) >= 0:
 		var wait: int = net["claim_in"]
@@ -172,9 +183,10 @@ func _show_deck() -> void:
 		var ka := DECK_SORT.find(String(a["category"]))
 		var kb := DECK_SORT.find(String(b["category"]))
 		return ka < kb if ka != kb else String(a["name"]) < String(b["name"]))
+	(pile_popup as HousePanel).set_tag("%d cards" % cards.size())
 	var head := HBoxContainer.new()
 	pile_box.add_child(head)
-	var tl := UIStyle.label("Your deck (%d cards)" % cards.size(), 18, UIStyle.GOLD, true, true)
+	var tl := UIStyle.label("Your deck (%d cards)" % cards.size(), 18, UIStyle.GOLD_HI, true, true)
 	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(tl)
 	var close := UIStyle.button("Close", 13)
@@ -198,6 +210,7 @@ func _show_deck() -> void:
 			cell.add_child(n)
 	pile_popup.z_index = UiLayers.PILE_POPUP
 	pile_popup.visible = true
+	(pile_popup as HousePanel).appear()
 
 
 ## Shows the modal for the current series stage (hidden during a game); re-renders only when
@@ -222,8 +235,14 @@ func render() -> void:
 		_overlay_stage = ""
 		rewards.mode = ""
 		return
+	var opening := not overlay.visible
 	overlay.visible = true
 	overlay_dim.visible = true
+	var house := overlay as HousePanel
+	house.set_title("Series · %s" % String({"decks": "deck choice", "rewards": "rewards", "first_player": "next game", "over": "final result"}.get(stage, stage)))
+	house.set_tag("Best of %d" % int(view.get("best_of", 3)))
+	if opening:
+		house.appear()
 	gs.hover.clear()
 	var want := Vector2(1000, 800)
 	match stage:
@@ -237,7 +256,7 @@ func render() -> void:
 	if stage != _overlay_stage:
 		_overlay_want = want
 		_overlay_stage = stage
-	overlay_box.custom_minimum_size = Vector2(want.x - 84.0, 0)
+	overlay_box.custom_minimum_size = Vector2(want.x - 84.0 - (overlay as HousePanel).chrome_size().x + 20.0, 0)
 	if stage != "over":
 		overlay_box.add_child(_stage_header(stage))
 	_fixed_height = false
@@ -276,9 +295,6 @@ func _stage_header(stage: String) -> Control:
 			sc.add_theme_font_override("font", UIStyle.font_display(700))
 			row.add_child(sc)
 		row.add_child(_seat_plate(String(view["names"][i]), i == gs.me()))
-	var bo := UIStyle.label("BEST OF %d" % int(view["best_of"]), 12, UIStyle.TEXT_DIM, false, true)
-	bo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(bo)
 	return v
 
 

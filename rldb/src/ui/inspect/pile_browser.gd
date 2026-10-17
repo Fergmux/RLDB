@@ -29,7 +29,7 @@ var _on_closed: Callable = Callable()
 var _closing: bool = false
 var _sig: int = 0
 var _built: bool = false
-var _panel: PanelContainer
+var _panel: HousePanel
 var _title_label: Label
 var _hint_label: Label
 var _scroll: ScrollContainer
@@ -51,6 +51,7 @@ static func open(parent: Node, title: String, cards: Array, hint: String = "", o
 	parent.add_child(b)
 	b.set_cards(cards)
 	b._relayout()
+	b._panel.appear()
 	return b
 
 
@@ -158,19 +159,10 @@ func _build() -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 			close())
 	add_child(dim)
-	_panel = PanelContainer.new()
-	var sb := UIStyle.panel_style(Color(0.05, 0.045, 0.04, 0.99), UIStyle.GOLD, 12)
-	sb.content_margin_left = PAD.x
-	sb.content_margin_right = PAD.x
-	sb.content_margin_top = PAD.y
-	sb.content_margin_bottom = PAD.y
-	sb.shadow_size = 24
-	sb.shadow_color = Color(0, 0, 0, 0.65)
-	_panel.add_theme_stylebox_override("panel", sb)
+	_panel = HousePanel.new("Card pile", "", Vector2(PAD.x - HousePanel.ACCENT_W, PAD.y), 10)
+	_panel.arm = 22.0
 	add_child(_panel)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	_panel.add_child(v)
+	var v := _panel.body
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 16)
 	head.custom_minimum_size.y = HEADER_H - 20.0
@@ -217,7 +209,8 @@ func _relayout() -> void:
 	var my := clampf(s.y * MARGIN_Y, 20.0, 60.0)
 	_panel.position = Vector2(mx, my)
 	_panel.size = Vector2(s.x - 2.0 * mx, s.y - 2.0 * my)
-	var avail := Vector2(_panel.size.x - 2.0 * PAD.x - SCROLLBAR_W - 12.0, _panel.size.y - 2.0 * PAD.y - HEADER_H - 12.0)
+	var chrome := _panel.chrome_size()
+	var avail := Vector2(_panel.size.x - chrome.x - SCROLLBAR_W - 12.0, _panel.size.y - chrome.y - HEADER_H - 12.0)
 	var k := clampf(s.y / 1000.0, 1.0, 2.0)
 	var lay := best_layout(_cards.size(), avail, CARD_MIN_W * k, CARD_MAX_W * k, GAP)
 	_grid.columns = int(lay["cols"])

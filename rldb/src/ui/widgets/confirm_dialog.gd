@@ -8,10 +8,11 @@ const PANEL_W := 420.0
 
 
 ## Opens a dialog as a full-rect child of `parent` (above its other content) and returns it.
+## `tag` is the header strip title of the house plate (F06-01).
 static func open(parent: Node, title: String, text: String, confirm: String, on_yes: Callable,
-		cancel: String = "Keep playing") -> ConfirmDialog:
+		cancel: String = "Keep playing", tag: String = "Confirm") -> ConfirmDialog:
 	var d := ConfirmDialog.new()
-	d._build(title, text, confirm, on_yes, cancel)
+	d._build(title, text, confirm, on_yes, cancel, tag)
 	parent.add_child(d)
 	d._appear()
 	return d
@@ -23,10 +24,10 @@ func close() -> void:
 		queue_free()
 
 
-var _panel: PanelContainer
+var _panel: HousePanel
 
 
-func _build(title: String, text: String, confirm: String, on_yes: Callable, cancel: String) -> void:
+func _build(title: String, text: String, confirm: String, on_yes: Callable, cancel: String, tag: String) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	z_index = UiLayers.CONFIRM_DIALOG
 	var dim := ColorRect.new()
@@ -38,23 +39,12 @@ func _build(title: String, text: String, confirm: String, on_yes: Callable, canc
 	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(cc)
-	_panel = PanelContainer.new()
-	var sb := UIStyle.panel_style(Color(0.05, 0.045, 0.04, 0.99), UIStyle.GOLD, 12)
-	for side in [SIDE_LEFT, SIDE_RIGHT]:
-		sb.set_content_margin(side, 30)
-	for side in [SIDE_TOP, SIDE_BOTTOM]:
-		sb.set_content_margin(side, 22)
-	sb.shadow_size = 20
-	sb.shadow_color = Color(0, 0, 0, 0.6)
-	_panel.add_theme_stylebox_override("panel", sb)
+	_panel = HousePanel.new(tag, "", Vector2(26, 22), 12)
+	_panel.arm = 18.0
 	_panel.custom_minimum_size = Vector2(PANEL_W, 0)
 	cc.add_child(_panel)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
-	_panel.add_child(v)
-	var t := UIStyle.label(title, 26, UIStyle.GOLD, false, true)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
+	var v := _panel.body
+	_panel.add_headline(title, 26, true, 12.0)
 	var m := UIStyle.label(text, 16, UIStyle.TEXT, true)
 	m.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(m)
@@ -73,11 +63,4 @@ func _build(title: String, text: String, confirm: String, on_yes: Callable, canc
 
 
 func _appear() -> void:
-	if UIStyle.reduce_motion:
-		return
-	_panel.modulate.a = 0.0
-	_panel.scale = Vector2(0.94, 0.94)
-	_panel.pivot_offset = Vector2(PANEL_W / 2.0, 70)
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_panel, "modulate:a", 1.0, 0.15)
-	tw.tween_property(_panel, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_panel.appear()

@@ -1241,4 +1241,4 @@ func _ask_delete(which: String = "") -> void:
 func _confirm(title: String, text: String, yes_text: String, on_yes: Callable) -> void:
 	if _overlay != null and is_instance_valid(_overlay):
 		_overlay.queue_free()
-	_overlay = ConfirmDialog.open(self, title, text, yes_text, on_yes, "Cancel")
+	_overlay = ConfirmDialog.open(self, title, text, yes_text, on_yes, "Cancel", "Deck builder")

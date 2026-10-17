@@ -25,7 +25,7 @@ static var _stack: Array = []
 var _card: Dictionary = {}
 var _on_closed: Callable = Callable()
 var _closing: bool = false
-var _panel: PanelContainer
+var _panel: HousePanel
 var _card_box: Control
 var _card_widget: CardWidget
 var _details: CardDetailsPanel
@@ -124,6 +124,7 @@ func show_card(c: Dictionary) -> void:
 	var face := c.duplicate()
 	face["face_up"] = true     # your own face-down Trap/Spell is read here, not drawn as a back
 	_card_widget.setup(face, "big")
+	_panel.set_tag(String(c.get("category", "")).replace("_", " "))
 	_layout_card()
 	var keep := _scroll.scroll_vertical
 	_details.show_card(c)
@@ -163,17 +164,12 @@ func _build() -> void:
 	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(cc)
-	_panel = PanelContainer.new()
-	var sb := UIStyle.panel_style(Color(0.05, 0.045, 0.04, 0.99), UIStyle.GOLD, 12)
-	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		sb.set_content_margin(side, PAD)
-	sb.shadow_size = 24
-	sb.shadow_color = Color(0, 0, 0, 0.65)
-	_panel.add_theme_stylebox_override("panel", sb)
+	_panel = HousePanel.new("Card details", "", Vector2(PAD - HousePanel.ACCENT_W, PAD), 10)
+	_panel.arm = 20.0
 	cc.add_child(_panel)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 24)
-	_panel.add_child(row)
+	_panel.body.add_child(row)
 	_card_box = Control.new()
 	_card_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(_card_box)
@@ -242,6 +238,7 @@ func _appear() -> void:
 		return
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, UIStyle.dur(0.12))
+	_panel.appear()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

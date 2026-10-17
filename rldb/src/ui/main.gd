@@ -39,7 +39,7 @@ var net: NetSession:
 	get: return _sessions.net
 	set(v): _sessions.net = v
 ## Hot-seat "Pass to ..." screen while shown (or null).
-var privacy_overlay: PanelContainer:
+var privacy_overlay: Control:
 	get: return _sessions.privacy_overlay
 	set(v): _sessions.privacy_overlay = v
 ## Series config of the menu pickers (best_of, deck_mode, names, ...).
@@ -202,7 +202,7 @@ func _go(fn: Callable) -> void:
 func _confirm_leave(title: String, text: String, on_yes: Callable, confirm: String = "Leave and continue",
 		cancel: String = "Stay") -> void:
 	_close_confirm()
-	_confirm_panel = ConfirmDialog.open(self, title, text, confirm, on_yes, cancel)
+	_confirm_panel = ConfirmDialog.open(self, title, text, confirm, on_yes, cancel, "Leave series")
 
 
 func _close_confirm() -> void:

@@ -247,21 +247,14 @@ func _set_center(panel: Control) -> void:
 # ---------------------------------------------------------------- leaf panels
 
 ## A dark panel for centre content: returns [panel, content VBox].
-static func _center_panel(title: String, note: String = "") -> Array:
-	var p := PanelContainer.new()
-	var sb := UIStyle.flat(Color(0.035, 0.03, 0.04, 0.9), Color(UIStyle.GOLD, 0.5), 1, 12)
-	for side in [SIDE_LEFT, SIDE_RIGHT]:
-		sb.set_content_margin(side, 30)
-	for side in [SIDE_TOP, SIDE_BOTTOM]:
-		sb.set_content_margin(side, 24)
-	sb.shadow_color = Color(0, 0, 0, 0.55)
-	sb.shadow_size = 18
-	p.add_theme_stylebox_override("panel", sb)
+static func _center_panel(title: String, note: String = "", section: String = "") -> Array:
+	var p := HousePanel.new(section if section != "" else title, "", Vector2(26, 22), 14)
+	p.arm = 18.0
 	p.custom_minimum_size = Vector2(CENTER_PANEL_W, 0)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 14)
-	p.add_child(v)
-	v.add_child(UIStyle.title_label(title, 30, UIStyle.GOLD))
+	var v := p.body
+	var t := UIStyle.title_label(title, 30, UIStyle.GOLD_HI)
+	v.add_child(t)
+	v.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 10.0))
 	if note != "":
 		v.add_child(UIStyle.label(note, 15, UIStyle.TEXT_DIM, true))
 	return [p, v]
@@ -397,16 +390,16 @@ func _leaf_panel(target: String) -> Control:
 	_series_panel_active = false
 	match target:
 		"bot":
-			pv = _center_panel("Play vs Bot", "A series against the computer. The bot picks a random starter deck.")
+			pv = _center_panel("Play vs Bot", "A series against the computer. The bot picks a random starter deck.", "Play · local")
 			_series_options(pv[1])
 			_start_button(pv[1], "Start series", bot_requested.emit)
 		"hotseat":
-			pv = _center_panel("Hot-seat", "Two players take turns on this screen.")
+			pv = _center_panel("Hot-seat", "Two players take turns on this screen.", "Play · local")
 			_series_options(pv[1])
 			pv[1].add_child(_privacy_box("Privacy screen between turns"))
 			_start_button(pv[1], "Start series", hotseat_requested.emit)
 		"host_lan":
-			pv = _center_panel("Host LAN", "Your friend joins with your computer's local IP address and this port.")
+			pv = _center_panel("Host LAN", "Your friend joins with your computer's local IP address and this port.", "Play · local")
 			_series_options(pv[1])
 			var port := LineEdit.new()
 			port.text = _options.lan_addr.split(":")[-1]
@@ -414,7 +407,7 @@ func _leaf_panel(target: String) -> Control:
 			_labelled(pv[1], "Port", port)
 			_start_button(pv[1], "Host series", func(): lan_host_requested.emit(int(port.text)))
 		"join_lan":
-			pv = _center_panel("Join LAN", "Enter the host's address and port (for example 192.168.1.20:24680).")
+			pv = _center_panel("Join LAN", "Enter the host's address and port (for example 192.168.1.20:24680).", "Play · local")
 			var addr := LineEdit.new()
 			addr.text = _options.lan_addr
 			addr.custom_minimum_size = Vector2(260, 0)
@@ -424,7 +417,7 @@ func _leaf_panel(target: String) -> Control:
 				var hp := addr.text.split(":")
 				lan_join_requested.emit(hp[0], int(hp[1]) if hp.size() > 1 else SessionOptions.DEFAULT_LAN_PORT))
 		"host_online":
-			pv = _center_panel("Host game", "Creates a Steam lobby and opens the invite dialog.")
+			pv = _center_panel("Host game", "Creates a Steam lobby and opens the invite dialog.", "Play · online")
 			_series_options(pv[1])
 			var pub := _check_box("List my lobby publicly", _options.series.get("public_lobby", false),
 					func(on): _options.series["public_lobby"] = on)
@@ -433,17 +426,17 @@ func _leaf_panel(target: String) -> Control:
 			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, UIStyle.TEXT_DIM, true))
 			_start_button(pv[1], "Host and invite", steam_host_requested.emit)
 		"join_online":
-			pv = _center_panel("Join game", "Accept a friend's invite in the Steam overlay, or browse public lobbies.")
+			pv = _center_panel("Join game", "Accept a friend's invite in the Steam overlay, or browse public lobbies.", "Play · online")
 			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, UIStyle.TEXT_DIM, true))
 			_start_button(pv[1], "Browse public lobbies", steam_browse_requested.emit)
 		"tutorial":
-			pv = _center_panel("Tutorial", "Guided lessons on a prepared board against a scripted Rival. Nothing is saved.")
+			pv = _center_panel("Tutorial", "Guided lessons on a prepared board against a scripted Rival. Nothing is saved.", "Play")
 			TutorialMenu.add_lessons(pv[1], tutorial_requested.emit)
 		"resume":
-			pv = _center_panel("Resume", "Pick up a series where you left it.")
+			pv = _center_panel("Resume", "Pick up a series where you left it.", "Main menu")
 			SavedSeriesList.add_to(pv[1], SeriesStore.list(), resume_requested.emit, delete_save_requested.emit)
 		"settings":
-			pv = _center_panel("Settings")
+			pv = _center_panel("Settings", "", "Main menu")
 			pv[1].add_child(UIStyle.display_controls(16))
 			pv[1].add_child(GameMenu.audio_controls(16))
 			pv[1].add_child(_check_box("Reduced motion (no travel, shake or particles)", UIStyle.reduce_motion,
