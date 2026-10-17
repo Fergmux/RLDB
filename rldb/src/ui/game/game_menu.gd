@@ -174,7 +174,7 @@ func save_text() -> String:
 		return "The series is saved here, so you can resume it later from Resume on the main menu." + tail
 	if gs.view.get("net", {}).get("is_host", false):
 		return "The series is saved on this computer. Resume it later from Resume on the main menu, and your opponent can join again to continue." + tail
-	return "%s, the host, keeps this series saved. When they resume it, join their game again to continue." % String(gs.view["names"][0]) + tail
+	return "The series is saved on the host's computer. When %s resumes it, join their game again to continue." % String(gs.view["names"][0]) + tail
 
 
 ## Leaves the screen after sending `cmd` ("suspend": saved, "forfeit_series", or "" for nothing).

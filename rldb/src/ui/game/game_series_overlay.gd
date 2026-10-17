@@ -57,6 +57,9 @@ func build_pause() -> void:
 	pause_dim.color = Color(0, 0, 0, 0.6)
 	pause_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	pause_dim.visible = false
+	# Above the series modal (built later, layer 0), which used to hide the veil between duels;
+	# below the in-game menu so Menu still works while paused.
+	pause_dim.z_index = UiLayers.GAME_END + 1
 	gs.add_child(pause_dim)
 	var pp := HousePanel.new("Match paused", "Network", Vector2(22, 18), 8)
 	pause_panel = pp
@@ -262,7 +265,7 @@ func render() -> void:
 	match stage:
 		"decks": want = Vector2(1180, 860)
 		"rewards": want = Vector2(740, 900)
-		"first_player": want = Vector2(620, 420)
+		"first_player": want = Vector2(660, 640)   # G05: room for the ready plate; fits to content
 		"over": want = Vector2(660, 760)
 	_overlay_max = want
 	# Re-rendering the same stage keeps the current size (no full-size flash); _fit_overlay then
