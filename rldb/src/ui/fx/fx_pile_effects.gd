@@ -319,14 +319,14 @@ func arrive_special(p: int, slot: int, kind: String) -> void:
 		var rt := _fx.new_tween()
 		rt.tween_property(ring, "t", 1.0, UIStyle.dur(0.8))
 		rt.tween_callback(_fx.free_node.bind(ring))
-	w.position = _origin(p, "extra") - centre
+	w.fx_offset = _origin(p, "extra") - centre
 	w.scale = Vector2(0.4, 0.4)
 	w.modulate.a = 0.0
 	holder.z_index = UiLayers.FX_CARD
 	var wait := UIStyle.dur(0.25)
 	tw.set_parallel(true)
 	tw.tween_property(w, "modulate:a", 1.0, UIStyle.dur(0.12)).set_delay(wait)
-	tw.tween_property(w, "position", Vector2.ZERO, UIStyle.dur(0.4)).set_delay(wait).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "fx_offset", Vector2.ZERO, UIStyle.dur(0.4)).set_delay(wait).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.4)).set_delay(wait).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.chain().tween_callback(func():
 		_fx.burst(FxBurst.Kind.SPARK, centre, col.lightened(0.3), 16, reach, 0.5)

@@ -434,7 +434,8 @@ func burst(kind: FxBurst.Kind, global_center: Vector2, col: Color, count: int, r
 ## Puts a slot widget and its holder back to their rest state (no offset, scale, glow or lift).
 func reset_widget(w: CardWidget, holder: Control) -> void:
 	if is_instance_valid(w):
-		w.position = Vector2.ZERO
+		w.fx_offset = Vector2.ZERO
+		w.position = Vector2.ZERO   # the slot anchor; a hovered card re-applies its lift about it (F02)
 		w.scale = Vector2.ONE
 		w.rotation = 0.0
 		w.modulate = Color.WHITE
