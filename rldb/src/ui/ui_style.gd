@@ -321,6 +321,7 @@ static func button(text: String, size: int = 14) -> Button:
 ## Gold-filled primary action button.
 static func primary_button(text: String, size: int = 15) -> Button:
 	var b := button(text, size)
+	b.set_meta(Sfx.FAMILY_META, "primary")   # F25: the gold click
 	var n := flat(GOLD, GOLD_HI, 1, 6)
 	var h := flat(GOLD_HI, Color.WHITE, 1, 6)
 	var p := flat(GOLD.darkened(0.15), GOLD_HI, 1, 6)

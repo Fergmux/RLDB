@@ -45,6 +45,7 @@ func _init(t: String, size_px: int = DEFAULT_SIZE, is_muted: bool = false) -> vo
 	focus_mode = Control.FOCUS_NONE
 	custom_minimum_size = Vector2(0, fs * ROW_HEIGHT_FACTOR)
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	Sfx.install_button_sounds()   # F25: pressing plays the gold click, the Back item the back sound
 	for st in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]:
 		add_theme_stylebox_override(st, StyleBoxEmpty.new())
 	mouse_entered.connect(func(): _to_hl(1.0); Sfx.play("select", 0.0, 0.03))
