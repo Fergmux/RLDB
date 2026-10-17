@@ -27,6 +27,7 @@ func _init(screen: GameScreen) -> void:
 func build_top_strip() -> void:
 	top_strip = Control.new()
 	top_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_strip.z_index = UiLayers.FX + 1     # UI review F12: the Menu button is never under a burst
 	gs.add_child(top_strip)
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
