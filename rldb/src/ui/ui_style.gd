@@ -111,9 +111,18 @@ static var fast_anim: bool = false
 const DEFAULT_WINDOW_MODE := "fullscreen"
 ## Window mode: "windowed", "borderless" (borderless full screen) or "fullscreen" (exclusive).
 static var window_mode: String = DEFAULT_WINDOW_MODE
-## 2D anti-aliasing (MSAA) level: 0 off, 2, 4 or 8 samples. Needs the Mobile/Forward renderer; on
-## the OpenGL fallback it has no effect (lines and shapes are still drawn anti-aliased).
-static var aa_level: int = 8
+## 2D anti-aliasing (MSAA) level: 0 off, 2, 4 or 8 samples, applied to the root viewport's `msaa_2d`
+## (the whole game is 2D Controls drawn into the root viewport; there are no SubViewports and no 3D).
+## Needs the Forward+/Mobile renderer (D3D12 / Vulkan); on the OpenGL fallback it has no effect (lines
+## and shapes are still drawn anti-aliased). F13: the default is 4x, mirrored by the project setting
+## rendering/anti_aliasing/quality/msaa_2d so the first frames before apply_aa() match.
+const DEFAULT_AA := 4
+## The default before F13. A legacy settings file always wrote aa_level, so a saved 8 without
+## aa_explicit is the old default rather than a choice (choosing the selected item fires no signal).
+const LEGACY_DEFAULT_AA := 8
+static var aa_level: int = DEFAULT_AA
+## True once the player picked a level in Settings (persisted as ui/aa_explicit).
+static var aa_explicit: bool = false
 const AA_LEVELS := [[0, "Off"], [2, "2x"], [4, "4x"], [8, "8x"]]
 const WINDOW_MODES := [["windowed", "Windowed"], ["borderless", "Borderless"], ["fullscreen", "Fullscreen"]]
 static var _settings_loaded: bool = false
@@ -129,7 +138,29 @@ static func load_settings() -> void:
 		reduce_motion = bool(cf.get_value("ui", "reduce_motion", false))
 		fast_anim = bool(cf.get_value("ui", "fast_anim", false))
 		window_mode = String(cf.get_value("ui", "window_mode", DEFAULT_WINDOW_MODE))
-		aa_level = int(cf.get_value("ui", "aa_level", 8))
+		var aa := aa_from(cf)
+		aa_level = aa[0]
+		aa_explicit = aa[1]
+
+
+## F13: the MSAA level a settings file asks for, as [level, explicit]. An explicit choice is kept; a
+## legacy file (no ui/aa_explicit) keeps any level other than the old default 8, which was never a
+## choice and becomes DEFAULT_AA. Unknown values fall back to DEFAULT_AA.
+static func aa_from(cf: ConfigFile) -> Array:
+	if not cf.has_section_key("ui", "aa_level"):
+		return [DEFAULT_AA, false]
+	var lv := int(cf.get_value("ui", "aa_level", DEFAULT_AA))
+	var known := false
+	for e in AA_LEVELS:
+		if int(e[0]) == lv:
+			known = true
+	if not known:
+		return [DEFAULT_AA, false]
+	if bool(cf.get_value("ui", "aa_explicit", false)):
+		return [lv, true]
+	if lv == LEGACY_DEFAULT_AA:
+		return [DEFAULT_AA, false]
+	return [lv, true]
 
 
 ## Writes the UI settings to SETTINGS_PATH.
@@ -140,6 +171,7 @@ static func save_settings() -> void:
 	cf.set_value("ui", "fast_anim", fast_anim)
 	cf.set_value("ui", "window_mode", window_mode)
 	cf.set_value("ui", "aa_level", aa_level)
+	cf.set_value("ui", "aa_explicit", aa_explicit)
 	cf.save(SETTINGS_PATH)
 
 
@@ -177,21 +209,27 @@ static func apply_window_mode() -> void:
 ## Sets, saves and applies the MSAA level (0, 2, 4 or 8).
 static func set_aa_level(n: int) -> void:
 	aa_level = n
+	aa_explicit = true
 	save_settings()
 	apply_aa()
 
 
-## Applies the MSAA level to the main window.
+## Applies the MSAA level to the main window (the root viewport, where the whole game is drawn).
 static func apply_aa() -> void:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return
-	var v: Viewport.MSAA = Viewport.MSAA_DISABLED
-	match aa_level:
-		2: v = Viewport.MSAA_2X
-		4: v = Viewport.MSAA_4X
-		8: v = Viewport.MSAA_8X
-	tree.root.msaa_2d = v
+	load_settings()
+	tree.root.msaa_2d = msaa_for(aa_level)
+
+
+## The Viewport MSAA mode for a level of AA_LEVELS (0, 2, 4, 8).
+static func msaa_for(level: int) -> Viewport.MSAA:
+	match level:
+		2: return Viewport.MSAA_2X
+		4: return Viewport.MSAA_4X
+		8: return Viewport.MSAA_8X
+	return Viewport.MSAA_DISABLED
 
 
 ## Display and Anti-aliasing pickers (window mode, MSAA level).
@@ -283,6 +321,7 @@ static func button(text: String, size: int = 14) -> Button:
 ## Gold-filled primary action button.
 static func primary_button(text: String, size: int = 15) -> Button:
 	var b := button(text, size)
+	b.set_meta(Sfx.FAMILY_META, "primary")   # F25: the gold click
 	var n := flat(GOLD, GOLD_HI, 1, 6)
 	var h := flat(GOLD_HI, Color.WHITE, 1, 6)
 	var p := flat(GOLD.darkened(0.15), GOLD_HI, 1, 6)

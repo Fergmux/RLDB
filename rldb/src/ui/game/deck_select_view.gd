@@ -136,12 +136,15 @@ func _tabs_and_list(box: VBoxContainer) -> void:
 	plate.add_child(area)
 	list_area = area
 	var inner := MarginContainer.new()
+	# F01: the content fills the plate's height, so a sparse or empty tab keeps the same plate and
+	# its empty-state panel sits in the middle of it.
+	inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	inner.add_theme_constant_override("margin_right", 8)
 	inner.add_theme_constant_override("margin_top", 4)
 	inner.add_theme_constant_override("margin_bottom", 4)
 	inner.add_theme_constant_override("margin_left", 2)
 	area.set_content(inner)
-	var wide: bool = minf(ov._overlay_max.x, ov.gs.size.x - ov.gs.sidebar_w - 40.0) >= 1000.0
+	var wide: bool = ov.modal_width() >= 1000.0
 	var grid := GridContainer.new()
 	grid.columns = 2 if wide else 1
 	grid.add_theme_constant_override("h_separation", 12)
@@ -445,9 +448,10 @@ func _basic_plate(dr: Dictionary) -> Control:
 	return pv[0]
 
 
-## Right plate: the categories in drafting order. Drag a row, or use its arrows (keyboard).
+## Right plate: the categories in drafting order, reordered with each row's up / down arrows
+## (owner answer 2026-10-17 §8: no drag-and-drop anywhere; the arrows work by mouse and keyboard).
 func _order_plate(dr: Dictionary) -> Control:
-	var pv: Array = GameRewardPanels._reward_panel("Draft order", "You draft these from top to bottom. Drag a row, or use its arrows.")
+	var pv: Array = GameRewardPanels._reward_panel("Draft order", "You draft these from top to bottom. Use the arrows to change the order.")
 	var v: VBoxContainer = pv[1]
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 6)
@@ -457,7 +461,7 @@ func _order_plate(dr: Dictionary) -> Control:
 	var focus_btn: Button = null
 	for i in _order.size():
 		var cat: String = _order[i]
-		var row := OrderRow.new(cat, i + 1, String(labels.get(cat, cat.capitalize())), int(q.get(cat, 0)), _drop_on)
+		var row := OrderRow.new(cat, i + 1, String(labels.get(cat, cat.capitalize())), int(q.get(cat, 0)))
 		list.add_child(row)
 		var up := _arrow_button(true, "Move %s up" % String(labels.get(cat, cat)))
 		up.disabled = i == 0
@@ -498,16 +502,8 @@ func _move(cat: String, delta: int) -> void:
 	_order.remove_at(i)
 	_order.insert(j, cat)
 	_focus_after = [cat, "up" if delta < 0 else "down"]
-	ov.refresh()
-
-
-## Drag-and-drop: `from` is dropped on the row of `onto`, before it or (`after`) after it.
-func _drop_on(from: String, onto: String, after: bool) -> void:
-	if from == onto or not (from in _order) or not (onto in _order):
-		return
-	_order.erase(from)
-	_order.insert(_order.find(onto) + (1 if after else 0), from)
-	ov.refresh.call_deferred()
+	if ov != null:
+		ov.refresh()
 
 
 ## The pick sequence of the current order: the basic unit first, then a bar of the categories with
@@ -611,20 +607,16 @@ func _close_picker() -> void:
 	_picker_dim = null
 
 
-## A category row of the draft order: grip, position, icon, name and pick count, then its arrow
-## buttons (in `tail`). Drag it onto another row to move it before or after that row.
+## A category row of the draft order: position, icon, name and pick count, then its up / down
+## arrow buttons (in `tail`). Rows are not draggable (owner answer 2026-10-17 §8): the arrows are
+## the only way to reorder, by mouse or keyboard.
 class OrderRow extends PanelContainer:
 	var cat := ""
 	var tail: HBoxContainer
-	var _on_drop: Callable
-	var _mark := 0
 	var _col := UIStyle.GOLD
-	var _title := ""
 
-	func _init(c: String, pos: int, title: String, count: int, on_drop: Callable) -> void:
+	func _init(c: String, pos: int, title: String, count: int) -> void:
 		cat = c
-		_title = title
-		_on_drop = on_drop
 		_col = UIStyle.CATEGORY_COLORS.get(c, UIStyle.BRONZE)
 		var sb := UIStyle.flat(Color(_col.darkened(0.82), 0.96), Color(_col.lightened(0.15), 0.7), 2, 9)
 		sb.content_margin_left = 8
@@ -632,13 +624,11 @@ class OrderRow extends PanelContainer:
 		sb.content_margin_top = 5
 		sb.content_margin_bottom = 5
 		add_theme_stylebox_override("panel", sb)
-		mouse_default_cursor_shape = Control.CURSOR_MOVE
-		tooltip_text = "Drag to reorder %s" % title
+		mouse_filter = Control.MOUSE_FILTER_PASS
 		var h := HBoxContainer.new()
 		h.add_theme_constant_override("separation", 10)
 		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(h)
-		h.add_child(Grip.new())
 		var num := UIStyle.label(str(pos), 20, UIStyle.GOLD_HI, false, true)
 		num.custom_minimum_size = Vector2(22, 0)
 		num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -659,62 +649,6 @@ class OrderRow extends PanelContainer:
 		tail.add_theme_constant_override("separation", 4)
 		h.add_child(tail)
 
-	func _get_drag_data(_at: Vector2) -> Variant:
-		var prev := PanelContainer.new()
-		prev.add_theme_stylebox_override("panel", UIStyle.flat(Color(_col.darkened(0.7), 0.95), UIStyle.GOLD_HI, 2, 9))
-		var l := UIStyle.label("  %s  " % _title, 18, UIStyle.GOLD_HI, false, true)
-		prev.add_child(l)
-		set_drag_preview(prev)
-		modulate = Color(1, 1, 1, 0.45)
-		return {"draft_cat": cat}
-
-	func _can_drop_data(at: Vector2, data: Variant) -> bool:
-		var ok: bool = data is Dictionary and data.has("draft_cat") and String(data["draft_cat"]) != cat
-		var m := (1 if at.y >= size.y / 2.0 else -1) if ok else 0
-		# Only one insertion line at a time: rows passed over during the drag may not get a mouse
-		# exit, so their marks are cleared here.
-		for sib in get_parent().get_children():
-			if sib != self and sib is OrderRow and sib._mark != 0:
-				sib._mark = 0
-				sib.queue_redraw()
-		if m != _mark:
-			_mark = m
-			queue_redraw()
-		return ok
-
-	func _drop_data(at: Vector2, data: Variant) -> void:
-		_mark = 0
-		queue_redraw()
-		_on_drop.call(String(data["draft_cat"]), cat, at.y >= size.y / 2.0)
-
-	func _notification(what: int) -> void:
-		if what == NOTIFICATION_MOUSE_EXIT or what == NOTIFICATION_DRAG_END:
-			if _mark != 0:
-				_mark = 0
-				queue_redraw()
-			if what == NOTIFICATION_DRAG_END:
-				modulate = Color.WHITE
-
-	func _draw() -> void:
-		if _mark == 0:
-			return
-		var y := -4.0 if _mark < 0 else size.y + 3.0
-		draw_line(Vector2(6, y), Vector2(size.x - 6, y), UIStyle.GOLD_HI, 3.0, true)
-		Ornate.diamond(self, Vector2(6, y), 5.0, UIStyle.GOLD_HI)
-		Ornate.diamond(self, Vector2(size.x - 6, y), 5.0, UIStyle.GOLD_HI)
-
-
-## Six-dot drag grip.
-class Grip extends Control:
-	func _init() -> void:
-		custom_minimum_size = Vector2(14, 26)
-		size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		for r in 3:
-			for c in 2:
-				draw_circle(Vector2(3.5 + c * 7.0, 5.0 + r * 8.0), 2.0, Color(UIStyle.GOLD, 0.7))
 
 
 ## Up / down triangle drawn on an arrow button (dimmed while disabled).

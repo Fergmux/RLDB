@@ -130,6 +130,25 @@ func destroy(e: Dictionary, prev_mv: Dictionary) -> void:
 		_fx.free_node(g))
 
 
+## F12: a still ghost of the card destroyed by `e`, standing in its slot until the killing blow lands
+## (the board already shows the slot empty). Returns it (null when hidden or unknown); free it with
+## FxPlayer.free_node, normally right before destroy(e) plays at the impact.
+func hold_ghost(e: Dictionary, prev_mv: Dictionary) -> CardWidget:
+	var at: Dictionary = e.get("at", {})
+	if at.is_empty():
+		return null
+	var zone := String(at["zone"])
+	var view := ghost_view(e, prev_mv)
+	if view.has("hidden") and view.size() == 1 and zone != "backrow":
+		return null
+	var rect: Rect2 = _fx.screen.fx_slot_global_rect(int(at["p"]), zone, int(at["slot"]))
+	var rot: bool = zone == "backrow" or (zone == "unit" and String(view.get("stance", "atk")) == "def")
+	var g := _ghost(view, Zones.KIND[zone], rot)
+	g.position = _fx.fx_pos(rect.get_center() - g.size / 2.0)
+	_fx.add_node(g)
+	return g
+
+
 # ---------------------------------------------------------------- exhaust
 
 ## A card is exhausted (Exhaust event `e`): it flies to the middle of the board, holds with an
@@ -319,14 +338,14 @@ func arrive_special(p: int, slot: int, kind: String) -> void:
 		var rt := _fx.new_tween()
 		rt.tween_property(ring, "t", 1.0, UIStyle.dur(0.8))
 		rt.tween_callback(_fx.free_node.bind(ring))
-	w.position = _origin(p, "extra") - centre
+	w.fx_offset = _origin(p, "extra") - centre
 	w.scale = Vector2(0.4, 0.4)
 	w.modulate.a = 0.0
 	holder.z_index = UiLayers.FX_CARD
 	var wait := UIStyle.dur(0.25)
 	tw.set_parallel(true)
 	tw.tween_property(w, "modulate:a", 1.0, UIStyle.dur(0.12)).set_delay(wait)
-	tw.tween_property(w, "position", Vector2.ZERO, UIStyle.dur(0.4)).set_delay(wait).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "fx_offset", Vector2.ZERO, UIStyle.dur(0.4)).set_delay(wait).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.4)).set_delay(wait).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.chain().tween_callback(func():
 		_fx.burst(FxBurst.Kind.SPARK, centre, col.lightened(0.3), 16, reach, 0.5)

@@ -63,6 +63,7 @@ func _init() -> void:
 func _ready() -> void:
 	theme = UIStyle.make_theme()
 	UIStyle.apply_aa()
+	Sfx.install_button_sounds()   # F25: every button's click, from one place
 	get_tree().set_auto_accept_quit(false)   # closing the window is handled in _notification
 	var args := OS.get_cmdline_user_args()
 	# Saved window mode (scripted runs keep their own window size).

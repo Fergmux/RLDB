@@ -248,17 +248,15 @@ func show_hint(text: String) -> void:
 
 
 func _on_next() -> void:
-	Sfx.play("confirm")
-	host.next_step()
+	host.next_step()   # F25: the button's own click
 
 
 func _on_restart() -> void:
-	Sfx.play("confirm")
-	host.restart()
+	host.restart()   # F25: the button's own click
 
 
 func _on_exit() -> void:
-	Sfx.play("cancel")
+	Sfx.play("back")   # F22
 	gs.leave_to_menu.emit()
 
 
@@ -613,7 +611,6 @@ func _show_complete() -> void:
 		var nxt := TutorialLessons.get_lesson(idx + 1)
 		main_b = UIStyle.primary_button("Next: %s" % String(nxt["title"]).get_slice("·", 1).strip_edges(), 18)
 		main_b.pressed.connect(func():
-			Sfx.play("confirm")
 			host.load_lesson(idx + 1))
 	main_b.custom_minimum_size = Vector2(0, 52)
 	fv.add_child(main_b)

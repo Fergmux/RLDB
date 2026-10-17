@@ -354,7 +354,14 @@ func _collect_fx() -> Array:
 		return []
 	var out := []
 	for e in fresh:
-		out.append_array(e.get("fx", []))
+		# F12: tag HP changes with their cause from the authoritative log line ("battle" / "direct"), so a
+		# killing blow can be told apart from effect damage resolved in the same batch.
+		var via := FxStrike.hp_cause(String(e.get("text", "")))
+		for f in e.get("fx", []):
+			if via != "" and String(f.get("k", "")) == "hp" and not f.has("via"):
+				f = (f as Dictionary).duplicate()
+				f["via"] = via
+			out.append(f)
 	return out
 
 
@@ -420,7 +427,7 @@ func locked() -> bool:
 ## True while a modal, popup, menu or pause covers the board (no hover).
 func hover_blocked() -> bool:
 	return overlays.overlay.visible or overlays.pile_popup.visible or menu.settings_popup.visible or menu.game_menu.visible \
-		or overlays.pause_dim.visible or mv.is_empty() or inspect.is_open()
+		or overlays.pause_dim.visible or mv.is_empty() or inspect.is_open() or details.method_picker_open()
 
 
 ## True while a series is being played on this screen (leaving it would forfeit).

@@ -210,7 +210,9 @@ func _steps() -> void:
 			await _wait(0.4)
 			break
 	await _shot("10_extra_pile_click_to_act")
-	var arc_btn := _pile_button("Summon Defense")
+	# F04 (2026-10-17): every Extra Deck row now shows its own legal summons, so look in Tyde's row.
+	var tyde_row := gs.details.pile_row(uids["tyde"])
+	var arc_btn := _find_button(tyde_row, "Summon Defense") if tyde_row != null else null
 	_check("F02-02 Extra Deck card offers Summon Attack/Defense after click", arc_btn != null)
 	if arc_btn != null:
 		await _click(arc_btn.get_global_rect().get_center())

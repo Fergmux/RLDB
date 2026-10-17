@@ -114,6 +114,12 @@ func place_modals() -> void:
 	overlay_dim.position = region.position
 	overlay_dim.size = region.size
 	var sz := Vector2(minf(_overlay_want.x, region.size.x - 40.0), minf(_overlay_want.y, region.size.y - 24.0))
+	# F01: the content's minimum width follows the window, so a small window never forces the
+	# modal wider than the play area (it would clip); the content scrolls inside instead.
+	if overlay_box != null and _overlay_stage != "":
+		var mw := _content_w(sz.x)
+		if not is_equal_approx(overlay_box.custom_minimum_size.x, mw):
+			overlay_box.custom_minimum_size.x = mw
 	overlay.size = sz
 	overlay.position = region.position + (region.size - sz) / 2.0
 	pile_popup.position = Vector2(40, GameScreen.TOP_H + 26.0)
@@ -128,13 +134,21 @@ func _fit_overlay() -> void:
 		return
 	var need := overlay_box.get_combined_minimum_size().y + _chrome_h()
 	if _fixed_height:
+		# F01: the deck list keeps the modal's full size on every tab (sparse, empty or long), so
+		# switching tabs never collapses or moves it; the list scrolls inside.
 		need = _overlay_max.y
-		var la := decks.list_area
-		if la != null and la.scroll.get_child_count() > 0:
-			# Hug the tile list when it is shorter than the screen allows.
-			need = overlay_box.get_combined_minimum_size().y - la.get_combined_minimum_size().y 				+ (la.scroll.get_child(0) as Control).get_combined_minimum_size().y + _chrome_h() + 26.0
 	_overlay_want = Vector2(_overlay_max.x, minf(need, _overlay_max.y))
 	place_modals()
+
+
+## Width of the stage modal in the current window (its stage maximum, narrowed to the play area).
+func modal_width() -> float:
+	return minf(_overlay_max.x, gs.size.x - gs.sidebar_w - 40.0)
+
+
+## Minimum width of the modal's content for a modal `w` wide (chrome, glow room and slack off).
+func _content_w(w: float) -> float:
+	return maxf(240.0, w - 84.0 - (overlay as HousePanel).chrome_size().x + 20.0)
 
 
 ## Height the modal adds around its content: the house plate's margins and header strip, the glow
@@ -256,7 +270,7 @@ func render() -> void:
 	if stage != _overlay_stage:
 		_overlay_want = want
 		_overlay_stage = stage
-	overlay_box.custom_minimum_size = Vector2(want.x - 84.0 - (overlay as HousePanel).chrome_size().x + 20.0, 0)
+	overlay_box.custom_minimum_size = Vector2(_content_w(modal_width()), 0)
 	if stage != "over":
 		overlay_box.add_child(_stage_header(stage))
 	_fixed_height = false

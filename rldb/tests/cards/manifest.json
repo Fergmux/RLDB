@@ -83,30 +83,36 @@
 			]
 		},
 		"6": {
-			"name": "Tag Team - F",
+			"name": "Tag Team - L",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c006_tag_team_l_optionally_adds_a_trap_that_costs_one_less",
+						"test_c006_tag_team_l_skip_leaves_the_trap_in_draw"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c006_tag_team_f_adds_same_race_unit_from_draw_at_reduced_cost",
-						"test_c006_tag_team_f_does_nothing_without_column_partner"
+						"test_c006_tag_team_l_does_nothing_without_column_partner"
 					]
 				}
 			]
 		},
 		"7": {
-			"name": "Tag Team - J",
+			"name": "Tag Team - B",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
-					"file": "res://tests/unit/cards/cards_units_test.gd",
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
-						"test_c007_tag_team_j_cleanses_unit_in_column"
+						"test_c007_tag_team_b_adds_a_spell_and_no_longer_cleanses"
 					]
 				}
 			]
@@ -115,7 +121,7 @@
 			"name": "Tag Team - S",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -126,15 +132,28 @@
 			]
 		},
 		"9": {
-			"name": "Tag Team - L",
+			"name": "Tag Team - F",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_c009_tag_team_f_summon_pays_its_new_two_ap_cost",
+						"test_changed_cards_use_their_new_stats_and_costs_in_play"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c009_tag_team_f_adds_same_cost_unit_with_discount_and_new_stats"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c009_tag_team_l_adds_unit_with_partner_cost"
+						"test_c009_tag_team_f_adds_unit_with_partner_cost"
 					]
 				}
 			]
@@ -143,27 +162,40 @@
 			"name": "Tag Team - W",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c010_c011_discount_expires_after_this_turn",
+						"test_c010_tag_team_w_search_is_mandatory_same_race_with_discount"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c010_tag_team_w_adds_trap_that_costs_one_less",
-						"test_c010_tag_team_w_destroy_clears_face_down_cards_in_column"
+						"test_c010_tag_team_w_destroy_still_clears_face_down_cards_in_column"
 					]
 				}
 			]
 		},
 		"11": {
-			"name": "Tag Team - B",
+			"name": "Tag Team - J",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c011_tag_team_j_adds_same_type_unit_with_discount",
+						"test_c011_tag_team_j_typeless_partner_matches_nothing"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c011_tag_team_b_destroy_hits_revealed_cards_in_column"
+						"test_c011_tag_team_j_destroy_still_hits_revealed_cards_in_column"
 					]
 				}
 			]
@@ -172,7 +204,7 @@
 			"name": "Tag Team - X",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -186,12 +218,18 @@
 			"name": "Chaos Witch",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c013_chaos_witch_changes_its_own_type_and_every_mage_follows"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c013_chaos_witch_makes_mages_the_declared_type"
+						"test_c013_chaos_witch_type_change_carries_every_mage"
 					]
 				}
 			]
@@ -223,8 +261,14 @@
 			"name": "Da Mage",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c015_da_mage_destroyed_can_give_eternal_to_a_mage_in_its_column"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
@@ -237,7 +281,7 @@
 			"name": "Edwin, Initiatus of The Order",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -271,14 +315,21 @@
 			"name": "Corrupted Narzyl",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c018_corrupted_narzyl_applies_one_paralyse"
+					]
+				}
+			]
 		},
 		"19": {
 			"name": "Shapeshifter Loak",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -292,7 +343,7 @@
 			"name": "Spirit Bomb",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -306,8 +357,14 @@
 			"name": "Shen the World Dragon",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c021_c022_c023_c161_divine_units_apply_one_cleanse"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
@@ -320,7 +377,7 @@
 			"name": "Zorath, Deity of the End",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -334,8 +391,14 @@
 			"name": "Auric the Divine Father",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_changed_cards_use_their_new_stats_and_costs_in_play"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
@@ -368,8 +431,14 @@
 			"name": "Stormcaller Harbinger",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c025_stormcaller_destroys_all_unprotected_basic_units_without_asking"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
@@ -444,8 +513,14 @@
 			"name": "The Sweeper",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c029_sweeper_reveals_a_spell_or_trap_in_its_column"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
@@ -458,8 +533,15 @@
 			"name": "Accio the Hermit",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c030_accio_sends_a_draw_unit_to_spent_then_retains_a_hand_unit",
+						"test_c030_accio_skip_sends_nothing_and_retains_nothing"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
@@ -492,7 +574,7 @@
 			"name": "Frost Wyvern",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -527,14 +609,22 @@
 			"name": "Dragon of the Cave",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_c034_dragon_of_the_cave_bonus_ends_when_it_leaves",
+						"test_c034_dragon_of_the_cave_gives_only_adjacent_units_six_def"
+					]
+				}
+			]
 		},
 		"35": {
 			"name": "Enraged Komodo",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -548,12 +638,19 @@
 			"name": "Dante",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c036_dante_burning_itself_raises_its_atk_and_cleanse_lowers_it",
+						"test_c036_dante_burns_every_unit_and_gains_atk_from_its_own_burn",
+						"test_c036_dante_manual_ten_burn_on_any_unit_once_per_turn"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c036_dante_burns_unprotected_foes",
 						"test_c036_dante_revives_next_turn_for_one_ap"
 					]
 				}
@@ -563,12 +660,12 @@
 			"name": "Solomon, the Captain",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
-					"file": "res://tests/unit/cards/cards_units_test.gd",
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
-						"test_c037_solomon_captain_gains_atk_while_protecting"
+						"test_c037_solomon_captain_gains_ten_only_while_protected"
 					]
 				}
 			]
@@ -577,7 +674,7 @@
 			"name": "The Lone Warrior",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -591,7 +688,7 @@
 			"name": "Steadfast Soldier",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -605,7 +702,7 @@
 			"name": "Aleister the Invoker",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -639,7 +736,7 @@
 			"name": "Ambush",
 			"category": "spell",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -653,7 +750,7 @@
 			"name": "Freaky Funday",
 			"category": "spell",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -690,21 +787,37 @@
 			"name": "Magic Cylinder",
 			"category": "trap",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_c045_magic_cylinder_ignores_direct_attacks_and_other_columns",
+						"test_c045_magic_cylinder_reflects_attacker_atk_and_costs_one_more"
+					]
+				}
+			]
 		},
 		"46": {
 			"name": "Mirror Force",
 			"category": "trap",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_c046_mirror_force_destroys_only_attack_stance_units_at_four_cards",
+						"test_c046_mirror_force_unavailable_with_three_opposing_cards"
+					]
+				}
+			]
 		},
 		"47": {
 			"name": "Damage Conversion",
 			"category": "trap",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -718,7 +831,7 @@
 			"name": "Overextend",
 			"category": "trap",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -774,8 +887,15 @@
 			"name": "Rushed Recklessly",
 			"category": "trap",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_c051_rushed_recklessly_gives_column_units_eight_def_this_turn"
+					]
+				}
+			]
 		},
 		"52": {
 			"name": "Saviour Appears: Defcon 2",
@@ -802,7 +922,7 @@
 			"name": "Power of Normal",
 			"category": "power",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -816,7 +936,7 @@
 			"name": "Strength in Unity",
 			"category": "power",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -830,7 +950,7 @@
 			"name": "Spy",
 			"category": "power",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -844,7 +964,7 @@
 			"name": "Razeon Storm",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -858,12 +978,14 @@
 			"name": "Geolock Colossus",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
-					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
-						"test_c057_geolock_colossus_moves_ally_anywhere"
+						"test_c057_geolock_ability_needs_an_unprotected_foe",
+						"test_c057_geolock_changes_stance_of_unprotected_foes_and_no_longer_moves",
+						"test_c057_geolock_summon_grants_infiltrate_and_nimble_to_your_units"
 					]
 				}
 			]
@@ -872,7 +994,7 @@
 			"name": "Infernogate the Three-Fanged",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -886,8 +1008,14 @@
 			"name": "Abysslord the Tidecaller",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c059_abysslord_destroys_a_spell_or_trap_without_reveal"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -946,7 +1074,7 @@
 			"name": "Naturewrath Ascendant",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -960,8 +1088,14 @@
 			"name": "The Last Foundation",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c063_last_foundation_reveals_spells_traps_and_gains_eternal_even_when_buffed"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -975,7 +1109,7 @@
 			"name": "Necrovast the Undying",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -989,7 +1123,7 @@
 			"name": "The Creeping Null",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -1003,7 +1137,7 @@
 			"name": "Nyxthral, Beyond Reason",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -1017,7 +1151,7 @@
 			"name": "Void Basilisk",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -1031,7 +1165,7 @@
 			"name": "Sepukku",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -1045,8 +1179,23 @@
 			"name": "Magentric",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_changed_cards_use_their_new_stats_and_costs_in_play"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c069_magentric_exhausted_for_an_arcane_summon_gives_nothing",
+						"test_c069_magentric_tributed_for_a_fusion_gives_it_two_pierce",
+						"test_c069_magentric_tributed_for_a_ritual_gives_it_two_pierce",
+						"test_c069_other_fusion_materials_give_no_pierce"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
@@ -1079,12 +1228,24 @@
 			"name": "Faerie Flight",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_changed_cards_use_their_new_stats_and_costs_in_play"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c071_faerie_flight_grants_nimble_to_any_unit"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c071_faerie_flight_heals_itself_when_moving"
+						"test_c071_faerie_flight_gains_three_medic_when_moving"
 					]
 				}
 			]
@@ -1093,8 +1254,14 @@
 			"name": "Myth Wukong",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c072_myth_wukong_gains_nimble_on_summon"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
@@ -1148,7 +1315,7 @@
 			"name": "Travelwarden",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -1162,7 +1329,7 @@
 			"name": "Soul Devourer",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -1196,8 +1363,14 @@
 			"name": "Abraxus Terrormane",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_changed_cards_use_their_new_stats_and_costs_in_play"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
@@ -1231,7 +1404,7 @@
 			"name": "Wings of Aurenthor",
 			"category": "spell",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -1245,7 +1418,7 @@
 			"name": "Fog of War",
 			"category": "spell",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -1259,7 +1432,7 @@
 			"name": "Polymerization",
 			"category": "spell",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/cards/unchanged_spells_traps_test.gd",
@@ -1334,7 +1507,7 @@
 			"name": "Get Well Soon",
 			"category": "trap",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -1348,7 +1521,7 @@
 			"name": "Shared Fate",
 			"category": "trap",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -1378,7 +1551,7 @@
 			"name": "Nether Portal",
 			"category": "power",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -1392,7 +1565,7 @@
 			"name": "Chains of Binding",
 			"category": "power",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -1460,7 +1633,7 @@
 			"name": "Mirrorflesh Construct",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -1474,8 +1647,15 @@
 			"name": "Mimic",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c095_c065_c183_ritual_costs_and_stats_follow_the_new_source",
+						"test_c095_mimic_accepts_a_two_rune_material"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -1488,14 +1668,22 @@
 			"name": "Roma, Exhile of The Order",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_c096_roma_is_twelve_per_rune_used",
+						"test_c096_roma_pays_ten_hp_to_destroy_a_lower_atk_unit_once_per_turn"
+					]
+				}
+			]
 		},
 		"97": {
 			"name": "The Legendary Swordsman",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -1509,7 +1697,7 @@
 			"name": "Raging Inferno",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -1543,14 +1731,22 @@
 			"name": "Gaping Crevasse",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_c100_gaping_crevasse_destroyed_by_an_effect_paralyses_nothing",
+						"test_c100_gaping_crevasse_paralyses_the_unit_that_destroyed_it_in_battle"
+					]
+				}
+			]
 		},
 		"101": {
 			"name": "Into the Void",
 			"category": "spell",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -1564,7 +1760,7 @@
 			"name": "Waang, Bender of Elements",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -1598,7 +1794,7 @@
 			"name": "Earthquake",
 			"category": "spell",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -2092,7 +2288,7 @@
 			"name": "Dragon Rider",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -2106,7 +2302,7 @@
 			"name": "Equaliser",
 			"category": "spell",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
@@ -2120,7 +2316,7 @@
 			"name": "Unstable Fusions",
 			"category": "power",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2195,7 +2391,7 @@
 			"name": "Bahatia",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2229,7 +2425,7 @@
 			"name": "Typhoon Simorgh",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2265,7 +2461,7 @@
 			"name": "Trigonam",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2279,7 +2475,7 @@
 			"name": "Akiramari",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2293,7 +2489,7 @@
 			"name": "Demented Apparition",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2329,7 +2525,7 @@
 			"name": "Marked by the Abyss",
 			"category": "power",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2364,7 +2560,7 @@
 			"name": "Ultimate Dragon",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2430,43 +2626,56 @@
 			]
 		},
 		"155": {
-			"name": "Symbiote - Black",
+			"name": "Symbiote Spawn",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c155_symbiote_spawn_boosts_its_protector_by_ten"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c155_symbiote_black_boosts_its_protector"
+						"test_c155_symbiote_spawn_still_boosts_its_protector"
 					]
 				}
 			]
 		},
 		"156": {
-			"name": "Symbiote - Red",
+			"name": "Symbiote Larva",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
-					"file": "res://tests/unit/cards/cards_units_test.gd",
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
-						"test_c156_symbiote_red_boosts_its_protector_by_twenty"
+						"test_c156_symbiote_larva_boosts_protector_by_ten_and_draws_then_discards"
 					]
 				}
 			]
 		},
 		"157": {
-			"name": "Symbiote - White",
+			"name": "Symbiote Siphonophore",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c157_symbiote_siphonophore_boosts_adjacent_only_while_protected",
+						"test_c157_symbiote_siphonophore_draws_an_extra_card_at_start_of_turn"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c157_symbiote_white_boosts_adjacent_units"
+						"test_c157_symbiote_siphonophore_needs_protection_for_its_boost"
 					]
 				}
 			]
@@ -2475,7 +2684,7 @@
 			"name": "Divine Serpent - Head",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -2489,7 +2698,7 @@
 			"name": "Divine Serpent - Body",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -2503,7 +2712,7 @@
 			"name": "Divine Serpent - Soul",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -2517,7 +2726,7 @@
 			"name": "Neva the Divine Mother",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
@@ -2532,8 +2741,22 @@
 			"name": "Diggie",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_c162_diggie_new_six_atk_wins_against_a_five_atk_unit",
+						"test_changed_cards_use_their_new_stats_and_costs_in_play"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c162_diggie_destroyed_keeps_its_cost",
+						"test_c162_diggie_sacrificed_costs_one_more_for_the_game"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
@@ -2688,7 +2911,7 @@
 			"name": "Grandmother Kaya",
 			"category": "arcane",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2703,8 +2926,14 @@
 			"name": "Flying Sandworm",
 			"category": "arcane",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_changed_cards_use_their_new_stats_and_costs_in_play"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -2717,12 +2946,13 @@
 			"name": "Tyde, Councillor of The Order",
 			"category": "arcane",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
-					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
-						"test_c172_tyde_destroys_revealed_card_when_sacrificed"
+						"test_c172_tyde_adds_a_beast_with_discount_and_destroys_a_runed_unit",
+						"test_c172_tyde_sacrificed_no_longer_destroys_anything"
 					]
 				}
 			]
@@ -2731,7 +2961,7 @@
 			"name": "Thunderclap Dragon",
 			"category": "arcane",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2745,14 +2975,21 @@
 			"name": "Cliff the Flying Bison",
 			"category": "arcane",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_c174_cliff_gives_two_ap_when_sacrificed_but_not_when_destroyed"
+					]
+				}
+			]
 		},
 		"175": {
 			"name": "Boom, Councillor of The Order",
 			"category": "arcane",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2766,7 +3003,7 @@
 			"name": "Tritu, Heir to the Ocean Tribe",
 			"category": "arcane",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2780,8 +3017,16 @@
 			"name": "The Illusionist",
 			"category": "arcane",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c177_illusionist_destroyed_recovers_a_low_cost_card_from_own_exhaust",
+						"test_c177_illusionist_is_typeless_and_gains_thirty_on_its_own_turn",
+						"test_c177_illusionist_recovery_is_optional"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -2794,7 +3039,7 @@
 			"name": "Reinforcements",
 			"category": "power",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2808,7 +3053,7 @@
 			"name": "Tyrants Lantern",
 			"category": "power",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2822,19 +3067,29 @@
 			"name": "Hypnotise",
 			"category": "spell",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/cards/changed_cards_test.gd",
+					"tests": [
+						"test_c180_hypnotise_cannot_be_cast_without_a_legal_target",
+						"test_c180_hypnotise_takes_a_20_atk_unit_until_end_of_turn"
+					]
+				}
+			]
 		},
 		"181": {
 			"name": "Solomon, the Tyrannical",
 			"category": "fusion",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
 				{
-					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
-						"test_c181_solomon_tyrannical_feeds_on_warriors_and_costs_hp_on_death"
+						"test_c181_solomon_tyrannical_exhausts_the_unit_it_protects",
+						"test_c181_solomon_tyrannical_keeps_summon_pierce_and_death_hp_loss",
+						"test_c181_solomon_tyrannical_needs_to_be_protecting"
 					]
 				}
 			]
@@ -2864,8 +3119,14 @@
 			"name": "Yamata, Spirit of the Flame",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
-			"status": "pending(changed in the 2026-10-17 CSV; existing tests target pre-migration behaviour -- revalidate after the A1 migration and add the id to pending.json _revalidated)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c183_yamata_three_runes_and_start_of_turn_damage_kept"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [

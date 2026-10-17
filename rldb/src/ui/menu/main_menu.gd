@@ -184,7 +184,7 @@ func _slide_in(mi: MenuItem, i: int, animate: bool) -> void:
 ## Chooses menu target `target`: "@level" opens a sub-level, "quit"/"builder"/"cards" act, any
 ## other target shows its leaf panel in the centre.
 func pick(target: String) -> void:
-	Sfx.play("confirm")
+	# F25: the menu item's own click is the sound (MenuItem through Sfx.install_button_sounds).
 	if target.begins_with("@"):
 		_menu_path.append(target.substr(1))
 		_menu_leaf = ""
@@ -211,7 +211,7 @@ func pick(target: String) -> void:
 
 ## Goes up one menu level (the "Back" item).
 func back_out() -> void:
-	Sfx.play("cancel")
+	Sfx.play("back")   # F22: Back item and Esc; coalesced with the item's own click
 	if _menu_path.size() > 1:
 		_menu_path.pop_back()
 	_menu_leaf = ""
@@ -222,6 +222,7 @@ func back_out() -> void:
 ## Esc: closes the shown leaf panel, else goes up one level (nothing at the root).
 func step_back() -> void:
 	if _menu_leaf != "":
+		Sfx.play("back")   # F22
 		_menu_leaf = ""
 		_set_center(null)
 		_build_menu_level(false)

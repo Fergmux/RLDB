@@ -16,6 +16,18 @@ To resume an agent, send it a message by id. To check one without opening its tr
 | A6 (`ae522dc7774407d2c`) | FX and audio: F02, F12, F13, F22, F25 | technical-artist / opus | `src/ui/fx/**`, `sfx.gd`, `tools/gen_sfx.py`, `juicy_button`, the AA settings in `ui_style.gd` | none | starting |
 | A7 (`a2fb176b0092f52a5`) | Bot stance decisions: F11 | ai-programmer / sonnet | `rldb/src/ai/**`, bot tests | none | starting |
 
+## Wave B: independent reviews
+
+| Pkg | Scope | Owner | Status |
+| --- | --- | --- | --- |
+| R1 (`af12ea6f208e3531a`) | Gameplay, rules and card review; fixes with tests | lead-programmer / opus | running |
+| R2 (`aaaf39e88a8f06d85`) | UI/UX polish review in the running game; fixes | ux-designer / opus | running |
+| R3 | Firebase security and data review (after A3) | security-engineer / opus | queued |
+
 ## Stalls and recoveries
 
-None yet.
+- **All agents:** hit 10–20 turn limits repeatedly and were resumed each time, with nothing lost because of commit-as-you-go instructions.
+- **A1, A6:** each reported the same status twice; checked by git, both were making real progress (uncommitted work), so they were told to commit WIP.
+- **Tutorial driver hang (F04 era):** fixed with a watchdog and per-step limits.
+- **A6:** used 7 windowed runs, against 5 allowed.
+- **No orphan Godot processes found at checks.**
