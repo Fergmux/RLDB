@@ -19,3 +19,10 @@ Run everything from `rldb/`. `<godot>` is `/c/Users/fergm/Downloads/Godot_v4.6.1
 | 17 Oct | Interim deny-all rules deployed; the same request repeated | 403 PERMISSION_DENIED |
 | 17 Oct | A7 bot branch: full suite | 621/621 (agent run) |
 | 17 Oct | Integrated suite after A1, A2, A4, A5, A6 and A7 | 825/825; one SCRIPT ERROR (toast timer on a freed label) fixed |
+| 17 Oct | R3 security review: emulator rules/admin | 18/18; live re-check 403 unauth + owner probe accepted |
+| 17 Oct | FINAL integrated suite (everything merged) | **904/904**, 0 script errors |
+| 17 Oct | FINAL f02 / net (win, lose) / bot | 75/75 / 8/8, 8/8 / 4/4 |
+| 17 Oct | FINAL tutorial / series / deckbuilder / catalogue | 207/207 (after the Arcane-lesson update for F08) / 45/45 / 0 fail / 0 fail |
+| 17 Oct | Killing-blow FPS on a quiet machine, 4x MSAA | direct ≥ ~150 fps (1600x900 and 4K); unit lethal minimum 82 fps |
+| 17 Oct | Exported exe launch (`--no-steam --telemetry-off`) | no script errors |
+| 17 Oct | `python tools/import_cards.py` rerun | cards.json byte-identical (deterministic, dated CSV 8ac4a39a…) |
