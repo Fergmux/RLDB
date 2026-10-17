@@ -21,8 +21,9 @@ To resume an agent, send it a message by id. To check one without opening its tr
 | Pkg | Scope | Owner | Status |
 | --- | --- | --- | --- |
 | R1 (`af12ea6f208e3531a`) | Gameplay, rules and card review; fixes with tests | lead-programmer / opus | running |
-| R2 (`aaaf39e88a8f06d85`) | UI/UX polish review in the running game; fixes | ux-designer / opus | running |
-| R3 | Firebase security and data review (after A3) | security-engineer / opus | queued |
+| R2 (`aaaf39e88a8f06d85`) | UI/UX polish review in the running game; fixes | ux-designer / opus | done: no shell in this agent type, so a static review of screenshots; findings handed to R2b |
+| R2b (`a8e7399a404b9493f`) | Fixes for R2's findings, verified live | ui-programmer / opus | running |
+| R3 (`a55696c2fe376845d`) | Firebase security and data review | security-engineer / opus | running |
 
 ## Stalls and recoveries
 

@@ -44,3 +44,7 @@ Full list with the options considered: `card-ledger.md` (Decisions section). The
 - **F22 (A6):** the back sound is chosen by button label (Back / Exit / Leave / Cancel / Close) unless a button sets an `sfx` meta. Main-menu hover ticks are kept.
 - **F12 (A6):** the HP-change cause (direct / battle / pierce) is read from the authoritative log text. A1 should eventually add a structured cause field; a test guards the wording.
 - **F09 (A1):** not reproduced. The Medic only activates by deliberate use, with a target choice. The owner probably saw the Medic status healing at turn start.
+- **Firebase (A3):** the admin tool authenticates with Google Cloud ADC or a service-account key kept outside the repo, not an allowlisted user account, so the rules stay closed to every client. The owner must run `gcloud auth application-default login` (gcloud is not installed) or provide a key, before using the tool on live data.
+- **Firebase (A3):** turning the setting off deletes not-yet-sent queued records (it doesn't hold them). Tutorial games are not collected.
+- **Firebase (A3):** the online client sends a small confirming report built from its own view; the host reports both seats. The host report contains the opponent's hidden cards (database only, never shown to the other player).
+- **Firebase (A3):** the salt for the Steam hash ships in the client, and Steam IDs are enumerable, so the hash is pseudonymous, not anonymous (documented in `docs/telemetry/privacy.md`).

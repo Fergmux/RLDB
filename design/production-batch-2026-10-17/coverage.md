@@ -12,15 +12,15 @@ Status values: pending, in progress, merged (unverified), verified.
 
 | Requirement | Event or record | Status |
 | --- | --- | --- |
-| Profile/session | profile and session records | in progress |
-| Draft picks (offers and copies, decisions, abandoned drafts); reward offers and picks | draftReport / rewardReport | in progress |
-| Starting deck snapshot (Main/Extra multisets, source, HP/AP, starting seat) | gameReport.start | in progress |
-| Draw / play / activation / special summon / hand opportunities | event batch plus per-game counters | in progress |
-| Game completion (reason, winner, HP, turns, duration; abandoned kept separate) | gameReport.end | in progress |
-| Verified / provisional / conflicted | admin reconciliation tool | in progress |
-| Metrics: W/L, pick rate, deck inclusion, plays, conversion, card win rate, copy-count win rate | admin aggregation tool plus fixtures | in progress |
+| Profile/session | profile and session records | merged `89e5871` |
+| Draft picks (offers and copies, decisions, abandoned drafts); reward offers and picks | draftReport / rewardReport | merged `89e5871` |
+| Starting deck snapshot (Main/Extra multisets, source, HP/AP, starting seat) | gameReport.start | merged `89e5871` |
+| Draw / play / activation / special summon / hand opportunities | event batch plus per-game counters | merged `89e5871` |
+| Game completion (reason, winner, HP, turns, duration; abandoned kept separate) | gameReport.end | merged `89e5871` |
+| Verified / provisional / conflicted | admin reconciliation tool | merged `89e5871` |
+| Metrics: W/L, pick rate, deck inclusion, plays, conversion, card win rate, copy-count win rate | admin aggregation tool plus fixtures | merged `89e5871` |
 | Strict rules, emulator tests, deployed and verified live | `firebase/` | in progress (interim deny-all deployed) |
-| Settings toggle, privacy note, kill switch, environment labels | client config | in progress |
+| Settings toggle, privacy note, kill switch, environment labels | client config | merged `89e5871` |
 
 ## Workstream 3: feedback F01–F26
 
