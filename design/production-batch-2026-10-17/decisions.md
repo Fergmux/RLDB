@@ -48,3 +48,13 @@ Full list with the options considered: `card-ledger.md` (Decisions section). The
 - **Firebase (A3):** turning the setting off deletes not-yet-sent queued records (it doesn't hold them). Tutorial games are not collected.
 - **Firebase (A3):** the online client sends a small confirming report built from its own view; the host reports both seats. The host report contains the opponent's hidden cards (database only, never shown to the other player).
 - **Firebase (A3):** the salt for the Steam hash ships in the client, and Steam IDs are enumerable, so the hash is pseudonymous, not anonymous (documented in `docs/telemetry/privacy.md`).
+
+## Open rules questions from the independent review (left as implemented; for the owner)
+
+- **Two Chaos Witches on the Field:** each takes the other Witch's Type. Options: (a) a Witch ignores other Witches' auras; (b) the most recent change wins; (c) keep the current behaviour.
+- **Self-costs on ordinary abilities** (e.g. Neva "Exhaust this unit:"): they still resolve after the response window. They now fail safely if the unit has left the Field. Fusion self-costs now pay before the window (R1 fix). Should every self-cost pay first?
+- **Magical Council / Saboteurs Guild:** the discount does not stack per copy, unlike Options. Should it?
+
+## Incident
+
+- **The owner's saved custom decks (`user://decks.json`) were lost** during parallel test runs: tests and drivers in several worktrees shared the real file through backup/restore. Fixed in `DeckStore`: automated runs now use `user://test_decks.json`, with a regression test. The lead recreated "Deck 3 - Spirit Bomb" from the structure deck. The owner's 4-card "test" deck could not be recovered.
