@@ -10,7 +10,8 @@ func test_markup_tags_become_bbcode() -> void:
 	assert_str(bb).contains("“Go to Recovery”")
 	assert_str(bb).contains("[color=#%s]Battle Phase[/color]" % TutorialMarkup.KW_COLOR.to_html(false))
 	assert_str(bb).contains("[color=#%s]8 ATK[/color]" % TutorialMarkup.STAT_COLORS["ATK"].to_html(false))
-	assert_str(TutorialMarkup.to_bbcode("[card]Bastion Wyrm[/card]")).contains("Cinzel")
+	# Card names are bold body text (display small caps read as shouting mid-sentence, F05 review).
+	assert_str(TutorialMarkup.to_bbcode("[card]Bastion Wyrm[/card]")).is_equal("[b][color=#%s]Bastion Wyrm[/color][/b]" % TutorialMarkup.CARD_COLOR.to_html(false))
 
 
 func test_markup_plain_strips_tags() -> void:
