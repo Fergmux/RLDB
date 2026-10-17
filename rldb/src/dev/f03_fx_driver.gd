@@ -4,7 +4,8 @@ extends SceneTree
 ##   godot --path rldb -s res://src/dev/f03_fx_driver.gd -- --no-steam --fx-shots=<abs dir> --mode=<mode> [--size=1600x900]
 ## Modes: ready, destroy, exhaust, fusion, ritual, arcane, win, lose, series, strike, final, fps, plus
 ## selfbuff (F02: overlapping self-buffs on a hovered unit; prints its drift), unitwin / unitwin_trap (F12:
-## a game-winning attack on a unit, the second answered in a trap window) and fpsunit. It stages a board through the
+## a game-winning attack on a unit, the second answered in a trap window), fpsunit and aa (F13: reports the
+## renderer and MSAA actually in use, saves crops at Off / 4x / 8x and times frames at each). It stages a board through the
 ## real engine, drives commands through LocalHost and saves frame sequences of the running animation.
 
 var main: Node
@@ -322,6 +323,55 @@ func _fps_scene(on_unit: bool) -> void:
 		line.append("%.0f" % (counter[0] / 0.5))
 	process_frame.disconnect(cb)
 	print("FPS per 0.5s from the attack: ", ", ".join(line), "  (Engine.time_scale=", Engine.time_scale, ", lethal=", main.screen.fx.last_lethal_mode, ")")
+	_done()
+
+
+## F13: what the running game really renders with, crops of the same board at MSAA Off / 4x / 8x, and
+## the frame rate of the idle board (ready glow pulsing) at each, then the lethal sequence at 4x.
+func _mode_aa() -> void:
+	print("F13 renderer: method=%s driver=%s adapter=%s | project msaa_2d=%s | UIStyle.aa_level=%d explicit=%s | root.msaa_2d=%d | max_fps=%d vsync=%d" % [
+		RenderingServer.get_current_rendering_method(), RenderingServer.get_current_rendering_driver_name(),
+		RenderingServer.get_video_adapter_name(), ProjectSettings.get_setting("rendering/anti_aliasing/quality/msaa_2d"),
+		UIStyle.aa_level, UIStyle.aa_explicit, root.msaa_2d, Engine.max_fps, DisplayServer.window_get_vsync_mode()])
+	_turn2()
+	var a := m.active
+	var att := TB.unit(m, a, 36, 0, "atk", 30, 30)
+	TB.unit(m, a, 110, 1, "def")
+	var tgt := TB.unit(m, 1 - a, 70, 2)
+	m.players[a]["ap"] = 6
+	_fresh_view(a)
+	await _wait(0.8)
+	var counter := [0]
+	var cb := func(): counter[0] += 1
+	for lv in [0, 4, 8]:
+		root.msaa_2d = UIStyle.msaa_for(lv)
+		await _wait(0.3)
+		await _snap("msaa_%d" % lv)
+		process_frame.connect(cb)
+		counter[0] = 0
+		var t0 := Time.get_ticks_usec()
+		await _wait(2.0)
+		var secs := (Time.get_ticks_usec() - t0) / 1.0e6
+		process_frame.disconnect(cb)
+		print("F13 msaa %dx: %.0f fps over %.1fs (root.msaa_2d=%d)" % [lv, counter[0] / secs, secs, root.msaa_2d])
+	root.msaa_2d = UIStyle.msaa_for(4)
+	# The game-winning attack on a unit at 4x: frames per half second through the whole sequence.
+	m.players[1 - a]["hp"] = 5
+	host.handle(a, {"t": "next_phase"})
+	await _wait(0.6)
+	host.handle(a, {"t": "attack", "uid": att})
+	var pd := m.pending
+	if not pd.is_empty() and pd.get("kind", "") == "attack_target":
+		host.handle(a, {"t": "choose", "id": pd["id"], "values": [tgt]})
+	_auto_answer()
+	process_frame.connect(cb)
+	var line := []
+	for i in 14:
+		counter[0] = 0
+		await _wait(0.5)
+		line.append("%.0f" % (counter[0] / 0.5))
+	process_frame.disconnect(cb)
+	print("F13 lethal-on-unit at 4x, fps per 0.5s: ", ", ".join(line), " lethal=", main.screen.fx.last_lethal_mode, " time_scale=", Engine.time_scale)
 	_done()
 
 
