@@ -14,8 +14,9 @@
 //        --write also stores canonical_games/{env}__{game_id} (only changed docs) and
 //        aggregates/{env}__default; canonical docs whose submissions disappeared are deleted.
 //   node tools/rldb-admin.js health [--env=production]
-//   node tools/rldb-admin.js delete-uid <uid> [--confirm]   list (or, with --confirm, delete) every
-//        submission of one Firebase uid; then run "reconcile --write" for each environment.
+//   node tools/rldb-admin.js delete-uid <uid> [--confirm]   list (or, with --confirm, erase) one uid:
+//        submissions, its anonymous Auth account, filtered aggregates naming it, then a rebuild of
+//        every environment's canonical games and default aggregate.
 //   node tools/rldb-admin.js --from-file=dump.json reconcile ...   offline run on exported raw docs.
 'use strict';
 const fs = require('node:fs');
@@ -116,6 +117,37 @@ async function deleteUid(firestore, uid, confirm) {
   return snap.size;
 }
 
+/**
+ * Complete erasure of one Firebase uid (privacy request): its submissions, its anonymous Auth
+ * account (when `auth` is given), every filtered aggregate that names it, and then a rebuild of
+ * every environment so canonical games and default aggregates no longer contain it.
+ * Returns {submissions, auth_deleted, aggregates_deleted, rebuilt: [env]}.
+ */
+async function purgeUid(firestore, uid, { auth = null, cat = catalog() } = {}) {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(uid)) throw new Error('not a Firebase uid');
+  const out = { submissions: await deleteUid(firestore, uid, true), auth_deleted: false, aggregates_deleted: 0, rebuilt: [] };
+  if (auth) {
+    try { await auth.deleteUser(uid); out.auth_deleted = true; } catch (e) { if (e.code !== 'auth/user-not-found') throw e; }
+  }
+  const key = `u:${uid}`;
+  for (const d of (await firestore.collection('aggregates').get()).docs) {
+    const a = d.data();
+    if (!d.id.endsWith('__default') && (String(a.filter || '').includes(uid) || String(a.body || '').includes(key))) {
+      await d.ref.delete();
+      out.aggregates_deleted++;
+    }
+  }
+  const raws = await loadSubmissions(firestore);
+  const envs = new Set(raws.map((r) => r.data.env));
+  for (const d of (await firestore.collection('canonical_games').get()).docs) envs.add(d.data().env);
+  for (const d of (await firestore.collection('aggregates').get()).docs) envs.add(d.data().env);
+  for (const env of [...envs].filter(Boolean).sort()) {
+    await runReconcile(firestore, raws, { env, write: true, cat });
+    out.rebuilt.push(env);
+  }
+  return out;
+}
+
 function summary(res) {
   const m = res.metrics;
   const lines = [
@@ -153,8 +185,9 @@ async function main() {
   } else if (cmd === 'delete-uid') {
     const uid = o._[1];
     if (!uid) throw new Error('usage: delete-uid <uid> [--confirm]');
-    const n = await deleteUid(firestore, uid, !!o.confirm);
-    console.log(o.confirm ? `deleted ${n} submission(s) of ${uid}; now run "reconcile --write" for each environment` : `${n} submission(s) of ${uid} (add --confirm to delete)`);
+    if (!o.confirm) { console.log(`${await deleteUid(firestore, uid, false)} submission(s) of ${uid} (add --confirm to erase everything for this uid)`); return; }
+    const r = await purgeUid(firestore, uid, { auth: require('firebase-admin').auth() });
+    console.log(`deleted ${r.submissions} submission(s), auth account ${r.auth_deleted ? 'deleted' : 'not found'}, ${r.aggregates_deleted} filtered aggregate(s); rebuilt ${r.rebuilt.join(', ') || 'nothing'}. Also delete local tools/out/*.json copies.`);
   } else {
     console.log(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 22).join('\n'));
     process.exitCode = 2;
@@ -163,4 +196,4 @@ async function main() {
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exitCode = 1; });
 
-module.exports = { runReconcile, deleteUid, loadSubmissions, catalog };
+module.exports = { runReconcile, deleteUid, purgeUid, loadSubmissions, catalog };

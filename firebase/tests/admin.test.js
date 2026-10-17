@@ -7,7 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8180';
 const admin = require('firebase-admin');
-const { runReconcile, deleteUid, loadSubmissions } = require('../tools/rldb-admin');
+const { runReconcile, deleteUid, purgeUid, loadSubmissions } = require('../tools/rldb-admin');
 const fx = require('../tools/fixtures/basic');
 
 admin.initializeApp({ projectId: 'rldb-b5593' }, 'admin-test');
@@ -63,4 +63,25 @@ test('delete-uid removes that uid only, and a rebuild drops its canonical games'
   const res = await runReconcile(db, await loadSubmissions(db), { env: 'production', write: true, cat: fx.catalog });
   assert.equal(res.deleted, 1);
   assert.equal((await db.collection('canonical_games').doc('production__G3').get()).exists, false);
+});
+
+test('purge-uid erases submissions, the auth account, filtered aggregates and rebuilds every env', async () => {
+  const auth = admin.app('admin-test').auth();
+  await auth.createUser({ uid: 'uC' }).catch(() => {});
+  await seed(fx.submissions);
+  await runReconcile(db, await loadSubmissions(db), { env: 'production', write: true, cat: fx.catalog });
+  await runReconcile(db, await loadSubmissions(db), { env: 'production', write: true, cat: fx.catalog,
+    filter: { modes: ['lan', 'steam'], statuses: ['verified', 'provisional'], player: 'u:uC' } });
+  assert.equal((await db.collection('aggregates').get()).size, 2);
+  const r = await purgeUid(db, 'uC', { auth, cat: fx.catalog });
+  assert.equal(r.submissions, 1);
+  assert.equal(r.auth_deleted, true);
+  assert.equal(r.aggregates_deleted, 1);
+  assert.ok(r.rebuilt.includes('production'));
+  await assert.rejects(auth.getUser('uC'));
+  assert.equal((await db.collection('canonical_games').doc('production__G3').get()).exists, false);
+  const agg = (await db.collection('aggregates').doc('production__default').get()).data();
+  assert.ok(!agg.body.includes('u:uC'));
+  assert.ok((await db.collection('users').doc('uA').collection('submissions').get()).size > 0);
+  await assert.rejects(purgeUid(db, '../x', { cat: fx.catalog }));
 });
