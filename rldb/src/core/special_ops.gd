@@ -52,12 +52,6 @@ func _op_declare_type(f: Dictionary, op: Dictionary) -> int:
 	return ask(f, f["ctl"], "mode", "Choose a Type.", opts)
 
 
-func _op_set_declared(f: Dictionary, op: Dictionary) -> int:
-	cards[f["src"]]["declared_type"] = f["vars"][op["var"]]
-	add_log("%s declares %s: all Mage units on the Field become that Type." % [name_of(f["src"]), _type_name(f["vars"][op["var"]])])
-	return R.CONT
-
-
 func _type_name(t: String) -> String:
 	return t if t != "" else "no type"
 

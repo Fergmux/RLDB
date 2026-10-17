@@ -3,32 +3,11 @@ extends GdUnitTestSuite
 ## (test_cNNN_...) so the support ledger can record which cards are tested.
 
 
-func test_c006_tag_team_f_adds_same_race_unit_from_draw_at_reduced_cost() -> void:
+func test_c006_tag_team_l_does_nothing_without_column_partner() -> void:
 	var m := TB.make()
-	TB.unit(m, 0, 4, 3)                                  # Basic Beast (Water) behind
-	var beast := TB.card(m, 0, 113, "draw")              # Basic Beast (Fire)
-	TB.summon(m, 0, 6, 0)
-	assert_str(TB.pend_kind(m)).is_equal("select")
-	TB.choose_uids(m, [beast])
-	assert_str(m.cards[beast]["zone"]).is_equal("hand")
-	assert_int(m.current_cost(beast)).is_equal(0)
-
-
-func test_c006_tag_team_f_does_nothing_without_column_partner() -> void:
-	var m := TB.make()
-	TB.card(m, 0, 113, "draw")
+	TB.card(m, 0, 45, "draw")
 	TB.summon(m, 0, 6, 0)
 	assert_bool(m.pending.is_empty()).is_true()
-
-
-func test_c007_tag_team_j_cleanses_unit_in_column() -> void:
-	var m := TB.make()
-	var back := TB.unit(m, 0, TB.WATER, 3)
-	m.apply_status(back, "poison", 2)
-	TB.summon(m, 0, 7, 0)
-	TB.choose_uids(m, [back])
-	assert_int(m.status_count(back, "poison")).is_equal(0)
-	assert_int(m.status_count(back, "cleanse")).is_equal(0)
 
 
 func test_c008_tag_team_s_fusion_summons_from_field() -> void:
@@ -39,18 +18,17 @@ func test_c008_tag_team_s_fusion_summons_from_field() -> void:
 	TB.summon(m, 0, 8, 0)
 	TB.choose(m, ["Yes"])
 	TB.choose_uids(m, [wyrm])
-	# F04-22: materials are picked one by one, then the zone, stance and an explicit Confirm.
+	# F04-22 / F07: materials are picked one by one, then the zone; the stance choice commits.
 	TB.choose_uids(m, [beast])
 	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Back row, column 2"])
 	TB.choose(m, ["Attack"])
-	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 	assert_str(m.cards[beast]["zone"]).is_equal("spent")
 	assert_str(m.cards[dragon]["zone"]).is_equal("spent")
 
 
-func test_c009_tag_team_l_adds_unit_with_partner_cost() -> void:
+func test_c009_tag_team_f_adds_unit_with_partner_cost() -> void:
 	var m := TB.make()
 	TB.unit(m, 0, TB.WATER, 3)                          # cost 1 partner
 	var d: int = m.players[0]["draw"][0]                # filler cost 1
@@ -59,7 +37,7 @@ func test_c009_tag_team_l_adds_unit_with_partner_cost() -> void:
 	assert_str(m.cards[d]["zone"]).is_equal("hand")
 
 
-func test_c010_tag_team_w_destroy_clears_face_down_cards_in_column() -> void:
+func test_c010_tag_team_w_destroy_still_clears_face_down_cards_in_column() -> void:
 	var m := TB.make()
 	var w := TB.unit(m, 0, 10, 0)
 	var own := TB.set_card(m, 0, 45, 0)
@@ -71,16 +49,7 @@ func test_c010_tag_team_w_destroy_clears_face_down_cards_in_column() -> void:
 	assert_str(m.cards[other_col]["zone"]).is_equal("backrow")
 
 
-func test_c010_tag_team_w_adds_trap_that_costs_one_less() -> void:
-	var m := TB.make()
-	TB.unit(m, 0, TB.WATER, 3)
-	var trap := TB.card(m, 0, 45, "draw")
-	TB.summon(m, 0, 10, 0)
-	TB.choose_uids(m, [trap])
-	assert_int(m.current_cost(trap)).is_equal(0)
-
-
-func test_c011_tag_team_b_destroy_hits_revealed_cards_in_column() -> void:
+func test_c011_tag_team_j_destroy_still_hits_revealed_cards_in_column() -> void:
 	var m := TB.make()
 	var b := TB.unit(m, 0, 11, 0)
 	var foe := TB.unit(m, 1, TB.WATER, 0)
@@ -109,7 +78,7 @@ func test_c012_tag_team_x_draws_gains_ap_and_revives_into_column() -> void:
 	assert_int(m.cards[dead]["slot"]).is_equal(3)
 
 
-func test_c013_chaos_witch_makes_mages_the_declared_type() -> void:
+func test_c013_chaos_witch_type_change_carries_every_mage() -> void:
 	var m := TB.make()
 	var witch := TB.unit(m, 0, 13, 0)
 	var mage := TB.unit(m, 1, TB.WATER, 0)
@@ -163,7 +132,7 @@ func test_c021_shen_gains_protection_scales_with_exhaust_and_raises_cost() -> vo
 	var m := TB.make()
 	var shen := TB.summon(m, 0, 21, 0)
 	assert_int(m.status_count(shen, "eternal")).is_equal(1)
-	assert_int(m.status_count(shen, "cleanse")).is_equal(3)
+	assert_int(m.status_count(shen, "cleanse")).is_equal(1)    # 2026-10-17: Cleanse 3 -> 1
 	TB.card(m, 0, TB.WATER, "exhaust")
 	TB.card(m, 0, TB.WATER, "exhaust")
 	assert_int(m.atk_of(shen)).is_equal(50)
@@ -186,7 +155,7 @@ func test_c023_auric_pays_ten_hp_for_ten_atk() -> void:
 	var auric := TB.unit(m, 0, 23, 0)
 	TB.ability(m, auric)
 	TB.choose(m, ["gains +10 ATK"])
-	assert_int(m.atk_of(auric)).is_equal(60)
+	assert_int(m.atk_of(auric)).is_equal(40)    # 2026-10-17: Auric 30/16
 	assert_int(m.players[0]["hp"]).is_equal(50)
 
 
@@ -316,15 +285,6 @@ func test_c035_enraged_komodo_gives_itself_pierce_once_per_turn() -> void:
 	assert_str(TB.ability(m, k)).is_equal("Already used this turn.")
 
 
-func test_c036_dante_burns_unprotected_foes() -> void:
-	var m := TB.make()
-	var front := TB.unit(m, 1, TB.WATER, 0)
-	var back := TB.unit(m, 1, TB.WATER, 3)
-	TB.summon(m, 0, 36, 0)
-	assert_int(m.status_count(front, "burn")).is_equal(6)
-	assert_int(m.status_count(back, "burn")).is_equal(0)
-
-
 func test_c036_dante_revives_next_turn_for_one_ap() -> void:
 	var m := TB.make()
 	var dante := TB.unit(m, 0, 36, 1)
@@ -339,14 +299,6 @@ func test_c036_dante_revives_next_turn_for_one_ap() -> void:
 	TB.choose(m, ["Attack"])
 	assert_int(m.cards[dante]["slot"]).is_equal(1)
 	assert_int(m.players[0]["ap"]).is_equal(1)
-
-
-func test_c037_solomon_captain_gains_atk_while_protecting() -> void:
-	var m := TB.make()
-	var sol := TB.unit(m, 0, 37, 0)
-	assert_int(m.atk_of(sol)).is_equal(26)
-	TB.unit(m, 0, TB.WATER, 3)
-	assert_int(m.atk_of(sol)).is_equal(34)
 
 
 func test_c038_lone_warrior_weakens_per_adjacent_ally_and_refuses_buffs() -> void:
@@ -378,12 +330,11 @@ func test_c067_void_basilisk_exhausts_itself_to_fuse_from_spent() -> void:
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.ability(m, vb)
 	TB.choose_uids(m, [wyrm])
-	# F04-22: materials are picked one by one, then the zone, stance and an explicit Confirm.
+	# F04-22 / F07: materials are picked one by one, then the zone; the stance choice commits.
 	TB.choose_uids(m, [beast])
 	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 2"])
 	TB.choose(m, ["Attack"])
-	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[vb]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[beast]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[dragon]["zone"]).is_equal("exhaust")
@@ -398,13 +349,11 @@ func test_c068_sepukku_destroys_itself_to_fuse() -> void:
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.ability(m, sp)
 	TB.choose_uids(m, [wyrm])
-	# F04-22: materials are picked one by one, then the zone, stance and an explicit Confirm.
+	# F04-22 / F07: materials are picked one by one, then the zone; the stance choice commits.
 	TB.choose_uids(m, [beast])
 	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 1"])                # Sepukku's own zone: it leaves first
 	TB.choose(m, ["Attack"])
-	assert_str(m.cards[sp]["zone"]).is_equal("unit")      # not destroyed until Confirm
-	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[sp]["zone"]).is_equal("spent")
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 
@@ -430,9 +379,7 @@ func test_c040_aleister_pays_one_ap_to_fuse() -> void:
 	TB.choose_uids(m, [beast])
 	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 2"])
-	TB.choose(m, ["Attack"])
-	assert_int(m.players[0]["ap"]).is_equal(2)
-	TB.choose(m, ["Confirm"])
+	TB.choose(m, ["Attack"])                            # F07: the stance commits; the cost follows
 	assert_int(m.players[0]["ap"]).is_equal(1)
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 
@@ -446,13 +393,14 @@ func test_c070_krakeshin_gains_atk_when_moving() -> void:
 	assert_int(m.atk_of(k)).is_equal(22)
 
 
-func test_c071_faerie_flight_heals_itself_when_moving() -> void:
+func test_c071_faerie_flight_gains_three_medic_when_moving() -> void:
 	var m := TB.make()
 	var ff := TB.unit(m, 0, 71, 0)
 	TB.ability(m, ff)
+	TB.choose_uids(m, [ff])                     # 2026-10-17: Nimble to a unit (itself here)
 	m.submit(0, {"t": "move", "uid": ff})
 	TB.choose(m, ["Front row, column 2"])
-	assert_int(m.status_count(ff, "medic")).is_equal(2)
+	assert_int(m.status_count(ff, "medic")).is_equal(3)
 
 
 func test_c072_myth_wukong_switches_rows_and_bonus_at_end_of_turn() -> void:
@@ -606,7 +554,7 @@ func test_c162_diggie_blinds_the_unit_that_destroyed_it() -> void:
 	assert_int(m.status_count(a, "blind")).is_equal(1)
 
 
-func test_c155_symbiote_black_boosts_its_protector() -> void:
+func test_c155_symbiote_spawn_still_boosts_its_protector() -> void:
 	var m := TB.make()
 	var front := TB.unit(m, 0, TB.WATER, 0)
 	var sym := TB.summon(m, 0, 155, 3)
@@ -614,14 +562,7 @@ func test_c155_symbiote_black_boosts_its_protector() -> void:
 	assert_int(m.atk_of(front)).is_equal(18)
 
 
-func test_c156_symbiote_red_boosts_its_protector_by_twenty() -> void:
-	var m := TB.make()
-	var front := TB.unit(m, 0, TB.WATER, 1)
-	TB.unit(m, 0, 156, 4)
-	assert_int(m.atk_of(front)).is_equal(28)
-
-
-func test_c157_symbiote_white_boosts_adjacent_units() -> void:
+func test_c157_symbiote_siphonophore_needs_protection_for_its_boost() -> void:
 	var m := TB.make()
 	var a := TB.unit(m, 0, TB.WATER, 0)
 	var far := TB.unit(m, 0, TB.WATER, 2)

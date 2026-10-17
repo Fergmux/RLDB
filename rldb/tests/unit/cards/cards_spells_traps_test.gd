@@ -87,13 +87,13 @@ func test_c043_two_freaky_fundays_cancel_out() -> void:
 
 func test_c043_unit_that_leaves_and_returns_is_a_new_card() -> void:
 	var m := TB.make()
-	var u := TB.unit(m, 0, 162, 0)                          # Diggie 2/0
+	var u := TB.unit(m, 0, 162, 0)                          # Diggie 6/0 (2026-10-17)
 	TB.cast(m, 0, 43)
 	assert_int(m.atk_of(u)).is_equal(0)
 	m._leave_field(u, "spent", "test")
 	m.players[0]["spent"].erase(u)
 	m.place_unit(u, 0, 0, "atk")
-	assert_int(m.atk_of(u)).is_equal(2)
+	assert_int(m.atk_of(u)).is_equal(6)
 	assert_int(m.def_of(u)).is_equal(0)
 
 

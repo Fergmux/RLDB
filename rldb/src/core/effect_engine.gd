@@ -285,6 +285,13 @@ func _matches(f: Dictionary, uid: int, sel: Dictionary) -> bool:
 			"race_eq":
 				var r := refs(f, want)
 				if r.is_empty() or unit_race(uid) != unit_race(r[0]): return false
+			"type_eq":
+				# Same Type as a reference unit; a typeless reference matches nothing.
+				var rt := refs(f, want)
+				if rt.is_empty() or unit_type(rt[0]) == "" or not is_unit(uid) or unit_type(uid) != unit_type(rt[0]): return false
+			"protected_by_src":
+				# The back-row unit the source (a front-row unit) is protecting.
+				if not unit_on_field(src) or (protected_by(src) == uid) != want: return false
 			"atk_min":
 				if not _unit_stat_ok(uid) or _pile_atk(uid) < want: return false
 			"atk_max":
@@ -440,6 +447,8 @@ func eval_cond(f: Dictionary, cond: Dictionary) -> bool:
 				if refs(f, "$" + v).is_empty(): return false
 			"protecting":
 				if (protected_by(f["src"]) != -1) != v: return false
+			"protected":
+				if (unit_on_field(f["src"]) and is_protected(f["src"])) != v: return false
 			"event_cost_min":
 				var ec: int = f["event"].get("card", -1)
 				if not cards.has(ec) or current_cost(ec) < v: return false

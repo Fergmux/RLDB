@@ -400,7 +400,7 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 			var raw_cards = cmd.get("cards", [])
 			if not (raw_cards is Array) or not (cmd.get("name", "") is String):
 				return "Malformed deck."
-			# Resource guard only (P-03 keeps decks unrestricted): far above any real deck.
+			# Resource guard before parsing; the real size caps are DeckStore.validate below.
 			if raw_cards.size() > MAX_CUSTOM_DECK:
 				return "Decks are limited to %d cards for performance." % MAX_CUSTOM_DECK
 			var ids := []
@@ -413,6 +413,9 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 				ids.append(id)
 			if ids.is_empty():
 				return "A deck needs at least one card."
+			var cap_err := DeckStore.validate(ids)   # F16: Main + Extra <= 99, Extra <= 15
+			if cap_err != "":
+				return cap_err
 			decks[p] = ids        # Main/Extra placement follows each card's category at game start
 			deck_names[p] = String(cmd.get("name", "Custom deck")).substr(0, 40)
 			deck_ready[p] = true

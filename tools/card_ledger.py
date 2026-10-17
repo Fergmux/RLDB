@@ -27,11 +27,15 @@ RULES_TESTS = {
 
 # Interpretations made where the card text leaves room (see design/decision-register.md).
 NOTES = {
-    7: "\"this Column\" spans both boards (columns face each other).",
+    7: "2026-10-17: Spell search (its Cleanse was removed); the -1 AP lasts this turn only.",
+    11: "2026-10-17: same-Type search; a typeless partner matches nothing.",
+    25: "2026-10-17: destroys every unprotected Basic Unit on both sides; mandatory.",
+    69: "2026-10-17: when tributed (Field, undebilitated) for a Fusion or Ritual summon, that unit gets 2 Pierce as it lands; Arcane exhausting does not count.",
+    177: "2026-10-17: optional On Destroy recovery from your own Exhaust, current ordinary cost 1 or lower (Extra Deck cards never qualify).",
     20: "Copies every Buff stack present on other units on the Field.",
-    36: "Revival uses the delayed-AP (-1) as the cost; revives only if Dante is still in Spent.",
+    36: "Revival uses the delayed-AP (-1) as the cost; revives only if Dante is still in Spent. 2026-10-17: the manual effect targets any unit; +1 ATK per Burn on Dante.",
     42: "Fills free zones in Hand-then-Draw order, Attack stance; no player choice of which basics.",
-    48: "Ties for highest ATK are chosen by the trap owner.",
+    48: "F03-19: the trap owner chooses any opposing unit (no highest-ATK rule).",
     72: "Moves only if the other zone in its column is empty.",
     94: "Material 1 must have a Type; material 2 must share it. Stats are a snapshot of the materials.",
     101: "\"sent from the Field to Spent\" also applies after resolving from Hand (it is exhausted).",
@@ -40,7 +44,7 @@ NOTES = {
     163: "Destroying your own cards counts as destruction by effect (may trigger your own traps/effects).",
     164: "Applies only when the attacked target is a unit; the owner picks the adjacent unit.",
     180: "Needs a free zone on your side; the unit returns to its owner at end of turn (to Spent if their board is full).",
-    13: "Declared Type applies to Mage units on both sides while the Witch remains.",
+    13: "2026-10-17: the Witch's own Type changes; every Mage on both sides has the Witch's Type while it remains. A typeless Witch imposes nothing.",
     19: "Copies current ATK/DEF and Race once (snapshot).",
     95: "Copies current ATK/DEF and Type once (snapshot).",
     176: "Sums current ATK of other Water units on the Field when summoned (snapshot).",

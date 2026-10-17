@@ -69,6 +69,8 @@ func test_reconnect_during_arcane_material_multiselect_summons_once() -> void:
 	_client_choose(["column 1"])
 	if await _await_pending(m, 1, "stance", 120):
 		_client_choose(["Attack"])
+	if await _await_pending(m, 1, "select", 120):
+		_client_choose(["Skip"])                     # Tyde's optional Beast search (2026-10-17)
 	assert_bool(await _await_idle(m)).is_true()
 	# Assert
 	assert_str(m.cards[tyde]["zone"]).is_equal("unit")

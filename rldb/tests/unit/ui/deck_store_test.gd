@@ -73,3 +73,57 @@ func test_filters() -> void:
 	assert_int(fusion).is_greater(0)
 	assert_int(dragon_text).is_greater(0)
 	assert_int(dragon_text).is_less(total)
+
+
+func _main_id() -> int:
+	for d in CardDB.all():
+		if not CardDB.is_extra_category(d["category"]):
+			return int(d["id"])
+	return -1
+
+
+func _fill(id: int, n: int) -> Array:
+	var a := []
+	a.resize(n)
+	a.fill(id)
+	return a
+
+
+## F16 / owner answers section 1: combined Main + Extra at most 99, Extra at most 15 within it.
+func test_validate_caps_combined_and_extra() -> void:
+	var m := _main_id()
+	var e := _extra_id()
+	assert_str(DeckStore.validate(_fill(m, 84) + _fill(e, 15))).is_empty()
+	assert_str(DeckStore.validate(_fill(m, 85) + _fill(e, 15))).contains("99")
+	assert_str(DeckStore.validate(_fill(m, 100))).contains("99")
+	assert_str(DeckStore.validate(_fill(m, 10) + _fill(e, 16))).contains("15")
+	assert_str(DeckStore.validate([])).is_empty()
+
+
+func test_add_block_reason_boundaries() -> void:
+	var m := _main_id()
+	var e := _extra_id()
+	assert_str(DeckStore.add_block_reason(98, 0, m)).is_empty()
+	assert_str(DeckStore.add_block_reason(99, 0, m)).is_not_empty()
+	assert_str(DeckStore.add_block_reason(84, 15, m)).is_not_empty()
+	assert_str(DeckStore.add_block_reason(83, 15, m)).is_empty()
+	assert_str(DeckStore.add_block_reason(10, 14, e)).is_empty()
+	assert_str(DeckStore.add_block_reason(10, 15, e)).is_not_empty()
+
+
+## Oversized saves from before the cap are listed intact, never trimmed.
+func test_oversized_save_lists_intact() -> void:
+	DeckStore.save_deck("Legacy", _fill(_main_id(), 120))
+	assert_int(DeckStore.list()[0]["cards"].size()).is_equal(120)
+
+
+func test_series_start_rejects_over_cap_custom_deck() -> void:
+	var m := _main_id()
+	var e := _extra_id()
+	var s := Series.new()
+	s.setup({"seed": 3})
+	assert_str(s.submit(0, {"t": "custom_deck", "cards": _fill(m, 100)})).contains("99")
+	assert_str(s.submit(0, {"t": "custom_deck", "cards": _fill(m, 5) + _fill(e, 16)})).contains("15")
+	assert_bool(s.deck_ready[0]).is_false()
+	assert_str(s.submit(0, {"t": "custom_deck", "cards": _fill(m, 84) + _fill(e, 15)})).is_empty()
+	assert_bool(s.deck_ready[0]).is_true()

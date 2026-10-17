@@ -13,7 +13,12 @@ Then inspect the actual working tree (`git log`, `git status`, worktrees under `
 
 ## Current phase
 
-**Stage 0: questions put to the owner. Waiting for answers before the unattended phase.**
+**Stages 2–4 running unattended**, under the owner's instruction of 17 Oct: "don't pause or ask questions until everything is complete".
+
+- Firebase CLI and Java are installed, and the owner is logged in.
+- Interim deny-all rules are deployed and verified.
+- Wave A agents A1–A7 are running (see `agents.md`). A7 is merged.
+- Toss-up decisions go in `decisions.md` for the final report.
 
 ## Stage 0 findings
 

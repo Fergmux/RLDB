@@ -374,12 +374,14 @@ func count_flag(p: int, flag: String) -> int:
 ## Current type of unit uid.
 func unit_type(uid: int) -> String:
 	var inst: Dictionary = cards[uid]
-	# Chaos Witch aura: mage units become the declared type.
+	# Chaos Witch aura (2026-10-17 text): every Mage unit on the Field has the Witch's own Type.
+	# While the Witch is still typeless it imposes nothing (its Type change excludes "?").
 	if inst["zone"] == "unit":
 		for src in all_field_units():
-			if has_flag(src, "mage_type_aura") and cards[src].get("declared_type", "") != "" \
-					and unit_race(uid) == "Mage":
-				return cards[src]["declared_type"]
+			if src != uid and has_flag(src, "mage_type_aura") and unit_race(uid) == "Mage":
+				var wt = cards[src]["type_o"] if cards[src]["type_o"] != null else d(src)["type"]
+				if wt != "":
+					return wt
 	if inst["type_o"] != null:
 		return inst["type_o"]
 	return d(uid)["type"]
@@ -710,7 +712,6 @@ func _reset_field_state(uid: int) -> void:
 	inst["ctl"] = inst["owner"]
 	inst["control_until"] = -1
 	inst.erase("control_slot")
-	inst.erase("declared_type")
 	inst.erase("runes_used")
 
 
