@@ -130,6 +130,25 @@ func destroy(e: Dictionary, prev_mv: Dictionary) -> void:
 		_fx.free_node(g))
 
 
+## F12: a still ghost of the card destroyed by `e`, standing in its slot until the killing blow lands
+## (the board already shows the slot empty). Returns it (null when hidden or unknown); free it with
+## FxPlayer.free_node, normally right before destroy(e) plays at the impact.
+func hold_ghost(e: Dictionary, prev_mv: Dictionary) -> CardWidget:
+	var at: Dictionary = e.get("at", {})
+	if at.is_empty():
+		return null
+	var zone := String(at["zone"])
+	var view := ghost_view(e, prev_mv)
+	if view.has("hidden") and view.size() == 1 and zone != "backrow":
+		return null
+	var rect: Rect2 = _fx.screen.fx_slot_global_rect(int(at["p"]), zone, int(at["slot"]))
+	var rot: bool = zone == "backrow" or (zone == "unit" and String(view.get("stance", "atk")) == "def")
+	var g := _ghost(view, Zones.KIND[zone], rot)
+	g.position = _fx.fx_pos(rect.get_center() - g.size / 2.0)
+	_fx.add_node(g)
+	return g
+
+
 # ---------------------------------------------------------------- exhaust
 
 ## A card is exhausted (Exhaust event `e`): it flies to the middle of the board, holds with an

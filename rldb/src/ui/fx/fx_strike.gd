@@ -6,6 +6,11 @@ extends FxPart
 ## lethal sequence: slow motion, a hit-stop, a big magic explosion (radial burst, light rays, flash
 ## to white, embers, a camera shake and a deep boom), then the F03-13 victory / defeat look.
 ## Lethal damage from an effect (no direct attack) gets a smaller "final blow" flourish instead.
+## F12: a game-winning attack on a unit (battle damage or Pierce overflow) plays the same lethal
+## sequence against the unit: slow lunge, hit-stop and explosion on the unit (its destruction shown at
+## the impact), then the overflow slams into the loser's plate with the big damage number. It is only
+## chosen from an authoritative batch that ends the game (game_over), so traps, prevention and a
+## negated attack can never preview a win: a batch without game_over is never lethal.
 ##
 ## Presentation only: the outcome is already decided and the rules never wait for it. Everything is
 ## created through FxPlayer, so a click (finish_all) snaps the lot away and releases the result modal.
@@ -23,13 +28,32 @@ const HIT_STOP := 0.14
 ## Seconds from the explosion to the start of the victory / defeat look.
 const BLAST_TO_END := 1.45
 const FLASH_WHITE := Color(1.0, 0.98, 0.92)
+## F12: seconds from the impact on a unit to its overflow damage hitting the loser's plate.
+const UNIT_OVERFLOW := 0.34
+## Fraction of the way to the target unit the lethal lunge travels (it stops on the card, not past it).
+const UNIT_LUNGE := 0.78
 
 
 # ---------------------------------------------------------------- detection (pure, testable)
 
+## Why a log line took HP (its text, F12): "direct" for a direct attack, "battle" for battle damage or
+## Pierce overflow, "" otherwise (effects, Burn). GameScreen tags each "hp" event with it as `via`.
+static func hp_cause(text: String) -> String:
+	if text.contains("(direct attack by "):
+		return "direct"
+	if text.contains(" (battle)") or text.contains(" (Pierce)"):
+		return "battle"
+	return ""
+
+
 ## The killing blow of an event batch, or {} when the batch does not end the game by damage.
-## {mode: "direct" | "effect", winner, loser, attack (event index, -1 for an effect), hp (index), d (damage dealt)}.
-static func detect(events: Array) -> Dictionary:
+## {mode: "direct" | "unit" | "effect", winner, loser, attack (event index, -1 when none in the batch),
+## hp (index), d (damage dealt), e (the attack event, also when it arrived in an earlier batch), start
+## (index the sequence is scheduled at), destroy (index of the target's destruction shown at the impact,
+## -1) and destroy_e (that event)}.
+## `prior` is the last attack event of earlier batches (F12): an attack answered in a trap window resolves
+## in a later batch than its declaration, so that batch carries only the battle damage and game_over.
+static func detect(events: Array, prior: Dictionary = {}) -> Dictionary:
 	var over := -1
 	for i in events.size():
 		if String(events[i].get("k", "")) == "game_over":
@@ -49,13 +73,42 @@ static func detect(events: Array) -> Dictionary:
 			break
 	if hp < 0:
 		return {}
-	var atk := -1
+	var info := {"mode": "effect", "winner": winner, "loser": loser, "attack": -1, "hp": hp, "d": -int(events[hp]["d"]), "start": hp, "destroy": -1}
+	var via := String(events[hp].get("via", ""))
 	for i in range(hp - 1, -1, -1):
 		var a: Dictionary = events[i]
 		if String(a.get("k", "")) == "attack" and bool(a.get("to", {}).get("direct", false)) and int(a["to"].get("p", -1)) == loser:
-			atk = i
+			info.merge({"mode": "direct", "attack": i, "e": a, "start": i}, true)
+			return info
+	if via != "battle" and via != "direct":
+		return info
+	var last := -1   # the attack this damage belongs to: the nearest one before it
+	for i in range(hp - 1, -1, -1):
+		if String(events[i].get("k", "")) == "attack":
+			last = i
 			break
-	return {"mode": "direct" if atk >= 0 else "effect", "winner": winner, "loser": loser, "attack": atk, "hp": hp, "d": -int(events[hp]["d"])}
+	var e: Dictionary = events[last] if last >= 0 else prior
+	if e.is_empty() or int(e.get("from", {}).get("p", -1)) != winner or int(e.get("to", {}).get("p", -1)) != loser:
+		return info
+	var direct := bool(e["to"].get("direct", false))
+	if direct != (via == "direct"):
+		return info
+	info["mode"] = "direct" if direct else "unit"
+	info["attack"] = last
+	info["e"] = e
+	if not direct:
+		for i in range(maxi(last, 0), hp):
+			var d: Dictionary = events[i]
+			var at: Dictionary = d.get("at", {})
+			if String(d.get("k", "")) == "destroy" and int(at.get("p", -1)) == loser and String(at.get("zone", "")) == "unit" and int(at.get("slot", -1)) == int(e["to"].get("slot", -2)):
+				info["destroy"] = i
+				info["destroy_e"] = d
+				break
+	if last >= 0:
+		info["start"] = last
+	elif int(info["destroy"]) >= 0:
+		info["start"] = int(info["destroy"])
+	return info
 
 
 ## Index of the HP loss that belongs to the direct attack at `ai` (the next damage to the defender
@@ -75,7 +128,12 @@ static func hp_after(events: Array, ai: int) -> int:
 static func hold_extra(info: Dictionary) -> float:
 	if info.is_empty():
 		return 0.0
-	return LETHAL_LEN if String(info["mode"]) == "direct" else FLOURISH_LEN
+	match String(info["mode"]):
+		"direct":
+			return LETHAL_LEN
+		"unit":
+			return LETHAL_LEN + UNIT_OVERFLOW
+	return FLOURISH_LEN
 
 
 # ---------------------------------------------------------------- direct attack
@@ -90,14 +148,24 @@ func lethal(e: Dictionary, info: Dictionary) -> void:
 	_run(e, int(info["d"]), info)
 
 
-func _run(e: Dictionary, dmg: int, info: Dictionary) -> void:
+## F12: the game-winning attack `e` on a unit: the lethal sequence aimed at the unit, `destroy_e` (its
+## destruction, {} if it survived) shown at the impact, then the overflow damage on the loser's plate.
+func lethal_unit(e: Dictionary, info: Dictionary, destroy_e: Dictionary, prev_mv: Dictionary) -> void:
+	_run(e, int(info["d"]), info, {"unit": true, "destroy_e": destroy_e, "prev_mv": prev_mv})
+
+
+func _run(e: Dictionary, dmg: int, info: Dictionary, extra: Dictionary = {}) -> void:
 	var screen: Control = _fx.screen
 	var from: Dictionary = e["from"]
 	var to: Dictionary = e["to"]
 	var killing := not info.is_empty()
 	var it: Dictionary = screen.fx_slot_item(int(from["p"]), "unit", int(from["slot"]))
 	var pl: PlayerPlate = screen.plate_of(int(to["p"]))
-	var target_c: Vector2 = pl.get_global_rect().get_center()
+	var plate_c: Vector2 = pl.get_global_rect().get_center()
+	var on_unit := bool(extra.get("unit", false))
+	var target_c: Vector2 = plate_c
+	if on_unit:
+		target_c = screen.fx_slot_global_rect(int(to["p"]), "unit", int(to["slot"])).get_center()
 	var w: CardWidget = null
 	var holder: Control = null
 	var start_c: Vector2 = screen.side_center(int(from["p"]))
@@ -108,7 +176,11 @@ func _run(e: Dictionary, dmg: int, info: Dictionary) -> void:
 	var tcol := _accent(w)
 	var dir := target_c - start_c
 	var reduced := UIStyle.reduce_motion
-	var ctx := {"c": target_c, "col": tcol, "dmg": dmg, "pl": pl, "info": info}
+	var ctx := {"c": target_c, "col": tcol, "dmg": dmg, "pl": pl, "info": info, "plate_c": plate_c}
+	ctx.merge(extra)
+	if on_unit and not (extra.get("destroy_e", {}) as Dictionary).is_empty():
+		# The board already shows the slot empty: the target stands as a ghost until the blow lands.
+		ctx["ghost"] = _fx.hold_destroy_ghost(extra["destroy_e"], extra.get("prev_mv", {}))
 	if w != null:
 		_fx.add_cleanup(_fx.reset_widget.bind(w, holder))
 	if reduced or w == null:
@@ -125,7 +197,7 @@ func _run(e: Dictionary, dmg: int, info: Dictionary) -> void:
 		return
 	holder.z_index = UiLayers.FX_CARD_FRONT
 	var wind := -dir.normalized() * (28.0 if killing else 18.0)
-	var lunge := dir * (0.9 if killing else 0.86)
+	var lunge := dir * (UNIT_LUNGE if on_unit else (0.9 if killing else 0.86))
 	var tw := _fx.new_tween()
 	if killing:
 		tw.tween_callback(_lethal_begin.bind(tw, ctx))
@@ -192,7 +264,7 @@ func _lethal_impact(tw: Tween, ctx: Dictionary) -> void:
 	_impact(ctx)
 	var winner := int(ctx["info"]["winner"])
 	var tl := _fx.new_tween()
-	tl.tween_interval(UIStyle.dur(BLAST_TO_END) + HIT_STOP)
+	tl.tween_interval(UIStyle.dur(BLAST_TO_END + (UNIT_OVERFLOW if ctx.get("unit", false) else 0.0)) + HIT_STOP)
 	tl.tween_callback(_end_look.bind(winner))
 
 
@@ -208,6 +280,9 @@ func _impact(ctx: Dictionary) -> void:
 	var killing := not (ctx["info"] as Dictionary).is_empty()
 	var area: Rect2 = _fx.screen.get_global_rect()
 	var reach := minf(area.size.x, area.size.y)
+	if ctx.get("unit", false):
+		_unit_impact(ctx, reach)
+		return
 	if is_instance_valid(pl):
 		pl.pulse()
 		_fx.shake(pl, 12.0 if killing else 9.0)
@@ -228,6 +303,45 @@ func _impact(ctx: Dictionary) -> void:
 		_fx.screen_flash(FLASH_WHITE, 0.3, 0.01, 0.06, c)
 		_fx.camera_shake(6.0, 0.3)
 		_damage_number(_number_pos(c), int(ctx["dmg"]), tcol, 84)
+
+
+## F12: the killing blow lands on the unit: its destruction, an explosion on the card, a white flash and
+## a camera shake; UNIT_OVERFLOW later the excess damage slams into the loser's plate.
+func _unit_impact(ctx: Dictionary, reach: float) -> void:
+	var c: Vector2 = ctx["c"]
+	var tcol: Color = ctx["col"]
+	var de: Dictionary = ctx.get("destroy_e", {})
+	var ghost = ctx.get("ghost", null)
+	if ghost != null and is_instance_valid(ghost):
+		_fx.free_node(ghost)
+	if not de.is_empty():
+		_fx.play_destroy(de, ctx.get("prev_mv", {}))
+	Sfx.play("impact", 0.0, 0.0)
+	_blast(FxBlast.Look.BLAST, c, tcol, reach * 0.22, 1.2)
+	_fx.burst(FxBurst.Kind.SPARK, c, tcol.lightened(0.5), 30, reach * 0.3, 0.8)
+	_fx.burst(FxBurst.Kind.EMBER, c, Color("ffd27a"), 26, reach * 0.22, 1.2)
+	_fx.screen_flash(FLASH_WHITE, 0.6, 0.02, 0.07, c)
+	_fx.camera_shake(16.0, 0.6)
+	var tw := _fx.new_tween()
+	tw.tween_interval(UIStyle.dur(UNIT_OVERFLOW))
+	tw.tween_callback(_overflow.bind(ctx, reach))
+
+
+## F12: the overflow of a game-winning attack on a unit reaching the loser's plate.
+func _overflow(ctx: Dictionary, reach: float) -> void:
+	var c: Vector2 = ctx["plate_c"]
+	var tcol: Color = ctx["col"]
+	var pl: PlayerPlate = ctx["pl"]
+	if is_instance_valid(pl):
+		pl.pulse()
+		_fx.shake(pl, 12.0)
+	Sfx.play("boom", 0.0, 0.0)
+	_blast(FxBlast.Look.BLAST, c, tcol, reach * 0.26, 1.4)
+	_fx.burst(FxBurst.Kind.SPARK, c, tcol.lightened(0.5), 30, reach * 0.36, 0.9)
+	_fx.burst(FxBurst.Kind.EMBER, c, Color("ffd27a"), 34, reach * 0.3, 1.3)
+	_fx.screen_flash(FLASH_WHITE, 0.62, 0.02, 0.07, c)
+	_fx.camera_shake(22.0, 1.0)
+	_damage_number(_number_pos(c), int(ctx["dmg"]), tcol, 132)
 
 
 # ---------------------------------------------------------------- final blow from an effect

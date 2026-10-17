@@ -2,7 +2,9 @@ extends SceneTree
 ## Development-only visual driver for the F03 effects package (badges, ready glow, destroy / exhaust,
 ## special summons, game end). Run windowed:
 ##   godot --path rldb -s res://src/dev/f03_fx_driver.gd -- --no-steam --fx-shots=<abs dir> --mode=<mode> [--size=1600x900]
-## Modes: ready, destroy, exhaust, fusion, ritual, arcane, win, lose, series. It stages a board through the
+## Modes: ready, destroy, exhaust, fusion, ritual, arcane, win, lose, series, strike, final, fps, plus
+## selfbuff (F02: overlapping self-buffs on a hovered unit; prints its drift), unitwin / unitwin_trap (F12:
+## a game-winning attack on a unit, the second answered in a trap window) and fpsunit. It stages a board through the
 ## real engine, drives commands through LocalHost and saves frame sequences of the running animation.
 
 var main: Node
@@ -286,10 +288,23 @@ func _mode_final() -> void:
 ## F04-07: frame rate through the lethal sequence (no screenshots, so nothing else slows the loop). Prints the
 ## frames per second of every half second from before the attack to the end of the victory look.
 func _mode_fps() -> void:
+	_fps_scene(false)
+
+
+## F12: frame rate through the lethal sequence of a game-winning attack on a unit.
+func _mode_fpsunit() -> void:
+	_fps_scene(true)
+
+
+func _fps_scene(on_unit: bool) -> void:
 	_turn2()
 	var a := m.active
 	var o := 1 - a
-	TB.unit(m, a, 36, 0)
+	if on_unit:
+		TB.unit(m, a, 36, 0, "atk", 30, 30)
+		TB.unit(m, o, 1, 1)
+	else:
+		TB.unit(m, a, 36, 0)
 	m.players[o]["hp"] = 5
 	host.handle(a, {"t": "next_phase"})
 	_fresh_view(a)
@@ -306,5 +321,82 @@ func _mode_fps() -> void:
 		await _wait(0.5)
 		line.append("%.0f" % (counter[0] / 0.5))
 	process_frame.disconnect(cb)
-	print("FPS per 0.5s from the attack: ", ", ".join(line), "  (Engine.time_scale=", Engine.time_scale, ")")
+	print("FPS per 0.5s from the attack: ", ", ".join(line), "  (Engine.time_scale=", Engine.time_scale, ", lethal=", main.screen.fx.last_lethal_mode, ")")
+	_done()
+
+
+## F02: three overlapping self-buffs (trigger + status, as a unit buffing itself) on a hovered unit. Samples
+## the card every frame and prints how far it strays from its lifted resting place, then unhovers.
+func _mode_selfbuff() -> void:
+	_turn2()
+	var a := m.active
+	var uid := TB.unit(m, a, 36, 1)
+	TB.unit(m, 1 - a, 1, 1)
+	_fresh_view(a)
+	await _wait(0.6)
+	var gs: GameScreen = main.screen
+	var w: CardWidget = gs.board.slot_item(a, "unit", 1)["widget"]
+	gs.hover.debug_hover_slot(a, "unit", 1)
+	await _wait(0.3)
+	var lifted := w.position
+	var rect0 := w.get_global_rect()
+	var at := {"p": a, "zone": "unit", "slot": 1}
+	var worst := [0.0, 0.0]
+	var sample := func():
+		if is_instance_valid(w):
+			worst[0] = maxf(worst[0], absf(w.position.y - lifted.y))
+			worst[1] = maxf(worst[1], absf(w.position.x - w.fx_offset.x - lifted.x))
+	process_frame.connect(sample)
+	for i in 3:
+		gs.fx.play([{"k": "trigger", "at": at}, {"k": "status", "at": at, "s": "pierce", "n": 1}], gs.mv)
+		await _snap("selfbuff_%02d" % (i * 2))
+		await _wait(0.08)
+		await _snap("selfbuff_%02d" % (i * 2 + 1))
+		await _wait(0.04)
+	await _seq("selfbuff_tail", 6, 0.12)
+	process_frame.disconnect(sample)
+	var settled := w.position
+	var rect1 := w.get_global_rect()
+	gs.hover.debug_clear()
+	await _wait(0.4)
+	print("F02 selfbuff: max |dy|=%.3f max |dx-fx|=%.3f settled=%s lifted=%s rect0=%s rect1=%s after_unhover=%s fx_offset=%s size=%s rest=%s" % [
+		worst[0], worst[1], settled, lifted, rect0, rect1, w.position, w.fx_offset, w.size, w.custom_minimum_size])
+	await _snap("selfbuff_unhovered")
+	_done()
+
+
+## F12: a game-winning attack on a unit (30 ATK into an 8 ATK unit, opponent at 5 HP).
+func _mode_unitwin() -> void:
+	await _unit_win(false)
+
+
+## F12: the same, with a set Trap so the defender gets a response window (declaration and resolution in
+## separate batches) and passes.
+func _mode_unitwin_trap() -> void:
+	await _unit_win(true)
+
+
+func _unit_win(trap: bool) -> void:
+	_turn2()
+	var a := m.active
+	var o := 1 - a
+	var att := TB.unit(m, a, 36, 0, "atk", 30, 30)
+	var tgt := TB.unit(m, o, 1, 1)
+	m.players[o]["hp"] = 5
+	if trap:
+		m.players[o]["backrow"] = [-1, -1, -1]
+		TB.set_card(m, o, 163, 0)
+	host.handle(a, {"t": "next_phase"})
+	_fresh_view(a)
+	await _wait(0.5)
+	host.handle(a, {"t": "attack", "uid": att})
+	var pd := m.pending
+	if not pd.is_empty() and pd.get("kind", "") == "attack_target":
+		host.handle(a, {"t": "choose", "id": pd["id"], "values": [tgt]})
+	if trap:
+		await _seq("unitwin_trap_window", 3, 0.25)
+		print("F12 trap window pending: ", m.pending.get("kind", ""))
+	_auto_answer()
+	await _seq("unitwin" + ("_trap" if trap else ""), 44, 0.1)
+	print("F12 %s: winner=%d lethal=%s time_scale=%s hold=%s" % [mode, m.winner, main.screen.fx.last_lethal_mode, Engine.time_scale, main.screen.fx.game_end_hold])
 	_done()

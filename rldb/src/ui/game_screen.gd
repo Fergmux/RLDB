@@ -354,7 +354,14 @@ func _collect_fx() -> Array:
 		return []
 	var out := []
 	for e in fresh:
-		out.append_array(e.get("fx", []))
+		# F12: tag HP changes with their cause from the authoritative log line ("battle" / "direct"), so a
+		# killing blow can be told apart from effect damage resolved in the same batch.
+		var via := FxStrike.hp_cause(String(e.get("text", "")))
+		for f in e.get("fx", []):
+			if via != "" and String(f.get("k", "")) == "hp" and not f.has("via"):
+				f = (f as Dictionary).duplicate()
+				f["via"] = via
+			out.append(f)
 	return out
 
 

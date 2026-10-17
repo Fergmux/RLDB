@@ -38,6 +38,12 @@ var game_end_hold := false
 var _hold_gen := 0
 var _cam_users := 0
 var _cam_rest := {}
+## F12: the last attack event seen and the game it belongs to. An attack answered in a trap window
+## resolves in a later batch, which then carries only the battle damage and game_over.
+var _last_attack := {}
+var _last_attack_game := -1
+## Mode of the last killing blow played ("direct", "unit", "effect" or ""; dev/QA verification only).
+var last_lethal_mode := ""
 
 
 ## True while any effect, banner or spotlight is still running.
@@ -57,11 +63,41 @@ func expect_game_end(events: Array) -> void:
 			game_end_hold = true
 			_hold_gen += 1
 			var gen := _hold_gen
-			var safety := 8.0 + FxStrike.hold_extra(FxStrike.detect(events))
+			var safety := 8.0 + FxStrike.hold_extra(lethal_info(events))
 			screen.get_tree().create_timer(safety).timeout.connect(func():
 				if gen == _hold_gen:
 					release_game_end_hold())
 			return
+
+
+## The killing blow of `events` (FxStrike.detect), with the attack of an earlier batch of this game.
+func lethal_info(events: Array) -> Dictionary:
+	var prior := {}
+	if not _last_attack.is_empty() and screen != null and int(screen.view.get("game_no", -1)) == _last_attack_game:
+		prior = _last_attack
+	return FxStrike.detect(events, prior)
+
+
+## Remembers the last attack of a batch for lethal_info(); a new turn or the end of a game forgets it.
+func _note_attacks(events: Array) -> void:
+	for e in events:
+		match String(e.get("k", "")):
+			"attack":
+				_last_attack = e
+				_last_attack_game = int(screen.view.get("game_no", -1)) if screen != null else -1
+			"turn", "game_over":
+				_last_attack = {}
+
+
+## F12: a still ghost of the card `e` destroys, held in its slot until the killing blow lands (or null).
+func hold_destroy_ghost(e: Dictionary, prev_mv: Dictionary) -> CardWidget:
+	return _piles.hold_ghost(e, prev_mv)
+
+
+## Shows the destruction event `e` now (with its sound); the lethal strike on a unit uses it at the impact.
+func play_destroy(e: Dictionary, prev_mv: Dictionary) -> void:
+	Sfx.play(Sfx.for_fx(e, screen.me()), 0.0, 0.0)
+	_piles.destroy(e, prev_mv)
 
 
 ## Lets the result modal appear (idempotent).
@@ -118,11 +154,23 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 		if e["k"] == "turn":
 			turn_in_batch = true
 	var fast := UIStyle.reduce_motion
-	var lethal := FxStrike.detect(events)   # F04-07: the killing blow of this batch, if it has one
+	var lethal := lethal_info(events)   # F04-07 / F12: the killing blow of this batch, if it has one
+	_note_attacks(events)
+	var lmode := String(lethal.get("mode", ""))
+	if lmode != "":
+		last_lethal_mode = lmode
+	var lstrike := lmode == "direct" or lmode == "unit"
+	var ldestroy := int(lethal.get("destroy", -1))
 	var claimed := {}   # hp event index -> true when a direct attack shows that damage itself
 	var special := {}   # player -> kind of the special summon whose materials were just shown
 	for i in events.size():
 		var e: Dictionary = events[i]
+		# F12: the attack was declared in an earlier batch (trap window): the killing blow plays here.
+		if lstrike and int(lethal["attack"]) < 0 and i == int(lethal["start"]):
+			var st_l := maxf(t, attack_end)
+			sched.append([st_l, _lethal_call(lethal, prev_mv)])
+			attack_end = st_l + (0.3 if fast else 0.9)
+			t = st_l + (0.1 if fast else 0.3)
 		# F03-17: a Fusion / Ritual / Arcane summon waits for its materials to be drawn in.
 		var summon_kind := ""
 		if e["k"] == "summon" and special.has(int(e["p"])):
@@ -137,10 +185,12 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			snd = ""   # FxGameEnd plays the victory / defeat sound itself
 		elif e["k"] == "hp" and not lethal.is_empty() and i == int(lethal["hp"]):
 			snd = ""   # the killing blow plays its own boom
+		elif e["k"] == "destroy" and i == ldestroy:
+			snd = ""   # F12: shown (with its sound) at the impact of the killing blow
 		if snd != "":
 			var st0 := maxf(t, attack_end) if e["k"] == "attack" else (t + 0.2 if e["k"] == "game_over" else t)
 			sched.append([st0, Sfx.play.bind(snd, 0.0, 0.04)])
-			if e["k"] == "attack" and not e.get("to", {}).get("direct", false):
+			if e["k"] == "attack" and not e.get("to", {}).get("direct", false) and not (lmode == "unit" and i == int(lethal["attack"])):
 				sched.append([st0 + (0.12 if fast else 0.26), Sfx.play.bind("impact", 0.0, 0.04)])
 		match String(e["k"]):
 			"attack":
@@ -155,6 +205,10 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 						sched.append([st, _strike.lethal.bind(e, lethal)])
 					else:
 						sched.append([st, _strike.direct.bind(e, dmg)])
+					attack_end = st + (0.3 if fast else 0.9)
+					t = st + (0.1 if fast else 0.3)
+				elif lmode == "unit" and int(lethal["attack"]) == i:
+					sched.append([st, _lethal_call(lethal, prev_mv)])   # F12
 					attack_end = st + (0.3 if fast else 0.9)
 					t = st + (0.1 if fast else 0.3)
 				else:
@@ -201,8 +255,9 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			"discard":
 				sched.append([t, _resources.discard.bind(int(e["p"]), int(e["n"]))])
 			"destroy":
-				sched.append([t, _piles.destroy.bind(e, prev_mv)])
-				t += 0.12
+				if i != ldestroy:   # F12: the killing blow on a unit shows it at its impact
+					sched.append([t, _piles.destroy.bind(e, prev_mv)])
+					t += 0.12
 			"status":
 				sched.append([t, _cards.status.bind(e["at"], String(e["s"]), int(e.get("n", 1)))])
 				t += 0.06
@@ -246,6 +301,14 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			spot_marks.pop_front()
 			shift += SPOT_HOLD
 		_later((float(sched[i][0]) * k + shift) * UIStyle.dur(1.0), sched[i][1])
+
+
+## The strike call for a killing blow `lethal` (mode "direct" or "unit").
+func _lethal_call(lethal: Dictionary, prev_mv: Dictionary) -> Callable:
+	var e: Dictionary = lethal["e"]
+	if String(lethal["mode"]) == "unit":
+		return _strike.lethal_unit.bind(e, lethal, lethal.get("destroy_e", {}), prev_mv)
+	return _strike.lethal.bind(e, lethal)
 
 
 ## Starts the victory / defeat presentation for `winner` (the killing blow calls this when it is done).
