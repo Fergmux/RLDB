@@ -5,7 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "test:unit": "node --test tools/test/*.test.js",
-    "test:rules": "firebase emulators:exec --only firestore,auth --project rldb-b5593 \"node --test tests/rules.test.js\"",
+    "test:rules": "firebase emulators:exec --only firestore,auth --project rldb-b5593 \"node --test --test-concurrency=1 tests/rules.test.js tests/admin.test.js\"",
     "admin": "node tools/rldb-admin.js"
   },
   "devDependencies": {

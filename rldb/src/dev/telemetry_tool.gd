@@ -6,6 +6,7 @@ extends SceneTree
 ##   --flush         upload the queue now (ignores backoff), then print the result
 ##   --test-upload   queue one synthetic probe report and upload it; exits 0 only when accepted
 ##   --purge         delete the local queue and quarantine (not the identity)
+##   --sim-series    play one bot-vs-bot draft series (Bo3) through the real collector, then upload
 ## target: --telemetry-emulator (local emulators) or --telemetry-live (real project). The
 ## environment defaults to "test" for --test-upload, so probes never mix with real statistics.
 
@@ -20,14 +21,14 @@ var _probe_id := ""
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	for a in args:
-		if a in ["--inspect", "--flush", "--test-upload", "--purge"]:
+		if a in ["--inspect", "--flush", "--test-upload", "--purge", "--sim-series"]:
 			_cmd = a
 	if _cmd == "":
 		print("usage: -- --inspect | --flush | --test-upload | --purge  [--telemetry-emulator | --telemetry-live] [--telemetry-env=test]")
 		quit(2)
 		return
 	var cfg := TelemetryConfig.resolve(args, OS.get_cmdline_args())
-	if _cmd == "--test-upload" and not " ".join(args).contains("--telemetry-env="):
+	if _cmd in ["--test-upload", "--sim-series"] and not " ".join(args).contains("--telemetry-env="):
 		cfg.environment = "test"
 	if cfg.environment == "test" and cfg.target == "none" and _cmd != "--inspect":
 		print("No target: add --telemetry-emulator or --telemetry-live.")
@@ -50,6 +51,9 @@ func _initialize() -> void:
 			_t.uploader.reset_backoff()
 		"--flush":
 			_t.uploader.reset_backoff()
+		"--sim-series":
+			_sim_series()
+			_t.uploader.reset_backoff()
 
 
 func _process(delta: float) -> bool:
@@ -62,7 +66,7 @@ func _process(delta: float) -> bool:
 	up.tick()
 	var probe_done := _probe_id != "" and not _t.outbox.has(_probe_id)
 	var drained := _t.outbox.next_ready().is_empty() and not up.busy
-	if (_cmd == "--test-upload" and probe_done) or (_cmd == "--flush" and drained) or _elapsed > TIMEOUT_S:
+	if (_cmd == "--test-upload" and probe_done) or (_cmd in ["--flush", "--sim-series"] and drained) or _elapsed > TIMEOUT_S:
 		_report()
 		var ok := probe_done and int(up.stats["quarantined"]) == 0 and (int(up.stats["accepted"]) + int(up.stats["duplicate"])) > 0
 		if _cmd == "--test-upload":
@@ -71,6 +75,25 @@ func _process(delta: float) -> bool:
 		else:
 			quit(0)
 	return false
+
+
+## Bot-vs-bot draft series in "bot" mode through the real Series, rules engine and collector.
+func _sim_series() -> void:
+	var s := Series.new()
+	s.setup({"seed": 4242, "best_of": 3, "deck_mode": "draft", "names": ["Sim A", "Sim B"], "mode": "bot"})
+	Telemetry.attach_series(s, "bot", "local")
+	var bots := [BotBrain.new(0, 1), BotBrain.new(1, 2)]
+	var steps := 0
+	while s.stage != Series.STAGE_OVER and steps < 20000:
+		steps += 1
+		var acted := false
+		for p in 2:
+			var cmd: Dictionary = bots[p].decide(s.game) if s.stage == Series.STAGE_GAME else bots[p].series_command(s)
+			if not cmd.is_empty() and s.submit(p, cmd) == "":
+				acted = true
+		if not acted and s.stage == Series.STAGE_GAME:
+			s.submit(s.game.active, {"t": "next_phase"})
+	print("Simulated series: stage=%s scores=%s games=%d steps=%d queued=%d" % [s.stage, s.scores, s.history.size(), steps, _t.outbox.size()])
 
 
 func _report() -> void:
