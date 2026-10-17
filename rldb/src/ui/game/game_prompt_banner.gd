@@ -12,7 +12,12 @@ const TRAY_MIN_W := 280.0
 const BANNER_MIN_W := 300.0
 const BANNER_MAX_W := 380.0
 ## Narrowest free column beside the board the banner may sit in (F03-25), and its margin to the zones.
-const BANNER_SIDE_MIN_W := 220.0
+const BANNER_SIDE_MIN_W := 170.0
+## Below this width the side column is "narrow": the card strip stacks the card above its text and
+## shows fewer rules lines, so the panel stays in the free column instead of covering the board.
+const BANNER_NARROW_W := 240.0
+## Rules lines of the card strip in the narrow side column and in the top-centre fallback.
+const SUBJECT_LINES_NARROW := 3
 const BANNER_SIDE_MAX_W := 300.0
 const BANNER_GAP := 12.0
 ## Breathing border period (s).
@@ -466,9 +471,22 @@ func _after_banner_settles() -> void:
 
 
 func _size_banner(w: float) -> void:
+	_fit_subject(w)
 	# F04-13: the plate measures itself in passes after layout (see HousePanel.fit), so wrapped
 	# labels that were laid out at a stale width cannot leave it too tall.
 	(ctx_banner as HousePanel).fit(w)
+
+
+## The card strip (F05) adapts to the panel width: side by side when there is room, otherwise the
+## card sits above a shorter text so the panel does not grow over the board.
+func _fit_subject(w: float) -> void:
+	if subject_box == null or subject_text == null:
+		return
+	var narrow := w < BANNER_NARROW_W or ctx_banner.position.y < 20.0
+	subject_text.max_lines_visible = SUBJECT_LINES_NARROW if narrow else SUBJECT_LINES
+	var row := subject_card.get_parent()
+	if row is BoxContainer:
+		(row as BoxContainer).vertical = w < BANNER_NARROW_W
 
 
 ## Attention treatment (F03-25): a pop and gold flare when a new choice appears, then a gentle
