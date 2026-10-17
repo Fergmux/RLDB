@@ -84,9 +84,10 @@ func fusion_candidates(p: int, sources: Array, exclude: int = -1) -> Array:
 	return out
 
 
-## F04-22: every Fusion method makes all of its choices first, while its source is still where
-## it was: the Fusion unit, each material (picked on the board for Field materials), the zone and
-## the stance, then an explicit Confirm. Until Confirm everything is cancellable and nothing has
+## F04-22 / F07 (2026-10-17): every Fusion method makes all of its choices first, while its
+## source is still where it was: the Fusion unit, each material (picked on the board for Field
+## materials), the zone and the stance. The Attack/Defense stance choice is the final, committing
+## step (F07 removed the separate Confirm). Until then everything is cancellable and nothing has
 ## changed (only frame vars are written). Costs, self-destruction / exhaustion, the response
 ## window and the summon follow; `_op_fusion` rechecks the plan before anything is tributed.
 ## Op fields: sources, exclude_self (the paying unit leaves, so it is never a material and frees
@@ -110,7 +111,7 @@ func _op_fusion_pick(f: Dictionary, op: Dictionary) -> int:
 	return ask(f, f["ctl"], "select", "Choose a Fusion unit to summon.", opts, 1, 1, cancellable, {"reveal_pile": true})
 
 
-## Splices the material, zone, stance and Confirm choices for Fusion unit `fu`.
+## Splices the material, zone and stance choices for Fusion unit `fu`.
 func _fusion_plan_ops(f: Dictionary, fu: int, sources: Array, leaves: bool, cancellable: bool) -> void:
 	f["vars"]["fusion"] = fu
 	f["vars"]["fmats"] = []
@@ -121,22 +122,14 @@ func _fusion_plan_ops(f: Dictionary, fu: int, sources: Array, leaves: bool, canc
 	# Zones the Field materials (and a paying unit that leaves) will free count (P-16).
 	ops.append({"op": "pick_slot", "zone": "unit", "as": "fslot", "freeing": "$fmats", "free_src": leaves, "for": fu, "cancellable": cancellable})
 	ops.append({"op": "pick_stance", "as": "stance", "for": fu, "cancellable": cancellable})
-	ops.append({"op": "fusion_confirm", "cancellable": cancellable})
+	ops.append({"op": "fusion_ready"})
 	_splice(f, ops)
 
 
-## The explicit Confirm after the last Fusion choice (F04-22). Cancel discards the whole action.
-func _op_fusion_confirm(f: Dictionary, op: Dictionary) -> int:
-	var ans: Variant = take_answer(f)
-	if ans != null:
-		f["vars"]["fusion_ready"] = true
-		return R.CONT
-	var names := []
-	for m in f["vars"]["fmats"]:
-		names.append(name_of(m))
-	var fu: int = f["vars"]["fusion"]
-	return ask(f, f["ctl"], "confirm", "Fusion Summon %s using %s?" % [name_of(fu), " and ".join(names)],
-		[{"v": 1, "label": "Confirm"}], 1, 1, op.get("cancellable", true))
+## F07: the stance answer completes the plan; no further Confirm prompt is asked.
+func _op_fusion_ready(f: Dictionary, op: Dictionary) -> int:
+	f["vars"]["fusion_ready"] = true
+	return R.CONT
 
 
 ## True while the confirmed plan (Fusion unit, materials in requirement order) is still legal:
@@ -175,8 +168,8 @@ func _fusion_fizzle(f: Dictionary) -> int:
 	return R.END
 
 
-## The Fusion summon itself. With a confirmed plan it tributes and places; without one (a
-## triggered method such as Tag Team - S) it first runs the same choose-then-Confirm steps.
+## The Fusion summon itself. With a completed plan it tributes and places; without one (a
+## triggered method such as Tag Team - S) it first runs the same choice steps.
 func _op_fusion(f: Dictionary, op: Dictionary) -> int:
 	var p: int = f["ctl"]
 	if not f["vars"].get("fusion_ready", false):
@@ -190,7 +183,7 @@ func _op_fusion(f: Dictionary, op: Dictionary) -> int:
 	if not _fusion_plan_valid(f):
 		add_log("The chosen Fusion materials are no longer available, so the Fusion Summon of %s fails." % name_of(fu))
 		return _fusion_fizzle(f)
-	var ops := [{"op": "fusion_tribute"}, {"op": "place", "target": fu, "slot": "$fslot", "stance": "$stance"}]
+	var ops := [{"op": "fusion_tribute"}, {"op": "place", "target": fu, "slot": "$fslot", "stance": "$stance"}, {"op": "tribute_bonus", "target": fu}]
 	ops += summon_tail(fu, p)
 	_splice(f, ops)
 	return R.CONT

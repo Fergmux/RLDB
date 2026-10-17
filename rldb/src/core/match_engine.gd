@@ -435,7 +435,7 @@ func _ability_check(p: int, uid: int, idx: int, ab: Dictionary) -> String:
 		return "Condition not met."
 	for op in ab["ops"]:
 		if op["op"] == "near_self":
-			_op_near_self(f, op)              # e.g. Dante: "this unit or an adjacent unit"
+			_op_near_self(f, op)              # its list feeds the choice that follows
 		if op["op"] == "choose" and not op.get("optional", false):
 			if select(f, op["sel"]).is_empty():
 				return "No legal target."
@@ -515,7 +515,8 @@ func _execute(p: int, cmd: Dictionary) -> void:
 				{"op": "pick_slot", "zone": "unit", "as": "slot", "cancellable": true, "freeing": "$mat"},
 				_stance_op(cmd),
 				{"op": "tribute", "target": "$mat", "ritual": true},
-				{"op": "place", "target": "self", "slot": "$slot", "stance": "$stance"}] + summon_tail(uid, p), "Ritual summon " + name_of(uid)))
+				{"op": "place", "target": "self", "slot": "$slot", "stance": "$stance"},
+				{"op": "tribute_bonus", "target": "self"}] + summon_tail(uid, p), "Ritual summon " + name_of(uid)))
 		"arcane":
 			push_frame(make_frame(uid, p, [{"op": "arcane_materials", "as": "mats", "cancellable": true},
 				{"op": "pick_slot", "zone": "unit", "as": "slot", "cancellable": true},
@@ -525,7 +526,7 @@ func _execute(p: int, cmd: Dictionary) -> void:
 	run()
 
 
-## F04-22: a Fusion method's choices (Fusion unit, materials, zone, stance, Confirm) lead its
+## F04-22 / F07: a Fusion method's choices (Fusion unit, materials, zone, stance) lead its
 ## frame, cancellable, before any cost, self-destruction or response window. Empty when the
 ## effect has other lead choices or no Fusion. `ability`: a "move/destroy self" cost before the
 ## Fusion means the paying unit leaves (never a material; it frees its own zone).

@@ -148,6 +148,13 @@ func _op_tribute(f: Dictionary, op: Dictionary) -> int:
 			add_log("%s tributes %s." % [pname(p), name_of(m)])
 			add_fx(mfx)
 			emit("tribute_or_sacrifice", {"self": m, "ctl": p, "player": p, "tribute": true, "debilitated": snap["st"].get("debilitate", 0) > 0})
+			# Magentric (2026-10-17): "If this Unit is Tributed, Apply 2 Pierce to the Fusion or
+			# Ritual Unit Summoned". Its On Field text needs it undebilitated on the Field.
+			var tb: Dictionary = script_of(m).get("tribute_bonus", {})
+			if not tb.is_empty() and snap["st"].get("debilitate", 0) <= 0 and not op.get("to", "") == "exhaust":
+				if not f["vars"].has("tribute_bonus"):
+					f["vars"]["tribute_bonus"] = []
+				f["vars"]["tribute_bonus"].append({"s": tb["s"], "n": tb["n"], "from": name_of(m)})
 		elif from == "hand":
 			move_to_pile(m, "exhaust")
 			add_log("%s tributes a card from Hand (exhausted)." % pname(p), {p: "%s tributes %s from Hand (exhausted)." % [pname(p), name_of(m)]})
@@ -160,6 +167,20 @@ func _op_tribute(f: Dictionary, op: Dictionary) -> int:
 	if op.get("ritual", false) and d(f["src"])["cost"] == null:
 		var n: int = f["vars"]["runes_used"]
 		cards[f["src"]]["runes_used"] = n
+	return R.CONT
+
+
+## Applies benefits recorded by `_op_tribute` to the Fusion/Ritual unit that just landed,
+## before its own On Summon effects and the summon-response window.
+func _op_tribute_bonus(f: Dictionary, op: Dictionary) -> int:
+	var bonuses: Array = f["vars"].get("tribute_bonus", [])
+	f["vars"].erase("tribute_bonus")
+	for u in refs(f, op["target"]):
+		if not unit_on_field(u):
+			continue
+		for b in bonuses:
+			add_log("%s was tributed: %s gains %d %s." % [b["from"], name_of(u), b["n"], String(b["s"]).capitalize()])
+			apply_status(u, b["s"], b["n"])
 	return R.CONT
 
 
