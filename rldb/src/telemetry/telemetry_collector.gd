@@ -611,14 +611,25 @@ static func abandon_body(kind: String, body: Dictionary) -> Dictionary:
 
 ## A network client's view arrived. Builds one corroborating report per duel from public view
 ## data only (no hidden information beyond what this seat already sees).
+## Every field comes from the host, which may be modified: ids must be plain names (they become
+## outbox file names and document ids) and malformed values are skipped, never trusted.
 func on_client_view(v: Dictionary, transport: String) -> void:
 	var tel = v.get("tel_ids", {})
 	if not (tel is Dictionary) or tel.is_empty():
 		return
+	var sid = tel.get("series", "")
+	var gid_v = tel.get("game", "")
+	if not (sid is String and gid_v is String) or not TelemetryOutbox.safe_id(String(sid)) \
+			or (gid_v != "" and not TelemetryOutbox.safe_id(String(gid_v))):
+		return
 	var cmode := "steam" if transport == "steam" else "lan"
 	if v.get("deck") is Array:
-		client_deck = v["deck"].map(func(c): return int(c.get("id", -1)) if c is Dictionary else int(c))
-	var gid := String(tel.get("game", ""))
+		client_deck = []
+		for c in v["deck"]:
+			var cid = c.get("id", -1) if c is Dictionary else c
+			if cid is int or cid is float:
+				client_deck.append(int(cid))
+	var gid := String(gid_v)
 	if String(v.get("stage", "")) == "game" and gid != "" and String(client.get("game_id", "")) != gid:
 		if not client.is_empty() and not client.get("done", false):
 			client["outcome"] = "unknown"
@@ -630,12 +641,12 @@ func on_client_view(v: Dictionary, transport: String) -> void:
 				extra.append(id)
 			elif id >= 0:
 				main.append(id)
-		client = {"game_id": gid, "series_id": String(tel.get("series", "")), "duel_index": int(v.get("game_no", 0)),
-			"seat": int(v.get("you", 1)), "mode": cmode, "started_at": now_ms.call(), "first_player": -1,
-			"best_of": int(v.get("best_of", 0)), "deck_mode": String(v.get("deck_mode", "")),
+		client = {"game_id": gid, "series_id": String(tel.get("series", "")), "duel_index": _num(v.get("game_no", 0)),
+			"seat": _num(v.get("you", 1)), "mode": cmode, "started_at": now_ms.call(), "first_player": -1,
+			"best_of": _num(v.get("best_of", 0)), "deck_mode": String(v.get("deck_mode", "")).substr(0, 16),
 			"deck": {"main": multiset(main), "extra": multiset(extra), "size": main.size() + extra.size(),
 				"fingerprint": fingerprint(multiset(main), multiset(extra))},
-			"participant": {"seat": int(v.get("you", 1)), "kind": "human", "link": "profile", "participant_id": profile_pid},
+			"participant": {"seat": _num(v.get("you", 1)), "kind": "human", "link": "profile", "participant_id": profile_pid},
 			"outcome": "in_progress", "winner": -1, "turns": 0, "final_hp": [], "forfeit": false, "done": false}
 		if steam_hash != "":
 			client["participant"]["steam_hash"] = steam_hash
@@ -644,19 +655,28 @@ func on_client_view(v: Dictionary, transport: String) -> void:
 	if client.is_empty() or client["done"]:
 		return
 	var mv = v.get("match", null)
-	if mv is Dictionary and int(client["first_player"]) == -1 and int(mv.get("turn", 0)) == 1:
-		client["first_player"] = int(mv.get("active", -1))
-	for h in v.get("history", []):
-		if h is Dictionary and int(h.get("game", -1)) == int(client["duel_index"]) and String(v.get("stage", "")) != "game":
+	if mv is Dictionary and int(client["first_player"]) == -1 and _num(mv.get("turn", 0)) == 1:
+		client["first_player"] = _num(mv.get("active", -1))
+	var hist = v.get("history", [])
+	if not (hist is Array):
+		return
+	for h in hist:
+		if h is Dictionary and _num(h.get("game", -1)) == int(client["duel_index"]) and String(v.get("stage", "")) != "game":
 			client["done"] = true
 			client["outcome"] = "completed"
-			client["winner"] = int(h.get("winner", -1))
-			client["turns"] = int(h.get("turns", 0))
-			client["final_hp"] = h.get("hp", []).map(func(x): return int(x))
+			client["winner"] = _num(h.get("winner", -1))
+			client["turns"] = _num(h.get("turns", 0))
+			var hp = h.get("hp", [])
+			client["final_hp"] = hp.map(func(x): return _num(x)) if hp is Array else []
 			client["forfeit"] = bool(h.get("forfeit", false))
 			client["ended_at"] = now_ms.call()
 			_emit_client("ready")
 			return
+
+
+## An int from an untrusted view value (-1 when it is not a number).
+static func _num(x) -> int:
+	return int(x) if (x is int or x is float) else -1
 
 
 func _emit_client(state: String) -> void:

@@ -15,6 +15,59 @@ const KINDS = ['profile', 'session', 'draft', 'reward', 'game', 'gclient', 'seri
 const ENVS = ['playtest', 'production', 'dev', 'test'];
 const NETWORK_MODES = ['lan', 'steam'];
 
+// ---- Strict body validation. Bodies are client-written and untrusted: every field the
+// reconciliation or the metrics read is type-checked here, and object keys that become map keys
+// downstream must be card ids or plain identifiers, so a crafted body can neither crash the
+// owner's run nor reach Object.prototype ("__proto__", "constructor").
+const ID_RE = /^[A-Za-z0-9_-]{1,120}$/;
+const CARD_RE = /^[0-9]{1,9}$/;
+const KEY_RE = /^[A-Za-z0-9_:.-]{1,64}$/;
+const RESERVED = new Set(['__proto__', 'constructor', 'prototype']);
+const isObj = (o) => o !== null && typeof o === 'object' && !Array.isArray(o);
+const isCount = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1e7;
+const isCardId = (v) => (Number.isInteger(v) && v >= 0 && v < 1e9) || (typeof v === 'string' && CARD_RE.test(v));
+const isId = (v) => typeof v === 'string' && ID_RE.test(v);
+const isSeat = (v) => v === 0 || v === 1;
+const countMap = (m) => isObj(m) && Object.keys(m).every((k) => CARD_RE.test(k) && isCount(m[k]));
+const kindMap = (m) => m === undefined || (isObj(m) && Object.keys(m).every((k) => KEY_RE.test(k) && !RESERVED.has(k) && isCount(m[k])));
+const deckOk = (d) => isObj(d) && countMap(d.main) && countMap(d.extra);
+const counterOk = (v) => isObj(v) && isCount(v.plays) && isCount(v.activations) && kindMap(v.plays_by_kind) && kindMap(v.activations_by_kind);
+const seatCountersOk = (m) => isObj(m) && Object.keys(m).every((k) => CARD_RE.test(k) && counterOk(m[k]));
+const oppOk = (o) => Array.isArray(o) && o.length >= 7 && isSeat(o[1]) && isCardId(o[2]);
+const strOk = (v) => v === undefined || v === null || (typeof v === 'string' && v.length <= 64);
+
+function validBody(kind, b) {
+  switch (kind) {
+    case 'game': {
+      const g = b.game;
+      return isObj(g) && isId(g.game_id) && strOk(g.outcome) && strOk(g.reason)
+        && Array.isArray(b.participants) && b.participants.length === 2 && b.participants.every((p) => p === null || isObj(p))
+        && Array.isArray(b.decks) && b.decks.length === 2 && b.decks.every(deckOk)
+        && Array.isArray(b.counters) && b.counters.length <= 2 && b.counters.every(seatCountersOk)
+        && Array.isArray(b.opportunities) && b.opportunities.every(oppOk);
+    }
+    case 'gclient': {
+      const c = b.gclient;
+      return isObj(c) && isId(c.game_id) && isSeat(c.seat) && deckOk(c.deck) && strOk(c.outcome);
+    }
+    case 'draft': {
+      const d = b.draft;
+      return isObj(d) && isId(d.draft_id) && Array.isArray(d.picks) && d.picks.every((p) => isObj(p)
+        && Array.isArray(p.offered) && p.offered.every(isCardId) && isCardId(p.selected)
+        && (p.offered_counts === undefined || countMap(p.offered_counts))
+        && (p.selected_count === undefined || isCount(p.selected_count)) && (p.n === undefined || isCount(p.n)));
+    }
+    case 'reward':
+      return isObj(b.reward) && Array.isArray(b.reward.actions) && b.reward.actions.every((a) => isObj(a)
+        && (a.kind !== 'type' || (Array.isArray(a.offered) && a.offered.every(isCardId)))
+        && (a.kind !== 'add' || isCardId(a.selected)));
+    case 'series': return isObj(b.series) && isId(b.series.series_id);
+    case 'session': return isObj(b.session) && isId(b.session.session_id);
+    case 'profile': return isObj(b.profile) && isId(b.profile.participant_id);
+    default: return false;
+  }
+}
+
 /** Normalises one raw submission {uid, id, data} (data = Firestore fields). Returns {ok, rec|reason}. */
 function normalize(raw) {
   const d = raw.data || {};
@@ -32,16 +85,11 @@ function normalize(raw) {
     received_at: raw.received_at != null ? Number(raw.received_at) : Number(d.created_at), body,
   };
   if (body.probe) return { ok: false, reason: 'probe', ...base };
-  const need = {
-    game: () => body.game && typeof body.game.game_id === 'string' && Array.isArray(body.participants) && body.participants.length === 2 && Array.isArray(body.decks),
-    gclient: () => body.gclient && typeof body.gclient.game_id === 'string' && Number.isInteger(body.gclient.seat),
-    draft: () => body.draft && Array.isArray(body.draft.picks) && typeof body.draft.draft_id === 'string',
-    reward: () => body.reward && Array.isArray(body.reward.actions),
-    series: () => body.series && typeof body.series.series_id === 'string',
-    session: () => body.session && typeof body.session.session_id === 'string',
-    profile: () => body.profile && typeof body.profile.participant_id === 'string',
-  }[d.kind];
-  if (!need()) return { ok: false, reason: `schema_${d.kind}`, ...base };
+  if (!validBody(d.kind, body)) return { ok: false, reason: `schema_${d.kind}`, ...base };
+  // The document id is the record id (schema v1 §2): one uid cannot file two reports for one duel.
+  if (d.kind === 'game' && raw.id !== `game_${body.game.game_id}`) return { ok: false, reason: 'doc_id', ...base };
+  if (d.kind === 'gclient' && raw.id !== `gclient_${body.gclient.game_id}`) return { ok: false, reason: 'doc_id', ...base };
+
   if (d.kind === 'game' && body.game.outcome === 'in_progress') return { ok: false, reason: 'in_progress', ...base };
   return { ok: true, rec };
 }
@@ -137,7 +185,8 @@ function reconcileAll(raws) {
   const out = { byEnv: {}, rejected: {}, accepted: 0 };
   const recsByEnv = {};
   for (const raw of raws) {
-    const n = normalize(raw);
+    let n;
+    try { n = normalize(raw); } catch (e) { n = { ok: false, reason: 'invalid' }; }
     if (!n.ok) { out.rejected[n.reason] = (out.rejected[n.reason] || 0) + 1; continue; }
     out.accepted++;
     (recsByEnv[n.rec.env] = recsByEnv[n.rec.env] || []).push(n.rec);
@@ -149,4 +198,4 @@ function reconcileAll(raws) {
   return out;
 }
 
-module.exports = { normalize, reconcile, reconcileAll, disagreements, NETWORK_MODES };
+module.exports = { validBody, normalize, reconcile, reconcileAll, disagreements, NETWORK_MODES };

@@ -37,6 +37,19 @@ Godot client (rldb/src/telemetry)                     Firestore rldb-b5593 (defa
   and a custom provider needs a backend. Abuse protection is Firebase Auth's per-IP sign-up limits, the rules' size
   caps and the Spark quota itself. If a spammer exhausts the daily free quota, telemetry stops for the day; the game
   is unaffected (uploads just back off).
+- Quota abuse (security review, 17 Oct 2026). One uid can create documents without limit, and anonymous
+  sign-up lets one person farm many uids, so per-uid caps in rules would not help. The 200,000-character
+  body cap means about 5,400 documents fill the 1 GiB Spark store, and with indefinite retention that
+  storage stays used until the owner deletes it (`delete-uid --confirm` per spamming uid). Owner GETs of
+  own documents also count against the 50k/day read quota that `reconcile` needs. Watch usage in the
+  console. Cheap later steps: lower the body cap to the measured 99th percentile (a real game report is
+  about 33 KB), and restrict the Web API key to the Identity Toolkit, Token Service and Firestore APIs.
+- Bodies are untrusted input to the admin tool. `reconcile.js` type-checks every field it reads and
+  rejects records with unsafe map keys or ids (counted under `rejected`), so a crafted body cannot crash a
+  run or pollute the tool's process. Provisional duels (one report) are in the default statistics, so a
+  single modified client can add invented provisional duels; filter `--statuses=verified` when that matters.
+- The network client treats every view field from the host as untrusted. Ids must be plain names before
+  they become outbox file names or document ids.
 
 ## Client behaviour (silent, never blocking)
 
@@ -154,8 +167,9 @@ Install once with `cd firebase && npm install`. Java 21 must be on PATH for the 
   - Defaults are human network duels, verified plus provisional (provisional is flagged and filterable), with
     conflicted, abandoned, bot and hot-seat duels excluded. Pass `--modes=bot,local --statuses=local` for local
     play.
-- Deletion: `node tools/rldb-admin.js delete-uid <uid>` lists the documents; add `--confirm` to delete them, then
-  run `reconcile --write` for each environment.
+- Deletion: `node tools/rldb-admin.js delete-uid <uid>` lists the documents; add `--confirm` to erase the uid:
+  its submissions, its anonymous Auth account, every filtered aggregate naming it, then a rebuild of every
+  environment's canonical games and default aggregate. Delete local `tools/out/*.json` copies by hand.
 - Health: `node tools/rldb-admin.js health --env=production` reports accepted and rejected counts by reason, each
   classification count, and network duels missing a client report.
 

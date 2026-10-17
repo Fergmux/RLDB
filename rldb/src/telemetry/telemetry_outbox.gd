@@ -17,6 +17,9 @@ extends RefCounted
 ##   {id, kind, priority, state: "ready" | "open", created_at, updated_at, attempts, fields, body}
 
 const PRIORITY := {"game": 3, "gclient": 3, "series": 3, "draft": 2, "reward": 2, "session": 1, "profile": 1}
+## Item ids become file names and Firestore document ids: plain names only (no dots or slashes).
+const ID_PATTERN := "^[A-Za-z0-9_-]{1,140}$"
+static var _id_re: RegEx = null
 
 var dir: String
 var max_items: int
@@ -60,16 +63,37 @@ func load_all() -> void:
 		if not fn.ends_with(".json"):
 			continue
 		var it = JSON.parse_string(FileAccess.get_file_as_string(path))
-		if it is Dictionary and it.has("id") and it.has("fields") and String(it["id"]) + ".json" == fn:
-			it["priority"] = int(it.get("priority", 1))
+		if valid_item(it) and String(it["id"]) + ".json" == fn:
+			it["priority"] = int(it.get("priority", PRIORITY.get(String(it["kind"]), 1)))
 			it["attempts"] = int(it.get("attempts", 0))
 			items[String(it["id"])] = it
 		else:
 			_quarantine_file(path, fn, "unreadable outbox file")
+	enforce_budget()
+
+
+## True for a plain item id (letters, digits, "_" and "-"; at most 140 characters).
+static func safe_id(id: String) -> bool:
+	if _id_re == null:
+		_id_re = RegEx.create_from_string(ID_PATTERN)
+	return _id_re.search(id) != null
+
+
+## True when a stored item has the shape the uploader relies on.
+static func valid_item(it) -> bool:
+	if not (it is Dictionary):
+		return false
+	var c = it.get("created_at")
+	return it.get("id") is String and safe_id(it["id"]) and PRIORITY.has(it.get("kind")) \
+		and it.get("state") in ["ready", "open"] and (c is int or c is float) \
+		and it.get("fields") is Dictionary and it.get("body") is String
 
 
 ## Stores (or replaces) an item durably. Returns false when the disk write failed.
 func put(item: Dictionary) -> bool:
+	if not (item.get("id") is String) or not safe_id(item["id"]):
+		stats["write_errors"] += 1
+		return false
 	var it := item.duplicate(true)
 	it["priority"] = int(it.get("priority", PRIORITY.get(String(it.get("kind", "")), 1)))
 	it["attempts"] = int(it.get("attempts", 0))
@@ -165,9 +189,13 @@ func quarantined() -> Array:
 ## Deletes every queued (not yet uploaded) item and the quarantine: used when the player turns
 ## sharing off, and by the developer tool.
 func clear_all() -> void:
-	for id in items.keys():
-		DirAccess.remove_absolute(dir.path_join(String(id) + ".json"))
 	items.clear()
+	# Everything on disk, including items this process never loaded (e.g. kill switch on).
+	var od := DirAccess.open(dir)
+	if od != null:
+		for fn in od.get_files():
+			if fn.ends_with(".json") or fn.ends_with(".tmp") or fn.ends_with(".bak"):
+				DirAccess.remove_absolute(dir.path_join(fn))
 	var qdir := dir.path_join("quarantine")
 	var da := DirAccess.open(qdir)
 	if da != null:
