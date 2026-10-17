@@ -19,6 +19,9 @@ const BANNER_NARROW_W := 240.0
 ## Rules lines of the card strip in the narrow side column and in the top-centre fallback.
 const SUBJECT_LINES_NARROW := 3
 const BANNER_SIDE_MAX_W := 300.0
+## Headline size of the panel, and its size in the narrow side column (keeps titles to a few lines).
+const HEADLINE_PX := 21
+const HEADLINE_NARROW_PX := 17
 const BANNER_GAP := 12.0
 ## Breathing border period (s).
 const BANNER_BREATH := 1.4
@@ -31,6 +34,13 @@ const SUBJECT_LINES := 6
 ## margin of 42 px holds it with a gap before the label).
 const TYPE_ICON_X := 9.0
 const TYPE_ICON_MAX := 28.0
+## Type-button label size, and the compact label size and left margin (still clears the icon box).
+const TYPE_PX := 15
+## Gap between Type-grid columns, and the most columns.
+const TYPE_GRID_SEP := 6
+const TYPE_GRID_MAX_COLS := 3
+const TYPE_COMPACT_PX := 13
+const TYPE_COMPACT_LEFT := 38
 
 ## The host screen this component works on.
 var gs: GameScreen
@@ -44,6 +54,9 @@ var banner_sub: RichTextLabel
 var banner_btns: HFlowContainer
 ## Banner flow of option buttons.
 var banner_flow: HFlowContainer
+## Grid of a Type choice's buttons (a direct child of the panel body, hidden otherwise). Its column
+## count follows the panel width, so every row is even (review F03).
+var type_grid: GridContainer
 ## F08: circles of an exact material cost (shown only for exact-total choices).
 var cost_pips: CostPips
 ## F05: the card the choice is about (image, name and rules text), hidden when there is none.
@@ -74,6 +87,13 @@ var banner_tag: Label
 var _banner_pid: int = -2
 var _wait_tween: Tween
 var _toast_game: int = -99
+## Full actor tag ("BEN · YOUR DECISION"); the narrow panel shows only "YOUR DECISION".
+var _tag_full: String = ""
+## Prompt + column for which the side column proved too short (the panel then uses the top strip).
+var _side_overflow_key: int = 0
+## Prompt + column for which the side column needed the compact layout (smaller headline, shorter
+## option buttons, fewer rules lines) to fit; tried before giving the column up.
+var _compact_key: int = 0
 
 
 func _init(screen: GameScreen) -> void:
@@ -112,6 +132,11 @@ func build() -> void:
 	banner_flow.add_theme_constant_override("h_separation", 6)
 	banner_flow.add_theme_constant_override("v_separation", 6)
 	bcol.add_child(banner_flow)
+	type_grid = GridContainer.new()
+	type_grid.add_theme_constant_override("h_separation", TYPE_GRID_SEP)
+	type_grid.add_theme_constant_override("v_separation", 6)
+	type_grid.visible = false
+	bcol.add_child(type_grid)
 	banner_btns = HFlowContainer.new()
 	banner_btns.add_theme_constant_override("h_separation", 6)
 	banner_btns.add_theme_constant_override("v_separation", 6)
@@ -144,7 +169,9 @@ func _build_subject(col: VBoxContainer) -> void:
 	subject_box.visible = false
 	subject_box.mouse_filter = Control.MOUSE_FILTER_PASS
 	col.add_child(subject_box)
-	var h := HBoxContainer.new()
+	# A plain BoxContainer: _fit_subject flips it vertical in the narrow side column (an
+	# HBoxContainer's orientation is fixed; setting it only logs an error).
+	var h := BoxContainer.new()
 	h.add_theme_constant_override("separation", 8)
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	subject_box.add_child(h)
@@ -152,6 +179,7 @@ func _build_subject(col: VBoxContainer) -> void:
 	GameUi.resize_card(subject_card, SUBJECT_CARD)
 	subject_card.auto_hover = false
 	subject_card.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	subject_card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # centred when the strip stacks
 	subject_card.tooltip_text = "Right-click to inspect"
 	subject_card.right_pressed.connect(func(w): gs.inspect.inspect_widget(w))
 	h.add_child(subject_card)
@@ -357,11 +385,14 @@ func _render_banner() -> void:
 	GameUi.clear(banner_btns)
 	GameUi.clear(banner_flow)
 	banner_flow.visible = false
+	GameUi.clear(type_grid)
+	type_grid.visible = false
 	if not on:
 		return
 	banner_title.text = String(pd["prompt"])
 	_render_subject(pd)
-	banner_tag.text = ("%s · your decision" % String(gs.pv(gs.me())["name"])).to_upper()
+	_tag_full = ("%s · your decision" % String(gs.pv(gs.me())["name"])).to_upper()
+	banner_tag.text = _tag_full
 	var pick := gs.selection.board_targeting()
 	var how := ""
 	if pick:
@@ -386,6 +417,8 @@ func _render_banner() -> void:
 	# Card/zone options are picked on the board; every other option is a button here.
 	var row: Control = banner_btns if pick else banner_flow
 	var type_choice := is_type_choice(pd)
+	if type_choice and not pick:
+		row = type_grid
 	for o in pd["options"]:
 		if pick and (o.has("ref") or o.has("slot") or o.has("card")):
 			continue
@@ -406,7 +439,7 @@ func _render_banner() -> void:
 		b.mouse_exited.connect(func(): if gs.targeting.hover_opt == idx: gs.targeting.hover_opt = -1)
 		row.add_child(b)
 	if not pick and row.get_child_count() > 0:
-		banner_flow.visible = true
+		row.visible = true
 	if type_choice:
 		even_type_widths(row)
 	if int(pd["max"]) > 1:
@@ -447,9 +480,13 @@ func place_banner() -> void:
 		col_right = edge - BANNER_GAP
 		top = board.opp_hand_box.position.y + CardWidget.SIZES["back"].y + BANNER_GAP
 	var side_w := minf(BANNER_SIDE_MAX_W, col_right - col_left)
-	if have_zones and side_w >= BANNER_SIDE_MIN_W:
-		_size_banner(side_w)
+	# The column ends above my own plate (bottom left), which the panel must never cover.
+	var bottom := (board.plates[1] as Control).position.y - BANNER_GAP if board.plates.size() > 1 else area.end.y
+	var key := hash([prompt_sig, banner_title.text, side_w, bottom - top])
+	if have_zones and side_w >= BANNER_SIDE_MIN_W and key != _side_overflow_key:
 		ctx_banner.position = Vector2(col_left, top)
+		_size_banner(side_w, key == _compact_key)
+		_check_side_fit(key, bottom)
 		_after_banner_settles()
 		return
 	var left := area.position.x + 230.0
@@ -459,6 +496,25 @@ func place_banner() -> void:
 	_size_banner(bw)
 	ctx_banner.position = Vector2(maxf(area.position.x + 8.0, (left + right) / 2.0 - bw / 2.0), 10.0)
 	_after_banner_settles()
+
+
+## Once the panel has settled (HousePanel.fit takes a few frames), a side-column panel taller than
+## the column (a long choice in a small window) is first laid out compact, and only if that still
+## overruns does it move to the top strip for this prompt.
+func _check_side_fit(key: int, bottom: float) -> void:
+	if not is_instance_valid(gs) or not gs.is_inside_tree():
+		return
+	var tree := gs.get_tree()
+	for i in 6:
+		await tree.process_frame
+	if not is_instance_valid(gs) or not ctx_banner.visible or key == _side_overflow_key:
+		return
+	if ctx_banner.position.y + ctx_banner.size.y > bottom + 0.5:
+		if _compact_key != key:
+			_compact_key = key
+		else:
+			_side_overflow_key = key
+		place_banner()
 
 
 ## Re-places the tray once the banner has measured itself (HousePanel.fit settles over frames).
@@ -472,8 +528,8 @@ func _after_banner_settles() -> void:
 		place_tray()
 
 
-func _size_banner(w: float) -> void:
-	_fit_subject(w)
+func _size_banner(w: float, compact: bool = false) -> void:
+	_fit_subject(w, compact)
 	# F04-13: the plate measures itself in passes after layout (see HousePanel.fit), so wrapped
 	# labels that were laid out at a stale width cannot leave it too tall.
 	(ctx_banner as HousePanel).fit(w)
@@ -481,14 +537,23 @@ func _size_banner(w: float) -> void:
 
 ## The card strip (F05) adapts to the panel width: side by side when there is room, otherwise the
 ## card sits above a shorter text so the panel does not grow over the board.
-func _fit_subject(w: float) -> void:
+## `compact`: the side column is short for this choice; headline, option buttons and rules text shrink.
+func _fit_subject(w: float, compact: bool = false) -> void:
 	if subject_box == null or subject_text == null:
 		return
-	var narrow := w < BANNER_NARROW_W or ctx_banner.position.y < 20.0
+	var narrow := w < BANNER_NARROW_W or ctx_banner.position.y < 20.0 or compact
 	subject_text.max_lines_visible = SUBJECT_LINES_NARROW if narrow else SUBJECT_LINES
+	_fit_type_buttons(w - (ctx_banner as HousePanel).chrome_size().x, compact)
 	var row := subject_card.get_parent()
 	if row is BoxContainer:
 		(row as BoxContainer).vertical = w < BANNER_NARROW_W
+	# The narrow column: a smaller headline and the tag without the player's name, so neither
+	# wraps word by word nor clips (UI review, 1600x900).
+	var thin := w < BANNER_NARROW_W
+	banner_title.add_theme_font_size_override("font_size", HEADLINE_NARROW_PX if thin or compact else HEADLINE_PX)
+	if _tag_full != "":
+		banner_tag.text = "YOUR DECISION" if thin else _tag_full
+		banner_tag.tooltip_text = _tag_full
 
 
 ## Attention treatment (F03-25): a pop and gold flare when a new choice appears, then a gentle
@@ -585,10 +650,45 @@ static func even_type_widths(row: Control) -> void:
 	var w := 0.0
 	for b in row.get_children():
 		if b is Button and b.has_meta("type_choice"):
+			(b as Button).custom_minimum_size.x = 0.0
 			w = maxf(w, (b as Button).get_combined_minimum_size().x)
 	for b in row.get_children():
 		if b is Button and b.has_meta("type_choice"):
 			(b as Button).custom_minimum_size.x = w
+
+
+## Restyles a Type button between its regular look and the compact one (smaller label, tighter
+## margins, shorter) used when the side column is short; the icon box keeps its size and place.
+static func compact_type_button(b: Button, compact: bool) -> void:
+	b.add_theme_font_size_override("font_size", TYPE_COMPACT_PX if compact else TYPE_PX)
+	for k in ["normal", "hover", "pressed"]:
+		var sb := b.get_theme_stylebox(k) as StyleBoxFlat
+		if sb != null:
+			sb.content_margin_left = TYPE_COMPACT_LEFT if compact else 42
+			sb.content_margin_right = 8 if compact else 14
+			sb.content_margin_top = 4 if compact else 6
+			sb.content_margin_bottom = 4 if compact else 6
+	b.custom_minimum_size.y = OPTION_H + (0 if compact else 6)
+
+
+## Type buttons for a body `content_w` wide: regular or compact style, all one width, and as many
+## grid columns as fit (at most TYPE_GRID_MAX_COLS); the columns share the row width evenly.
+func _fit_type_buttons(content_w: float, compact: bool) -> void:
+	if type_grid == null or not type_grid.visible:
+		return
+	var btns := type_grid.get_children().filter(func(b): return b is Button and b.has_meta("type_choice"))
+	if btns.is_empty():
+		return
+	type_grid.add_theme_constant_override("v_separation", 4 if compact else 6)
+	for b in btns:
+		compact_type_button(b, compact)
+	even_type_widths(type_grid)
+	var bw: float = (btns[0] as Button).custom_minimum_size.x
+	var cols := clampi(int(floor((content_w + TYPE_GRID_SEP) / (bw + TYPE_GRID_SEP))), 1, mini(TYPE_GRID_MAX_COLS, btns.size()))
+	type_grid.columns = cols
+	var cell := floorf((content_w - TYPE_GRID_SEP * (cols - 1)) / cols)
+	for b in btns:
+		(b as Button).custom_minimum_size.x = maxf(bw, cell)
 
 
 ## Side of the Type icon box of a Type button whose label is `font_px` (fits the left margin).
