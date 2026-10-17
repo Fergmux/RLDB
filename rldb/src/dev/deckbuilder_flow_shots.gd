@@ -135,9 +135,8 @@ func _extra_n() -> int:
 func _select_and_add(id: int, times: int = 1) -> void:
 	var w := db.cell_widget(id)
 	await _scroll_into_view(w)
-	await _click_node(w)
 	for i in times:
-		await _click_node(db.add_button())
+		await _click_node(w)
 
 
 func run() -> void:
@@ -169,13 +168,19 @@ func run() -> void:
 	var a: int = pair[0]
 	var b: int = pair[1]
 
-	# Hover, then a left-click selects into the preview without editing (F18).
+	# Hover, then a left-click selects into the preview and adds one copy.
 	var wa := db.cell_widget(a)
 	await _scroll_into_view(wa)
 	await _move(wa.get_global_rect().get_center())
 	await _shot("02_hover")
-	await _click_node(wa)
-	_check("click selects into preview", db.preview_id() == a and db.counts.is_empty())
+	_press(wa.get_global_rect().get_center(), MOUSE_BUTTON_LEFT, true)
+	await process_frame
+	_press(wa.get_global_rect().get_center(), MOUSE_BUTTON_LEFT, false)
+	await create_timer(0.14).timeout
+	await _snap("02a_click_add_in_flight")
+	_check("click selects and adds one", db.preview_id() == a and int(db.counts.get(a, 0)) == 1 and db.counts.size() == 1)
+	_check("ghost card in flight during click add", db.ghost_count() >= 1 or UIStyle.reduce_motion)
+	await create_timer(0.5).timeout
 	await _move(db.add_button().get_global_rect().get_center())
 	_press(db.add_button().get_global_rect().get_center(), MOUSE_BUTTON_LEFT, true)
 	await process_frame
@@ -184,9 +189,9 @@ func run() -> void:
 	await _snap("02b_add_in_flight")
 	_check("ghost card in flight during add", db.ghost_count() >= 1 or UIStyle.reduce_motion)
 	await create_timer(0.5).timeout
-	await _click_node(db.add_button())
+	_check("preview Add adds the selected card", int(db.counts.get(a, 0)) == 2)
 	await _select_and_add(b)
-	_check("preview Add adds the selected variant id", int(db.counts.get(a, 0)) == 2 and int(db.counts.get(b, 0)) == 1 and db.counts.size() == 2)
+	_check("click adds the exact variant id", int(db.counts.get(a, 0)) == 2 and int(db.counts.get(b, 0)) == 1 and db.counts.size() == 2)
 	var ctag: Control = db.browser.cell(a).get_meta("tag")
 	_check("catalogue count tag below the card", db.cell_count_text(a) == "x2" and ctag.get_global_rect().position.y >= wa.get_global_rect().end.y - 1)
 	await _shot("02c_added")
@@ -220,22 +225,24 @@ func run() -> void:
 		ordered = ordered and ids == sorted
 	_check("F17 deck tiles in catalogue order", ordered)
 
-	# Remove through the preview (select variant a again).
-	await _scroll_into_view(wa)
-	await _click_node(wa)
+	# Deck grid: a click selects and removes one copy; then preview Remove.
+	var da := db.deck_widget(a)
+	await _scroll_into_view(da)
+	await _click_node(da)
+	_check("deck tile click selects and removes one", db.preview_id() == a and int(db.counts.get(a, 0)) == 1)
+	await _click_node(db.add_button())
 	await _click_node(db.remove_button())
 	_check("preview Remove removes one copy", int(db.counts.get(a, 0)) == 1)
 
-	# Deck grid: click selects, right-click inspects.
+	# Deck grid: right-click inspects without editing.
 	var dw := db.deck_widget(b)
 	_check("deck grid has a tile for a deck card", dw != null)
 	await _scroll_into_view(dw)
-	await _click_node(dw)
-	_check("deck tile click selects it", db.preview_id() == b and int(db.counts.get(b, 0)) == 1)
 	await _shot("03b_deck_grid")
 	await _click_node(dw, MOUSE_BUTTON_RIGHT)
 	_check("deck tile right-click inspects", CardInspector.open_count() == 1)
 	await _key(KEY_ESCAPE)
+	db.show_preview(b)
 
 	# F24: rapid clicking (one frame apart) never loses or duplicates an edit.
 	var nb := int(db.counts.get(b, 0))

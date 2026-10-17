@@ -5,12 +5,13 @@ extends Control
 ## capped by DeckStore (99 combined, 15 Extra, F16) with no visible limit labels: Add simply
 ## becomes unavailable. Presentation only: persists through DeckStore.
 ##
-## Layout: catalogue (shared CardBrowser) | preview of the selected card with the only Add /
+## Layout: catalogue (shared CardBrowser) | preview of the selected card with Add /
 ## Remove controls (F18) | the deck (name + inline errors, actions, saved/starter tiles, Main/Extra
 ## grids in canonical catalogue order, F17).
 ##
-## Input (no drag and drop): left-click a card in the catalogue or the deck to select it into the
-## preview; right-click inspects; Add / Remove in the preview edit the deck. Keyboard: arrows move
+## Input (no drag and drop): left-click a catalogue card to select it and add a copy, or a deck
+## card to select it and remove a copy; right-click inspects; Add / Remove in the preview also
+## edit the deck. Keyboard: arrows move
 ## the catalogue selection, Enter or + adds, - removes, Esc = Back (F21) unless an inspector or a
 ## confirmation is open. Edits update `counts` at once; the fly / pop animation and sound (F24)
 ## are presentation on top and never gate input.
@@ -360,16 +361,18 @@ func show_preview(id: int) -> void:
 	_select(id)
 
 
-## Preview-pane Add (also Enter / +): adds one copy with sound and the fly animation (F24).
-## Unavailable (deck full) gives the deny sound and a small shake instead.
-func ui_add() -> bool:
+## Preview-pane Add (also Enter / +, or a catalogue click): adds one copy with sound and the fly
+## animation (F24), flying from `from` (default: the preview card). Unavailable (deck full) gives
+## the deny sound and a small shake instead.
+func ui_add(from: Rect2 = Rect2()) -> bool:
 	if _preview_id < 0:
 		return false
 	if add_block_reason(_preview_id) != "":
 		Sfx.play("deny")
 		_shake(_add_btn)
 		return false
-	var from := _preview_card.get_global_rect() if _preview_card != null else Rect2()
+	if from.size == Vector2.ZERO and _preview_card != null:
+		from = _preview_card.get_global_rect()
 	add_card(_preview_id)
 	Sfx.play("deck_add", 0.0, 0.04)   # F24 / F25: replaces the Add button's own click
 	_pop(_preview_chip, UIStyle.GOOD)
@@ -682,6 +685,8 @@ func _build_catalogue(body: HBoxContainer) -> void:
 	browser.card_selected.connect(func(id): _select(id, false))
 	browser.card_inspected.connect(func(id): inspect_card(id))
 	browser.card_activated.connect(func(_id): ui_add())
+	browser.click_sound = false
+	browser.card_clicked.connect(_on_catalogue_clicked)
 	v.add_child(browser)
 	browser.build()
 	for d in CardDB.all():
@@ -1009,11 +1014,17 @@ func _make_tile(id: int) -> Control:
 	return tile
 
 
+## Deck-tile click: selects the card and removes one copy (the remove sound replaces the select).
 func _on_tile_clicked(id: int) -> void:
-	if id != _preview_id:
-		Sfx.play("select", -4.0, 0.03)
 	_select(id)
 	browser.reveal(id)
+	ui_remove()
+
+
+## Catalogue click: the browser has already selected it; add one copy flying from the clicked card.
+func _on_catalogue_clicked(id: int) -> void:
+	var w := browser.cell_widget(id)
+	ui_add(w.get_global_rect() if w != null and w.is_inside_tree() else Rect2())
 
 
 ## Syncs the persistent Main / Extra sections with `counts`: tiles are reused and only

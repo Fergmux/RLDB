@@ -58,3 +58,5 @@ Full list with the options considered: `card-ledger.md` (Decisions section). The
 ## Incident
 
 - **The owner's saved custom decks (`user://decks.json`) were lost** during parallel test runs: tests and drivers in several worktrees shared the real file through backup/restore. Fixed in `DeckStore`: automated runs now use `user://test_decks.json`, with a regression test. The lead recreated "Deck 3 - Spirit Bomb" from the structure deck. The owner's 4-card "test" deck could not be recovered.
+
+- **17 Oct, owner follow-up to F18:** a click edits the deck again. A left-click on a catalogue card selects it and adds one copy, flying from that card; a left-click on a deck tile selects it and removes one. Preview Add / Remove, Enter / + / - and right-click inspect are unchanged. Arrow-key selection never edits.

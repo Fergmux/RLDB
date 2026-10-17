@@ -151,7 +151,7 @@ The full list is in `decisions.md`. The ones most worth the owner's attention:
 - Should the Magical Council and Saboteurs Guild discounts stack per copy?
 
 ### UI deviations
-- The deck builder adds a card by select-then-Add (F18), not click-to-add.
+- Deck builder (owner follow-up, 17 Oct): clicking a catalogue card selects it and adds a copy; clicking a deck card selects it and removes one. The preview's Add / Remove buttons and the keys stay.
 - Hover no longer changes the deck-builder preview.
 - Rename hides with Delete.
 - A legacy saved 8x AA setting becomes 4x.

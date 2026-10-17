@@ -6,7 +6,7 @@ extends VBoxContainer
 ## `footer(id)` / `set_marked(id, on)` (the deck builder puts its count tags there).
 ##
 ## Input (no drag and drop): hover highlights a card, left-click selects it (`card_selected`),
-## right-click asks for inspection (`card_inspected`). With no text field focused, the arrow keys
+## right-click asks for inspection (`card_inspected`); a mouse click also emits `card_clicked`. With no text field focused, the arrow keys
 ## move the selection through the visible cards and Enter emits `card_activated`.
 ##
 ##     var b := CardBrowser.new()
@@ -20,8 +20,13 @@ signal card_selected(id: int)
 signal card_inspected(id: int)
 ## Enter on the selected card.
 signal card_activated(id: int)
+## Left mouse click on a card, emitted after `card_selected` (the deck builder adds a copy).
+signal card_clicked(id: int)
 ## The visible set changed (search, filter or sort).
 signal filters_changed
+
+## Off when the owner plays its own sound for a click (the deck builder's add sound).
+var click_sound: bool = true
 
 ## Card ("hand" 120x180) and the room around it for the glow and selection brackets.
 const CARD_W := 120
@@ -469,10 +474,11 @@ func _make_cell(d: Dictionary) -> Control:
 
 
 func _on_click(id: int) -> void:
-	if id != selected_id:
+	if id != selected_id and click_sound:
 		Sfx.play("select", -4.0, 0.03)
 	select(id)
 	_pulse(cell_widget(id))
+	card_clicked.emit(id)
 
 
 ## Brief scale pulse on a clicked card (skipped under reduced motion).

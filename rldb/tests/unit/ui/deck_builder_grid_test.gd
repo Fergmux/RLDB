@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
-## DeckBuilder (F03-24 grid, F15-F24 production pass): one cell per card, click selects into the
-## preview, Add / Remove only in the preview, caps, canonical order, Delete visibility, Esc.
+## DeckBuilder (F03-24 grid, F15-F24 production pass): one cell per card, a catalogue click selects
+## and adds a copy, a deck-tile click selects and removes one, preview Add / Remove, caps, canonical order, Delete visibility, Esc.
 ## Backs up and restores the player's saved decks.
 
 var _backup: String = ""
@@ -73,21 +73,34 @@ func test_grid_has_one_cell_per_catalogue_card() -> void:
 	assert_int(db.visible_cell_count()).is_equal(0)
 
 
-func test_left_click_selects_exact_variant_without_editing() -> void:
+func test_left_click_selects_exact_variant_and_adds_one() -> void:
 	var db := _builder()
 	var v := _variants()
 	assert_int(v.size()).is_equal(2)
 	var w := db.cell_widget(v[1])
 	w.pressed.emit(w)
 	assert_int(db.preview_id()).is_equal(v[1])
+	assert_int(int(db.counts.get(v[1], 0))).is_equal(1)
+	assert_int(int(db.counts.get(v[0], 0))).is_equal(0)
+	w.pressed.emit(w)
+	assert_int(int(db.counts.get(v[1], 0))).is_equal(2)
+	assert_bool(db.dirty).is_true()
+
+
+func test_selecting_without_click_does_not_edit() -> void:
+	var db := _builder()
+	var v := _variants()
+	db.show_preview(v[0])
+	db.browser.select(v[1])
+	assert_int(db.preview_id()).is_equal(v[1])
 	assert_bool(db.counts.is_empty()).is_true()
 	assert_bool(db.dirty).is_false()
 
 
-func test_preview_add_and_remove_are_the_editing_controls() -> void:
+func test_preview_add_and_remove_edit_the_selected_card() -> void:
 	var db := _builder()
 	var v := _variants()
-	db.cell_widget(v[1]).pressed.emit(db.cell_widget(v[1]))
+	db.show_preview(v[1])
 	db.add_button().pressed.emit()
 	db.add_button().pressed.emit()
 	assert_int(int(db.counts.get(v[1], 0))).is_equal(2)
@@ -166,19 +179,21 @@ func test_unnamed_save_shows_inline_error_by_name_field() -> void:
 	assert_str(db.name_error()).is_equal("")
 
 
-func test_deck_tile_click_selects_and_remove_empties_it() -> void:
+func test_deck_tile_click_selects_and_removes_one() -> void:
 	var db := _builder()
 	var id := _first(false)
 	var other := _first(true)
 	db.show_preview(other)
-	db.add_card(id, 2)
+	db.add_card(id, 3)
 	var w := db.deck_widget(id)
 	w.pressed.emit(w)
 	assert_int(db.preview_id()).is_equal(id)
 	assert_int(int(db.counts[id])).is_equal(2)
-	db.ui_remove()
+	w.pressed.emit(w)
+	assert_int(int(db.counts[id])).is_equal(1)
 	db.ui_remove()
 	assert_object(db.deck_widget(id)).is_null()
+	assert_int(db.preview_id()).is_equal(id)
 
 
 func test_main_and_extra_sections_and_catalogue_mark() -> void:
