@@ -614,3 +614,12 @@ func test_c183_yamata_three_runes_and_start_of_turn_damage_kept() -> void:
 	m.submit(1, {"t": "next_phase"})
 	m.submit(1, {"t": "next_phase"})                             # player 0's turn: no Yamata damage
 	assert_int(m.players[0]["hp"]).is_equal(hp0)
+
+
+func test_c181_solomon_tyrannical_keeps_summon_pierce_and_death_hp_loss() -> void:
+	var m := TB.make()
+	var sol := TB.special(m, 0, 181, 0)
+	assert_int(m.status_count(sol, "pierce")).is_equal(2)
+	var hp0: int = m.players[0]["hp"]
+	TB.kill(m, sol)
+	assert_int(m.players[0]["hp"]).is_equal(hp0 - 12)

@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
-## F04-22: every Fusion method makes all its choices first (Fusion unit, each material, zone,
-## stance), then an explicit Confirm. Before Confirm the action is cancellable and nothing has
-## changed; after it the cost / self-destruction resolves, then the summon. Choices are asked
+## F04-22 / F07 (2026-10-17): every Fusion method makes all its choices first (Fusion unit, each
+## material, zone, stance). The stance choice is the final, committing step (no separate Confirm).
+## Before it the action is cancellable and nothing has changed; after it the cost /
+## self-destruction resolves, then the summon. Choices are asked
 ## with the method's source still on the Field (pending `source`).
 ## Methods: Sepukku (68), Void Basilisk (67), Magentric (69), Aleister the Invoker (40),
 ## Nether Portal (89), Polymerization cast (82) and set-activated, Tag Team - S (8, On Summon),
@@ -36,7 +37,7 @@ func _cancel(m: MatchEngine) -> String:
 
 
 ## Builds one method's scenario. Returns {m, start: Callable(m) -> String, src, answers, cost}.
-## `answers`: Fusion unit, materials, zone, stance (0 = Attack), Confirm (1).
+## `answers`: Fusion unit, materials, zone, stance (0 = Attack; the committing step).
 ## `cost`: a log needle for the cost / self-destruction that must come before the summon.
 func _setup(method: String) -> Dictionary:
 	var m := TB.make()
@@ -49,49 +50,49 @@ func _setup(method: String) -> Dictionary:
 			var b := TB.unit(m, 0, BEAST, 1)
 			var dr := TB.unit(m, 0, DRAGON, 2)
 			d.merge({"src": sp, "mats": [b, dr], "cmd": {"t": "ability", "uid": sp, "idx": 0},
-				"answers": [wyrm, b, dr, 0, 0, 1], "cost": "Sepukku is destroyed"})
+				"answers": [wyrm, b, dr, 0, 0], "cost": "Sepukku is destroyed"})
 		"basilisk":
 			var vb := TB.unit(m, 0, BASILISK, 0)
 			var b := TB.card(m, 0, BEAST, "spent")
 			var dr := TB.card(m, 0, DRAGON, "spent")
 			d.merge({"src": vb, "mats": [b, dr], "cmd": {"t": "ability", "uid": vb, "idx": 0},
-				"answers": [wyrm, b, dr, 0, 0, 1], "cost": "activates Void Basilisk"})
+				"answers": [wyrm, b, dr, 0, 0], "cost": "activates Void Basilisk"})
 		"magentric":
 			var mg := TB.unit(m, 0, MAGENTRIC, 0)
 			var dr := TB.unit(m, 0, DRAGON, 1)
 			d.merge({"src": mg, "mats": [mg, dr], "cmd": {"t": "ability", "uid": mg, "idx": 0},
-				"answers": [wyrm, mg, dr, 1, 0, 1], "cost": "activates Magentric"})
+				"answers": [wyrm, mg, dr, 1, 0], "cost": "activates Magentric"})
 		"aleister":
 			var al := TB.unit(m, 0, ALEISTER, 0)
 			var b := TB.unit(m, 0, BEAST, 1)
 			var dr := TB.unit(m, 0, DRAGON, 2)
 			d.merge({"src": al, "mats": [b, dr], "cmd": {"t": "ability", "uid": al, "idx": 0},
-				"answers": [wyrm, b, dr, 1, 0, 1], "cost": "pays 1 AP"})
+				"answers": [wyrm, b, dr, 1, 0], "cost": "pays 1 AP"})
 		"nether_portal":
 			var np := TB.power(m, 0, NETHER_PORTAL)
 			var b := TB.unit(m, 0, BEAST, 1)
 			var dr := TB.unit(m, 0, DRAGON, 2)
 			d.merge({"src": np, "mats": [b, dr], "cmd": {"t": "ability", "uid": np, "idx": 0},
-				"answers": [wyrm, b, dr, 1, 0, 1], "cost": "pays 1 AP"})
+				"answers": [wyrm, b, dr, 1, 0], "cost": "pays 1 AP"})
 		"poly_cast":
 			var poly := TB.card(m, 0, POLY, "hand")
 			var b := TB.unit(m, 0, BEAST, 1)
 			var dr := TB.unit(m, 0, DRAGON, 2)
 			d.merge({"src": poly, "mats": [b, dr], "cmd": {"t": "cast", "uid": poly},
-				"answers": [wyrm, b, dr, 1, 0, 1], "cost": "pays 1 AP"})
+				"answers": [wyrm, b, dr, 1, 0], "cost": "pays 1 AP"})
 		"poly_set":
 			var poly := TB.set_card(m, 0, POLY, 0)
 			var b := TB.unit(m, 0, BEAST, 1)
 			var dr := TB.unit(m, 0, DRAGON, 2)
 			d.merge({"src": poly, "mats": [b, dr], "cmd": {"t": "activate_set", "uid": poly},
-				"answers": [wyrm, b, dr, 1, 0, 1], "cost": "activates set Spell Polymerization"})
+				"answers": [wyrm, b, dr, 1, 0], "cost": "activates set Spell Polymerization"})
 		"unstable":
 			TB.power(m, 0, UNSTABLE)
 			var poly := TB.card(m, 0, POLY, "hand")
 			var b := TB.card(m, 0, BEAST, "hand")
 			var dr := TB.unit(m, 0, DRAGON, 2)
 			d.merge({"src": poly, "mats": [b, dr], "cmd": {"t": "cast", "uid": poly},
-				"answers": [wyrm, b, dr, 2, 0, 1], "cost": "pays 1 AP"})
+				"answers": [wyrm, b, dr, 2, 0], "cost": "pays 1 AP"})
 	return d
 
 
@@ -131,7 +132,7 @@ func test_f04_22_source_stays_on_field_while_choosing() -> void:
 			_answer(m, answers[i])
 
 
-func test_f04_22_confirm_pays_then_summons_in_order() -> void:
+func test_f04_22_stance_commits_then_pays_and_summons_in_order() -> void:
 	for method in METHODS:
 		var d := _setup(method)
 		var m: MatchEngine = d["m"]
@@ -141,8 +142,8 @@ func test_f04_22_confirm_pays_then_summons_in_order() -> void:
 		var answers: Array = d["answers"]
 		for i in answers.size():
 			if i == answers.size() - 1:
-				assert_str(TB.pend_kind(m)).is_equal("confirm")
-				assert_int(m.log_entries.size()).override_failure_message("%s: nothing logged before Confirm" % method).is_equal(log_n)
+				assert_str(TB.pend_kind(m)).is_equal("stance")
+				assert_int(m.log_entries.size()).override_failure_message("%s: nothing logged before the stance" % method).is_equal(log_n)
 			assert_str(_answer(m, answers[i])).override_failure_message("%s step %d" % [method, i]).is_empty()
 		assert_bool(m.pending.is_empty()).override_failure_message("%s pending %s" % [method, m.pending]).is_true()
 		assert_str(m.cards[wyrm]["zone"]).override_failure_message(method).is_equal("unit")
@@ -156,7 +157,7 @@ func test_f04_22_confirm_pays_then_summons_in_order() -> void:
 		assert_int(i_sum).override_failure_message("%s summon log" % method).is_greater(i_cost)
 
 
-func test_f04_22_sepukku_destroyed_after_confirm_and_its_zone_is_offered() -> void:
+func test_f04_22_sepukku_destroyed_after_stance_and_its_zone_is_offered() -> void:
 	var d := _setup("sepukku")
 	var m: MatchEngine = d["m"]
 	var sp: int = d["src"]
@@ -170,15 +171,14 @@ func test_f04_22_sepukku_destroyed_after_confirm_and_its_zone_is_offered() -> vo
 	var slots: Array = m.pending["options"].map(func(o): return o["v"])
 	assert_bool(0 in slots).is_true()                   # Sepukku's own zone (it leaves first)
 	_answer(m, 0)
+	assert_str(m.cards[sp]["zone"]).is_equal("unit")   # still there at the stance prompt
 	_answer(m, 0)
-	assert_str(m.cards[sp]["zone"]).is_equal("unit")   # still there at the Confirm prompt
-	_answer(m, 1)
 	assert_str(m.cards[sp]["zone"]).is_equal("spent")
 	assert_int(m.cards[d["wyrm"]]["slot"]).is_equal(0)
 
 
-func test_f04_22_tag_team_trigger_cancel_and_confirm() -> void:
-	for k in 7:
+func test_f04_22_tag_team_trigger_cancel_and_stance() -> void:
+	for k in 6:
 		var m := TB.make()
 		var b := TB.unit(m, 0, BEAST, 3)
 		var dr := TB.unit(m, 0, DRAGON, 1)
@@ -186,7 +186,7 @@ func test_f04_22_tag_team_trigger_cancel_and_confirm() -> void:
 		var tt := TB.summon(m, 0, TAG_TEAM_S, 0)
 		assert_str(TB.pend_kind(m)).is_equal("confirm")    # "Fusion Summon using units from your Field?"
 		var before := _state(m)
-		var answers := [1, wyrm, b, dr, 1, 0, 1]
+		var answers := [1, wyrm, b, dr, 1, 0]
 		for i in k:
 			assert_int(int(m.pending["source"])).is_equal(tt)
 			assert_str(_answer(m, answers[i])).is_empty()
@@ -202,7 +202,7 @@ func test_f04_22_tag_team_trigger_cancel_and_confirm() -> void:
 	var dr2 := TB.unit(m2, 0, DRAGON, 1)
 	var wyrm2 := TB.card(m2, 0, WYRM, "extra")
 	TB.summon(m2, 0, TAG_TEAM_S, 0)
-	for v in [1, wyrm2, b2, dr2, 1, 0, 1]:
+	for v in [1, wyrm2, b2, dr2, 1, 0]:
 		assert_str(_answer(m2, v)).is_empty()
 	assert_str(m2.cards[wyrm2]["zone"]).is_equal("unit")
 	assert_str(m2.cards[b2]["zone"]).is_equal("spent")
@@ -226,7 +226,7 @@ func test_f04_22_illegal_and_stale_selections_are_rejected() -> void:
 	assert_int(m.players[0]["ap"]).is_equal(5)
 
 
-## A material lost during the response window after Confirm: the summon fails, nothing else
+## A material lost during the response window after the committing stance: the summon fails, nothing else
 ## is tributed, the Fusion unit stays in the Extra Deck (the cost stays paid).
 func test_f04_22_material_lost_in_response_window_fails_cleanly() -> void:
 	var m := TB.make(7, 20, true)
@@ -237,7 +237,7 @@ func test_f04_22_material_lost_in_response_window_fails_cleanly() -> void:
 	var b := TB.unit(m, 0, BEAST, 1)
 	var dr := TB.unit(m, 0, DRAGON, 2)
 	m.submit(0, {"t": "ability", "uid": al, "idx": 0})
-	for v in [wyrm, b, dr, 1, 0, 1]:
+	for v in [wyrm, b, dr, 1, 0]:
 		assert_str(_answer(m, v)).is_empty()
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
 	assert_int(m.players[0]["ap"]).is_equal(4)
