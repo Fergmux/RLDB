@@ -13,6 +13,10 @@ var gs: GameScreen
 
 ## Reward being set up ("", "add", "remove", "basic").
 var mode: String = ""
+## F10: signature of the offer whose card was clicked (a second click on the same offer is
+## ignored until the authority answers), and when, so a rejected take can be retried.
+var _took_sig: int = 0
+var _took_at: int = 0
 var _remove_sel: int = -1
 ## Basic-unit change being composed (F06-04: the chosen Type and Race for every basic unit).
 var _basic_race: String = ""
@@ -194,55 +198,48 @@ func _render_offer(r: Dictionary) -> void:
 	flow.add_theme_constant_override("v_separation", 12)
 	flow.alignment = FlowContainer.ALIGNMENT_CENTER   # the offered cards sit centred in the modal
 	box.add_child(flow)
+	var sig := offer_sig(r)
 	for i in r["offer"].size():
 		var c: Dictionary = r["offer"][i]
-		var cell := VBoxContainer.new()
-		cell.add_theme_constant_override("separation", 8)
+		# F10: the card itself is the button (no Take card button or click glyph under it).
 		var holder := MarginContainer.new()   # room for the hover lift, so the neighbours do not shift
 		for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-			holder.add_theme_constant_override(side, 5)
-		cell.add_child(holder)
+			holder.add_theme_constant_override(side, 6)
 		var cw := CardWidget.new().setup(MatchView.summary_view(c), "big")
 		GameUi.resize_card(cw, OFFER_CARD)
+		cw.tooltip_text = "Take %s\nRight-click to inspect" % c["name"]
+		cw.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		cw.set_meta("reward_offer", i)
 		var idx: int = i
-		cw.pressed.connect(func(_w): gs.send({"t": "reward_add", "index": idx}))
+		cw.pressed.connect(func(_w): take_offer(idx, sig))
 		cw.right_pressed.connect(gs.inspect.inspect_widget)
 		cw.mouse_entered.connect(func(): gs.overlays._lift(cw, 1.05))
 		cw.mouse_exited.connect(func(): gs.overlays._lift(cw, 1.0))
 		holder.add_child(cw)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		cell.add_child(row)
-		var b := UIStyle.primary_button("Take card", 14)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.custom_minimum_size = Vector2(0, 34)
-		b.tooltip_text = "Take %s" % c["name"]
-		b.pressed.connect(func(): gs.send({"t": "reward_add", "index": idx}))
-		row.add_child(b)
-		row.add_child(InspectHint.new())
-		flow.add_child(cell)
+		flow.add_child(holder)
 	box.add_child(_footer(false))
 
 
-## Mouse glyph with the right button lit: "right-click a card to inspect it".
-class InspectHint extends Control:
-	func _init() -> void:
-		custom_minimum_size = Vector2(30, 34)
-		tooltip_text = "Right-click a card to inspect it"
-		mouse_filter = Control.MOUSE_FILTER_PASS
-		mouse_default_cursor_shape = Control.CURSOR_HELP
+## Signature of an offer: which cards, and how many picks are left (a new offer differs).
+static func offer_sig(r: Dictionary) -> int:
+	return hash([r.get("offer", []), r.get("left", 0), r.get("taken", []).size()])
 
-	func _draw() -> void:
-		var r := Rect2(size.x / 2.0 - 8.0, size.y / 2.0 - 12.0, 16.0, 24.0)
-		var body := StyleBoxFlat.new()
-		body.bg_color = Color(0.1, 0.085, 0.06)
-		body.border_color = UIStyle.GOLD
-		body.set_border_width_all(2)
-		body.set_corner_radius_all(8)
-		draw_style_box(body, r)
-		draw_rect(Rect2(r.position.x + r.size.x / 2.0, r.position.y + 1.5, r.size.x / 2.0 - 1.5, 9.0), UIStyle.GOLD_HI)
-		draw_line(Vector2(r.position.x + r.size.x / 2.0, r.position.y + 2.0), Vector2(r.position.x + r.size.x / 2.0, r.position.y + 11.0), UIStyle.GOLD, 1.5)
-		draw_line(Vector2(r.position.x + 2.0, r.position.y + 11.0), Vector2(r.end.x - 2.0, r.position.y + 11.0), UIStyle.GOLD, 1.5)
+
+## Takes offered card `idx` of the offer `sig` through the normal reward command. A repeated
+## click on the same offer (double click, click during the round trip) sends nothing; after 2 s
+## without an answer (a rejected take) the offer can be clicked again.
+func take_offer(idx: int, sig: int) -> bool:
+	var now := Time.get_ticks_msec()
+	if sig == _took_sig and now - _took_at < 2000:
+		return false
+	var r: Dictionary = gs.view.get("rewards", {})
+	if not r.get("pending", false) or offer_sig(r) != sig or idx < 0 or idx >= r.get("offer", []).size():
+		return false
+	_took_sig = sig
+	_took_at = now
+	Sfx.play("confirm")
+	gs.send({"t": "reward_add", "index": idx})
+	return true
 
 
 ## A titled sub-panel of the rewards screen: returns [panel, content VBox].
