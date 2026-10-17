@@ -45,6 +45,20 @@ const TYPE_GRID_SEP := 6
 const TYPE_GRID_MAX_COLS := 3
 const TYPE_COMPACT_PX := 13
 const TYPE_COMPACT_LEFT := 38
+## G03: largest and smallest card of the response strip (attacker -> target, the responding card),
+## and the card size in the compact top-strip panel.
+const MENTION_CARD_MAX := 56.0
+const MENTION_CARD_MIN := 38.0
+const MENTION_CARD_TOP := Vector2(36, 54)
+## Width of the arrow between an attacker and its target in the response strip.
+const MENTION_ARROW_W := 22.0
+## Option labels that decline a choice: always the last button, below the accepting ones (G03).
+const DECLINE_LABELS := ["Pass", "No", "Skip"]
+## Prompt kinds whose options are a vertical list (accept first, decline last) rather than a flow.
+const LIST_KINDS := ["trap_response", "confirm", "order"]
+## G03: caption under each card of the response strip, by role.
+const ROLE_CAPTIONS := {"attacker": "Attacker", "target": "Target", "summoned": "Summoned",
+	"activated": "Activated", "destroyed": "Destroyed", "direct": "Direct attack"}
 
 ## The host screen this component works on.
 var gs: GameScreen
@@ -74,6 +88,16 @@ var _in_top_strip := false
 var subject_card: CardWidget
 var subject_name: Label
 var subject_text: Label
+## G03: the cards a response prompt mentions: what it responds to (attacker -> target, or the card
+## summoned / activated / destroyed) and each of my cards that may respond. Hidden otherwise.
+var mention_box: PanelContainer
+## Row of the cards responded to, and the column of my responding cards.
+var mention_row: HBoxContainer
+var respond_col: VBoxContainer
+var _has_mentions := false
+## G03: option buttons of a response, yes / no or ordering prompt, one per row, the declining
+## option (Pass, No, Skip) always last, below the accepting ones.
+var banner_list: VBoxContainer
 ## Tray offering pile cards for a choice (a HousePanel).
 var tray: PanelContainer
 ## Container of the tray cards.
@@ -123,6 +147,7 @@ func build() -> void:
 	banner_tag = plate.title_label
 	banner_title = plate.add_headline("", 21)
 	_build_subject(bcol)
+	_build_mentions(bcol)
 	banner_sub = RichTextLabel.new()
 	banner_sub.bbcode_enabled = true
 	banner_sub.fit_content = true
@@ -147,6 +172,10 @@ func build() -> void:
 	type_grid.add_theme_constant_override("v_separation", 6)
 	type_grid.visible = false
 	bcol.add_child(type_grid)
+	banner_list = VBoxContainer.new()
+	banner_list.add_theme_constant_override("separation", 6)
+	banner_list.visible = false
+	bcol.add_child(banner_list)
 	banner_btns = HFlowContainer.new()
 	banner_btns.add_theme_constant_override("h_separation", 6)
 	banner_btns.add_theme_constant_override("v_separation", 6)
@@ -216,20 +245,27 @@ func subject_for(pd: Dictionary) -> Dictionary:
 	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) == "trap_response":
 		return {}
 	var src := gs.details.find_card(int(pd.get("source_uid", -1)))
+	var sc: Variant = pd.get("source_card", {})
+	if src.is_empty() and sc is Dictionary and (sc as Dictionary).has("uid") and not (sc as Dictionary).get("hidden", false):
+		src = sc   # e.g. a resolving Spell, which no pile of the view lists
 	var prompt := String(pd.get("prompt", ""))
 	if not src.is_empty() and prompt.contains(String(src.get("name", "~"))):
 		return src
 	# The prompt names another card of mine (the Fusion unit being summoned with a Spell's
 	# materials, zone and stance): show that one. Longest name wins ("Dragon" vs "Ultimate Dragon").
+	# G03: also a unit or set card on either side of the Field the prompt names ("Move X to which
+	# zone?"); hidden cards never match (they carry no name).
 	var best := {}
-	var pv := gs.pv(gs.me())
-	for z in ["extra", "hand"]:
-		for c in pv.get(z, []):
-			if c == null or c.get("hidden", false):
-				continue
-			var nm := String(c.get("name", ""))
-			if nm != "" and prompt.contains(nm) and nm.length() > String(best.get("name", "")).length():
-				best = c
+	for p in 2:
+		var pv := gs.pv(p)
+		var zones := ["extra", "hand", "units", "backrow", "powers"] if p == gs.me() else ["units", "backrow", "powers"]
+		for z in zones:
+			for c in pv.get(z, []):
+				if c == null or c.get("hidden", false):
+					continue
+				var nm := String(c.get("name", ""))
+				if nm != "" and prompt.contains(nm) and nm.length() > String(best.get("name", "")).length():
+					best = c
 	return best if not best.is_empty() else src
 
 
@@ -246,6 +282,239 @@ func _render_subject(pd: Dictionary) -> void:
 	subject_text.text = txt if txt != "" else "No rules text."
 	subject_text.tooltip_text = txt
 	subject_box.tooltip_text = "%s\n%s" % [String(c.get("name", "")), txt]
+
+
+## G03: the response strip, in the card strip's style: a row of the cards responded to over a
+## column of my responding cards.
+func _build_mentions(col: VBoxContainer) -> void:
+	mention_box = PanelContainer.new()
+	var sb := UIStyle.flat(Color(0.045, 0.035, 0.025, 0.92), Color(UIStyle.BRONZE, 0.75), 1, 8)
+	sb.content_margin_left = 6
+	sb.content_margin_right = 6
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	mention_box.add_theme_stylebox_override("panel", sb)
+	mention_box.visible = false
+	mention_box.mouse_filter = Control.MOUSE_FILTER_PASS
+	col.add_child(mention_box)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mention_box.add_child(v)
+	mention_row = HBoxContainer.new()
+	mention_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	mention_row.add_theme_constant_override("separation", 4)
+	mention_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(mention_row)
+	respond_col = VBoxContainer.new()
+	respond_col.add_theme_constant_override("separation", 6)
+	respond_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(respond_col)
+
+
+## G03: the cards a response prompt `pd` mentions, in reading order: [{"role", "card"}] of what it
+## responds to (MatchView.event_cards, already redacted for this seat), then {"role": "response"}
+## for each card of mine that may respond (an "Activate" option). [] for any other prompt.
+static func mentions_for(pd: Dictionary) -> Array:
+	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) != "trap_response":
+		return []
+	var out: Array = []
+	for e in pd.get("mentions", []):
+		out.append(e)
+	for o in pd.get("options", []):
+		if o.has("card") and not is_decline(String(o.get("label", ""))):
+			out.append({"role": "response", "card": o["card"], "label": String(o["label"])})
+	return out
+
+
+## True for an option that declines the choice (Pass, Pass (no Trap can respond), No, Skip).
+static func is_decline(label: String) -> bool:
+	return label in DECLINE_LABELS or label.begins_with("Pass ")
+
+
+func _render_mentions(pd: Dictionary) -> void:
+	var ms := mentions_for(pd)
+	_has_mentions = not ms.is_empty()
+	mention_box.visible = _has_mentions
+	GameUi.clear(mention_row)
+	GameUi.clear(respond_col)
+	if not _has_mentions:
+		return
+	var cause := ms.filter(func(e): return String(e.get("role", "")) != "response")
+	var resp := ms.filter(func(e): return String(e.get("role", "")) == "response")
+	for i in cause.size():
+		var e: Dictionary = cause[i]
+		if i > 0:
+			var arrow := MentionArrow.new()
+			arrow.attack = String(e.get("role", "")) in ["target", "direct"]
+			arrow.custom_minimum_size = Vector2(MENTION_ARROW_W, 0)
+			arrow.size_flags_vertical = Control.SIZE_FILL
+			arrow.tooltip_text = "attacks" if arrow.attack else ""
+			mention_row.add_child(arrow)
+		mention_row.add_child(_mention_figure(e))
+	mention_row.visible = not cause.is_empty()
+	if not resp.is_empty():
+		if not cause.is_empty():
+			var rule := ColorRect.new()
+			rule.color = Color(UIStyle.BRONZE, 0.55)
+			rule.custom_minimum_size = Vector2(0, 1)
+			rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			respond_col.add_child(rule)
+		var cap := UIStyle.label("YOUR RESPONSE" if resp.size() == 1 else "YOUR RESPONSES", 11, UIStyle.MUTED)
+		cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		respond_col.add_child(cap)
+		for e in resp:
+			respond_col.add_child(_response_row(e))
+	respond_col.visible = not resp.is_empty()
+
+
+## A card of the response strip with its role and name beneath (a direct attack is a plain token
+## for the defending player). Right-click a visible card to inspect it.
+func _mention_figure(e: Dictionary) -> Control:
+	var role := String(e.get("role", ""))
+	var fig := VBoxContainer.new()
+	fig.add_theme_constant_override("separation", 1)
+	fig.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fig.set_meta("role", role)
+	var c: Dictionary = e.get("card", {})
+	var nm := ""
+	if role == "direct":
+		var tok := DirectToken.new()
+		var p := int(e.get("p", gs.me()))
+		tok.who = "YOU" if p == gs.me() else String(gs.pv(p).get("name", "")).to_upper()
+		tok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		tok.tooltip_text = "A direct attack on %s" % ("you" if p == gs.me() else String(gs.pv(p).get("name", "")))
+		fig.add_child(tok)
+		nm = "Direct attack"
+	else:
+		var w := CardWidget.new().setup(c, "mini")
+		w.auto_hover = false
+		w.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		w.set_meta("mention", true)
+		w.right_pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
+		var hidden := bool(c.get("hidden", false)) or not c.has("name")
+		nm = ("Face-down card" if String(c.get("zone", "")) == "backrow" else "Hidden card") if hidden else String(c.get("name", ""))
+		w.tooltip_text = "%s: %s" % [ROLE_CAPTIONS.get(role, role.capitalize()), nm] + ("" if hidden else "\nRight-click to inspect")
+		fig.add_child(w)
+	var role_l := UIStyle.label(String(ROLE_CAPTIONS.get(role, role.capitalize())).to_upper() if role != "direct" else "TARGET", 10, UIStyle.MUTED)
+	role_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	role_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fig.add_child(role_l)
+	var name_l := UIStyle.label(nm, 12, UIStyle.GOLD_HI, false, true)
+	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_l.clip_text = true
+	name_l.tooltip_text = nm
+	name_l.mouse_filter = Control.MOUSE_FILTER_PASS
+	fig.add_child(name_l)
+	return fig
+
+
+## A card of mine that may respond: the card, its name and the start of its rules text (like the
+## card strip, F05).
+func _response_row(e: Dictionary) -> Control:
+	var c: Dictionary = e["card"]
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var w := CardWidget.new().setup(c, "mini")
+	w.auto_hover = false
+	w.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	w.set_meta("mention", true)
+	w.set_meta("response", true)
+	w.tooltip_text = "Right-click to inspect"
+	w.right_pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
+	row.add_child(w)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(v)
+	var nm := UIStyle.label(String(c.get("name", "")), 14, UIStyle.GOLD_HI, true, true)
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(nm)
+	var txt := String(c.get("text", "")).strip_edges()
+	var t := UIStyle.label(txt if txt != "" else "No rules text.", 12, UIStyle.TEXT, true)
+	t.max_lines_visible = SUBJECT_LINES_NARROW
+	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	t.tooltip_text = txt
+	t.mouse_filter = Control.MOUSE_FILTER_PASS
+	t.set_meta("rules", true)
+	v.add_child(t)
+	return row
+
+
+## G03: sizes the response strip for a panel `w` wide: the cards responded to share the row (never
+## larger than MENTION_CARD_MAX), and the compact top-strip panel shows small cards and no rules text.
+func _fit_mentions(w: float) -> void:
+	if mention_box == null or not _has_mentions:
+		return
+	var content := w - (ctx_banner as HousePanel).chrome_size().x - 12.0
+	var figs := mention_row.get_children().filter(func(n): return n.has_meta("role"))
+	var arrows := mention_row.get_child_count() - figs.size()
+	var cw := MENTION_CARD_MAX
+	if not figs.is_empty():
+		cw = floorf((content - arrows * (MENTION_ARROW_W + 8.0)) / figs.size()) - 2.0
+	cw = clampf(cw, MENTION_CARD_MIN, MENTION_CARD_MAX)
+	var sz := Vector2(cw, roundf(cw * 1.5))
+	if _in_top_strip:
+		sz = MENTION_CARD_TOP
+	for a in mention_row.get_children():
+		if a is MentionArrow:
+			(a as MentionArrow).card_h = sz.y
+			(a as Control).queue_redraw()
+	for f in figs:
+		(f as Control).custom_minimum_size.x = sz.x + 8.0
+		for n in (f as Node).get_children():
+			if n is CardWidget:
+				GameUi.resize_card(n, sz)
+			elif n is DirectToken:
+				(n as Control).custom_minimum_size = sz
+	for row in respond_col.get_children():
+		for n in (row as Node).get_children():
+			if n is CardWidget:
+				GameUi.resize_card(n, sz)
+			elif n is VBoxContainer:
+				for l in (n as Node).get_children():
+					if l.has_meta("rules"):
+						(l as Label).visible = not _in_top_strip
+
+
+## The arrow from an attacker to its target in the response strip (hostile red, like the board's
+## attack arrow); between other cards a plain bronze chevron.
+class MentionArrow extends Control:
+	var attack := true
+	## Height of the cards beside it (the arrow sits on their middle, above the captions).
+	var card_h := 0.0
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_PASS
+
+	func _draw() -> void:
+		var col := GameTargeting.HOSTILE_COLOR if attack else Color(UIStyle.BRONZE, 0.9)
+		var y := card_h / 2.0 if card_h > 0.0 else size.y * 0.38
+		var x0 := 2.0
+		var x1 := size.x - 2.0
+		draw_line(Vector2(x0, y), Vector2(x1 - 6.0, y), col, 3.0, true)
+		draw_colored_polygon(PackedVector2Array([Vector2(x1, y), Vector2(x1 - 9.0, y - 6.0), Vector2(x1 - 9.0, y + 6.0)]), col)
+
+
+## The defending player of a direct attack, in the strip in place of a target card.
+class DirectToken extends Control:
+	var who := "YOU"
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_PASS
+
+	func _draw() -> void:
+		var r := Rect2(Vector2.ZERO, size)
+		var sb := UIStyle.flat(Color(0.12, 0.05, 0.04, 0.95), GameTargeting.HOSTILE_COLOR, 2, 6)
+		draw_style_box(sb, r)
+		var f := UIStyle.font_display(600)
+		var fs := 12 if size.x >= 44.0 else 10
+		var tw := f.get_string_size(who, HORIZONTAL_ALIGNMENT_CENTER, -1, fs).x
+		var txt := who if tw <= size.x - 6.0 else "YOU"
+		draw_string(f, Vector2(3.0, size.y / 2.0 + fs * 0.35), txt, HORIZONTAL_ALIGNMENT_CENTER, size.x - 6.0, fs, UIStyle.TEXT)
 
 
 ## Builds the opponent-is-deciding notice and the toast (hidden).
@@ -396,6 +665,8 @@ func _render_banner() -> void:
 	GameUi.clear(banner_btns)
 	GameUi.clear(banner_flow)
 	banner_flow.visible = false
+	GameUi.clear(banner_list)
+	banner_list.visible = false
 	GameUi.clear(type_grid)
 	type_grid.visible = false
 	_exact_pay = false
@@ -403,6 +674,7 @@ func _render_banner() -> void:
 		return
 	banner_title.text = String(pd["prompt"])
 	_render_subject(pd)
+	_render_mentions(pd)
 	_tag_full = ("%s · your decision" % String(gs.pv(gs.me())["name"])).to_upper()
 	banner_tag.text = _tag_full
 	var pick := gs.selection.board_targeting()
@@ -427,46 +699,77 @@ func _render_banner() -> void:
 		cost_pips.set_payment(int(ep["need"]), ep["costs"])
 		cost_pips.tooltip_text = exact_status(ep)
 	update_banner_sub()
-	# Card/zone options are picked on the board; every other option is a button here.
+	# Card/zone options are picked on the board; every other option is a button here. G03: a
+	# response, yes / no or ordering prompt lists its options one per row, and the declining option
+	# (Pass, No, Skip) always comes last, below the accepting ones (Activate, Yes, Confirm).
 	var row: Control = banner_btns if pick else banner_flow
 	var type_choice := is_type_choice(pd)
 	if type_choice and not pick:
 		row = type_grid
+	elif not pick and (String(pd["kind"]) in LIST_KINDS or _has_decline(pd)):
+		row = banner_list
+	var declines: Array[Button] = []
 	for o in pd["options"]:
 		if pick and (o.has("ref") or o.has("slot") or o.has("card")):
 			continue
 		var idx: int = o["i"]
 		var chosen: bool = idx in gs.multi
 		var label := ("✓ " if chosen else "") + String(o["label"])
+		var decline := is_decline(String(o["label"]))
 		var b: Button
 		if type_choice:
 			b = type_button(String(o["label"]), 15)
 			b.set_meta("type_choice", String(o["label"]))
-		elif pd["kind"] == "attack_target" or (not pick and String(o["label"]).begins_with("Activate")):
+		elif pd["kind"] == "attack_target" or (not pick and not decline and (String(o["label"]).begins_with("Activate") or (pd["kind"] == "confirm" and String(o["label"]) == "Yes"))):
 			b = UIStyle.primary_button(label, 14)
 		else:
 			b = UIStyle.button(label, 14)
 		b.custom_minimum_size = Vector2(0, OPTION_H + (6 if type_choice else 0))
+		b.set_meta("option", idx)
 		b.pressed.connect(gs.selection.pick_option.bind(idx))
 		b.mouse_entered.connect(func(): gs.targeting.hover_opt = idx)
 		b.mouse_exited.connect(func(): if gs.targeting.hover_opt == idx: gs.targeting.hover_opt = -1)
+		if row == banner_list:
+			list_button(b, String(o["label"]))
+		if decline:
+			b.set_meta("decline", true)
+			declines.append(b)
+			continue
 		row.add_child(b)
-	if not pick and row.get_child_count() > 0:
-		row.visible = true
-	if type_choice:
-		even_type_widths(row)
 	if int(pd["max"]) > 1:
 		var c := UIStyle.primary_button("Confirm", 14)
 		c.custom_minimum_size = Vector2(0, OPTION_H)
 		c.disabled = MatchView.multi_pick_error(pd, gs.multi) != ""   # count and exact Arcane total (F03-04)
 		c.pressed.connect(gs.selection.confirm_multi)
 		banner_btns.add_child(c)
+	for b in declines:
+		row.add_child(b)
+	if not pick and row.get_child_count() > 0:
+		row.visible = true
+	if type_choice:
+		even_type_widths(row)
 	if pd["cancellable"] and not gs.view.has("tutorial"):   # a forced tutorial step has no Cancel button
 		var x := UIStyle.button("Cancel", 14)
 		x.custom_minimum_size = Vector2(0, OPTION_H)
 		x.pressed.connect(gs.selection.cancel)
 		banner_btns.add_child(x)
 	place_banner()
+
+
+## True when one of the prompt's options declines it (Pass, No, Skip).
+static func _has_decline(pd: Dictionary) -> bool:
+	for o in pd.get("options", []):
+		if is_decline(String(o.get("label", ""))):
+			return true
+	return false
+
+
+## A full-width row button of the option list (G03): its label wraps instead of widening the panel,
+## and the full label is its tooltip.
+static func list_button(b: Button, full: String) -> void:
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.tooltip_text = full
 
 
 ## Where the banner goes (F03-25). Preferred: the free column left of the board below the
@@ -562,6 +865,7 @@ func _size_banner(w: float, compact: bool = false) -> void:
 func _fit_subject(w: float, compact: bool = false) -> void:
 	if subject_box == null or subject_text == null:
 		return
+	_fit_mentions(w)
 	var narrow := w < BANNER_NARROW_W or ctx_banner.position.y < 20.0 or compact
 	subject_text.max_lines_visible = SUBJECT_LINES_NARROW if narrow else SUBJECT_LINES
 	_fit_type_buttons(w - (ctx_banner as HousePanel).chrome_size().x, compact)

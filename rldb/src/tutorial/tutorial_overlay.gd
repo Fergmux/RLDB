@@ -525,7 +525,7 @@ func _option_button_rect(i: int) -> Rect2:
 			label = String(x.get("label", ""))
 	if label == "":
 		return Rect2()
-	for box in [gs.prompt.banner_btns, gs.prompt.banner_flow]:
+	for box in [gs.prompt.banner_btns, gs.prompt.banner_flow, gs.prompt.banner_list]:
 		if box == null:
 			continue
 		for b in (box as Node).get_children():
