@@ -239,6 +239,8 @@ func _on_status(text: String) -> void:
 
 
 func _on_view(v: Dictionary) -> void:
+	# F06-02: battle music while a game is in progress, menu music between games.
+	Music.set_mode("battle" if String(v.get("stage", "")) == "game" else "menu")
 	if not _held.is_empty():
 		_release_held()
 	prev_mv = mv

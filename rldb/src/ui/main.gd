@@ -216,6 +216,7 @@ func _close_confirm() -> void:
 ## Shows the main menu (no fade).
 func _show_menu() -> void:
 	_clear_screens()
+	Music.set_mode("menu")
 	var m := MainMenu.new(options)
 	menu = m
 	add_child(m)
