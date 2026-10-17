@@ -62,6 +62,15 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		pressed.emit()
 		accept_event()
+	elif has_focus() and event.is_action_pressed("ui_accept"):
+		# Keyboard use when a host makes the tile focusable (F06-05 / F06-06 pickers).
+		pressed.emit()
+		accept_event()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_FOCUS_ENTER or what == NOTIFICATION_FOCUS_EXIT:
+		queue_redraw()
 
 
 func _process(delta: float) -> void:
@@ -91,6 +100,8 @@ func _draw() -> void:
 		Ornate.corners(self, Rect2(Vector2.ZERO, size), Color(accent.lightened(0.2), 0.45 + 0.45 * _hover), 11.0, 5.0, 1.3)
 	if selected:
 		draw_rect(Rect2(Vector2(4, 4), size - Vector2(8, 8)), Color(UIStyle.GOLD, 0.5), false, 1.0)
+	if has_focus():
+		draw_rect(Rect2(Vector2(5, 5), size - Vector2(10, 10)), Color(UIStyle.GOLD_HI, 0.9), false, 1.5)
 
 
 ## The drawn icon.

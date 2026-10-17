@@ -1,14 +1,30 @@
 class_name DeckSelectView
 extends RefCounted
 ## "Choose your deck" stage of the series modal (F04-02): lobby bar, Structured / Custom tabs,
-## uniform deck tiles in a smooth scrolling plate, the locked-in waiting state and the draft offer.
+## uniform deck tiles in a smooth scrolling plate, the locked-in waiting state, the F06-05 / F06-06
+## draft setup (basic unit, category order, pick sequence) and the draft offer.
 ## Renders into the overlay's content box; sends commands through the host screen.
+
+## Size of the chosen basic unit's card in the draft setup.
+const SETUP_CARD := Vector2(180, 270)
 
 ## Which tab is open: "structured" (starter decks) or "custom" (saved decks).
 var tab: String = "structured"
 ## The ScrollArea holding the tiles (null when this stage shows no list); the overlay sizes to it.
 var list_area: ScrollArea
 var ov: GameSeriesOverlay
+
+## Draft setup being composed locally (F06-05 / F06-06) until "Start drafting" sends it:
+## the category order and the basic unit's Type and Race. `_setup_for` names the series and seat
+## it belongs to, so a new series starts from that seat's defaults.
+var _setup_for: String = ""
+var _order: Array = []
+var _btype: String = ""
+var _brace: String = ""
+## [category, "up" / "down"]: the arrow to focus again after a keyboard move (the list rebuilds).
+var _focus_after: Array = []
+## The Choose basic unit picker (a HousePanel over a dim), or null while closed.
+var _picker_dim: ColorRect
 
 
 func _init(overlay: GameSeriesOverlay) -> void:
@@ -28,8 +44,13 @@ func render() -> bool:
 		_waiting(box)
 		return false
 	if view.has("starters"):
+		_close_picker()
 		_tabs_and_list(box)
 		return true
+	if not view["draft"].get("setup_done", true):
+		_draft_setup(box)
+		return false
+	_close_picker()
 	_draft(box)
 	return false
 
@@ -68,9 +89,12 @@ func _waiting(box: VBoxContainer) -> void:
 	var view := gs.view
 	var p := gs.me()
 	var opp_ready: bool = view["deck_ready"][1 - p]
+	var opp_doing := "choosing a deck…"
+	if view.has("draft"):
+		opp_doing = _opponent_doing(view["draft"])
 	var chips := [
 		{"text": "%s: deck locked in" % String(view["names"][p]), "done": true},
-		{"text": "%s: %s" % [String(view["names"][1 - p]), "deck locked in" if opp_ready else "choosing a deck…"], "done": opp_ready},
+		{"text": "%s: %s" % [String(view["names"][1 - p]), "deck locked in" if opp_ready else opp_doing], "done": opp_ready},
 	]
 	var wp := WaitPlate.new("Deck locked in", "You will play %s.\nWaiting for your opponent…" % String(view["deck_name"]) if not opp_ready else "You will play %s.\nStarting soon…" % String(view["deck_name"]), chips)
 	box.add_child(wp)
@@ -272,10 +296,25 @@ func _draft(box: VBoxContainer) -> void:
 	strip.add_child(UIStyle.label("Pick %d of %d" % [dr["step"] + 1, dr["total"]], 18, UIStyle.TEXT, false, true))
 	var chip := GameUi.pill(String(dr.get("category_label", cat.capitalize())), col, 16)
 	strip.add_child(chip)
-	if String(dr.get("composition", "")) != "":
-		var cl := UIStyle.label("Draft: " + String(dr["composition"]), 14, UIStyle.MUTED)    # F03-10
-		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		box.add_child(cl)
+	# F06-05 / F06-06: this seat's order and its chosen basic unit, then the other seat's progress.
+	var info := HFlowContainer.new()
+	info.alignment = FlowContainer.ALIGNMENT_CENTER
+	info.add_theme_constant_override("h_separation", 10)
+	info.add_theme_constant_override("v_separation", 6)
+	box.add_child(info)
+	var b: Dictionary = dr.get("basic", {})
+	if not b.is_empty() and int(dr.get("basic_copies", 0)) > 0:
+		info.add_child(GameUi.pill("%s (%s) ×%d" % [b["name"], b["type"], int(dr["basic_copies"])], UIStyle.type_color(b["type"]), 14))
+	var labels: Dictionary = dr.get("labels", {})
+	var q: Dictionary = dr.get("quota", {})
+	var parts := []
+	for c in dr.get("cat_order", []):
+		parts.append("%d %s" % [int(q.get(c, 0)), String(labels.get(c, c))])
+	if not parts.is_empty():
+		info.add_child(UIStyle.label("Your order: " + "  ›  ".join(parts), 14, UIStyle.MUTED))
+	var od: Dictionary = dr.get("opponent", {})
+	if not od.is_empty() and not gs.view["deck_ready"][1 - gs.me()]:
+		info.add_child(ov.rewards._info_chip("%s %s" % [String(gs.view["names"][1 - gs.me()]), _opponent_doing(dr)], false))
 	var row := HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(row)
@@ -293,6 +332,434 @@ func _draft(box: VBoxContainer) -> void:
 		cw.mouse_entered.connect(func(): ov._lift(cw, GameSeriesOverlay.DRAFT_HOVER_SCALE))
 		cw.mouse_exited.connect(func(): ov._lift(cw, 1.0))
 		colm.add_child(cw)
+
+
+# ---------------------------------------------------------------- draft setup (F06-05 / F06-06)
+
+## What the other seat is doing in a draft (its progress only; its offers are never sent).
+func _opponent_doing(dr: Dictionary) -> String:
+	var od: Dictionary = dr.get("opponent", {})
+	if od.is_empty():
+		return "drafting…"
+	if not od.get("setup_done", false):
+		return "is setting up their draft…"
+	return "is drafting (pick %d of %d)…" % [mini(int(od["step"]) + 1, int(od["total"])), int(od["total"])]
+
+
+## Starts the local setup from the seat's defaults when the series or seat changed.
+func _sync_setup(dr: Dictionary) -> void:
+	var key := "%s#%d" % [String(ov.gs.view.get("save_id", "")), ov.gs.me()]
+	var cats: Array = dr.get("cat_order", [])
+	var same_set := _order.size() == cats.size() and cats.all(func(c): return c in _order)
+	if key == _setup_for and same_set:
+		return
+	_setup_for = key
+	_order = cats.duplicate()
+	var b: Dictionary = dr.get("basic", {})
+	_btype = String(b.get("type", ""))
+	_brace = String(b.get("race", ""))
+
+
+## The card summary of the locally chosen basic unit ({} when there is none).
+func _chosen_basic(dr: Dictionary) -> Dictionary:
+	for c in dr.get("basic_options", []):
+		if String(c["type"]) == _btype and String(c["race"]) == _brace:
+			return c
+	return {}
+
+
+## The setup screen: the basic unit (left), the orderable categories (right), the resulting pick
+## sequence, then Start drafting. The other seat's progress is shown above.
+func _draft_setup(box: VBoxContainer) -> void:
+	var gs := ov.gs
+	var dr: Dictionary = gs.view["draft"]
+	_sync_setup(dr)
+	var intro := UIStyle.label("Before the picks begin, choose your basic unit and the order you draft the categories in. Each player sets up their own draft.", 15, UIStyle.TEXT_DIM, true)
+	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(intro)
+	var opp_ready: bool = gs.view["deck_ready"][1 - gs.me()]
+	box.add_child(ov.rewards._info_chip("%s %s" % [String(gs.view["names"][1 - gs.me()]), "has finished drafting" if opp_ready else _opponent_doing(dr)], opp_ready))
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 16)
+	box.add_child(cols)
+	cols.add_child(_basic_plate(dr))
+	var op := _order_plate(dr)
+	op.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cols.add_child(op)
+	box.add_child(_sequence_plate(dr))
+	var foot := VBoxContainer.new()
+	foot.add_theme_constant_override("separation", 6)
+	box.add_child(foot)
+	foot.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.45), true, 12.0))
+	var go := UIStyle.primary_button("Start drafting", 18)
+	go.custom_minimum_size = Vector2(280, 46)
+	go.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var copies := int(dr.get("basic_copies", 0))
+	var ready := copies <= 0 or not _chosen_basic(dr).is_empty()
+	go.disabled = not ready
+	go.tooltip_text = "Locks in your basic unit and category order, then the picks begin." if ready else "Choose a basic unit first."
+	go.pressed.connect(func():
+		_close_picker()
+		var cmd := {"t": "draft_setup", "order": _order.duplicate()}
+		if copies > 0:
+			cmd["basic_type"] = _btype
+			cmd["basic_race"] = _brace
+		gs.send(cmd))
+	foot.add_child(go)
+
+
+## Left plate: the chosen basic unit as a real card, its copies and Choose basic unit.
+func _basic_plate(dr: Dictionary) -> Control:
+	var copies := int(dr.get("basic_copies", 0))
+	var pv: Array = GameRewardPanels._reward_panel("Basic unit", "You get %d copies. They are not drafted picks." % copies if copies > 0 else "This draft gives no basic units.")
+	var v: VBoxContainer = pv[1]
+	pv[0].custom_minimum_size = Vector2(SETUP_CARD.x + 70.0, 0)
+	if copies <= 0:
+		return pv[0]
+	var c := _chosen_basic(dr)
+	var holder := CenterContainer.new()
+	holder.custom_minimum_size = SETUP_CARD + Vector2(14, 14)
+	v.add_child(holder)
+	var cw := CardWidget.new().setup(MatchView.summary_view(c) if not c.is_empty() else null, "big")
+	GameUi.resize_card(cw, SETUP_CARD)
+	cw.tooltip_text = "Right-click to inspect"
+	cw.right_pressed.connect(ov.gs.inspect.inspect_widget)
+	cw.pressed.connect(func(_w): _open_picker(dr))
+	cw.mouse_entered.connect(func(): ov._lift(cw, 1.04))
+	cw.mouse_exited.connect(func(): ov._lift(cw, 1.0))
+	holder.add_child(cw)
+	if not c.is_empty():
+		var nm := UIStyle.label("%s (%s) ×%d" % [c["name"], c["type"], copies], 16, UIStyle.GOLD_HI, false, true)
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		v.add_child(nm)
+	var choose := UIStyle.button("Choose basic unit", 15)
+	choose.custom_minimum_size = Vector2(0, 40)
+	choose.tooltip_text = "Pick its Type and Race"
+	choose.pressed.connect(func(): _open_picker(dr))
+	v.add_child(choose)
+	return pv[0]
+
+
+## Right plate: the categories in drafting order. Drag a row, or use its arrows (keyboard).
+func _order_plate(dr: Dictionary) -> Control:
+	var pv: Array = GameRewardPanels._reward_panel("Draft order", "You draft these from top to bottom. Drag a row, or use its arrows.")
+	var v: VBoxContainer = pv[1]
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 6)
+	v.add_child(list)
+	var q: Dictionary = dr.get("quota", {})
+	var labels: Dictionary = dr.get("labels", {})
+	var focus_btn: Button = null
+	for i in _order.size():
+		var cat: String = _order[i]
+		var row := OrderRow.new(cat, i + 1, String(labels.get(cat, cat.capitalize())), int(q.get(cat, 0)), _drop_on)
+		list.add_child(row)
+		var up := _arrow_button(true, "Move %s up" % String(labels.get(cat, cat)))
+		up.disabled = i == 0
+		up.pressed.connect(func(): _move(cat, -1))
+		var down := _arrow_button(false, "Move %s down" % String(labels.get(cat, cat)))
+		down.disabled = i == _order.size() - 1
+		down.pressed.connect(func(): _move(cat, 1))
+		row.tail.add_child(up)
+		row.tail.add_child(down)
+		if not _focus_after.is_empty() and _focus_after[0] == cat:
+			var want: Button = up if _focus_after[1] == "up" else down
+			focus_btn = want if not want.disabled else (down if want == up else up)
+	if _order.is_empty():
+		v.add_child(UIStyle.label("No categories to draft.", 14, UIStyle.MUTED))
+	_focus_after = []
+	if focus_btn != null:
+		focus_btn.grab_focus.call_deferred()
+	return pv[0]
+
+
+func _arrow_button(up: bool, tip: String) -> Button:
+	var b := UIStyle.button("", 13)
+	b.custom_minimum_size = Vector2(36, 34)
+	b.tooltip_text = tip
+	b.focus_mode = Control.FOCUS_ALL
+	var g := ArrowGlyph.new(up)
+	g.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	b.add_child(g)
+	return b
+
+
+## Keyboard / button move of a category by `delta` places.
+func _move(cat: String, delta: int) -> void:
+	var i := _order.find(cat)
+	var j := clampi(i + delta, 0, _order.size() - 1)
+	if i == -1 or j == i:
+		return
+	_order.remove_at(i)
+	_order.insert(j, cat)
+	_focus_after = [cat, "up" if delta < 0 else "down"]
+	ov.refresh()
+
+
+## Drag-and-drop: `from` is dropped on the row of `onto`, before it or (`after`) after it.
+func _drop_on(from: String, onto: String, after: bool) -> void:
+	if from == onto or not (from in _order) or not (onto in _order):
+		return
+	_order.erase(from)
+	_order.insert(_order.find(onto) + (1 if after else 0), from)
+	ov.refresh.call_deferred()
+
+
+## The pick sequence of the current order: the basic unit first, then a bar of the categories with
+## their pick numbers.
+func _sequence_plate(dr: Dictionary) -> Control:
+	var pv: Array = GameRewardPanels._reward_panel("Your pick sequence", "")
+	var v: VBoxContainer = pv[1]
+	var q: Dictionary = dr.get("quota", {})
+	var labels: Dictionary = dr.get("labels", {})
+	var segs := []
+	var n := 0
+	for cat in _order:
+		var k := int(q.get(cat, 0))
+		segs.append({"cat": cat, "from": n + 1, "to": n + k, "label": String(labels.get(cat, cat))})
+		n += k
+	var bar := SequenceBar.new(segs, n)
+	v.add_child(bar)
+	var flow := HFlowContainer.new()
+	flow.alignment = FlowContainer.ALIGNMENT_CENTER
+	flow.add_theme_constant_override("h_separation", 8)
+	flow.add_theme_constant_override("v_separation", 6)
+	v.add_child(flow)
+	var c := _chosen_basic(dr)
+	var copies := int(dr.get("basic_copies", 0))
+	if copies > 0 and not c.is_empty():
+		flow.add_child(GameUi.pill("First: %s (%s) ×%d" % [c["name"], c["type"], copies], UIStyle.type_color(c["type"]), 13))
+	for sg in segs:
+		var rng: String = "Pick %d" % sg["from"] if sg["from"] == sg["to"] else "Picks %d–%d" % [sg["from"], sg["to"]]
+		flow.add_child(GameUi.pill("%s: %s" % [rng, sg["label"]], UIStyle.category_text_color(String(sg["cat"])), 13))
+	var tot := UIStyle.label("%d picks in total, %d cards with the basic units" % [n, n + maxi(copies, 0)], 13, UIStyle.TEXT_DIM)
+	tot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(tot)
+	return pv[0]
+
+
+## Opens the Type x Race picker over the series modal; Use takes the choice, Cancel / Esc /
+## a click outside leave it unchanged.
+func _open_picker(dr: Dictionary) -> void:
+	_close_picker()
+	var gs := ov.gs
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.z_index = UiLayers.MODAL_PICKER
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	gs.add_child(dim)
+	_picker_dim = dim
+	dim.gui_input.connect(func(e):
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			_close_picker())
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.add_child(center)
+	var copies := int(dr.get("basic_copies", 0))
+	var hp := HousePanel.new("Choose basic unit", "×%d copies" % copies, Vector2(22, 18), 10)
+	hp.arm = 18.0
+	center.add_child(hp)
+	hp.add_headline("Choose your basic unit", 24, true)
+	var note := UIStyle.label("Pick a Type and a Race. You start your draft with %d copies of it." % copies, 14, UIStyle.TEXT_DIM, true)
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.custom_minimum_size = Vector2(560, 0)
+	hp.body.add_child(note)
+	var picker := BasicUnitPicker.new(dr.get("basic_types", []), dr.get("basic_races", []), dr.get("basic_options", []), _btype, _brace)
+	hp.body.add_child(picker)
+	hp.body.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.45), true, 10.0))
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	hp.body.add_child(row)
+	var cancel := UIStyle.button("Cancel", 15)
+	cancel.custom_minimum_size = Vector2(140, 40)
+	var sc := Shortcut.new()
+	var esc := InputEventAction.new()
+	esc.action = "ui_cancel"
+	sc.events = [esc]
+	cancel.shortcut = sc
+	cancel.pressed.connect(_close_picker)
+	row.add_child(cancel)
+	var use := UIStyle.primary_button("", 15)
+	use.custom_minimum_size = Vector2(300, 40)
+	row.add_child(use)
+	var sync := func():
+		var c: Dictionary = picker.chosen()
+		use.disabled = c.is_empty()
+		use.text = "Use %s (%s)" % [c["name"], c["type"]] if not c.is_empty() else "Choose a Type and a Race"
+	sync.call()
+	picker.changed.connect(func(_t, _r): sync.call())
+	use.pressed.connect(func():
+		_btype = picker.type
+		_brace = picker.race
+		_close_picker()
+		ov.refresh())
+	hp.appear()
+	picker.focus_first.call_deferred()
+
+
+## Closes the basic-unit picker, if open.
+func _close_picker() -> void:
+	if _picker_dim != null and is_instance_valid(_picker_dim):
+		_picker_dim.queue_free()
+	_picker_dim = null
+
+
+## A category row of the draft order: grip, position, icon, name and pick count, then its arrow
+## buttons (in `tail`). Drag it onto another row to move it before or after that row.
+class OrderRow extends PanelContainer:
+	var cat := ""
+	var tail: HBoxContainer
+	var _on_drop: Callable
+	var _mark := 0
+	var _col := UIStyle.GOLD
+	var _title := ""
+
+	func _init(c: String, pos: int, title: String, count: int, on_drop: Callable) -> void:
+		cat = c
+		_title = title
+		_on_drop = on_drop
+		_col = UIStyle.CATEGORY_COLORS.get(c, UIStyle.BRONZE)
+		var sb := UIStyle.flat(Color(_col.darkened(0.82), 0.96), Color(_col.lightened(0.15), 0.7), 2, 9)
+		sb.content_margin_left = 8
+		sb.content_margin_right = 8
+		sb.content_margin_top = 5
+		sb.content_margin_bottom = 5
+		add_theme_stylebox_override("panel", sb)
+		mouse_default_cursor_shape = Control.CURSOR_MOVE
+		tooltip_text = "Drag to reorder %s" % title
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 10)
+		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(h)
+		h.add_child(Grip.new())
+		var num := UIStyle.label(str(pos), 20, UIStyle.GOLD_HI, false, true)
+		num.custom_minimum_size = Vector2(22, 0)
+		num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		num.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(num)
+		var ic := ChoiceTile.Icon.new(c, _col, 34.0)
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(ic)
+		var nm := UIStyle.label(title, 18, UIStyle.TEXT, false, true)
+		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nm.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(nm)
+		var cp := GameUi.pill("%d pick%s" % [count, "" if count == 1 else "s"], UIStyle.category_text_color(c), 14)
+		cp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		GameUi.ignore_mouse(cp)
+		h.add_child(cp)
+		tail = HBoxContainer.new()
+		tail.add_theme_constant_override("separation", 4)
+		h.add_child(tail)
+
+	func _get_drag_data(_at: Vector2) -> Variant:
+		var prev := PanelContainer.new()
+		prev.add_theme_stylebox_override("panel", UIStyle.flat(Color(_col.darkened(0.7), 0.95), UIStyle.GOLD_HI, 2, 9))
+		var l := UIStyle.label("  %s  " % _title, 18, UIStyle.GOLD_HI, false, true)
+		prev.add_child(l)
+		set_drag_preview(prev)
+		modulate = Color(1, 1, 1, 0.45)
+		return {"draft_cat": cat}
+
+	func _can_drop_data(at: Vector2, data: Variant) -> bool:
+		var ok: bool = data is Dictionary and data.has("draft_cat") and String(data["draft_cat"]) != cat
+		var m := (1 if at.y >= size.y / 2.0 else -1) if ok else 0
+		if m != _mark:
+			_mark = m
+			queue_redraw()
+		return ok
+
+	func _drop_data(at: Vector2, data: Variant) -> void:
+		_mark = 0
+		queue_redraw()
+		_on_drop.call(String(data["draft_cat"]), cat, at.y >= size.y / 2.0)
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_MOUSE_EXIT or what == NOTIFICATION_DRAG_END:
+			if _mark != 0:
+				_mark = 0
+				queue_redraw()
+			if what == NOTIFICATION_DRAG_END:
+				modulate = Color.WHITE
+
+	func _draw() -> void:
+		if _mark == 0:
+			return
+		var y := -4.0 if _mark < 0 else size.y + 3.0
+		draw_line(Vector2(6, y), Vector2(size.x - 6, y), UIStyle.GOLD_HI, 3.0, true)
+		Ornate.diamond(self, Vector2(6, y), 5.0, UIStyle.GOLD_HI)
+		Ornate.diamond(self, Vector2(size.x - 6, y), 5.0, UIStyle.GOLD_HI)
+
+
+## Six-dot drag grip.
+class Grip extends Control:
+	func _init() -> void:
+		custom_minimum_size = Vector2(14, 26)
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		for r in 3:
+			for c in 2:
+				draw_circle(Vector2(3.5 + c * 7.0, 5.0 + r * 8.0), 2.0, Color(UIStyle.GOLD, 0.7))
+
+
+## Up / down triangle drawn on an arrow button (dimmed while disabled).
+class ArrowGlyph extends Control:
+	var up := true
+
+	func _init(u: bool) -> void:
+		up = u
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var b := get_parent() as Button
+		var col: Color = Color(UIStyle.GOLD_HI, 0.3) if b != null and b.disabled else UIStyle.GOLD_HI
+		var c := size / 2.0
+		var k := 7.0
+		var pts := PackedVector2Array([c + Vector2(-k, k * 0.5), c + Vector2(k, k * 0.5), c + Vector2(0, -k * 0.6)]) if up \
+			else PackedVector2Array([c + Vector2(-k, -k * 0.5), c + Vector2(k, -k * 0.5), c + Vector2(0, k * 0.6)])
+		draw_colored_polygon(pts, col)
+
+
+## The pick sequence as one bar: a segment per category (its colour, width by pick count) with the
+## pick numbers where they fit.
+class SequenceBar extends Control:
+	var segs: Array = []
+	var total := 1
+
+	func _init(s: Array, t: int) -> void:
+		segs = s
+		total = maxi(t, 1)
+		custom_minimum_size = Vector2(0, 30)
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var f := UIStyle.font_display(700)
+		var x := 0.0
+		draw_style_box(UIStyle.flat(Color(0.03, 0.025, 0.02, 0.9), Color(UIStyle.BRONZE, 0.8), 1, 8), Rect2(Vector2.ZERO, size))
+		for sg in segs:
+			var n: int = int(sg["to"]) - int(sg["from"]) + 1
+			if n <= 0:
+				continue
+			var w := (size.x - 4.0) * float(n) / float(total)
+			var r := Rect2(Vector2(2.0 + x, 2.0), Vector2(w, size.y - 4.0))
+			var col: Color = UIStyle.CATEGORY_COLORS.get(String(sg["cat"]), UIStyle.BRONZE)
+			Ornate.vgradient(self, r.grow(-1.0), col.lightened(0.05), col.darkened(0.45))
+			if x > 0.0:
+				draw_line(r.position, r.position + Vector2(0, r.size.y), Color(0, 0, 0, 0.8), 2.0)
+			var txt := String(sg["label"]) if n == 1 else "%s ×%d" % [String(sg["label"]), n]
+			var tw := f.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+			if tw + 8.0 > w:
+				txt = str(n)
+				tw = f.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+			if tw + 4.0 <= w:
+				draw_string_outline(f, Vector2(r.position.x + (w - tw) / 2.0, r.position.y + r.size.y / 2.0 + 5.0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 3, Color(0, 0, 0, 0.85))
+				draw_string(f, Vector2(r.position.x + (w - tw) / 2.0, r.position.y + r.size.y / 2.0 + 5.0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 0.97, 0.9))
+			x += w
 
 
 ## Row of gems: picks made are filled, the current one glows, the rest are sockets.

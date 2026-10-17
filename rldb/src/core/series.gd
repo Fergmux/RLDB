@@ -712,7 +712,8 @@ func view_for(p: int) -> Dictionary:
 			v["rewards"] = {"left": r["left"], "done": r["done"], "taken": r["taken"].duplicate(),
 				"offer": r["offer"].map(func(i): return card_summary(i)), "pending": r.get("pending", false),
 				"offer_type": r.get("offer_type", ""), "types": types,
-				"opponent_done": rewards[1 - p]["done"], "basic_types": CardDB.ELEMENTS, "basic_races": races}
+				"opponent_done": rewards[1 - p]["done"], "basic_types": CardDB.ELEMENTS, "basic_races": races,
+				"basic_options": basic_options()}
 	if stage in [STAGE_REWARDS, STAGE_FIRST, STAGE_OVER, STAGE_DECKS]:
 		v["deck"] = decks[p].map(func(i): return card_summary(i))
 	return v
@@ -725,14 +726,10 @@ func _draft_view(p: int) -> Dictionary:
 	var st: Dictionary = draft[p]
 	var quota: Dictionary = cfg["draft"]["quota"]
 	var dcat: String = st["order"][st["step"]] if st["setup_done"] and st["step"] < st["order"].size() else ""
-	var basics := []
-	for d in CardDB.all():
-		if d["category"] == "basic_unit":
-			basics.append(card_summary(int(d["id"])))
 	var opp: Dictionary = draft[1 - p]
 	return {"setup_done": st["setup_done"], "cat_order": st["cat_order"].duplicate(),
 		"basic": card_summary(st["basic"]) if st["basic"] != -1 else {},
-		"basic_copies": int(cfg["draft"]["basic_copies"]), "basic_options": basics,
+		"basic_copies": int(cfg["draft"]["basic_copies"]), "basic_options": [] if st["setup_done"] else basic_options(),
 		"basic_types": CardDB.ELEMENTS, "basic_races": basic_races(),
 		"labels": DRAFT_LABELS.duplicate(),
 		"step": st["step"], "total": st["order"].size(),
@@ -741,6 +738,15 @@ func _draft_view(p: int) -> Dictionary:
 		"composition": draft_composition_text(quota, st["cat_order"]),
 		"offer": st["offer"].map(func(i): return card_summary(i)), "picked": st["picked"].map(func(i): return card_summary(i)),
 		"opponent": {"setup_done": opp["setup_done"], "step": opp["step"], "total": opp["order"].size()}}
+
+
+## Card summaries of every basic unit (the Type x Race pickers' previews).
+static func basic_options() -> Array:
+	var out := []
+	for d in CardDB.all():
+		if d["category"] == "basic_unit":
+			out.append(card_summary(int(d["id"])))
+	return out
 
 
 ## Display summary of card `id` (name, cost, stats, rules text, support status) for menus and rewards.
