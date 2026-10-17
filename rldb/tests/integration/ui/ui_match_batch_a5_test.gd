@@ -273,6 +273,20 @@ func test_extra_list_shows_summon_buttons_without_selection() -> void:
 	assert_bool(wy.all(func(b): return not b.disabled)).is_true()
 
 
+## UI review: the Extra Deck viewer has no helper line and an Arcane unit's Summon Attack and
+## Summon Defense share one row.
+func test_extra_viewer_has_no_hint_and_stance_buttons_share_a_row() -> void:
+	var r := await _extra_board()
+	var gs: GameScreen = r[0]
+	gs.details.show_pile("extra")
+	for i in 3:
+		await await_idle_frame()
+	assert_bool(gs.details.pile_hint.visible).is_false()
+	var ka: Array = _summon_buttons(gs, r[6]).filter(func(b): return String(b.get_meta("summon_kind")) == "arcane")
+	assert_int(ka.size()).is_equal(2)
+	assert_float((ka[0] as Control).global_position.y).is_equal_approx((ka[1] as Control).global_position.y, 0.5)
+
+
 func test_fusion_with_two_methods_asks_which_then_continues() -> void:
 	var r := await _extra_board()
 	var gs: GameScreen = r[0]

@@ -69,6 +69,7 @@ func build(col: VBoxContainer) -> PanelContainer:
 	pile_head = HBoxContainer.new()
 	pile_head.add_theme_constant_override("separation", 6)
 	pile_head.visible = false
+	pile_head.alignment = BoxContainer.ALIGNMENT_END   # Close stays right when there is no hint
 	dv.add_child(pile_head)
 	pile_hint = UIStyle.label("", 13, UIStyle.MUTED, true)
 	pile_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -282,8 +283,9 @@ func render_pile_list() -> void:
 		details_title.text = "Your draft (%d)" % cards.size()
 	else:
 		pile_hint.text = "Shown in a random order; the real order is unchanged." if pile_zone == "draw" else \
-			("Summon buttons show what you can summon right now." if pile_zone == "extra" else "Hover a card to read it; click to select it.")
+			("" if pile_zone == "extra" else "Hover a card to read it; click to select it.")   # review: the Extra rows' buttons speak for themselves
 		details_title.text = "Your %s (%d)" % [PILE_NAMES.get(pile_zone, pile_zone.capitalize()), cards.size()]
+	pile_hint.visible = pile_hint.text != ""
 	if sig == _pile_sig:
 		return
 	_pile_sig = sig
@@ -339,10 +341,16 @@ func _pile_row(c: Dictionary) -> Control:
 			elif ev.button_index == MOUSE_BUTTON_RIGHT:
 				row.accept_event()
 				gs.inspect.inspect_card(c))
+	# The card + details, then the action buttons across the row's full width (review: Summon
+	# Attack and Summon Defense fit on one row instead of stacking in the text column).
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(col)
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 8)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(hb)
+	col.add_child(hb)
 	var w := CardWidget.new().setup(c, "mini")
 	w.auto_hover = false
 	w.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -370,7 +378,7 @@ func _pile_row(c: Dictionary) -> Control:
 		var af := HFlowContainer.new()
 		af.add_theme_constant_override("h_separation", 6)
 		af.add_theme_constant_override("v_separation", 4)
-		vb.add_child(af)
+		col.add_child(af)
 		for e in buttons:
 			var b := UIStyle.primary_button(String(e["label"]), 13)
 			b.custom_minimum_size = Vector2(0, 30)
