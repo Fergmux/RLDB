@@ -223,6 +223,9 @@ func cancel() -> bool:
 	var details := gs.details
 	if gs.inspect.close_top():
 		return true
+	if details.close_method_picker():   # F04 Fusion-method picker
+		Sfx.play("cancel")
+		return true
 	if menu.close_dialog():
 		return true
 	if menu.game_menu.visible:

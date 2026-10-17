@@ -18,6 +18,13 @@ const BANNER_GAP := 12.0
 ## Breathing border period (s).
 const BANNER_BREATH := 1.4
 const OPTION_H := 32
+## F05: size of the card image in the input panel, and the most rules-text lines shown there
+## (the full text is its tooltip and the right-click inspection).
+const SUBJECT_CARD := Vector2(64, 96)
+const SUBJECT_LINES := 6
+## F05: prompts that name the card being placed when it is not the effect's source (a Fusion
+## unit placed by a Fusion Spell): "Choose a zone for <name>." / "Choose a stance for <name>.".
+const SUBJECT_LEADS := ["Choose a zone for ", "Choose a stance for "]
 ## Type-choice buttons (F03): the icon box's left inset and its largest side (the left content
 ## margin of 42 px holds it with a gap before the label).
 const TYPE_ICON_X := 9.0
@@ -37,6 +44,11 @@ var banner_btns: HFlowContainer
 var banner_flow: HFlowContainer
 ## F08: circles of an exact material cost (shown only for exact-total choices).
 var cost_pips: CostPips
+## F05: the card the choice is about (image, name and rules text), hidden when there is none.
+var subject_box: PanelContainer
+var subject_card: CardWidget
+var subject_name: Label
+var subject_text: Label
 ## Tray offering pile cards for a choice (a HousePanel).
 var tray: PanelContainer
 ## Container of the tray cards.
@@ -78,6 +90,7 @@ func build() -> void:
 	var bcol := plate.body
 	banner_tag = plate.title_label
 	banner_title = plate.add_headline("", 21)
+	_build_subject(bcol)
 	banner_sub = RichTextLabel.new()
 	banner_sub.bbcode_enabled = true
 	banner_sub.fit_content = true
@@ -114,6 +127,89 @@ func build() -> void:
 	tray_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tray_box.add_theme_constant_override("separation", 8)
 	tsc.add_child(tray_box)
+
+
+## F05: the card-context strip of the input panel: the card on the left, its name and rules
+## text beside it. Right-click the card to inspect it in full.
+func _build_subject(col: VBoxContainer) -> void:
+	subject_box = PanelContainer.new()
+	var sb := UIStyle.flat(Color(0.045, 0.035, 0.025, 0.92), Color(UIStyle.BRONZE, 0.75), 1, 8)
+	sb.content_margin_left = 6
+	sb.content_margin_right = 8
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	subject_box.add_theme_stylebox_override("panel", sb)
+	subject_box.visible = false
+	subject_box.mouse_filter = Control.MOUSE_FILTER_PASS
+	col.add_child(subject_box)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 8)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	subject_box.add_child(h)
+	subject_card = CardWidget.new().setup(null, "mini")
+	GameUi.resize_card(subject_card, SUBJECT_CARD)
+	subject_card.auto_hover = false
+	subject_card.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	subject_card.tooltip_text = "Right-click to inspect"
+	subject_card.right_pressed.connect(func(w): gs.inspect.inspect_widget(w))
+	h.add_child(subject_card)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(v)
+	subject_name = UIStyle.label("", 15, UIStyle.GOLD_HI, true, true)
+	subject_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(subject_name)
+	subject_text = UIStyle.label("", 13, UIStyle.TEXT, true)
+	subject_text.max_lines_visible = SUBJECT_LINES
+	subject_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	subject_text.mouse_filter = Control.MOUSE_FILTER_PASS
+	v.add_child(subject_text)
+
+
+## F05: the visible card my choice `pd` is about, or {}: the card a placement prompt names (a
+## Fusion unit), else the choice's source. Only cards this seat may see are ever used: the source
+## is given only when visible (MatchView._add_source) and the name is matched among my own visible
+## cards; a Trap response names no card (which face-down card may respond stays hidden).
+func subject_for(pd: Dictionary) -> Dictionary:
+	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) == "trap_response":
+		return {}
+	var src := gs.details.find_card(int(pd.get("source_uid", -1)))
+	var prompt := String(pd.get("prompt", ""))
+	var named := ""
+	for lead in SUBJECT_LEADS:
+		if prompt.begins_with(lead) and prompt.ends_with("."):
+			named = prompt.substr(lead.length(), prompt.length() - lead.length() - 1)
+	if named != "" and String(src.get("name", "")) != named:
+		var own := _own_visible_named(named)
+		if not own.is_empty():
+			return own
+	return src
+
+
+## One of my own visible cards named `nm` (Extra Deck and Hand first), or {}.
+func _own_visible_named(nm: String) -> Dictionary:
+	var pv := gs.pv(gs.me())
+	for z in ["extra", "hand", "spent", "units", "exhaust"]:
+		for c in pv.get(z, []):
+			if c != null and not c.get("hidden", false) and String(c.get("name", "")) == nm:
+				return c
+	return {}
+
+
+func _render_subject(pd: Dictionary) -> void:
+	var c := subject_for(pd)
+	subject_box.visible = not c.is_empty()
+	if c.is_empty():
+		return
+	subject_card.setup(c, "mini")
+	GameUi.resize_card(subject_card, SUBJECT_CARD)
+	subject_name.text = String(c.get("name", ""))
+	var txt := String(c.get("text", "")).strip_edges()
+	subject_text.text = txt if txt != "" else "No rules text."
+	subject_text.tooltip_text = txt
+	subject_box.tooltip_text = "%s\n%s" % [String(c.get("name", "")), txt]
 
 
 ## Builds the opponent-is-deciding notice and the toast (hidden).
@@ -170,6 +266,10 @@ func render() -> void:
 	var sig := hash([view.get("stage", ""), view.get("net", {}), pd, mv.get("active", -1), mv.get("winner", -1), mv.get("resolving", false),
 		gs.multi, view.get("deck_ready", []), view.get("you", 0)])
 	if sig == prompt_sig:
+		return
+	# F04: a Fusion started from the Extra Deck list answers its "which Fusion unit" prompt
+	# with the unit the player chose there; the banner then shows the next step instead.
+	if gs.details.consume_fusion_intent():
 		return
 	prompt_sig = sig
 	gs.targeting.hover_opt = -1
@@ -263,6 +363,7 @@ func _render_banner() -> void:
 	if not on:
 		return
 	banner_title.text = String(pd["prompt"])
+	_render_subject(pd)
 	banner_tag.text = ("%s · your decision" % String(gs.pv(gs.me())["name"])).to_upper()
 	var pick := gs.selection.board_targeting()
 	var how := ""

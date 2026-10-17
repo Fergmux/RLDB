@@ -39,6 +39,15 @@ var log_card: Dictionary = {}
 var pile_zone: String = ""
 var _pile_sel: int = -1
 var _pile_sig: int = 0
+## F04: the Fusion unit the player asked to summon from the Extra Deck list, answered for them when
+## the Fusion method asks which Fusion unit to summon: {"fu": uid, "at": msec}, or {}.
+var fusion_intent: Dictionary = {}
+## F04: the Fusion-method picker (a HousePanel over a dim), or null while closed, and its unit.
+var _method_dim: ColorRect
+var _method_fu: int = -1
+var _method_sig: int = 0
+## Milliseconds a Fusion intent waits for its "Choose a Fusion unit" prompt.
+const INTENT_MS := 4000
 
 
 func _init(screen: GameScreen) -> void:
@@ -260,7 +269,10 @@ func render_pile_list() -> void:
 		var key := "draw_inspect" if pile_zone == "draw" else pile_zone
 		cards = gs.pv(gs.me()).get(key, [])
 	var acts := gs.action_row.actions_for_card(_pile_sel) if _pile_sel != -1 else []
-	var sig := hash([pile_zone, _pile_sel, cards, acts, gs.board.ready_uids.keys()])
+	# F04: the Extra Deck rows' Summon buttons follow every legal-action change (phase, AP,
+	# materials, zones), so the list re-renders whenever those change.
+	var sig := hash([pile_zone, _pile_sel, cards, acts, gs.board.ready_uids.keys(), gs.mv.get("actions", []), gs.mv.get("extra_avail", {}), gs.locked()])
+	_sync_method_picker()
 	details_scroll.visible = false
 	pile_scroll.visible = true
 	pile_head.visible = true
@@ -269,7 +281,8 @@ func render_pile_list() -> void:
 		pile_hint.text = "The cards you have drafted so far."
 		details_title.text = "Your draft (%d)" % cards.size()
 	else:
-		pile_hint.text = "Shown in a random order; the real order is unchanged." if pile_zone == "draw" else "Hover a card to read it; click to select it."
+		pile_hint.text = "Shown in a random order; the real order is unchanged." if pile_zone == "draw" else \
+			("Summon buttons show what you can summon right now." if pile_zone == "extra" else "Hover a card to read it; click to select it.")
 		details_title.text = "Your %s (%d)" % [PILE_NAMES.get(pile_zone, pile_zone.capitalize()), cards.size()]
 	if sig == _pile_sig:
 		return
@@ -350,18 +363,237 @@ func _pile_row(c: Dictionary) -> Control:
 	dp.show_card(c)
 	GameUi.ignore_mouse(dp)
 	vb.add_child(dp)
-	if sel and not gs.locked():
+	# F04: Extra Deck rows always show their legal summons (no selection needed); other piles show
+	# the selected row's actions.
+	var buttons := extra_summons(uid) if pile_zone == "extra" else ([] if not sel else _row_actions(uid))
+	if not buttons.is_empty():
 		var af := HFlowContainer.new()
 		af.add_theme_constant_override("h_separation", 6)
 		af.add_theme_constant_override("v_separation", 4)
 		vb.add_child(af)
-		for a in gs.action_row.actions_for_card(uid):
-			var b := UIStyle.primary_button(String(a["label"]), 13)
-			b.tooltip_text = String(a.get("full", a["label"]))
-			var act: Dictionary = a
-			b.pressed.connect(func():
-				close_pile()
-				gs.row_open = true
-				gs.action_row.run_action(uid, act))
+		for e in buttons:
+			var b := UIStyle.primary_button(String(e["label"]), 13)
+			b.custom_minimum_size = Vector2(0, 30)
+			b.tooltip_text = String(e["full"])
+			b.set_meta("summon_kind", String(e["kind"]))
+			b.pressed.connect(e["run"])
 			af.add_child(b)
 	return row
+
+
+## The selected row's legal actions as buttons [{label, full, kind, run}] (none while locked).
+func _row_actions(uid: int) -> Array:
+	var out := []
+	for a in gs.action_row.actions_for_card(uid):
+		var act: Dictionary = a
+		out.append({"label": a["label"], "full": a.get("full", a["label"]), "kind": a["t"], "run": func():
+			close_pile()
+			gs.row_open = true
+			gs.action_row.run_action(uid, act)})
+	return out
+
+
+## F04: every summon of Extra Deck card `uid` that is legal right now, as buttons
+## [{label, full, kind, run}]. Ritual / Arcane come from the view's legal actions (the authority's
+## validate: phase, materials, AP, zones); Fusion from `extra_avail` (the Fusion methods the
+## authority can activate now that can summon this unit). Nothing while I cannot act.
+func extra_summons(uid: int) -> Array:
+	var out := []
+	if gs.locked():
+		return out
+	for a in gs.action_row.actions_for_card(uid):
+		if String(a["t"]) in ["ritual", "arcane"]:
+			var act: Dictionary = a
+			out.append({"label": a["label"], "full": a.get("full", a["label"]), "kind": a["t"], "run": func():
+				close_pile()
+				gs.row_open = true
+				gs.action_row.run_action(uid, act)})
+	var ms := fusion_methods_for(uid)
+	if not ms.is_empty():
+		out.append({"label": "Fusion Summon", "kind": "fusion",
+			"full": "Fusion Summon this unit" + (" (choose how: %d ways)" % ms.size() if ms.size() > 1 else " with %s" % method_label(ms[0])),
+			"run": func(): start_fusion(uid)})
+	return out
+
+
+## F04: the Fusion methods that can summon Fusion unit `fu` right now (from `extra_avail`).
+func fusion_methods_for(fu: int) -> Array:
+	var out := []
+	for m in gs.mv.get("extra_avail", {}).get("methods", []):
+		if String(m.get("kind", "")) == "fusion" and fu in m.get("targets", []).map(func(x): return int(x)):
+			out.append(m)
+	return out
+
+
+## Readable name of a Fusion method: its card and how it is used.
+func method_label(m: Dictionary) -> String:
+	var c := find_card(int(m.get("via", -1)))
+	var nm := String(c.get("name", "a card"))
+	match String(m.get("t", "")):
+		"cast": return "Cast %s" % nm
+		"activate_set": return "Activate %s" % nm
+		"ability":
+			var abs: Array = c.get("abilities", [])
+			var i := int(m.get("idx", -1))
+			if i >= 0 and i < abs.size():
+				return "%s: %s" % [nm, String(abs[i].get("short", abs[i].get("label", "ability")))]
+			return "%s ability" % nm
+	return nm
+
+
+## F04: Fusion Summon of `fu` from the Extra Deck list. One method runs at once; several open the
+## method picker. Never picks a method on the player's behalf.
+func start_fusion(fu: int) -> void:
+	var ms := fusion_methods_for(fu)
+	if ms.is_empty() or gs.locked():
+		Sfx.play("deny")
+		return
+	if ms.size() == 1:
+		run_fusion(fu, ms[0])
+	else:
+		open_method_picker(fu)
+
+
+## Sends Fusion method `m` (still legal) and records that `fu` is the unit to summon with it.
+func run_fusion(fu: int, m: Dictionary) -> void:
+	var still := false
+	for x in fusion_methods_for(fu):
+		if x.get("t") == m.get("t") and int(x.get("via", -1)) == int(m.get("via", -2)) and int(x.get("idx", -1)) == int(m.get("idx", -1)):
+			still = true
+	if not still or gs.locked():
+		Sfx.play("deny")
+		return
+	close_method_picker()
+	var cmd := {"t": String(m["t"]), "uid": int(m["via"])}
+	if String(m["t"]) == "ability":
+		cmd["idx"] = int(m["idx"])
+	fusion_intent = {"fu": fu, "at": Time.get_ticks_msec()}
+	close_pile()
+	gs.selected_uid = -1
+	gs.row_open = false
+	gs.acting_uid = int(m["via"])
+	gs.action_row.clear()
+	Sfx.play("confirm")
+	gs.send(cmd)
+
+
+## F04: answers the Fusion method's "Choose a Fusion unit to summon" prompt with the unit chosen in
+## the Extra Deck list. Returns true when it answered (the banner then waits for the next prompt).
+## Any other prompt of mine, or a stale intent, drops the intent.
+func consume_fusion_intent() -> bool:
+	if fusion_intent.is_empty():
+		return false
+	if Time.get_ticks_msec() - int(fusion_intent["at"]) > INTENT_MS:
+		fusion_intent = {}
+		return false
+	var pd := gs.pending()
+	if pd.is_empty() or not bool(pd.get("mine", false)):
+		return false            # not there yet (resolving / the command in flight)
+	var fu := int(fusion_intent["fu"])
+	fusion_intent = {}
+	if String(pd.get("kind", "")) != "select" or int(pd.get("max", 1)) != 1:
+		return false
+	for o in pd.get("options", []):
+		var c: Dictionary = o.get("card", {})
+		if int(c.get("uid", -1)) == fu and String(c.get("zone", "")) == "extra":
+			gs.selection.pick_option.call_deferred(int(o["i"]))
+			return true
+	return false
+
+
+## F04: the picker of how to Fusion Summon `fu` when several methods can: each method's card
+## with what it does; click one to continue. Cancel, Esc or a click outside close it.
+func open_method_picker(fu: int) -> void:
+	close_method_picker()
+	_method_fu = fu
+	var ms := fusion_methods_for(fu)
+	_method_sig = hash(ms)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.z_index = UiLayers.MODAL_PICKER
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	gs.add_child(dim)
+	_method_dim = dim
+	dim.gui_input.connect(func(e):
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			close_method_picker())
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.add_child(center)
+	var fc := find_card(fu)
+	var hp := HousePanel.new("Fusion Summon", "%d ways" % ms.size(), Vector2(22, 18), 10)
+	hp.arm = 18.0
+	center.add_child(hp)
+	hp.add_headline("Choose how to summon %s" % String(fc.get("name", "this unit")), 22, true)
+	var note := UIStyle.label("Each of these can Fusion Summon it now. You choose the materials next.", 14, UIStyle.TEXT_DIM, true)
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.custom_minimum_size = Vector2(420, 0)
+	hp.body.add_child(note)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 16)
+	hp.body.add_child(row)
+	for m in ms:
+		var mm: Dictionary = m
+		var cell := VBoxContainer.new()
+		cell.add_theme_constant_override("separation", 6)
+		row.add_child(cell)
+		var holder := MarginContainer.new()
+		for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+			holder.add_theme_constant_override(side, 5)
+		cell.add_child(holder)
+		var cw := CardWidget.new().setup(find_card(int(m["via"])), "hand")
+		cw.tooltip_text = method_label(m)
+		cw.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		cw.set_meta("fusion_method", true)
+		cw.pressed.connect(func(_w): run_fusion(fu, mm))
+		cw.right_pressed.connect(gs.inspect.inspect_widget)
+		cw.mouse_entered.connect(func(): gs.overlays._lift(cw, 1.05))
+		cw.mouse_exited.connect(func(): gs.overlays._lift(cw, 1.0))
+		holder.add_child(cw)
+		var b := UIStyle.button(method_label(m), 13)
+		b.custom_minimum_size = Vector2(CardWidget.SIZES["hand"].x + 40.0, 34)
+		b.clip_text = true
+		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		b.tooltip_text = method_label(m)
+		b.pressed.connect(func(): run_fusion(fu, mm))
+		cell.add_child(b)
+	hp.body.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.45), true, 10.0))
+	var cancel := UIStyle.button("Cancel", 15)
+	cancel.custom_minimum_size = Vector2(140, 40)
+	cancel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	cancel.pressed.connect(func():
+		Sfx.play("cancel")
+		close_method_picker())
+	hp.body.add_child(cancel)
+	hp.appear()
+	gs.hover.clear()
+
+
+## True while the Fusion-method picker is open.
+func method_picker_open() -> bool:
+	return _method_dim != null and is_instance_valid(_method_dim)
+
+
+## Closes the Fusion-method picker; true when it was open.
+func close_method_picker() -> bool:
+	var was := method_picker_open()
+	if was:
+		_method_dim.queue_free()
+	_method_dim = null
+	_method_fu = -1
+	return was
+
+
+## Revalidates an open method picker against the current state: closes it when I can no longer
+## act or the unit has no method left, rebuilds it when the set of methods changed.
+func _sync_method_picker() -> void:
+	if not method_picker_open():
+		return
+	var fu := _method_fu
+	var ms := fusion_methods_for(fu)
+	if gs.locked() or ms.size() < 2:
+		close_method_picker()
+	elif hash(ms) != _method_sig:
+		open_method_picker(fu)
