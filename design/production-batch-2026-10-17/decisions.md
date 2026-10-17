@@ -26,3 +26,16 @@
 - **Stormcaller (25):** "Destroy all Unprotected Basic Units" hits both players' unprotected basic units and is mandatory. The same reading as Dante's "all Units".
 - **Dante (36):** the manual once-per-turn effect is "Apply 1 Cleanse or 10 Burn to a Unit": any unit, with the player choosing which. The ATK bonus is +1 per Burn on Dante, continuous.
 - **Tag Team names:** follow the new CSV by ID. This resolves the F06-03 sheet mismatch: 7 = Tag Team - B, 11 = Tag Team - J.
+
+## Card migration (package A1) autonomous decisions (NOT owner-confirmed)
+
+Full list with the options considered: `card-ledger.md` (Decisions section). The ones most worth owner review:
+
+- **Chaos Witch (13):** a still-typeless Witch imposes nothing; after its once-per-turn Type change, every Mage on both sides has the Witch's Type while it is on the Field. The literal alternative (a typeless Witch makes all Mages typeless on arrival) was rejected.
+- **Tag Team - W (10):** the search is mandatory (no "you can"); 6, 7, 9 and 11 are optional. Tag Team - J (11) with a typeless partner matches nothing.
+- **Magentric (69):** only a Field tribute for a Fusion or Ritual summon counts; the 2 Pierce lands on the summoned unit before its own On Summon effects. Arcane exhausting from Spent does not count.
+- **Accio (30):** Skip does neither part; the Retain follows only when a Draw unit was sent to Spent, and targets a unit in Hand.
+- **Spell or Trap (29, 59, 63):** means a card in a backrow zone; Powers are excluded.
+- **Importer:** the exact Arcane requirement text (F03-04) is now an importer correction (it had only been hand-edited into cards.json). Overrides 90 and 183 dropped as obsolete; 45, 47, 48, 169 kept.
+- **F07:** the stance choice commits every Fusion method; the separate Confirm is gone everywhere it existed (only Fusion had one).
+- **F09:** not reproduced; Sanctified Blade's Medic waits for activation and a target. Recorded in `card-ledger.md`.
