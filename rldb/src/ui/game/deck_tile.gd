@@ -22,7 +22,8 @@ var _hover := 0.0
 var _box: StyleBoxFlat
 
 
-## Builds the tile. `d`: title, theme, main (Array of card summaries), extra, btn_text, open (bool).
+## Builds the tile. `d`: title, theme, main (Array of card summaries), extra, btn_text, open (bool),
+## blocked (why the deck cannot be used; empty when it can).
 func _init(d: Dictionary = {}) -> void:
 	_box = UIStyle.flat(Color(0, 0, 0, 0), UIStyle.BRONZE, 2, 10)
 	_box.content_margin_left = 16
@@ -126,6 +127,11 @@ func _build(d: Dictionary) -> void:
 	var pick := UIStyle.primary_button(String(d.get("btn_text", "Choose")), 15)
 	pick.custom_minimum_size = Vector2(150, 34)
 	pick.pressed.connect(func(): chosen.emit())
+	# An unusable deck (e.g. an oversized save from before the deck caps) cannot be chosen.
+	var blocked := String(d.get("blocked", ""))
+	if blocked != "":
+		pick.disabled = true
+		pick.tooltip_text = blocked
 	brow.add_child(pick)
 
 

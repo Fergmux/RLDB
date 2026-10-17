@@ -233,7 +233,7 @@ func test_c047_damage_conversion_heals_by_attacker_atk() -> void:
 	assert_int(m.current_cost(dc)).is_equal(1)
 
 
-func test_c048_overextend_weakens_highest_atk_after_third_unit() -> void:
+func test_c048_overextend_weakens_the_chosen_unit_after_third_unit() -> void:
 	var m := _p1_turn()
 	TB.set_card(m, 0, 48, 0)
 	var big := TB.unit(m, 1, TB.WATER, 0, "atk", 30)
