@@ -394,10 +394,9 @@ func _fusion_zone_steps() -> void:
 	_check("FB4-15 stance prompt names the Fusion unit", String(m.pending.get("prompt", "")) == "Choose a stance for %s." % m.name_of(wyrm), String(m.pending.get("prompt", "")))
 	await _shot("24_fusion_stance_banner")
 	_answer(p, "Defense")
-	await _wait(0.4)
-	await _shot("24b_fusion_confirm")
-	_answer(p, "Confirm")
 	await _wait(0.6)
+	# F07 (2026-10-17): the stance choice is the final, committing step; no Confirm prompt follows.
+	_check("F07 stance commits the Fusion with no extra Confirm", m.pending.get("kind", "") != "confirm", str(m.pending.get("prompt", "")))
 	_check("FB4-15 Fusion unit summoned into the material's zone", m.cards[wyrm]["zone"] == "unit" and m.cards[wyrm]["slot"] == 1 and m.cards[dragon]["zone"] != "unit" and m.cards[beast]["zone"] != "unit")
 	await _shot("25_after_fusion")
 	# FB4-21: end of turn sends the hand to Spent with an animation.

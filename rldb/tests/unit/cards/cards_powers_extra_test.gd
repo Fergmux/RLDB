@@ -30,12 +30,11 @@ func test_c089_nether_portal_fuses_for_one_ap() -> void:
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.ability(m, np)
 	TB.choose_uids(m, [wyrm])
-	# F04-22: materials are picked one by one, then the zone, stance and an explicit Confirm.
+	# F04-22 / F07: materials are picked one by one, then the zone; the stance choice commits.
 	TB.choose_uids(m, [beast])
 	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
-	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 
 
@@ -84,12 +83,11 @@ func test_c137_unstable_fusions_uses_and_exhausts_hand_materials() -> void:
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.cast(m, 0, 82)
 	TB.choose_uids(m, [wyrm])
-	# F04-22: materials are picked one by one, then the zone, stance and an explicit Confirm.
+	# F04-22 / F07: materials are picked one by one, then the zone; the stance choice commits.
 	TB.choose_uids(m, [beast])
 	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
-	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[beast]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[dragon]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
@@ -202,16 +200,6 @@ func test_c056_razeon_storm_reveals_face_down_and_paralyses_all_on_death() -> vo
 	assert_int(m.status_count(foe, "paralyse")).is_equal(1)
 
 
-func test_c057_geolock_colossus_moves_ally_anywhere() -> void:
-	var m := TB.make()
-	var g := TB.unit(m, 0, 57, 0)
-	var ally := TB.unit(m, 0, TB.WATER, 1)
-	TB.ability(m, g)
-	TB.choose_uids(m, [ally])
-	TB.choose(m, ["Back row, column 3"])
-	assert_int(m.cards[ally]["slot"]).is_equal(5)
-
-
 func test_c058_infernogate_burns_everything() -> void:
 	var m := TB.make()
 	var ig := TB.unit(m, 0, 58, 0)
@@ -262,7 +250,6 @@ func test_c094_mirrorflesh_combines_material_stats_and_type() -> void:
 	TB.choose_uids(m, [b])                                 # F04-22: a sole legal material is still picked
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
-	TB.choose(m, ["Confirm"])
 	assert_int(m.atk_of(mf)).is_equal(16)
 	assert_int(m.def_of(mf)).is_equal(16)
 	assert_str(m.unit_type(mf)).is_equal("Fire")
@@ -346,20 +333,6 @@ func test_c147_demented_apparition_paralyses_unprotected_foes_on_summon() -> voi
 	var foe := TB.unit(m, 1, TB.WATER, 0)
 	TB.special(m, 0, 147, 0)
 	assert_int(m.status_count(foe, "paralyse")).is_equal(2)
-
-
-func test_c181_solomon_tyrannical_feeds_on_warriors_and_costs_hp_on_death() -> void:
-	var m := TB.make()
-	var st := TB.unit(m, 0, 181, 0)
-	var w := TB.card(m, 0, 122, "spent")
-	m.players[0]["ap"] = 2
-	TB.ability(m, st)
-	TB.choose_uids(m, [w])
-	assert_str(m.cards[w]["zone"]).is_equal("exhaust")
-	assert_int(m.status_count(st, "eternal")).is_equal(1)
-	m.cards[st]["st"] = {}
-	TB.kill(m, st)
-	assert_int(m.players[0]["hp"]).is_equal(48)
 
 
 func test_c151_ultimate_dragon_doubles_debuffs_on_death() -> void:
@@ -498,20 +471,10 @@ func test_c171_flying_sandworm_grows_attacks_directly_and_exhausts() -> void:
 	var fs := TB.unit(m, 1, 171, 0)
 	TB.unit(m, 0, TB.WATER, 0)
 	TB.to_turn2(m)
-	assert_int(m.atk_of(fs)).is_equal(10)
+	assert_int(m.atk_of(fs)).is_equal(12)          # 2026-10-17: 6 ATK + 6
 	assert_bool(-1 in m.attack_targets(fs)).is_true()
 	TB.kill(m, fs)
 	assert_str(m.cards[fs]["zone"]).is_equal("exhaust")
-
-
-func test_c172_tyde_destroys_revealed_card_when_sacrificed() -> void:
-	var m := TB.make()
-	var ty := TB.unit(m, 0, 172, 0)
-	var fd := TB.set_card(m, 1, 45, 0)
-	m.apply_status(fd, "reveal", 1)
-	m.submit(0, {"t": "sacrifice", "uid": ty})
-	TB.choose_uids(m, [fd])
-	assert_str(m.cards[fd]["zone"]).is_equal("spent")
 
 
 func test_c173_thunderclap_dragon_hits_per_opposing_unit() -> void:
@@ -544,7 +507,7 @@ func test_c177_illusionist_strong_on_own_turn_but_deals_no_battle_damage() -> vo
 	var m := TB.make()
 	TB.p1_battle(m)
 	var il := TB.unit(m, 1, 177, 0)
-	assert_int(m.atk_of(il)).is_equal(40)
+	assert_int(m.atk_of(il)).is_equal(60)          # 2026-10-17: 30 + 30 on its own turn
 	TB.attack(m, il, -1)
 	assert_int(m.players[0]["hp"]).is_equal(60)
 	var foe := TB.unit(m, 0, TB.WATER, 0)

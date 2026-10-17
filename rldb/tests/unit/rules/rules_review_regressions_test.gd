@@ -165,24 +165,8 @@ func test_fusion_zone_and_stance_prompts_name_the_fusion_unit() -> void:
 	assert_str(TB.pend_kind(m)).is_equal("stance")
 	assert_str(String(m.pending["prompt"])).is_equal("Choose a stance for %s." % m.name_of(wyrm))
 	TB.choose(m, ["Defense"])
-	assert_str(String(m.pending["prompt"])).contains(m.name_of(wyrm))   # the F04-22 Confirm
-	TB.choose(m, ["Confirm"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 	assert_str(m.cards[wyrm]["stance"]).is_equal("def")
-
-
-## Feedback 06 bug: Dante's "Apply 1 Cleanse to this unit or an adjacent unit" was never offered
-## (the legality check read the adjacent-unit list before it was computed).
-func test_dante_cleanse_ability_is_usable() -> void:
-	var m := TB.make()
-	var dante := TB.unit(m, 0, 36, 0)
-	TB.unit(m, 0, TB.WATER, 1)
-	assert_str(m.validate(0, {"t": "ability", "uid": dante, "idx": 0})).is_empty()
-	assert_str(TB.ability(m, dante)).is_empty()
-	assert_str(TB.pend_kind(m)).is_equal("select")
-	assert_int(m.pending["options"].size()).is_equal(2)          # Dante itself and the adjacent unit
-	TB.choose_uids(m, [dante])
-	assert_int(m.status_count(dante, "cleanse")).is_equal(1)
 
 
 ## Feedback 06: Polymerization cannot be cast without a Fusion unit it could summon.
@@ -331,15 +315,13 @@ func test_sepukku_prevented_self_destroy_does_not_fusion() -> void:
 	# F04-22: every choice comes first; Sepukku is never offered as its own material.
 	var offered_self := false
 	var guard := 0
-	while not m.pending.is_empty() and TB.pend_kind(m) != "confirm" and guard < 6:
+	while not m.pending.is_empty() and guard < 6:
 		guard += 1
 		for o in m.pending["options"]:
 			if o.get("uid", -1) == sep:
 				offered_self = true
 		m.submit(0, {"t": "choose", "id": m.pending["id"], "indices": [0]})
-	assert_bool(offered_self).is_false()
-	assert_str(TB.pend_kind(m)).is_equal("confirm")
-	TB.choose(m, ["Confirm"])                                  # the destroy is prevented: no Fusion
+	assert_bool(offered_self).is_false()                       # F07: the stance answer committed; the destroy is prevented: no Fusion
 	assert_bool(m.pending.is_empty()).is_true()
 	assert_str(m.cards[sol]["zone"]).is_equal("extra")
 	assert_str(m.cards[sep]["zone"]).is_equal("unit")

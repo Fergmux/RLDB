@@ -272,7 +272,7 @@ func test_ritual_lesson_runes_tribute_and_payoff() -> void:
 	assert_int(null_u["slot"]).is_equal(1)
 	assert_int(m.players[ME]["ap"]).is_equal(1)                     # the Ritual summon paid no AP
 	assert_str(m.cards[h.keys["o_warrior"]]["zone"]).is_equal("spent")
-	assert_int(m.players[RIVAL]["hp"]).is_equal(22)                 # 46 against 8 in Attack stance
+	assert_int(m.players[RIVAL]["hp"]).is_equal(28)                 # 40 against 8 in Attack stance (2026-10-17 Null 40/28)
 
 
 func test_ritual_lesson_refuses_off_script_commands() -> void:
