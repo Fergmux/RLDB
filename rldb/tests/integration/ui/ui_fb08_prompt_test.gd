@@ -139,6 +139,20 @@ func test_g03_direct_attack_shows_the_attacked_player() -> void:
 	assert_str((tok as GamePromptBanner.DirectToken).who).is_equal("YOU")
 
 
+func test_g03_strip_names_shrink_to_fit_instead_of_splitting_a_word() -> void:
+	var r := await _attack_window()
+	var gs: GameScreen = r[0]
+	for f in _figures(gs):
+		for n in f.get_children():
+			if n is Label and n.has_meta("name"):
+				var l := n as Label
+				assert_int(l.autowrap_mode).is_equal(TextServer.AUTOWRAP_WORD)
+				var px := l.get_theme_font_size("font_size")
+				for word in l.text.split(" ", false):
+					var ww := l.get_theme_font("font").get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+					assert_bool(ww <= (f as Control).custom_minimum_size.x or px == GamePromptBanner.MENTION_NAME_MIN_PX).is_true()
+
+
 func test_g03_event_cards_never_reveal_a_hidden_card() -> void:
 	var r := await _screen()
 	var m: MatchEngine = r[2]

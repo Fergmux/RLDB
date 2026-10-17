@@ -34,6 +34,9 @@ const OPTION_H := 32
 ## (the full text is its tooltip and the right-click inspection).
 const SUBJECT_CARD := Vector2(64, 96)
 const SUBJECT_LINES := 6
+## The card strip in a short side column (compact): a smaller card and fewer rules lines.
+const SUBJECT_CARD_COMPACT := Vector2(44, 66)
+const SUBJECT_LINES_COMPACT := 2
 ## Type-choice buttons (F03): the icon box's left inset and its largest side (the left content
 ## margin of 42 px holds it with a gap before the label).
 const TYPE_ICON_X := 9.0
@@ -50,6 +53,14 @@ const TYPE_COMPACT_LEFT := 38
 const MENTION_CARD_MAX := 56.0
 const MENTION_CARD_MIN := 38.0
 const MENTION_CARD_TOP := Vector2(36, 54)
+## Card width of the strip in a short side column (compact), and the rules lines of a responding card.
+const MENTION_CARD_COMPACT := 42.0
+const RESPONSE_LINES := 2
+## Name size under a strip card, and the smallest it shrinks to so a long word fits.
+const MENTION_NAME_PX := 12
+const MENTION_NAME_MIN_PX := 9
+## Name size of a responding card beside its picture.
+const RESPONSE_NAME_PX := 14
 ## Width of the arrow between an attacker and its target in the response strip.
 const MENTION_ARROW_W := 22.0
 ## Option labels that decline a choice: always the last button, below the accepting ones (G03).
@@ -58,7 +69,7 @@ const DECLINE_LABELS := ["Pass", "No", "Skip"]
 const LIST_KINDS := ["trap_response", "confirm", "order"]
 ## G09: gap between a card and the toast about it, the toast pointer's length, its fade-in (s), and
 ## how long after a command a refusal is still taken to be about that command's card (ms).
-const TOAST_GAP := 4.0
+const TOAST_GAP := 10.0   # clears the ready badge over a board card
 const TOAST_POINTER := 7.0
 const TOAST_FADE := 0.12
 const STATUS_ANCHOR_MS := 1500
@@ -101,6 +112,8 @@ var mention_box: PanelContainer
 var mention_row: HBoxContainer
 var respond_col: VBoxContainer
 var _has_mentions := false
+## Whether the strip was built for the top strip (one row) or the side column.
+var _mentions_top := false
 ## G03: option buttons of a response, yes / no or ordering prompt, one per row, the declining
 ## option (Pass, No, Skip) always last, below the accepting ones.
 var banner_list: VBoxContainer
@@ -344,6 +357,7 @@ static func is_decline(label: String) -> bool:
 func _render_mentions(pd: Dictionary) -> void:
 	var ms := mentions_for(pd)
 	_has_mentions = not ms.is_empty()
+	_mentions_top = _in_top_strip
 	mention_box.visible = _has_mentions
 	GameUi.clear(mention_row)
 	GameUi.clear(respond_col)
@@ -361,7 +375,20 @@ func _render_mentions(pd: Dictionary) -> void:
 			arrow.tooltip_text = "attacks" if arrow.attack else ""
 			mention_row.add_child(arrow)
 		mention_row.add_child(_mention_figure(e))
-	mention_row.visible = not cause.is_empty()
+	if _in_top_strip:
+		# The compact top-strip panel: one row, the responding cards after a divider.
+		for e in resp:
+			if mention_row.get_child_count() > 0:
+				var div := ColorRect.new()
+				div.color = Color(UIStyle.BRONZE, 0.55)
+				div.custom_minimum_size = Vector2(1, 0)
+				div.size_flags_vertical = Control.SIZE_FILL
+				div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				div.set_meta("divider", true)
+				mention_row.add_child(div)
+			mention_row.add_child(_mention_figure(e))
+		resp = []
+	mention_row.visible = mention_row.get_child_count() > 0
 	if not resp.is_empty():
 		if not cause.is_empty():
 			var rule := ColorRect.new()
@@ -369,7 +396,7 @@ func _render_mentions(pd: Dictionary) -> void:
 			rule.custom_minimum_size = Vector2(0, 1)
 			rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			respond_col.add_child(rule)
-		var cap := UIStyle.label("YOUR RESPONSE" if resp.size() == 1 else "YOUR RESPONSES", 11, UIStyle.MUTED)
+		var cap := UIStyle.label("YOUR RESPONSE" if resp.size() == 1 else "YOUR RESPONSES", 10, UIStyle.MUTED)
 		cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		respond_col.add_child(cap)
 		for e in resp:
@@ -400,19 +427,25 @@ func _mention_figure(e: Dictionary) -> Control:
 		w.auto_hover = false
 		w.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		w.set_meta("mention", true)
+		if role == "response":
+			w.set_meta("response", true)
 		w.right_pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
 		var hidden := bool(c.get("hidden", false)) or not c.has("name")
 		nm = ("Face-down card" if String(c.get("zone", "")) == "backrow" else "Hidden card") if hidden else String(c.get("name", ""))
 		w.tooltip_text = "%s: %s" % [ROLE_CAPTIONS.get(role, role.capitalize()), nm] + ("" if hidden else "\nRight-click to inspect")
 		fig.add_child(w)
-	var role_l := UIStyle.label(String(ROLE_CAPTIONS.get(role, role.capitalize())).to_upper() if role != "direct" else "TARGET", 10, UIStyle.MUTED)
+	var cap := "TARGET" if role == "direct" else String(ROLE_CAPTIONS.get(role, role.capitalize())).to_upper()
+	var role_l := UIStyle.label(cap, 10, UIStyle.MUTED)
 	role_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	role_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	fig.add_child(role_l)
-	var name_l := UIStyle.label(nm, 12, UIStyle.GOLD_HI, false, true)
+	# The name wraps onto a second line before it is cut (the full name is its tooltip).
+	var name_l := UIStyle.label(nm, MENTION_NAME_PX, UIStyle.GOLD_HI, true, true)
+	name_l.autowrap_mode = TextServer.AUTOWRAP_WORD     # between words only ("Radablast" never splits)
+	name_l.set_meta("name", true)
 	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_l.max_lines_visible = 2
 	name_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name_l.clip_text = true
 	name_l.tooltip_text = nm
 	name_l.mouse_filter = Control.MOUSE_FILTER_PASS
 	fig.add_child(name_l)
@@ -441,10 +474,12 @@ func _response_row(e: Dictionary) -> Control:
 	row.add_child(v)
 	var nm := UIStyle.label(String(c.get("name", "")), 14, UIStyle.GOLD_HI, true, true)
 	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	nm.autowrap_mode = TextServer.AUTOWRAP_WORD
+	nm.set_meta("rname", true)
 	v.add_child(nm)
 	var txt := String(c.get("text", "")).strip_edges()
 	var t := UIStyle.label(txt if txt != "" else "No rules text.", 12, UIStyle.TEXT, true)
-	t.max_lines_visible = SUBJECT_LINES_NARROW
+	t.max_lines_visible = RESPONSE_LINES
 	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	t.tooltip_text = txt
 	t.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -453,40 +488,63 @@ func _response_row(e: Dictionary) -> Control:
 	return row
 
 
-## G03: sizes the response strip for a panel `w` wide: the cards responded to share the row (never
-## larger than MENTION_CARD_MAX), and the compact top-strip panel shows small cards and no rules text.
-func _fit_mentions(w: float) -> void:
+## G03: sizes the response strip for a panel `w` wide. The figures share the row (each card no
+## larger than MENTION_CARD_MAX, the names wrapping in the figure's share); `compact` (a short side
+## column) and the top strip use smaller cards, and the responding card's rules text then hides.
+func _fit_mentions(w: float, compact: bool = false) -> void:
 	if mention_box == null or not _has_mentions:
 		return
 	var content := w - (ctx_banner as HousePanel).chrome_size().x - 12.0
 	var figs := mention_row.get_children().filter(func(n): return n.has_meta("role"))
-	var arrows := mention_row.get_child_count() - figs.size()
-	var cw := MENTION_CARD_MAX
+	var arrows := mention_row.get_children().filter(func(n): return n is MentionArrow).size()
+	var divs := mention_row.get_children().filter(func(n): return n.has_meta("divider")).size()
+	var share := content
 	if not figs.is_empty():
-		cw = floorf((content - arrows * (MENTION_ARROW_W + 8.0)) / figs.size()) - 2.0
-	cw = clampf(cw, MENTION_CARD_MIN, MENTION_CARD_MAX)
+		share = floorf((content - arrows * (MENTION_ARROW_W + 4.0) - divs * 5.0) / figs.size()) - 4.0
+	var top_c := MENTION_CARD_TOP.x if _in_top_strip else (MENTION_CARD_COMPACT if compact else MENTION_CARD_MAX)
+	var cw := clampf(share - 8.0, MENTION_CARD_MIN, top_c)
 	var sz := Vector2(cw, roundf(cw * 1.5))
-	if _in_top_strip:
-		sz = MENTION_CARD_TOP
 	for a in mention_row.get_children():
 		if a is MentionArrow:
 			(a as MentionArrow).card_h = sz.y
 			(a as Control).queue_redraw()
 	for f in figs:
-		(f as Control).custom_minimum_size.x = sz.x + 8.0
+		var fw := maxf(sz.x + 8.0, share)
+		(f as Control).custom_minimum_size.x = fw
 		for n in (f as Node).get_children():
 			if n is CardWidget:
 				GameUi.resize_card(n, sz)
 			elif n is DirectToken:
 				(n as Control).custom_minimum_size = sz
+			elif n is Label and n.has_meta("name"):
+				_fit_name(n as Label, fw)
+	var rsz := Vector2(MENTION_CARD_COMPACT, MENTION_CARD_COMPACT * 1.5) if compact else Vector2(48, 72)
 	for row in respond_col.get_children():
 		for n in (row as Node).get_children():
 			if n is CardWidget:
-				GameUi.resize_card(n, sz)
+				GameUi.resize_card(n, rsz)
 			elif n is VBoxContainer:
 				for l in (n as Node).get_children():
+					if l.has_meta("rname"):
+						_fit_name(l as Label, content - rsz.x - 8.0, RESPONSE_NAME_PX)
 					if l.has_meta("rules"):
-						(l as Label).visible = not _in_top_strip
+						(l as Label).visible = not compact
+
+
+## A strip name in the largest size (MENTION_NAME_PX down to MENTION_NAME_MIN_PX) at which its
+## longest word fits the figure width `w`, so a name wraps between words instead of being cut.
+static func _fit_name(l: Label, w: float, start_px: int = MENTION_NAME_PX) -> void:
+	var font := l.get_theme_font("font")
+	var px := start_px
+	var longest := 0.0
+	while px > MENTION_NAME_MIN_PX:
+		longest = 0.0
+		for word in l.text.split(" ", false):
+			longest = maxf(longest, font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x)
+		if longest <= w - 2.0:
+			break
+		px -= 1
+	l.add_theme_font_size_override("font_size", px)
 
 
 ## The arrow from an attacker to its target in the response strip (hostile red, like the board's
@@ -700,7 +758,9 @@ func _render_banner() -> void:
 		if pd["kind"] == "attack_target":
 			how = "Hover a target to preview the battle, click to attack."
 	elif pd["kind"] == "trap_response":
-		how = "Your opponent is waiting: activate a Trap or pass."
+		# G03: with my responding cards shown under what they answer, the buttons say the rest.
+		var responders := mentions_for(pd).filter(func(e): return String(e.get("role", "")) == "response")
+		how = "" if not responders.is_empty() else ("Your opponent is waiting: activate a Trap or pass." if _has_activate(pd) else "Your opponent is waiting: pass to continue.")
 	elif int(pd["max"]) > 1:
 		how = _multi_status(pd)
 	_banner_how = how
@@ -768,6 +828,14 @@ func _render_banner() -> void:
 	place_banner()
 
 
+## True when one of the prompt's options activates a card ("Activate ...").
+static func _has_activate(pd: Dictionary) -> bool:
+	for o in pd.get("options", []):
+		if String(o.get("label", "")).begins_with("Activate"):
+			return true
+	return false
+
+
 ## True when one of the prompt's options declines it (Pass, No, Skip).
 static func _has_decline(pd: Dictionary) -> bool:
 	for o in pd.get("options", []):
@@ -832,6 +900,9 @@ func _set_top_strip(on: bool) -> void:
 	_in_top_strip = on
 	if subject_box != null:
 		subject_box.visible = _has_subject and not on
+	# G03: the response strip is laid out differently there (one row); rebuild it on a change.
+	if mention_box != null and _has_mentions and _mentions_top != on:
+		_render_mentions(gs.pending())
 
 
 ## Once the panel has settled (HousePanel.fit takes a few frames), a side-column panel taller than
@@ -877,13 +948,18 @@ func _size_banner(w: float, compact: bool = false) -> void:
 func _fit_subject(w: float, compact: bool = false) -> void:
 	if subject_box == null or subject_text == null:
 		return
-	_fit_mentions(w)
+	_fit_mentions(w, compact)
 	var narrow := w < BANNER_NARROW_W or ctx_banner.position.y < 20.0 or compact
 	subject_text.max_lines_visible = SUBJECT_LINES_NARROW if narrow else SUBJECT_LINES
 	_fit_type_buttons(w - (ctx_banner as HousePanel).chrome_size().x, compact)
 	var row := subject_card.get_parent()
+	# A short column (compact): a smaller card beside two lines of text, so the panel can stay in
+	# the side column instead of falling back to the top strip over the opponent's zones.
+	GameUi.resize_card(subject_card, SUBJECT_CARD_COMPACT if compact else SUBJECT_CARD)
+	if compact:
+		subject_text.max_lines_visible = SUBJECT_LINES_COMPACT
 	if row is BoxContainer:
-		(row as BoxContainer).vertical = w < BANNER_NARROW_W
+		(row as BoxContainer).vertical = w < BANNER_NARROW_W and not compact
 	# The narrow column: a smaller headline and the tag without the player's name, so neither
 	# wraps word by word nor clips (UI review, 1600x900).
 	var thin := w < BANNER_NARROW_W
@@ -1049,8 +1125,9 @@ func update_banner_sub() -> void:
 		var col: Color = GameScreen.VERDICT_COLORS.get(pv.verdict, UIStyle.TEXT)
 		t = "[b][color=#%s]%s[/color][/b]" % [col.to_html(false), pv.target.replace("[", "(")]
 	# G04: an exact payment reads from its headline and circles alone; the status stays the circles'
-	# tooltip. A battle preview (never during a payment) would still show.
-	var shown := not (_exact_pay and pv.text == "")
+	# tooltip. A battle preview (never during a payment) would still show. A prompt with nothing to
+	# say here (yes / no, a mode) leaves no empty line either.
+	var shown := pv.text != "" or not (_exact_pay or _banner_how == "")
 	if banner_sub.visible != shown:
 		banner_sub.visible = shown
 		if ctx_banner != null and ctx_banner.visible:
