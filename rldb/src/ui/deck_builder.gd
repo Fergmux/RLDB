@@ -1,66 +1,75 @@
 class_name DeckBuilder
 extends Control
-## Custom deck builder (P-03). No limits on size, category mix or duplicates; the
-## deck is a flat id list and Fusion/Ritual/Arcane cards land in the Extra Deck
-## automatically (shown grouped here). Presentation only: persists through DeckStore.
+## Custom deck builder. The deck is a flat id list; Fusion/Ritual/Arcane cards land in the
+## Extra Deck automatically (shown grouped here). Category mix and duplicates are free; size is
+## capped by DeckStore (99 combined, 15 Extra, F16) with no visible limit labels: Add simply
+## becomes unavailable. Presentation only: persists through DeckStore.
 ##
-## Layout (F04 polish): catalogue of free-standing cards | preview with the in-game details
-## pane | the deck (name + inline errors, saved/starter deck tiles, Main/Extra card grids).
+## Layout: catalogue (shared CardBrowser) | preview of the selected card with the only Add /
+## Remove controls (F18) | the deck (name + inline errors, actions, saved/starter tiles, Main/Extra
+## grids in canonical catalogue order, F17).
+##
+## Input (no drag and drop): left-click a card in the catalogue or the deck to select it into the
+## preview; right-click inspects; Add / Remove in the preview edit the deck. Keyboard: arrows move
+## the catalogue selection, Enter or + adds, - removes, Esc = Back (F21) unless an inspector or a
+## confirmation is open. Edits update `counts` at once; the fly / pop animation and sound (F24)
+## are presentation on top and never gate input.
 
 signal closed
 
 const MARGIN := 16
-## Catalogue card ("hand" 120x180) and the cell around it (a few px of room for the glow).
-const CARD_W := 120
-const CARD_H := 180
-const CELL_PAD := 11
-const CELL_MIN_W := CARD_W + CELL_PAD * 2
-const CELL_H := CARD_H + CELL_PAD * 2
-## Deck grid tile: "mini" card 90x135, count badge, a -/+ strip underneath.
+## Deck grid tile: "mini" card 90x135 with its count tag just below it (F18).
 const TILE_W := 100
-const TILE_H := 175
+const TILE_H := 168
+const MINI_W := 90.0
+## Count tag (x1..x99) size: fixed so a changing count never shifts anything (F16).
+const TAG_W := 48
+const TAG_H := 22
+## Footer room under each catalogue card (for its count tag).
+const CELL_FOOTER := 24
 ## Tallest the saved/starter deck list grows before it scrolls.
 const LIST_MAX_H := 190.0
-## Smallest gap between catalogue columns (the rest of the width is shared out between them).
-const GRID_MIN_GAP := 8
-
-const COST_OPTIONS := [
-	["Any cost", ""], ["0 AP", "ap:0"], ["1 AP", "ap:1"], ["2 AP", "ap:2"], ["3 AP", "ap:3"],
-	["4 AP", "ap:4"], ["5+ AP", "ap:5+"], ["Fusion", "kind:fusion"], ["Ritual", "kind:ritual"],
-	["Arcane", "kind:arcane"],
-]
+## Fly animation (F24): seconds, and how many ghost cards may be in flight at once.
+const FLY_TIME := 0.34
+const MAX_GHOSTS := 6
 
 ## card id -> copies in the working deck
 var counts: Dictionary = {}
 var deck_name_edit: LineEdit
 var dirty: bool = false
+## The shared catalogue browser (filters + grid).
+var browser: CardBrowser
 
-var _search: LineEdit
-var _cat_opt: OptionButton
-var _type_opt: OptionButton
-var _race_opt: OptionButton
-var _cost_opt: OptionButton
-var _result_label: Label
-var _grid: HFlowContainer
-var _no_match: Control
-## card id -> its catalogue grid cell (one per catalogue card, built once; filters only hide cells).
-var _cells: Dictionary = {}
 var _loaded_name: String = ""
 var _deck_box: VBoxContainer
+var _deck_scroll: SmoothScroll
 var _deck_chips: HFlowContainer
+var _chip_vals: Dictionary = {}
+var _unsaved_chip: Control
 var _empty_note: Control
+## "main" / "extra" -> {box, flow, value}
+var _sections: Dictionary = {}
 ## card id -> its deck grid tile (reused between refreshes so hover and scroll survive a click).
 var _deck_tiles: Dictionary = {}
+var _cat_index: Dictionary = {}
+var _main_n := 0
+var _extra_n := 0
 var _preview_holder: VBoxContainer
+var _preview_card: CardWidget
 var _details: CardDetailsPanel
 var _preview_note: Label
 var _preview_count: Label
+var _preview_chip: PanelContainer
+var _add_btn: Button
+var _rem_btn: Button
+var _save_btn: Button
+var _rename_btn: Button
+var _delete_btn: Button
 var _name_err: Label
 var _name_box: VBoxContainer
 var _name_shake: Tween
 var _list_box: VBoxContainer
 var _list_scroll: ScrollContainer
-var _preview_chip: PanelContainer
 var _tab_saved: Button
 var _tab_starters: Button
 var _show_starters: bool = false
@@ -71,53 +80,30 @@ var _starters: Array = []
 var _summaries: Dictionary = {}
 var _preview_id: int = -1
 var _overlay: ConfirmDialog
+var _fx_layer: Control
+var _ghosts: Array = []
+var _deck_scroll_tw: Tween
+var _leaving := false
 
 
 func _ready() -> void:
 	CardDB.ensure_loaded()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_cat_index = CardBrowser.catalogue_index()
 	_starters = Series.load_starters()
 	_build()
 	_refresh_saved()
-	_build_cells()
-	_refresh_catalogue()
 	_refresh_deck()
-	var all := CardDB.all()
-	if not all.is_empty():
-		show_preview(int(all[0]["id"]))
+	var ids := browser.visible_ids()
+	if not ids.is_empty():
+		_select(int(ids[0]))
 
 
 # ------------------------------------------------------------ pure logic (testable)
 
-## True if card def `d` passes the filters. Empty string means "any".
-## cost is "", "ap:N", "ap:5+" or "kind:fusion|ritual|arcane".
+## True if card def `d` passes the filters (see CardBrowser.matches).
 static func matches(d: Dictionary, query: String, category: String, type: String, race: String, cost: String) -> bool:
-	if category != "" and d["category"] != category:
-		return false
-	if type != "" and String(d["type"] if d["type"] != null else "") != type:
-		return false
-	if race != "" and String(d["race"] if d["race"] != null else "") != race:
-		return false
-	if cost != "":
-		var parts := cost.split(":")
-		if parts[0] == "kind":
-			if d["cost_kind"] != parts[1]:
-				return false
-		else:
-			if d["cost_kind"] != "ap" or d["cost"] == null:
-				return false
-			if parts[1].ends_with("+"):
-				if int(d["cost"]) < int(parts[1].trim_suffix("+")):
-					return false
-			elif int(d["cost"]) != int(parts[1]):
-				return false
-	var q := query.strip_edges().to_lower()
-	if q != "":
-		var hay := (String(d["name"]) + " " + String(Series.card_summary(int(d["id"]))["text"])).to_lower()
-		for word in q.split(" ", false):
-			if not hay.contains(word):
-				return false
-	return true
+	return CardBrowser.matches(d, query, category, type, race, cost)
 
 
 ## Expands a counts dictionary to a sorted id list (the DeckStore format).
@@ -139,10 +125,25 @@ static func cards_to_counts(cards: Array) -> Dictionary:
 	return c
 
 
+## Deck card ids in canonical catalogue order (F17): CardDB order, matched by stable id, never
+## by display name or insertion order. Unknown ids sort last by id.
+static func catalogue_sorted(ids: Array, index_of: Dictionary) -> Array:
+	var out := ids.duplicate()
+	out.sort_custom(func(a, b):
+		var ia: int = index_of.get(int(a), 1 << 30)
+		var ib: int = index_of.get(int(b), 1 << 30)
+		if ia != ib:
+			return ia < ib
+		return int(a) < int(b))
+	return out
+
+
 ## The up-to-`n` most common non-empty Types in a deck id list, most frequent first.
 static func dominant_types(cards: Array, n: int = 3) -> Array:
 	var tally := {}
 	for id in cards:
+		if not CardDB.has(int(id)):
+			continue
 		var t = CardDB.get_def(int(id))["type"]
 		if t != null and String(t) != "":
 			tally[String(t)] = int(tally.get(String(t), 0)) + 1
@@ -156,30 +157,47 @@ static func dominant_types(cards: Array, n: int = 3) -> Array:
 
 # ------------------------------------------------------------ public editing API
 
-## Adds `n` copies of card `id` to the working deck.
-func add_card(id: int, n: int = 1) -> void:
-	counts[id] = int(counts.get(id, 0)) + n
-	dirty = true
-	_refresh_deck()
-	_refresh_catalogue_counts()
+## Why one more copy of `id` cannot be added right now ("" when it can).
+func add_block_reason(id: int) -> String:
+	return DeckStore.add_block_reason(_main_n, _extra_n, id)
 
 
-## Removes one copy of card `id` (no-op when absent).
-func remove_card(id: int) -> void:
-	if not counts.has(id):
-		return
+## Adds up to `n` copies of card `id`, stopping at the deck caps. Returns the copies added.
+func add_card(id: int, n: int = 1) -> int:
+	var added := 0
+	for i in n:
+		if add_block_reason(id) != "":
+			break
+		counts[id] = int(counts.get(id, 0)) + 1
+		if DeckStore.is_extra(id):
+			_extra_n += 1
+		else:
+			_main_n += 1
+		added += 1
+	if added > 0:
+		dirty = true
+		_refresh_deck()
+		_update_cell(id)
+	return added
+
+
+## Removes one copy of card `id` (no-op when absent; never goes below zero).
+func remove_card(id: int) -> bool:
+	if int(counts.get(id, 0)) <= 0:
+		return false
 	counts[id] = int(counts[id]) - 1
 	if int(counts[id]) <= 0:
 		counts.erase(id)
 	dirty = true
+	_recount()
 	_refresh_deck()
-	_refresh_catalogue_counts()
+	_update_cell(id)
+	return true
 
 
 ## Sets the search text and refreshes the catalogue.
 func set_filters(query: String) -> void:
-	_search.text = query
-	_refresh_catalogue()
+	browser.set_query(query)
 
 
 ## Starts an empty, unnamed deck.
@@ -190,36 +208,42 @@ func new_deck() -> void:
 	dirty = false
 	_clear_name_error()
 	_say("Started a new empty deck.")
-	_refresh_saved()
-	_refresh_deck()
-	_refresh_catalogue_counts()
+	_after_replace()
 
 
-## Replaces the working deck with `cards` under `name` (not dirty).
+## Replaces the working deck with `cards` under `name` (not dirty). Never trims: a deck saved
+## before the caps opens intact and can only shrink until it is legal again.
 func load_cards(name: String, cards: Array) -> void:
-	counts = cards_to_counts(cards)
+	counts = {}
+	for id in cards:
+		if CardDB.has(int(id)):
+			counts[int(id)] = int(counts.get(int(id), 0)) + 1
 	deck_name_edit.text = name
 	_loaded_name = name
 	dirty = false
 	_clear_name_error()
-	_refresh_saved()
-	_refresh_deck()
-	_refresh_catalogue_counts()
+	_after_replace()
 
 
-## Saves the working deck under its name; false (with an inline message by the name field) when unnamed.
+## Saves the working deck under its name; false (with an inline message by the name field) when
+## unnamed or over the deck caps.
 func save() -> bool:
 	var n := deck_name_edit.text.strip_edges()
 	if n == "":
 		_say("Give the deck a name before saving.", true)
 		return false
-	DeckStore.save_deck(n, counts_to_cards(counts))
+	var cards := counts_to_cards(counts)
+	var err := DeckStore.validate(cards)
+	if err != "":
+		_say(err, true)
+		return false
+	DeckStore.save_deck(n, cards)
 	dirty = false
 	_loaded_name = n
 	_clear_name_error()
 	_refresh_saved()
 	_refresh_deck()
-	_say("Saved \"%s\" (%d cards). Pick it under \"Your saved decks\" when you set up a series." % [n, counts_to_cards(counts).size()])
+	_say("Saved \"%s\" (%d cards). Pick it under \"Your saved decks\" when you set up a series." % [n, cards.size()])
 	return true
 
 
@@ -227,7 +251,7 @@ func save() -> bool:
 ## False (with a message) when no saved deck is loaded, the name is empty/unchanged or taken.
 func rename_loaded() -> bool:
 	var n := deck_name_edit.text.strip_edges()
-	if _loaded_name == "" or not _saved_exists(_loaded_name):
+	if not has_saved_deck_loaded():
 		_say("Load a saved deck first, then type a new name and press Rename.", true)
 		return false
 	if n == "" or n == _loaded_name:
@@ -235,6 +259,10 @@ func rename_loaded() -> bool:
 		return false
 	if _saved_exists(n):
 		_say("A saved deck named \"%s\" already exists." % n, true)
+		return false
+	var err := DeckStore.validate(counts_to_cards(counts))
+	if err != "":
+		_say(err, true)
 		return false
 	DeckStore.delete_deck(_loaded_name)
 	DeckStore.save_deck(n, counts_to_cards(counts))
@@ -247,6 +275,11 @@ func rename_loaded() -> bool:
 	return true
 
 
+## True when the editor holds a deck that exists in the saved list (F23: Delete / Rename show).
+func has_saved_deck_loaded() -> bool:
+	return _loaded_name != "" and _saved_exists(_loaded_name)
+
+
 func _saved_exists(n: String) -> bool:
 	for dk in DeckStore.list():
 		if dk["name"] == n:
@@ -254,9 +287,9 @@ func _saved_exists(n: String) -> bool:
 	return false
 
 
-## The grid cell widget of catalogue card `id` (null when absent): emit its `pressed` / `right_pressed`.
+## The catalogue card widget of card `id` (null when absent): emit its `pressed` / `right_pressed`.
 func cell_widget(id: int) -> CardWidget:
-	return _cells[id]["widget"] if _cells.has(id) else null
+	return browser.cell_widget(id)
 
 
 ## The deck-grid card widget of card `id` (null when it is not in the deck).
@@ -264,13 +297,44 @@ func deck_widget(id: int) -> CardWidget:
 	return (_deck_tiles[id].get_meta("rec") as Dictionary)["widget"] if _deck_tiles.has(id) and counts.has(id) else null
 
 
+## The count tag text under catalogue card `id` ("" when not in the deck).
+func cell_count_text(id: int) -> String:
+	var tag := _cell_tag(id)
+	return (tag.get_node("Text") as Label).text if tag != null and tag.visible else ""
+
+
+## The count tag under deck tile `id` (null when absent).
+func deck_tag(id: int) -> Control:
+	return (_deck_tiles[id].get_meta("rec") as Dictionary)["tag"] if _deck_tiles.has(id) else null
+
+
 ## Number of catalogue cells currently shown (passing the filters).
 func visible_cell_count() -> int:
-	var n := 0
-	for c in _cells.values():
-		if c["cell"].visible:
-			n += 1
-	return n
+	return browser.visible_count()
+
+
+## The selected (previewed) card id, -1 when none.
+func preview_id() -> int:
+	return _preview_id
+
+
+## The preview pane's Add / Remove buttons (the only deck editing controls, F18).
+func add_button() -> Button:
+	return _add_btn
+
+
+func remove_button() -> Button:
+	return _rem_btn
+
+
+func delete_button() -> Button:
+	return _delete_btn
+
+
+## Ghost cards currently flying (F24 presentation; dev/test helper).
+func ghost_count() -> int:
+	_ghosts = _ghosts.filter(func(g): return is_instance_valid(g))
+	return _ghosts.size()
 
 
 ## The text of the inline error beside the name field ("" when none is shown).
@@ -286,46 +350,60 @@ func saved_row(n: String) -> Control:
 	return null
 
 
-## Opens the shared card inspector for catalogue card `id`; the working deck is untouched.
+## Opens the shared card inspector for card `id`; the working deck is untouched.
 func inspect_card(id: int) -> CardInspector:
 	return CardInspector.open(self, MatchView.summary_view(_summary(id)))
 
 
-## Shows card `id` big in the preview column with the same details pane as the game screen.
+## Shows card `id` big in the preview column (deck-construction stats, F19) and selects it.
 func show_preview(id: int) -> void:
-	_preview_id = id
-	for c in _preview_holder.get_children():
-		_preview_holder.remove_child(c)
-		c.queue_free()
-	var s := _summary(id)
-	var cw := CardWidget.new().setup(MatchView.summary_view(s), "big")
-	cw.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	cw.show_tooltip = false
-	cw.tooltip_text = ""
-	_preview_holder.add_child(cw)
-	_details.show_card(MatchView.summary_view(s))
-	_preview_note.visible = s["support"] != "full"
-	_preview_note.text = "Implementation: %s" % s["support"]
-	_update_preview_count()
+	_select(id)
 
 
-func _update_preview_count() -> void:
-	var n := int(counts.get(_preview_id, 0))
-	_preview_count.text = ("In your deck: x%d" % n) if n > 0 else "Not in your deck"
-	_preview_count.add_theme_color_override("font_color", UIStyle.GOLD_HI if n > 0 else UIStyle.TEXT_DIM)
-	var sb := UIStyle.flat(Color(UIStyle.GOLD, 0.14) if n > 0 else Color(0, 0, 0, 0.3), UIStyle.GOLD if n > 0 else Color(UIStyle.BRONZE, 0.6), 1, 12)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 3
-	sb.content_margin_bottom = 3
-	_preview_chip.add_theme_stylebox_override("panel", sb)
+## Preview-pane Add (also Enter / +): adds one copy with sound and the fly animation (F24).
+## Unavailable (deck full) gives the deny sound and a small shake instead.
+func ui_add() -> bool:
+	if _preview_id < 0:
+		return false
+	if add_block_reason(_preview_id) != "":
+		Sfx.play("deny")
+		_shake(_add_btn)
+		return false
+	var from := _preview_card.get_global_rect() if _preview_card != null else Rect2()
+	add_card(_preview_id)
+	Sfx.play("card_set", -2.0, 0.06)
+	_pop(_preview_chip, UIStyle.GOOD)
+	_pop(_cell_tag(_preview_id), UIStyle.GOOD)
+	_queue_fly(_preview_id, from, true)
+	return true
+
+
+## Preview-pane Remove (also -): removes one copy with sound and the return animation (F24).
+func ui_remove() -> bool:
+	if _preview_id < 0 or int(counts.get(_preview_id, 0)) <= 0:
+		Sfx.play("deny")
+		return false
+	var id := _preview_id
+	var tile: Control = _deck_tiles.get(id)
+	var from := Rect2()
+	if tile != null and _tile_on_screen(tile):
+		from = ((tile.get_meta("rec") as Dictionary)["widget"] as Control).get_global_rect()
+	remove_card(id)
+	Sfx.play("card_draw", -2.0, 0.06)
+	_pop(_preview_chip, UIStyle.BAD)
+	if counts.has(id):
+		_pop(deck_tag(id), UIStyle.BAD)
+		_pop(_cell_tag(id), UIStyle.BAD)
+	if from.size != Vector2.ZERO and _preview_card != null:
+		_fly(id, from, _preview_card.get_global_rect(), false)
+	return true
 
 
 # ------------------------------------------------------------ small widgets
 
-## Round-cornered icon button drawn from vectors (no font glyph needed): minus, plus, cross, pencil.
+## Round-cornered icon button drawn from vectors (no font glyph needed): cross, pencil.
 class IconBtn extends JuicyButton:
-	var glyph: String = "minus"
+	var glyph: String = "cross"
 	var tint: Color = UIStyle.TEXT
 
 	func _draw() -> void:
@@ -335,11 +413,6 @@ class IconBtn extends JuicyButton:
 		var r := minf(size.x, size.y) * 0.24
 		var w := maxf(1.8, minf(size.x, size.y) * 0.1)
 		match glyph:
-			"minus":
-				draw_line(c + Vector2(-r, 0), c + Vector2(r, 0), col, w)
-			"plus":
-				draw_line(c + Vector2(-r, 0), c + Vector2(r, 0), col, w)
-				draw_line(c + Vector2(0, -r), c + Vector2(0, r), col, w)
 			"cross":
 				draw_line(c + Vector2(-r, -r), c + Vector2(r, r), col, w)
 				draw_line(c + Vector2(-r, r), c + Vector2(r, -r), col, w)
@@ -369,8 +442,8 @@ class Rule extends Control:
 		draw_polyline_colors(pts, cols, 1.5)
 
 
-## A bronze-trimmed, softly shaded plate for one of the three columns.
-static func _plate(color: Color = UIStyle.PANEL) -> PanelContainer:
+## A bronze-trimmed, softly shaded plate for one of the columns.
+static func plate(color: Color = UIStyle.PANEL) -> PanelContainer:
 	var p := PanelContainer.new()
 	var sb := UIStyle.panel_style(color, UIStyle.BRONZE, 8)
 	sb.shadow_size = 10
@@ -399,7 +472,7 @@ static func _plate(color: Color = UIStyle.PANEL) -> PanelContainer:
 
 
 ## Section heading: Cinzel title with the fading gold rule under it.
-static func _heading(text: String, size: int = 18) -> VBoxContainer:
+static func heading(text: String, size: int = 18) -> VBoxContainer:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 3)
 	v.add_child(UIStyle.title_label(text, size, UIStyle.GOLD_HI))
@@ -407,11 +480,37 @@ static func _heading(text: String, size: int = 18) -> VBoxContainer:
 	return v
 
 
-## Small rounded pill: a bold value and a dim caption.
-static func _chip(value: String, caption: String, accent: Color = UIStyle.GOLD_HI) -> PanelContainer:
+## Wood table background with a soft radial vignette (shared with the catalogue screen).
+static func table_backdrop(host: Control) -> void:
+	var bg := ColorRect.new()
+	bg.color = UIStyle.TABLE_WOOD
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.add_child(bg)
+	var vignette := TextureRect.new()
+	var vg := Gradient.new()
+	vg.colors = PackedColorArray([Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.45)])
+	var vt := GradientTexture2D.new()
+	vt.gradient = vg
+	vt.fill = GradientTexture2D.FILL_RADIAL
+	vt.fill_from = Vector2(0.5, 0.45)
+	vt.fill_to = Vector2(1.05, 1.0)
+	vt.width = 256
+	vt.height = 256
+	vignette.texture = vt
+	vignette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	vignette.stretch_mode = TextureRect.STRETCH_SCALE
+	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.add_child(vignette)
+
+
+## Summary pill: a bold value in a fixed-width slot (room for 99, F16) and a dim caption.
+## Returns the pill; the value Label is its "Value" node.
+static func count_chip(caption: String, accent: Color = UIStyle.GOLD_HI) -> PanelContainer:
 	var pc := PanelContainer.new()
 	var sb := UIStyle.flat(Color(0, 0, 0, 0.32), Color(UIStyle.BRONZE, 0.7), 1, 10)
-	sb.content_margin_left = 9
+	sb.content_margin_left = 8
 	sb.content_margin_right = 9
 	sb.content_margin_top = 2
 	sb.content_margin_bottom = 2
@@ -421,37 +520,53 @@ static func _chip(value: String, caption: String, accent: Color = UIStyle.GOLD_H
 	h.add_theme_constant_override("separation", 5)
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pc.add_child(h)
-	var a := UIStyle.label(value, 13, accent)
+	var a := UIStyle.label("0", 13, accent)
+	a.name = "Value"
 	a.add_theme_font_override("font", UIStyle.font_bold())
+	a.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	a.custom_minimum_size.x = ceilf(UIStyle.font_bold().get_string_size("99", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x) + 2.0
 	h.add_child(a)
 	if caption != "":
 		h.add_child(UIStyle.label(caption, 12, UIStyle.TEXT_DIM))
 	return pc
 
 
-## Gold count pill ("x3") pinned onto a card corner.
-static func _count_badge() -> PanelContainer:
+## Gold quantity tag ("x3") shown just below a card (F18), fixed width with room for x99 (F16).
+static func count_tag() -> PanelContainer:
 	var pc := PanelContainer.new()
-	var sb := UIStyle.flat(UIStyle.GOLD, UIStyle.GOLD_HI, 1, 10)
-	sb.border_color = Color("fff0b8")
-	sb.content_margin_left = 7
-	sb.content_margin_right = 7
+	var sb := UIStyle.flat(UIStyle.GOLD, Color("fff0b8"), 1, 10)
+	sb.content_margin_left = 4
+	sb.content_margin_right = 4
 	sb.content_margin_top = 0
 	sb.content_margin_bottom = 1
 	sb.shadow_color = Color(0, 0, 0, 0.6)
 	sb.shadow_size = 4
 	sb.shadow_offset = Vector2(0, 1)
 	pc.add_theme_stylebox_override("panel", sb)
+	pc.custom_minimum_size = Vector2(TAG_W, TAG_H)
 	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var l := UIStyle.label("", 14, UIStyle.ON_GOLD)
 	l.add_theme_font_override("font", UIStyle.font_bold())
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.name = "Text"
 	pc.add_child(l)
 	return pc
 
 
-## Round -/+/x/pencil button of `px` square; `danger` tints the rim red.
+## Centres `c` horizontally in a full-rect row inside `host` (host keeps its own size).
+static func _centre_in(host: Control, c: Control) -> void:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	host.add_child(row)
+	c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(c)
+
+
+## Round pencil/cross button of `px` square; `danger` tints the rim red.
 static func _icon_btn(glyph: String, px: int, tip: String, danger: bool = false) -> IconBtn:
 	var b := IconBtn.new()
 	b.glyph = glyph
@@ -473,46 +588,7 @@ static func _icon_btn(glyph: String, px: int, tip: String, danger: bool = false)
 	return b
 
 
-## Gives a LineEdit the house look (ink fill, bronze rim, gold when focused).
-static func _style_edit(le: LineEdit, err: bool = false) -> void:
-	var n := UIStyle.flat(UIStyle.PANEL_INK, UIStyle.BAD if err else UIStyle.BRONZE, 2 if err else 1, 6)
-	var f := UIStyle.flat(UIStyle.PANEL_INK, UIStyle.BAD if err else UIStyle.GOLD, 2, 6)
-	for sb in [n, f]:
-		sb.content_margin_left = 10
-		sb.content_margin_right = 10
-		sb.content_margin_top = 6
-		sb.content_margin_bottom = 6
-	n.shadow_color = Color(0, 0, 0, 0.35)
-	n.shadow_size = 3
-	n.shadow_offset = Vector2(0, 1)
-	le.add_theme_stylebox_override("normal", n)
-	le.add_theme_stylebox_override("focus", f)
-	le.add_theme_color_override("font_color", UIStyle.TEXT)
-	le.add_theme_color_override("font_placeholder_color", Color(UIStyle.TEXT_DIM, 0.7))
-	le.add_theme_color_override("caret_color", UIStyle.GOLD_HI)
-	le.add_theme_color_override("selection_color", Color(UIStyle.GOLD, 0.35))
-	le.add_theme_font_size_override("font_size", 15)
-
-
-## Pins `c` to a corner of its parent Control, `dx`/`dy` px in from the corner ("tr", "tl", "br", "bl").
-static func _pin(c: Control, corner: String, dx: float, dy: float) -> void:
-	var ax := 1.0 if corner.ends_with("r") else (0.5 if corner.ends_with("c") else 0.0)
-	var ay := 1.0 if corner.begins_with("b") else 0.0
-	c.anchor_left = ax
-	c.anchor_right = ax
-	c.anchor_top = ay
-	c.anchor_bottom = ay
-	c.grow_horizontal = Control.GROW_DIRECTION_BEGIN if ax == 1.0 else (Control.GROW_DIRECTION_BOTH if ax == 0.5 else Control.GROW_DIRECTION_END)
-	c.grow_vertical = Control.GROW_DIRECTION_BEGIN if ay == 1.0 else Control.GROW_DIRECTION_END
-	var ox := -dx if ax == 1.0 else (0.0 if ax == 0.5 else dx)
-	var oy := -dy if ay == 1.0 else dy
-	c.offset_left = ox
-	c.offset_right = ox
-	c.offset_top = oy
-	c.offset_bottom = oy
-
-
-## Empty-state block: a dashed-look slot with a title and a hint.
+## Empty-state block: a soft slot with a title and a hint.
 static func _empty_state(title: String, hint: String) -> PanelContainer:
 	var pc := PanelContainer.new()
 	var sb := UIStyle.flat(Color(0, 0, 0, 0.2), Color(UIStyle.BRONZE, 0.5), 1, 8)
@@ -530,39 +606,10 @@ static func _empty_state(title: String, hint: String) -> PanelContainer:
 	return pc
 
 
-## Brief scale pulse on a card widget when it is clicked (skipped under reduced motion).
-func _pulse(w: Control) -> void:
-	if UIStyle.reduce_motion or not w.is_inside_tree():
-		return
-	w.pivot_offset = w.size / 2.0
-	w.scale = Vector2(0.94, 0.94)
-	var tw := w.create_tween()
-	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.16)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-
 # ------------------------------------------------------------ construction
 
 func _build() -> void:
-	var bg := ColorRect.new()
-	bg.color = UIStyle.TABLE_WOOD
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
-	var vignette := TextureRect.new()
-	var vg := Gradient.new()
-	vg.colors = PackedColorArray([Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.45)])
-	var vt := GradientTexture2D.new()
-	vt.gradient = vg
-	vt.fill = GradientTexture2D.FILL_RADIAL
-	vt.fill_from = Vector2(0.5, 0.45)
-	vt.fill_to = Vector2(1.05, 1.0)
-	vt.width = 256
-	vt.height = 256
-	vignette.texture = vt
-	vignette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	vignette.stretch_mode = TextureRect.STRETCH_SCALE
-	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(vignette)
+	table_backdrop(self)
 	var margin := UIStyle.full_rect_margin(MARGIN)
 	add_child(margin)
 	var root := VBoxContainer.new()
@@ -602,132 +649,94 @@ func _build() -> void:
 	_status_panel.add_child(_status)
 	root.add_child(_status_panel)
 
-
-func _opt(items: Array, first: String) -> OptionButton:
-	var o := OptionButton.new()
-	o.add_item(first)
-	o.set_item_metadata(0, "")
-	for it in items:
-		o.add_item(String(it))
-		o.set_item_metadata(o.item_count - 1, String(it))
-	o.item_selected.connect(func(_i): _refresh_catalogue())
-	return o
+	# Ghost cards fly on this layer; it never takes input.
+	_fx_layer = Control.new()
+	_fx_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fx_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fx_layer.z_index = 5
+	add_child(_fx_layer)
 
 
 func _build_catalogue(body: HBoxContainer) -> void:
-	var plate := _plate()
-	plate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	plate.size_flags_stretch_ratio = 3.0
-	body.add_child(plate)
+	var p := plate()
+	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p.size_flags_stretch_ratio = 3.0
+	body.add_child(p)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
-	plate.add_child(v)
-	v.add_child(_heading("Card catalogue"))
-	_search = LineEdit.new()
-	_search.placeholder_text = "Search name or rules text..."
-	_search.clear_button_enabled = true
-	_style_edit(_search)
-	_search.text_changed.connect(func(_t): _refresh_catalogue())
-	v.add_child(_search)
-	var filters := HFlowContainer.new()
-	filters.add_theme_constant_override("h_separation", 8)
-	filters.add_theme_constant_override("v_separation", 6)
-	v.add_child(filters)
-	_cat_opt = OptionButton.new()
-	_cat_opt.add_item("Any category")
-	_cat_opt.set_item_metadata(0, "")
-	for k in UIStyle.CATEGORY_NAMES:
-		_cat_opt.add_item(UIStyle.CATEGORY_NAMES[k])
-		_cat_opt.set_item_metadata(_cat_opt.item_count - 1, k)
-	_cat_opt.item_selected.connect(func(_i): _refresh_catalogue())
-	filters.add_child(_cat_opt)
-	_type_opt = _opt(CardDB.ELEMENTS, "Any Type")
-	filters.add_child(_type_opt)
-	_race_opt = _opt(CardDB.RACES, "Any Race")
-	filters.add_child(_race_opt)
-	_cost_opt = OptionButton.new()
-	for c in COST_OPTIONS:
-		_cost_opt.add_item(c[0])
-		_cost_opt.set_item_metadata(_cost_opt.item_count - 1, c[1])
-	_cost_opt.item_selected.connect(func(_i): _refresh_catalogue())
-	filters.add_child(_cost_opt)
-	var reset := UIStyle.button("Clear filters", 13)
-	reset.pressed.connect(func():
-		_search.text = ""
-		for o in [_cat_opt, _type_opt, _race_opt, _cost_opt]:
-			o.select(0)
-		_refresh_catalogue())
-	filters.add_child(reset)
-	_result_label = UIStyle.label("", 12, UIStyle.TEXT_DIM)
-	v.add_child(_result_label)
-	var sc := ScrollContainer.new()
-	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	v.add_child(sc)
-	_grid = HFlowContainer.new()
-	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_grid.add_theme_constant_override("h_separation", 8)
-	_grid.add_theme_constant_override("v_separation", 4)
-	sc.add_child(_grid)
-	_grid.resized.connect(_spread_grid)
-	_no_match = _empty_state("No cards match", "Loosen the search or press Clear filters.")
-	v.add_child(_no_match)
+	p.add_child(v)
+	v.add_child(heading("Card catalogue"))
+	browser = CardBrowser.new(false, CELL_FOOTER)
+	browser.card_selected.connect(func(id): _select(id, false))
+	browser.card_inspected.connect(func(id): inspect_card(id))
+	browser.card_activated.connect(func(_id): ui_add())
+	v.add_child(browser)
+	browser.build()
+	for d in CardDB.all():
+		var id := int(d["id"])
+		var tag := count_tag()
+		tag.visible = false
+		_centre_in(browser.footer(id), tag)
+		browser.cell(id).set_meta("tag", tag)
 
 
 func _build_preview(body: HBoxContainer) -> void:
-	var plate := _plate(UIStyle.PANEL_INK)
-	plate.custom_minimum_size = Vector2(320, 0)
-	body.add_child(plate)
+	var p := plate(UIStyle.PANEL_INK)
+	p.custom_minimum_size = Vector2(320, 0)
+	body.add_child(p)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
-	plate.add_child(v)
-	v.add_child(_heading("Preview"))
+	p.add_child(v)
+	v.add_child(heading("Preview"))
 	_preview_holder = VBoxContainer.new()
 	_preview_holder.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(_preview_holder)
-	var sc := ScrollContainer.new()
+	var mid := HBoxContainer.new()
+	mid.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_child(mid)
+	_preview_chip = PanelContainer.new()
+	_preview_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_preview_count = UIStyle.label("", 14, UIStyle.TEXT_DIM)
+	_preview_count.add_theme_font_override("font", UIStyle.font_bold())
+	_preview_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_preview_chip.add_child(_preview_count)
+	mid.add_child(_preview_chip)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	v.add_child(row)
+	_add_btn = UIStyle.primary_button("Add to deck", 15)
+	_add_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_add_btn.custom_minimum_size = Vector2(0, 38)
+	_add_btn.pressed.connect(ui_add)
+	row.add_child(_add_btn)
+	_rem_btn = UIStyle.button("Remove one", 15)
+	_rem_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_rem_btn.custom_minimum_size = Vector2(0, 38)
+	_rem_btn.pressed.connect(ui_remove)
+	row.add_child(_rem_btn)
+	var sc := SmoothScroll.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(sc)
 	var inner := VBoxContainer.new()
 	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inner.add_theme_constant_override("separation", 6)
 	sc.add_child(inner)
 	_details = CardDetailsPanel.new()
+	_details.construction = true
 	inner.add_child(_details)
 	_preview_note = UIStyle.label("", 13, UIStyle.BAD)
 	inner.add_child(_preview_note)
-	_preview_chip = PanelContainer.new()
-	_preview_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_preview_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_preview_count = UIStyle.label("", 14, UIStyle.TEXT_DIM)
-	_preview_count.add_theme_font_override("font", UIStyle.font_bold())
-	_preview_chip.add_child(_preview_count)
-	inner.add_child(_preview_chip)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	v.add_child(row)
-	var add := UIStyle.primary_button("Add to deck", 14)
-	add.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add.custom_minimum_size = Vector2(0, 34)
-	add.pressed.connect(func(): if _preview_id >= 0: add_card(_preview_id))
-	row.add_child(add)
-	var rem := UIStyle.button("Remove one", 14)
-	rem.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rem.custom_minimum_size = Vector2(0, 34)
-	rem.pressed.connect(func(): if _preview_id >= 0: remove_card(_preview_id))
-	row.add_child(rem)
 
 
 func _build_deck(body: HBoxContainer) -> void:
-	var plate := _plate()
-	plate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	plate.size_flags_stretch_ratio = 2.2
-	body.add_child(plate)
+	var p := plate()
+	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p.size_flags_stretch_ratio = 2.2
+	body.add_child(p)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
-	plate.add_child(v)
-	v.add_child(_heading("Your deck"))
+	p.add_child(v)
+	v.add_child(heading("Your deck"))
 
 	# Name field with its inline error line right under it (F04-20).
 	_name_box = VBoxContainer.new()
@@ -736,7 +745,7 @@ func _build_deck(body: HBoxContainer) -> void:
 	deck_name_edit = LineEdit.new()
 	deck_name_edit.placeholder_text = "Deck name"
 	deck_name_edit.max_length = 40
-	_style_edit(deck_name_edit)
+	CardBrowser.style_edit(deck_name_edit)
 	deck_name_edit.text_changed.connect(func(_t):
 		dirty = true
 		_clear_name_error()
@@ -752,34 +761,39 @@ func _build_deck(body: HBoxContainer) -> void:
 	actions.add_theme_constant_override("h_separation", 6)
 	actions.add_theme_constant_override("v_separation", 6)
 	v.add_child(actions)
-	var save_b := UIStyle.primary_button("Save", 14)
-	save_b.custom_minimum_size = Vector2(84, 32)
-	save_b.pressed.connect(_on_save_pressed)
-	actions.add_child(save_b)
-	for spec in [["New", "Start a new empty deck"], ["Rename", "Rename the loaded saved deck to the name typed above"], ["Delete", "Delete the saved deck named above"]]:
-		var b := UIStyle.button(spec[0], 14)
-		b.custom_minimum_size = Vector2(76, 32)
-		b.tooltip_text = spec[1]
-		actions.add_child(b)
-		match spec[0]:
-			"New": b.pressed.connect(func(): _guard_unsaved(new_deck))
-			"Rename": b.pressed.connect(rename_loaded)
-			_: b.pressed.connect(func(): _ask_delete())
+	_save_btn = UIStyle.primary_button("Save", 14)
+	_save_btn.custom_minimum_size = Vector2(84, 32)
+	_save_btn.pressed.connect(_on_save_pressed)
+	actions.add_child(_save_btn)
+	var new_b := UIStyle.button("New", 14)
+	new_b.custom_minimum_size = Vector2(76, 32)
+	new_b.tooltip_text = "Start a new empty deck"
+	new_b.pressed.connect(func(): _guard_unsaved(new_deck))
+	actions.add_child(new_b)
+	_rename_btn = UIStyle.button("Rename", 14)
+	_rename_btn.custom_minimum_size = Vector2(76, 32)
+	_rename_btn.tooltip_text = "Rename the loaded saved deck to the name typed above"
+	_rename_btn.pressed.connect(rename_loaded)
+	actions.add_child(_rename_btn)
+	_delete_btn = UIStyle.button("Delete", 14)
+	_delete_btn.custom_minimum_size = Vector2(76, 32)
+	_delete_btn.tooltip_text = "Delete the loaded saved deck"
+	_delete_btn.pressed.connect(func(): _ask_delete())
+	actions.add_child(_delete_btn)
 
-	# Saved / starter deck tiles (F04-17): a segmented switch over one scrolling list.
+	# Saved / starter deck tiles (F04-17, F20): two established-style toggle buttons over one list.
 	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 0)
+	tabs.add_theme_constant_override("separation", 8)
 	v.add_child(tabs)
 	var group := ButtonGroup.new()
-	_tab_saved = _tab_button("Saved decks", group, true)
-	_tab_starters = _tab_button("Starter decks", group, false)
+	_tab_saved = _tab_button("Saved Decks", group, true)
+	_tab_starters = _tab_button("Starter Decks", group, false)
 	_tab_saved.pressed.connect(func(): _show_starters = false; _refresh_saved())
 	_tab_starters.pressed.connect(func(): _show_starters = true; _refresh_saved())
 	tabs.add_child(_tab_saved)
 	tabs.add_child(_tab_starters)
-	var list_sc := ScrollContainer.new()
+	var list_sc := SmoothScroll.new()
 	_list_scroll = list_sc
-	list_sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(list_sc)
 	_list_box = VBoxContainer.new()
 	_list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -787,42 +801,83 @@ func _build_deck(body: HBoxContainer) -> void:
 	list_sc.add_child(_list_box)
 
 	v.add_child(Rule.new(false))
+	# Summary pills: built once, values in fixed-width slots so nothing shifts (F16).
 	_deck_chips = HFlowContainer.new()
 	_deck_chips.add_theme_constant_override("h_separation", 6)
 	_deck_chips.add_theme_constant_override("v_separation", 4)
 	v.add_child(_deck_chips)
-	_empty_note = _empty_state("Your deck is empty", "Click cards in the catalogue to add them. Fusion, Ritual and Arcane cards go to the Extra Deck.")
+	for k in [["total", "cards"], ["main", "Main"], ["extra", "Extra"], ["unique", "unique"]]:
+		var chip := count_chip(k[1])
+		_chip_vals[k[0]] = chip.get_node("HBoxContainer/Value") if chip.has_node("HBoxContainer/Value") else chip.get_child(0).get_child(0)
+		_deck_chips.add_child(chip)
+	var uc := PanelContainer.new()
+	var usb := UIStyle.flat(Color(0, 0, 0, 0.32), Color(UIStyle.TARGET, 0.7), 1, 10)
+	usb.content_margin_left = 9
+	usb.content_margin_right = 9
+	usb.content_margin_top = 2
+	usb.content_margin_bottom = 2
+	uc.add_theme_stylebox_override("panel", usb)
+	uc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ul := UIStyle.label("Unsaved", 13, UIStyle.TARGET)
+	ul.add_theme_font_override("font", UIStyle.font_bold())
+	uc.add_child(ul)
+	_unsaved_chip = uc
+	_deck_chips.add_child(uc)
+	_empty_note = _empty_state("Your deck is empty", "Select a card and press Add to deck. Fusion, Ritual and Arcane cards go to the Extra Deck.")
 	v.add_child(_empty_note)
-	var sc := ScrollContainer.new()
-	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sc.size_flags_stretch_ratio = 1.6
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	v.add_child(sc)
+	_deck_scroll = SmoothScroll.new()
+	_deck_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_deck_scroll.size_flags_stretch_ratio = 1.6
+	v.add_child(_deck_scroll)
 	_deck_box = VBoxContainer.new()
 	_deck_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_deck_box.add_theme_constant_override("separation", 8)
-	sc.add_child(_deck_box)
+	_deck_scroll.add_child(_deck_box)
+	for key in ["main", "extra"]:
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 4)
+		_deck_box.add_child(box)
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 8)
+		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var t := UIStyle.title_label("MAIN DECK" if key == "main" else "EXTRA DECK", 15, UIStyle.GOLD)
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		h.add_child(t)
+		var chip := count_chip("cards")
+		h.add_child(chip)
+		h.add_child(Rule.new())
+		box.add_child(h)
+		var flow := HFlowContainer.new()
+		flow.add_theme_constant_override("h_separation", 4)
+		flow.add_theme_constant_override("v_separation", 2)
+		box.add_child(flow)
+		_sections[key] = {"box": box, "flow": flow, "value": chip.get_child(0).get_child(0)}
 
 
+## Saved / Starter selector (F20): the established button shape and height; the selected one
+## takes the gold primary fill. No counts in the labels.
 func _tab_button(text: String, group: ButtonGroup, on: bool) -> Button:
-	var b := UIStyle.button(text, 13)
+	var b := UIStyle.button(text, 14)
 	b.toggle_mode = true
 	b.button_group = group
 	b.button_pressed = on
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var n := UIStyle.flat(Color(0, 0, 0, 0.3), Color(UIStyle.BRONZE, 0.7), 1, 6)
-	var h := UIStyle.flat(Color(0.14, 0.11, 0.08), UIStyle.GOLD, 1, 6)
+	b.custom_minimum_size = Vector2(140, 34)
+	b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	var p := UIStyle.flat(UIStyle.GOLD, UIStyle.GOLD_HI, 1, 6)
-	for sb in [n, h, p]:
-		sb.content_margin_top = 4
-		sb.content_margin_bottom = 4
-	b.add_theme_stylebox_override("normal", n)
-	b.add_theme_stylebox_override("hover", h)
+	var ph := UIStyle.flat(UIStyle.GOLD_HI, Color.WHITE, 1, 6)
+	for sb in [p, ph]:
+		sb.content_margin_left = 14
+		sb.content_margin_right = 14
+		sb.content_margin_top = 5
+		sb.content_margin_bottom = 5
+	p.border_width_bottom = 2
+	p.border_color = UIStyle.GOLD.darkened(0.35)
+	UIStyle.lift_style(p, Color(0, 0, 0, 0.5), 4, 2)
+	UIStyle.lift_style(ph, Color(UIStyle.GOLD_HI, 0.45), 9, 0)
 	b.add_theme_stylebox_override("pressed", p)
-	b.add_theme_stylebox_override("hover_pressed", p)
+	b.add_theme_stylebox_override("hover_pressed", ph)
 	b.add_theme_color_override("font_pressed_color", UIStyle.ON_GOLD)
 	b.add_theme_color_override("font_hover_pressed_color", UIStyle.ON_GOLD)
-	b.add_theme_color_override("font_color", UIStyle.MUTED)
 	return b
 
 
@@ -834,196 +889,171 @@ func _summary(id: int) -> Dictionary:
 	return _summaries[id]
 
 
-func _sel(o: OptionButton) -> String:
-	return String(o.get_item_metadata(o.selected)) if o.selected >= 0 else ""
+func _recount() -> void:
+	var sc := DeckStore.split_counts(counts_to_cards(counts))
+	_main_n = sc["main"]
+	_extra_n = sc["extra"]
 
 
-## Builds one grid cell per catalogue card (once). Left-click adds a copy, right-click inspects.
-func _build_cells() -> void:
-	for d in CardDB.all():
-		_grid.add_child(_make_cell(d))
-
-
-## Spreads the catalogue columns across the full width: the leftover space becomes the gap
-## between columns instead of a dead strip at the right edge.
-func _spread_grid() -> void:
-	var w := _grid.size.x
-	var cw := float(CELL_MIN_W)
-	var cols := maxi(1, int(floor((w + GRID_MIN_GAP) / (cw + GRID_MIN_GAP))))
-	var gap := GRID_MIN_GAP if cols == 1 else int(floor((w - cols * cw) / float(cols - 1)))
-	if _grid.get_theme_constant("h_separation") != gap:
-		_grid.add_theme_constant_override("h_separation", gap)
-
-
-## A catalogue cell: the card alone (no caption box), a glow behind it and a gold count badge plus
-## a round minus control once it is in the deck. Basic variants read apart by the Type icon on the card.
-func _make_cell(d: Dictionary) -> Control:
-	var id := int(d["id"])
-	var sm := _summary(id)
-	var status := String(sm["support"])
-	var cell := Control.new()
-	cell.set_meta("card_id", id)
-	cell.custom_minimum_size = Vector2(CELL_MIN_W, CELL_H)
-	var glow := Panel.new()
-	var gs := UIStyle.flat(Color(UIStyle.GOLD, 0.0), UIStyle.GOLD_HI, 2, 8)
-	gs.shadow_color = Color(UIStyle.GOLD, 0.55)
-	gs.shadow_size = 9
-	glow.add_theme_stylebox_override("panel", gs)
-	glow.position = Vector2(CELL_PAD, CELL_PAD)
-	glow.size = Vector2(CARD_W, CARD_H)
-	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cell.add_child(glow)
-	var w := CardWidget.new().setup(MatchView.summary_view(sm), "hand")
-	w.position = Vector2(CELL_PAD, CELL_PAD)
-	if status != "full":
-		w.tooltip_text += "\n\nImplementation: %s" % status
-	w.pressed.connect(func(_w): add_card(id); _pulse(w))
-	w.right_pressed.connect(func(_w): inspect_card(id))
-	w.mouse_entered.connect(func(): show_preview(id))
-	cell.add_child(w)
-	if status != "full":
-		var warn := _chip("!", "", UIStyle.BAD)
-		warn.tooltip_text = "Implementation: %s" % status
-		_pin(warn, "tl", 2, 2)
-		cell.add_child(warn)
-	var badge := _count_badge()
-	_pin(badge, "bc", 0, CELL_PAD + 8)
-	cell.add_child(badge)
-	var rem := _icon_btn("minus", 22, "Remove one copy from the deck", true)
-	_pin(rem, "br", 0, 0)
-	rem.pressed.connect(func(): remove_card(id))
-	cell.add_child(rem)
-	_cells[id] = {"cell": cell, "widget": w, "badge": badge, "remove": rem, "glow": glow}
-	_update_cell(id)
-	return cell
-
-
-func _update_cell(id: int) -> void:
-	var c: Dictionary = _cells[id]
-	var n := int(counts.get(id, 0))
-	((c["badge"] as Control).get_node("Text") as Label).text = "x%d" % n
-	(c["badge"] as Control).visible = n > 0
-	(c["remove"] as Control).visible = n > 0
-	(c["glow"] as Control).visible = n > 0
-
-
-func _refresh_catalogue() -> void:
-	var cat := _sel(_cat_opt)
-	var type := _sel(_type_opt)
-	var race := _sel(_race_opt)
-	var cost := _sel(_cost_opt)
-	var n := 0
-	for d in CardDB.all():
-		var show := matches(d, _search.text, cat, type, race, cost)
-		_cells[int(d["id"])]["cell"].visible = show
-		if show:
-			n += 1
-	_result_label.text = "%d of %d cards   ·   click a card to add it, right-click to inspect" % [n, CardDB.all().size()]
-	_no_match.visible = n == 0
-
-
-func _refresh_catalogue_counts() -> void:
-	for id in _cells:
+## After the whole deck was replaced (new / load / copy).
+func _after_replace() -> void:
+	_recount()
+	_refresh_saved()
+	_refresh_deck()
+	for id in browser._cells:
 		_update_cell(id)
 
 
-## One deck-grid tile (built once per card id): mini card, gold count badge, -/+ strip.
+func _select(id: int, sync_browser: bool = true) -> void:
+	if not CardDB.has(id):
+		return
+	var changed := id != _preview_id
+	_preview_id = id
+	if sync_browser and browser.selected_id != id:
+		browser.select(id, false)
+	if changed:
+		for c in _preview_holder.get_children():
+			_preview_holder.remove_child(c)
+			c.queue_free()
+		var s := _summary(id)
+		_preview_card = CardWidget.new().setup(MatchView.summary_view(s), "big")
+		_preview_card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_preview_card.show_tooltip = false
+		_preview_card.tooltip_text = ""
+		_preview_card.right_pressed.connect(func(_w): inspect_card(id))
+		_preview_holder.add_child(_preview_card)
+		_details.show_card(MatchView.summary_view(s))
+		_preview_note.visible = s["support"] != "full"
+		_preview_note.text = "Implementation: %s" % s["support"]
+	_mark_deck_selection()
+	_update_preview_count()
+
+
+func _mark_deck_selection() -> void:
+	for tid in _deck_tiles:
+		var w: CardWidget = (_deck_tiles[tid].get_meta("rec") as Dictionary)["widget"]
+		w.set_marks(false, int(tid) == _preview_id)
+
+
+func _update_preview_count() -> void:
+	if _preview_count == null:
+		return
+	var n := int(counts.get(_preview_id, 0))
+	_preview_count.text = ("In your deck: x%d" % n) if n > 0 else "Not in your deck"
+	_preview_count.add_theme_color_override("font_color", UIStyle.GOLD_HI if n > 0 else UIStyle.TEXT_DIM)
+	var sb := UIStyle.flat(Color(UIStyle.GOLD, 0.14) if n > 0 else Color(0, 0, 0, 0.3), UIStyle.GOLD if n > 0 else Color(UIStyle.BRONZE, 0.6), 1, 12)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 3
+	sb.content_margin_bottom = 3
+	_preview_chip.add_theme_stylebox_override("panel", sb)
+	_preview_chip.custom_minimum_size.x = ceilf(UIStyle.font_bold().get_string_size("In your deck: x99", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x) + 28.0
+	# Legal-action availability (F16): Add is simply unavailable when the deck is full.
+	var reason := add_block_reason(_preview_id) if _preview_id >= 0 else "Select a card first."
+	_add_btn.disabled = reason != ""
+	_add_btn.tooltip_text = reason if reason != "" else "Add one copy to the deck (Enter or +)"
+	_rem_btn.disabled = n <= 0
+	_rem_btn.tooltip_text = "Not in your deck" if n <= 0 else "Remove one copy from the deck (-)"
+
+
+func _cell_tag(id: int) -> Control:
+	var c := browser.cell(id) if browser != null else null
+	return c.get_meta("tag") if c != null and c.has_meta("tag") else null
+
+
+func _update_cell(id: int) -> void:
+	var tag := _cell_tag(id)
+	if tag == null:
+		return
+	var n := int(counts.get(id, 0))
+	(tag.get_node("Text") as Label).text = "x%d" % n
+	tag.visible = n > 0
+	browser.set_marked(id, n > 0)
+
+
+## One deck-grid tile (built once per card id): mini card with its count tag just below (F18).
 func _make_tile(id: int) -> Control:
 	var tile := Control.new()
 	tile.custom_minimum_size = Vector2(TILE_W, TILE_H)
 	tile.set_meta("card_id", id)
 	var w := CardWidget.new().setup(MatchView.summary_view(_summary(id)), "mini")
-	w.position = Vector2(5, 6)
+	w.position = Vector2(5, 4)
 	w.show_tooltip = false
-	w.tooltip_text = "Click to remove one copy · right-click to inspect"
-	w.pressed.connect(func(_w): remove_card(id))
+	w.tooltip_text = "%s\nClick to select, right-click to inspect" % String(_summary(id)["name"])
+	w.pressed.connect(func(_w): _on_tile_clicked(id))
 	w.right_pressed.connect(func(_w): inspect_card(id))
-	w.mouse_entered.connect(func(): show_preview(id))
 	tile.add_child(w)
-	var badge := _count_badge()
-	_pin(badge, "bc", 0, TILE_H - 141 + 8)
-	tile.add_child(badge)
-	var strip := HBoxContainer.new()
-	strip.add_theme_constant_override("separation", 10)
-	strip.alignment = BoxContainer.ALIGNMENT_CENTER
-	strip.position = Vector2(0, 144)
-	strip.size = Vector2(TILE_W, 26)
-	tile.add_child(strip)
-	var minus := _icon_btn("minus", 24, "Remove one copy", true)
-	minus.pressed.connect(func(): remove_card(id))
-	strip.add_child(minus)
-	var plus := _icon_btn("plus", 24, "Add one copy")
-	plus.pressed.connect(func(): add_card(id))
-	strip.add_child(plus)
-	var rec := {"widget": w, "badge": badge}
+	var slot := Control.new()
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot.position = Vector2(0, 4 + 135 + 4)
+	slot.size = Vector2(TILE_W, TAG_H)
+	tile.add_child(slot)
+	var tag := count_tag()
+	_centre_in(slot, tag)
+	var rec := {"widget": w, "tag": tag}
 	_deck_tiles[id] = tile
 	tile.set_meta("rec", rec)
 	return tile
 
 
-func _section_header(text: String, total: int) -> Control:
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 8)
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var t := UIStyle.title_label(text.to_upper(), 15, UIStyle.GOLD)
-	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_child(t)
-	h.add_child(_chip(str(total), "cards"))
-	h.add_child(Rule.new())
-	return h
+func _on_tile_clicked(id: int) -> void:
+	if id != _preview_id:
+		Sfx.play("select", -4.0, 0.03)
+	_select(id)
+	browser.reveal(id)
 
 
+## Syncs the persistent Main / Extra sections with `counts`: tiles are reused and only
+## reordered (canonical catalogue order, F17), so hover, focus and scroll survive every edit.
 func _refresh_deck() -> void:
-	# Detach the reusable tiles, drop the old section containers, drop tiles of cards that left the deck.
 	for id in _deck_tiles.keys():
-		var tile: Control = _deck_tiles[id]
-		if tile.get_parent() != null:
-			tile.get_parent().remove_child(tile)
 		if not counts.has(id):
-			tile.queue_free()
+			var gone: Control = _deck_tiles[id]
 			_deck_tiles.erase(id)
-	for c in _deck_box.get_children():
-		_deck_box.remove_child(c)
-		c.queue_free()
-	var cards := counts_to_cards(counts)
-	var sc := DeckStore.split_counts(cards)
-	for c in _deck_chips.get_children():
-		_deck_chips.remove_child(c)
-		c.queue_free()
-	_deck_chips.add_child(_chip(str(cards.size()), "cards"))
-	_deck_chips.add_child(_chip(str(sc["main"]), "Main"))
-	_deck_chips.add_child(_chip(str(sc["extra"]), "Extra"))
-	_deck_chips.add_child(_chip(str(counts.size()), "unique"))
-	if dirty:
-		_deck_chips.add_child(_chip("Unsaved", "", UIStyle.TARGET))
-	_empty_note.visible = cards.is_empty()
-	for group in ["Main Deck", "Extra Deck"]:
-		var want_extra: bool = group == "Extra Deck"
-		var ids := []
-		var total := 0
-		for id in counts.keys():
-			if CardDB.is_extra_category(CardDB.get_def(int(id))["category"]) == want_extra:
-				ids.append(int(id))
-				total += int(counts[id])
-		if ids.is_empty():
-			continue
-		ids.sort_custom(func(a, b):
-			var da := CardDB.get_def(a)
-			var db := CardDB.get_def(b)
-			if da["category"] != db["category"]:
-				return String(da["category"]) < String(db["category"])
-			return String(da["name"]) < String(db["name"]))
-		_deck_box.add_child(_section_header(group, total))
-		var flow := HFlowContainer.new()
-		flow.add_theme_constant_override("h_separation", 4)
-		flow.add_theme_constant_override("v_separation", 2)
-		_deck_box.add_child(flow)
-		for id in ids:
+			if gone.get_parent() != null:
+				gone.get_parent().remove_child(gone)
+			gone.queue_free()
+	var groups := {"main": [], "extra": []}
+	var totals := {"main": 0, "extra": 0}
+	for id in counts.keys():
+		var key := "extra" if DeckStore.is_extra(int(id)) else "main"
+		groups[key].append(int(id))
+		totals[key] += int(counts[id])
+	for key in ["main", "extra"]:
+		var sec: Dictionary = _sections[key]
+		var flow: HFlowContainer = sec["flow"]
+		var ids := catalogue_sorted(groups[key], _cat_index)
+		for i in ids.size():
+			var id: int = ids[i]
 			var tile: Control = _deck_tiles[id] if _deck_tiles.has(id) else _make_tile(id)
-			flow.add_child(tile)
-			var label := ((tile.get_meta("rec") as Dictionary)["badge"] as Control).get_node("Text") as Label
-			label.text = "x%d" % int(counts[id])
+			if tile.get_parent() != flow:
+				if tile.get_parent() != null:
+					tile.get_parent().remove_child(tile)
+				flow.add_child(tile)
+			if tile.get_index() != i:
+				flow.move_child(tile, i)
+			((tile.get_meta("rec") as Dictionary)["tag"].get_node("Text") as Label).text = "x%d" % int(counts[id])
+		(sec["value"] as Label).text = str(totals[key])
+		(sec["box"] as Control).visible = not ids.is_empty()
+	var total: int = totals["main"] + totals["extra"]
+	(_chip_vals["total"] as Label).text = str(total)
+	(_chip_vals["main"] as Label).text = str(totals["main"])
+	(_chip_vals["extra"] as Label).text = str(totals["extra"])
+	(_chip_vals["unique"] as Label).text = str(counts.size())
+	_unsaved_chip.modulate.a = 1.0 if dirty else 0.0
+	_empty_note.visible = total == 0
+	_mark_deck_selection()
 	_update_preview_count()
+	_update_actions()
+
+
+## F23: Delete (and Rename) only while an actual saved deck is loaded.
+func _update_actions() -> void:
+	if _delete_btn == null:
+		return
+	var has := has_saved_deck_loaded()
+	_delete_btn.visible = has
+	_rename_btn.visible = has
 
 
 ## Rebuilds the saved-deck (or starter) tile list for the active tab.
@@ -1032,8 +1062,6 @@ func _refresh_saved() -> void:
 		_list_box.remove_child(c)
 		c.queue_free()
 	var decks := DeckStore.list()
-	_tab_saved.text = "Saved decks (%d)" % decks.size()
-	_tab_starters.text = "Starter decks (%d)" % _starters.size()
 	_tab_saved.set_pressed_no_signal(not _show_starters)
 	_tab_starters.set_pressed_no_signal(_show_starters)
 	if _show_starters:
@@ -1046,6 +1074,7 @@ func _refresh_saved() -> void:
 			_list_box.add_child(_deck_tile(String(dk["name"]), dk["cards"], String(dk["name"]) == _loaded_name, false))
 	# Fit the list to its content (tiles + gaps), scrolling only beyond LIST_MAX_H.
 	_list_scroll.custom_minimum_size.y = clampf(_list_box.get_combined_minimum_size().y + 4.0, 40.0, LIST_MAX_H)
+	_update_actions()
 
 
 ## One deck tile: accent bar, name, Main/Extra counts, dominant Type icons, hover and loaded states, actions.
@@ -1134,6 +1163,135 @@ func _deck_tile(deck_name: String, cards: Array, loaded: bool, starter: bool) ->
 	return pc
 
 
+# ------------------------------------------------------------ edit feedback (F24)
+
+## Scale pop with a colour flash on `c` (a count tag or chip). Static under reduced motion.
+func _pop(c: Control, flash: Color) -> void:
+	if c == null or not is_instance_valid(c) or not c.is_inside_tree() or UIStyle.reduce_motion:
+		return
+	c.pivot_offset = c.size / 2.0
+	var tw := c.create_tween()
+	tw.set_parallel(true)
+	c.scale = Vector2(1.28, 1.28)
+	c.modulate = flash.lightened(0.35)
+	tw.tween_property(c, "scale", Vector2.ONE, UIStyle.dur(0.26)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "modulate", Color.WHITE, UIStyle.dur(0.3))
+
+
+func _shake(c: Control) -> void:
+	if c == null or UIStyle.reduce_motion or not c.is_inside_tree():
+		return
+	var x0 := c.position.x
+	var tw := c.create_tween()
+	for dx in [-5.0, 5.0, -3.0, 3.0, 0.0]:
+		tw.tween_property(c, "position:x", x0 + dx, 0.035)
+	tw.finished.connect(func(): if is_instance_valid(c) and c.get_parent() is Container: (c.get_parent() as Container).queue_sort())
+
+
+func _tile_on_screen(tile: Control) -> bool:
+	return tile.is_visible_in_tree() and _deck_scroll.get_global_rect().intersects(tile.get_global_rect())
+
+
+## Waits one frame (the new / moved tile gets its layout), then flies a ghost from `from`.
+func _queue_fly(id: int, from: Rect2, adding: bool) -> void:
+	if UIStyle.reduce_motion or from.size == Vector2.ZERO or not is_inside_tree():
+		_reveal_tile(id)
+		return
+	get_tree().process_frame.connect(_fly_to_tile.bind(id, from, adding), CONNECT_ONE_SHOT)
+
+
+func _fly_to_tile(id: int, from: Rect2, adding: bool) -> void:
+	if not is_inside_tree() or not _deck_tiles.has(id):
+		return
+	var tile: Control = _deck_tiles[id]
+	var shift := _reveal_tile(id)
+	var w: Control = (tile.get_meta("rec") as Dictionary)["widget"]
+	var to := w.get_global_rect()
+	to.position.y -= shift
+	var clip := _deck_scroll.get_global_rect()
+	to.position.y = clampf(to.position.y, clip.position.y - to.size.y * 0.5, clip.end.y - to.size.y * 0.5)
+	_fly(id, from, to, adding)
+
+
+## Glides the deck list so tile `id` is in view; returns how far the view will move (px).
+func _reveal_tile(id: int) -> float:
+	if not _deck_tiles.has(id):
+		return 0.0
+	var tile: Control = _deck_tiles[id]
+	var top := tile.get_global_rect().position.y - _deck_box.get_global_rect().position.y
+	var bottom := top + tile.size.y
+	var cur := float(_deck_scroll.scroll_vertical)
+	var view_h := _deck_scroll.size.y
+	var target := cur
+	if top < cur:
+		target = top
+	elif bottom > cur + view_h:
+		target = bottom - view_h
+	target = clampf(target, 0.0, maxf(0.0, _deck_box.size.y - view_h))
+	if is_equal_approx(target, cur):
+		return 0.0
+	if _deck_scroll_tw != null and _deck_scroll_tw.is_valid():
+		_deck_scroll_tw.kill()
+	if UIStyle.reduce_motion or not is_inside_tree():
+		_deck_scroll.scroll_vertical = int(target)
+	else:
+		_deck_scroll_tw = create_tween()
+		_deck_scroll_tw.tween_property(_deck_scroll, "scroll_vertical", int(target), UIStyle.dur(0.24)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	return target - cur
+
+
+## A non-interactive mini card flying from `from` to `to` (global rects). Adding lands with a
+## tag pop on the tile; removing shrinks and fades into the preview card.
+func _fly(id: int, from: Rect2, to: Rect2, adding: bool) -> void:
+	if UIStyle.reduce_motion or not is_inside_tree():
+		return
+	ghost_count()
+	while _ghosts.size() >= MAX_GHOSTS:
+		var old: Control = _ghosts.pop_front()
+		if is_instance_valid(old):
+			old.queue_free()
+	var g := CardWidget.new().setup(MatchView.summary_view(_summary(id)), "mini")
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	g.show_tooltip = false
+	g.auto_hover = false
+	_fx_layer.add_child(g)
+	_ghosts.append(g)
+	var origin := _fx_layer.get_global_rect().position
+	g.pivot_offset = Vector2.ZERO
+	g.position = from.position - origin
+	g.scale = Vector2.ONE * (from.size.x / MINI_W)
+	g.modulate = Color(1, 1, 1, 0.95)
+	var end_scale := Vector2.ONE * (to.size.x / MINI_W) * (1.0 if adding else 0.55)
+	var end_pos := to.position - origin
+	if not adding:
+		end_pos += to.size * 0.225
+	var t := UIStyle.dur(FLY_TIME)
+	var tw := g.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(g, "position", end_pos, t).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(g, "scale", end_scale, t).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(g, "rotation", deg_to_rad(-6.0 if adding else 6.0), t * 0.5).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_property(g, "modulate:a", 0.0, UIStyle.dur(0.1))
+	tw.finished.connect(func():
+		if adding:
+			_pop(deck_tag(id), UIStyle.GOOD)
+			_pulse_tile(id)
+		g.queue_free())
+
+
+func _pulse_tile(id: int) -> void:
+	var w := deck_widget(id)
+	if w == null or UIStyle.reduce_motion:
+		return
+	w.pivot_offset = w.size / 2.0
+	w.scale = Vector2(1.08, 1.08)
+	w.fx_glow = Color(UIStyle.GOLD_HI, 0.8)
+	var tw := w.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.22)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "fx_glow", Color(UIStyle.GOLD_HI, 0.0), UIStyle.dur(0.4))
+
+
 # ------------------------------------------------------------ actions
 
 ## Reports `text`. Problems with the name (save, rename, delete) show inline under the name field;
@@ -1156,7 +1314,7 @@ func _say(text: String, bad: bool = false) -> void:
 func _show_name_error(text: String) -> void:
 	_name_err.text = text
 	_name_err.visible = true
-	_style_edit(deck_name_edit, true)
+	CardBrowser.style_edit(deck_name_edit, true)
 	if UIStyle.reduce_motion or not is_inside_tree():
 		return
 	if _name_shake != null and _name_shake.is_valid():
@@ -1172,7 +1330,7 @@ func _clear_name_error() -> void:
 		return
 	_name_err.visible = false
 	_name_err.text = ""
-	_style_edit(deck_name_edit, false)
+	CardBrowser.style_edit(deck_name_edit, false)
 
 
 ## Save button / Enter in the name field: asks before replacing a different saved deck of the same name.
@@ -1200,6 +1358,7 @@ func _begin_rename(n: String) -> void:
 	_say("Type the new name for \"%s\", then press Rename." % n)
 
 
+## Starter decks are read-only: picking one copies it into the editor as a new unsaved deck.
 func _copy_starter_cards(starter_name: String, cards: Array) -> void:
 	load_cards(starter_name + " (copy)", cards)
 	dirty = true
@@ -1217,13 +1376,58 @@ func _guard_unsaved(proceed: Callable) -> void:
 		proceed.call()
 
 
+## Back button and Esc (F21): one flow, including the unsaved-changes question; emits `closed`
+## at most once.
 func _on_back() -> void:
-	_guard_unsaved(func(): closed.emit())
+	if _leaving:
+		return
+	_guard_unsaved(func():
+		if _leaving:
+			return
+		_leaving = true
+		closed.emit())
 
 
-## Deletes saved deck `which` (default: the name typed in the field) after confirmation.
+## Esc: an open inspector closes itself first (it handles the key); an open confirmation is
+## cancelled; otherwise Esc is the Back button. + / - / Enter edit the selected card.
+func _input(event: InputEvent) -> void:
+	var ke := event as InputEventKey
+	if ke == null or not ke.pressed or not is_visible_in_tree():
+		return
+	if ke.keycode == KEY_ESCAPE:
+		if ke.echo or CardInspector.open_count() > 0:
+			return   # the inspector's own Esc handler closes it; nothing else happens
+		get_viewport().set_input_as_handled()
+		if _overlay != null and is_instance_valid(_overlay) and not _overlay.is_queued_for_deletion():
+			_overlay.close()
+			return
+		_on_back()
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var ke := event as InputEventKey
+	if ke == null or not ke.pressed or CardInspector.open_count() > 0 or _modal_open():
+		return
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit:
+		return
+	match ke.keycode:
+		KEY_EQUAL, KEY_PLUS, KEY_KP_ADD:
+			ui_add()
+		KEY_MINUS, KEY_KP_SUBTRACT:
+			ui_remove()
+		_:
+			return
+	get_viewport().set_input_as_handled()
+
+
+func _modal_open() -> bool:
+	return _overlay != null and is_instance_valid(_overlay) and not _overlay.is_queued_for_deletion()
+
+
+## Deletes saved deck `which` (default: the loaded saved deck) after confirmation.
 func _ask_delete(which: String = "") -> void:
-	var n := which if which != "" else deck_name_edit.text.strip_edges()
+	var n := which if which != "" else _loaded_name
 	if not _saved_exists(n):
 		_say("No saved deck named \"%s\" to delete." % n, true)
 		return
@@ -1231,7 +1435,7 @@ func _ask_delete(which: String = "") -> void:
 		DeckStore.delete_deck(n)
 		if _loaded_name == n:
 			_loaded_name = ""
-		dirty = true
+			dirty = true
 		_refresh_saved()
 		_refresh_deck()
 		_say("Deleted \"%s\". The cards are still in the editor; Save to keep them under a name." % n))
