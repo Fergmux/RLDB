@@ -11,15 +11,16 @@ extends Node
 ## uploader stops and the local queue of not-yet-sent records is deleted. Records already sent
 ## stay in the database until the owner deletes them (firebase/tools: delete-uid).
 
-const DIR := "user://telemetry"
-const SETTINGS_PATH := "user://ui_settings.cfg"
-const STATE_PATH := "user://telemetry/state.cfg"
+## Storage roots; tests point these at a scratch folder so they never touch real player files.
+static var DIR := "user://telemetry"
+static var SETTINGS_PATH := "user://ui_settings.cfg"
 const PRIVACY_NOTE := "Sends anonymous match statistics (draft picks, decks, cards played and results) to help balance RLDB. No names, chat or Steam profile details are sent. Turning this off stops collection and deletes statistics not yet sent."
 
 ## The running service, or null.
 static var instance: Telemetry = null
 static var _share_loaded := false
 static var _share := true
+static var _share_path := ""
 
 var config: TelemetryConfig
 var outbox: TelemetryOutbox
@@ -75,8 +76,10 @@ static func _live() -> bool:
 
 ## The player's choice (default on).
 static func share_enabled() -> bool:
-	if not _share_loaded:
+	if not _share_loaded or _share_path != SETTINGS_PATH:
+		_share_path = SETTINGS_PATH
 		_share_loaded = true
+		_share = true
 		var cf := ConfigFile.new()
 		if cf.load(SETTINGS_PATH) == OK:
 			_share = bool(cf.get_value("privacy", "share_gameplay_stats", true))
@@ -237,40 +240,44 @@ func _recover_open_items() -> void:
 		outbox.put(it)
 
 
+func _state_path() -> String:
+	return DIR.path_join("state.cfg")
+
+
 func _next_seq() -> int:
 	_seq += 1
 	var cf := ConfigFile.new()
-	cf.load(STATE_PATH)
+	cf.load(_state_path())
 	cf.set_value("state", "seq", _seq)
 	cf.set_value("state", "install_pid", install_pid)
-	cf.save(STATE_PATH)
+	cf.save(_state_path())
 	return _seq
 
 
 func _load_state() -> void:
 	DirAccess.make_dir_recursive_absolute(DIR)
 	var cf := ConfigFile.new()
-	cf.load(STATE_PATH)
+	cf.load(_state_path())
 	_seq = int(cf.get_value("state", "seq", 0))
 	install_pid = String(cf.get_value("state", "install_pid", ""))
 	if install_pid == "":
 		install_pid = "pp_" + Series.new_telemetry_id()
 		cf.set_value("state", "install_pid", install_pid)
 		cf.set_value("state", "seq", _seq)
-		cf.save(STATE_PATH)
+		cf.save(_state_path())
 
 
 func _profile_sent() -> bool:
 	var cf := ConfigFile.new()
-	cf.load(STATE_PATH)
+	cf.load(_state_path())
 	return bool(cf.get_value("state", "profile_queued_" + config.target, false))
 
 
 func _mark_profile_sent() -> void:
 	var cf := ConfigFile.new()
-	cf.load(STATE_PATH)
+	cf.load(_state_path())
 	cf.set_value("state", "profile_queued_" + config.target, true)
-	cf.save(STATE_PATH)
+	cf.save(_state_path())
 
 
 ## Salted one-way HMAC-SHA256 of the Steam ID (first 32 hex chars), "" without Steam. Pseudonymous
