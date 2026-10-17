@@ -57,31 +57,59 @@ func update_arrow() -> void:
 
 
 func _source_rect() -> Rect2:
+	var pd := gs.pending()
+	# G08: a zone choice's arrow starts at the card being placed (the summoned or moved unit),
+	# never at the effect's card that summons it or at a zone a card has left.
+	var placing: Dictionary = pd.get("placing", {})
+	if not placing.is_empty():
+		return gs.fx_slot_global_rect(int(placing["p"]), String(placing["zone"]), int(placing["slot"]))
+	if pd.has("placing_uid"):
+		return _card_rect(int(pd["placing_uid"]), String(pd.get("placing_zone", "")))
 	# F03-18: an effect's arrow starts at the card whose effect asks (its board zone, from the
 	# pending choice), never at an unrelated selected or attacking unit.
-	var pd := gs.pending()
 	var at: Dictionary = pd.get("source", {})
 	if not at.is_empty():
 		return gs.fx_slot_global_rect(int(at["p"]), String(at["zone"]), int(at["slot"]))
 	var uid := source_uid()
 	if uid == -1:
 		return Rect2()
+	return _card_rect(uid)
+
+
+## Where my card `uid` is shown right now: its board zone or Hand slot, else the prompt banner's
+## card (a unit summoned from a pile or the Extra Deck), else the pile it is in; Rect2() if none.
+## Only VISIBLE board widgets count: a hidden widget keeps the view of the card that left its
+## zone (G08: the arrow once started at the zone a sacrificed unit had left).
+func _card_rect(uid: int, zone_hint: String = "") -> Rect2:
+	if uid == -1:
+		return Rect2()
 	var slots := gs.board.slots
 	for k in slots.keys():
 		if (k as String).begins_with("1:"):
 			var sl: Dictionary = slots[k]
-			if (sl["widget"] as CardWidget).view.get("uid", -9) == uid:
+			var w: CardWidget = sl["widget"]
+			if w.visible and w.view.get("uid", -9) == uid:
 				return (sl["holder"] as Control).get_global_rect()
 	var items := gs.hand.items
 	if items.has(uid):
 		return (items[uid]["holder"] as Control).get_global_rect()
+	var sc: CardWidget = gs.prompt.subject_card if gs.prompt != null else null
+	if sc != null and sc.is_visible_in_tree() and sc.view.get("uid", -9) == uid:
+		return sc.get_global_rect()
+	var zone := zone_hint if zone_hint != "" else String(gs.details.find_card(uid).get("zone", ""))
+	var ps: PileStack = gs.board.piles[1].get(zone)
+	if ps != null and ps.is_visible_in_tree():
+		return ps.get_global_rect()
 	return Rect2()
 
 
-## The card my current choice belongs to: the card whose action opened it, else the unit the
-## prompt names ("... for X"), else my selected card; -1 when unknown.
+## The card my current choice belongs to: the card being placed by a zone choice (G08), else
+## the card whose action opened it, else the unit the prompt names ("... for X"), else my
+## selected card; -1 when unknown.
 func source_uid() -> int:
 	var pd0 := gs.pending()
+	if pd0.has("placing_uid"):
+		return int(pd0["placing_uid"])
 	if pd0.has("source_uid"):
 		return int(pd0["source_uid"])      # the effect's own card (F03-18)
 	var acting := gs.acting_uid

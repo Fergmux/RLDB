@@ -52,7 +52,10 @@ func _op_pick_slot(f: Dictionary, op: Dictionary) -> int:
 		opts.append({"v": s, "label": label, "slot": s, "zone": op["zone"]})
 	# The prompt names the card being placed (a summoned Fusion unit, not the effect's source).
 	var for_name: String = name_of(int(op["for"])) if op.has("for") else String(f["label"])
-	return ask(f, p, "slot", "Choose a zone for %s." % for_name, opts, 1, 1, op.get("cancellable", false))
+	# G08: `placing` is the card being placed, so the zone arrow starts at it rather than at
+	# the effect's card (an ability or Spell that summons) or a zone it left.
+	return ask(f, p, "slot", "Choose a zone for %s." % for_name, opts, 1, 1, op.get("cancellable", false),
+		{"placing": int(op.get("for", f["src"]))})
 
 
 func _op_pick_stance(f: Dictionary, op: Dictionary) -> int:

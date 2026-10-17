@@ -209,6 +209,10 @@ func _build_subject(col: VBoxContainer) -> void:
 func subject_for(pd: Dictionary) -> Dictionary:
 	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) == "trap_response":
 		return {}
+	# G08: a zone choice is about the card it places (e.g. a unit summoned from Spent).
+	var placing := gs.details.find_card(int(pd.get("placing_uid", -1)))
+	if not placing.is_empty():
+		return placing
 	var src := gs.details.find_card(int(pd.get("source_uid", -1)))
 	var prompt := String(pd.get("prompt", ""))
 	if not src.is_empty() and prompt.contains(String(src.get("name", "~"))):

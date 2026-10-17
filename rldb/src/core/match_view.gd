@@ -229,6 +229,7 @@ static func _pending_view(m: MatchEngine, viewer: int) -> Dictionary:
 		"options": opts, "min": pd["min"], "max": pd["max"], "cancellable": pd["cancellable"],
 		"min_total": pd.get("min_total", 0)}
 	_add_source(m, pd, viewer, out)
+	_add_placing(m, pd, viewer, out)
 	if pd.has("total_required"):
 		out["total_required"] = pd["total_required"]
 		out["total_exact"] = pd.get("total_exact", false)
@@ -251,6 +252,20 @@ static func _add_source(m: MatchEngine, pd: Dictionary, viewer: int, out: Dictio
 	if not pos.is_empty():
 		out["source"] = pos
 	out["source_uid"] = src
+
+
+## G08: the card a zone choice places (the summoned unit, the moved unit), so its arrow starts
+## at that card, not at the effect's card. `placing` is its board position while it is on the
+## Field (a moving unit); `placing_uid` is given only when the viewer may see the card.
+static func _add_placing(m: MatchEngine, pd: Dictionary, viewer: int, out: Dictionary) -> void:
+	var u: int = int(pd.get("placing", -1))
+	if not m.cards.has(u) or not can_see(m, u, viewer):
+		return
+	out["placing_uid"] = u
+	out["placing_zone"] = String(m.cards[u]["zone"])
+	var pos := m.fx_pos(u)
+	if not pos.is_empty():
+		out["placing"] = pos
 
 
 ## Why picking option indices `picks` would be rejected for the viewer's pending choice `pd`
