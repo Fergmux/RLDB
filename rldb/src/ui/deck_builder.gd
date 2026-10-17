@@ -371,7 +371,7 @@ func ui_add() -> bool:
 		return false
 	var from := _preview_card.get_global_rect() if _preview_card != null else Rect2()
 	add_card(_preview_id)
-	Sfx.play("card_set", -2.0, 0.06)
+	Sfx.play("deck_add", 0.0, 0.04)   # F24 / F25: replaces the Add button's own click
 	_pop(_preview_chip, UIStyle.GOOD)
 	_pop(_cell_tag(_preview_id), UIStyle.GOOD)
 	_queue_fly(_preview_id, from, true)
@@ -389,7 +389,7 @@ func ui_remove() -> bool:
 	if tile != null and _tile_on_screen(tile):
 		from = ((tile.get_meta("rec") as Dictionary)["widget"] as Control).get_global_rect()
 	remove_card(id)
-	Sfx.play("card_draw", -2.0, 0.06)
+	Sfx.play("deck_remove", 0.0, 0.04)
 	_pop(_preview_chip, UIStyle.BAD)
 	if counts.has(id):
 		_pop(deck_tag(id), UIStyle.BAD)
@@ -1400,6 +1400,7 @@ func _guard_unsaved(proceed: Callable) -> void:
 func _on_back() -> void:
 	if _leaving:
 		return
+	Sfx.play("back")   # F22: Back button and Esc alike; one sound (coalesced with the button's)
 	_guard_unsaved(func():
 		if _leaving:
 			return

@@ -19,8 +19,8 @@ const NAMES: PackedStringArray = [
 ## dropped). So a button's own click and the meaningful sound its handler asks for (confirm, back, a
 ## deck edit) never both play, wherever either comes from.
 const UI_PRIORITY := {
-	"select": 0, "click_secondary": 1, "click_primary": 2, "deck_add": 2, "deck_remove": 2,
-	"cancel": 3, "confirm": 3, "deny": 4, "back": 5,
+	"select": 0, "click_secondary": 1, "click_primary": 2,
+	"deck_add": 3, "deck_remove": 3, "cancel": 3, "confirm": 3, "deny": 4, "back": 5,
 }
 ## Button meta overriding the automatic click: a sound name, or "none" for silence.
 const BUTTON_META := "sfx"
