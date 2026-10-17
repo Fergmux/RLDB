@@ -3,10 +3,10 @@ extends "res://tests/integration/qa/qa_net_base.gd"
 ## payloads never carry the hidden names or uids.
 
 const INTO_THE_VOID := 101
-const SHEN := 21
+const SHEN := 34          # Dragon of the Cave: in no structure deck, so its name is never public
 const MAGIC_CYLINDER := 45
 const KAYA := 170
-const SECRET := 101          # Into the Void: not in the host's starter deck (Tide & Storm)
+const SECRET := 101          # Into the Void: in no structure deck
 
 
 func port() -> int:
@@ -21,12 +21,12 @@ func test_into_the_void_reveals_host_spent_to_client_only_while_choosing() -> vo
 	var itv := TB.card(m, 1, INTO_THE_VOID, "hand")
 	m.players[1]["ap"] = 20
 	await _sync()
-	assert_bool(_blob().contains("Shen the World Dragon")).is_false()
+	assert_bool(_blob().contains("Dragon of the Cave")).is_false()
 	# Act
 	client.local_seat.send({"t": "cast", "uid": itv})
 	assert_bool(await _await_pending(m, 1, "select")).is_true()
 	var names: Array = cpend()["options"].filter(func(o): return o.has("card")).map(func(o): return o["card"]["name"])
-	assert_array(names).contains(["Shen the World Dragon", "Magic Cylinder"])
+	assert_array(names).contains(["Dragon of the Cave", "Magic Cylinder"])
 	_client_choose(["Magic Cylinder"])
 	assert_bool(await _await_idle(m)).is_true()
 	# Assert
@@ -35,7 +35,7 @@ func test_into_the_void_reveals_host_spent_to_client_only_while_choosing() -> vo
 	await _sync()
 	assert_bool(await _wait(func(): return not client_payloads.is_empty())).is_true()
 	var blob := _blob()
-	assert_bool(blob.contains("Shen the World Dragon")).is_false()
+	assert_bool(blob.contains("Dragon of the Cave")).is_false()
 	assert_bool(blob.contains("\"uid\":%d" % shen)).is_false()
 	assert_bool(blob.contains("\"uid\":%d" % mc)).is_false()
 
@@ -77,5 +77,5 @@ func test_host_arcane_and_hand_choices_never_leak_to_client() -> void:
 	assert_str(m.cards[kaya]["zone"]).is_equal("unit")
 	assert_str(m.cards[secret]["zone"]).is_equal("spent")
 	var blob := _blob()
-	for needle in ["Shen the World Dragon", "Into the Void", "\"uid\":%d" % shen, "\"uid\":%d" % secret, "\"uid\":%d" % mat]:
+	for needle in ["Dragon of the Cave", "Into the Void", "\"uid\":%d" % shen, "\"uid\":%d" % secret, "\"uid\":%d" % mat]:
 		assert_bool(blob.contains(needle)).override_failure_message("client payload leaked " + needle).is_false()

@@ -82,7 +82,7 @@ func _setup_battle() -> Dictionary:
 	var atk := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
 	var def := TB.unit(m, 0, TB.WATER, 0, "atk", 8)
 	var trap := TB.set_card(m, 0, 45, 0)
-	var secret := TB.card(m, 0, 21, "hand")
+	var secret := TB.card(m, 0, 34, "hand")   # Dragon of the Cave: in no structure deck
 	host._broadcast()
 	await _wait(func(): return _client_view().get("match", {}).get("players", [{}, {"units": [null]}])[1]["units"][0] != null)
 	return {"m": m, "atk": atk, "def": def, "trap": trap, "secret": secret}
@@ -134,7 +134,7 @@ func test_client_payloads_never_contain_host_hidden_cards(timeout := 30000) -> v
 	var s := await _setup_battle()
 	await _wait(func(): return client.raw_received.size() > 0)
 	var blob := JSON.stringify(client.raw_received)
-	assert_bool(blob.contains("Shen the World Dragon")).is_false()
+	assert_bool(blob.contains("Dragon of the Cave")).is_false()
 	assert_bool(blob.contains(str(s["secret"]))).is_false()
 	assert_bool(blob.contains(str(s["trap"]))).is_false()
 	for uid in host.series.game.players[0]["draw"]:

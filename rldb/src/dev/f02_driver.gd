@@ -322,6 +322,12 @@ func _steps() -> void:
 		if m.is_unit(uid) and String(m.d(uid)["on_summon"]) != "":
 			typical = uid
 			break
+	if typical == -1:   # the structure decks may deal no On Summon unit: any unit (or card) will do
+		for uid in gs.hand.order:
+			if typical == -1 or m.is_unit(uid):
+				typical = uid
+				if m.is_unit(uid):
+					break
 	if typical != -1:
 		await _click(_hand_rect(typical).get_center())
 		await _wait(0.4)

@@ -21,8 +21,10 @@ func test_starter_decks_are_valid_and_fully_implemented() -> void:
 			main_count += 1
 			if d["category"] == "basic_unit":
 				basics += 1
-		assert_int(main_count).is_equal(20)
+		# F06-03 structure decks: 3 copies of one basic unit plus 9 other main-deck cards.
+		assert_int(main_count).is_equal(12)
 		assert_int(basics).is_equal(3)
+		assert_int(deck["extra"].size()).is_between(1, 3)
 		for id in deck["extra"]:
 			assert_bool(CardDB.is_extra_category(CardDB.get_def(id)["category"])).is_true()
 
@@ -60,12 +62,12 @@ func test_rewards_accept_any_combination_and_persist_into_next_game() -> void:
 	# Player 0: add, add, remove, change basic type.
 	assert_str(_add(s, 0, "spell", 0)).is_empty()
 	assert_str(_add(s, 0, "unit", 1)).is_empty()
-	assert_str(s.submit(0, {"t": "reward_remove", "card_id": 7})).is_empty()
-	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 1, "to_type": "Fire"})).is_empty()
+	assert_str(s.submit(0, {"t": "reward_remove", "card_id": 166})).is_empty()   # Saboteurs Guild
+	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 4, "to_type": "Fire"})).is_empty()
 	assert_bool(s.rewards[0]["done"]).is_true()
 	assert_int(s.decks[0].size()).is_equal(size_before + 1)
-	assert_int(s.decks[0].count(110)).is_equal(3)   # all three Water Mages became Fire Mages
-	assert_int(s.decks[0].count(1)).is_equal(0)
+	assert_int(s.decks[0].count(113)).is_equal(3)   # all three Water Beasts became Fire Beasts
+	assert_int(s.decks[0].count(4)).is_equal(0)
 	assert_str(s.submit(0, {"t": "reward_type", "category": "spell"})).is_not_empty()
 	# Player 1: four removals.
 	for i in 4:
@@ -312,11 +314,11 @@ func test_unknown_reward_type_is_refused() -> void:
 func test_basic_change_can_change_race_and_type() -> void:
 	var s := _series()
 	s.submit(s.game.active, {"t": "concede"})
-	var n: int = s.decks[0].count(1)                         # Basic Mage (Water)
+	var n: int = s.decks[0].count(4)                         # Basic Beast (Water)
 	assert_int(n).is_greater(0)
-	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 1, "to_type": "Fire", "to_race": "Dragon"})).is_empty()
+	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 4, "to_type": "Fire", "to_race": "Dragon"})).is_empty()
 	assert_int(s.decks[0].count(111)).is_equal(n)            # Basic Dragon (Fire)
-	assert_int(s.decks[0].count(1)).is_equal(0)
+	assert_int(s.decks[0].count(4)).is_equal(0)
 	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 111, "to_type": "Fire", "to_race": "Dragon"})).contains("different")
 
 
