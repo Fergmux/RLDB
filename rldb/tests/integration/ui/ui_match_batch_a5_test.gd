@@ -72,6 +72,16 @@ func test_options_that_would_overpay_are_refused_and_picks_stay_deselectable() -
 	assert_bool(GamePromptBanner.would_overpay(pd, [0, 1], 3)).is_true()   # nothing remains
 
 
+## UI review F08: a paid circle grows in with a small overshoot and settles exactly full.
+func test_paid_circle_fill_overshoots_slightly_and_settles() -> void:
+	assert_float(CostPips.pop(0.0)).is_equal_approx(0.0, 0.001)
+	assert_float(CostPips.pop(1.0)).is_equal_approx(1.0, 0.001)
+	var peak := 0.0
+	for i in 101:
+		peak = maxf(peak, CostPips.pop(i / 100.0))
+	assert_float(peak).is_between(1.05, 1.15)
+
+
 func test_material_tray_marks_overpay_and_confirm_needs_the_exact_total() -> void:
 	var r := await _screen()
 	var gs: GameScreen = r[0]
@@ -263,6 +273,20 @@ func test_extra_list_shows_summon_buttons_without_selection() -> void:
 	assert_bool(wy.all(func(b): return not b.disabled)).is_true()
 
 
+## UI review: the Extra Deck viewer has no helper line and an Arcane unit's Summon Attack and
+## Summon Defense share one row.
+func test_extra_viewer_has_no_hint_and_stance_buttons_share_a_row() -> void:
+	var r := await _extra_board()
+	var gs: GameScreen = r[0]
+	gs.details.show_pile("extra")
+	for i in 3:
+		await await_idle_frame()
+	assert_bool(gs.details.pile_hint.visible).is_false()
+	var ka: Array = _summon_buttons(gs, r[6]).filter(func(b): return String(b.get_meta("summon_kind")) == "arcane")
+	assert_int(ka.size()).is_equal(2)
+	assert_float((ka[0] as Control).global_position.y).is_equal_approx((ka[1] as Control).global_position.y, 0.5)
+
+
 func test_fusion_with_two_methods_asks_which_then_continues() -> void:
 	var r := await _extra_board()
 	var gs: GameScreen = r[0]
@@ -304,3 +328,30 @@ func test_method_picker_closes_on_cancel_and_when_the_state_changes() -> void:
 	host.broadcast()
 	await await_idle_frame()
 	assert_bool(gs.details.method_picker_open()).is_false()
+
+
+## UI review F04: each method button names only the action (the card is shown above it), its full
+## label is in the tooltip, and no button text is clipped.
+func test_method_picker_buttons_name_the_action_and_are_not_clipped() -> void:
+	var r := await _extra_board()
+	var gs: GameScreen = r[0]
+	var wyrm: int = r[5]
+	gs.details.open_method_picker(wyrm)
+	for i in 3:
+		await await_idle_frame()
+	var btns: Array = _all(gs.details._method_dim).filter(func(n): return n is Button and n.text != "Cancel")
+	assert_int(btns.size()).is_equal(2)
+	var texts := []
+	for b in btns:
+		var bt: Button = b
+		texts.append(bt.text)
+		var font := bt.get_theme_font("font")
+		var fs := bt.get_theme_font_size("font_size")
+		var sb := bt.get_theme_stylebox("normal")
+		var need := font.get_string_size(bt.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + sb.get_margin(SIDE_LEFT) + sb.get_margin(SIDE_RIGHT)
+		assert_float(bt.size.x).override_failure_message("'%s' needs %.0f px, has %.0f" % [bt.text, need, bt.size.x]).is_greater_equal(need)
+		assert_str(bt.tooltip_text).is_not_equal(bt.text)        # the tooltip carries the full label
+		assert_bool(bt.tooltip_text.begins_with("Cast Polymerization") or bt.tooltip_text.begins_with("Aleister the Invoker:")).is_true()
+	assert_array(texts).contains(["Cast"])
+	assert_bool(texts.all(func(t): return not String(t).contains("Aleister"))).is_true()   # no card name on the button
+	gs.details.close_method_picker()

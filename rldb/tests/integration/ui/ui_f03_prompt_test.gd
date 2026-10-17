@@ -26,7 +26,7 @@ func _screen_with_type_choice(card_id: int) -> Array:
 
 
 func _type_buttons(gs: GameScreen) -> Array:
-	return gs.prompt.banner_flow.get_children().filter(func(b): return b.has_meta("type_choice"))
+	return gs.prompt.type_grid.get_children().filter(func(b): return b.has_meta("type_choice"))
 
 
 func test_waang_offers_only_its_four_types_in_type_colours() -> void:
@@ -91,6 +91,27 @@ func test_type_icon_is_centred_in_a_fixed_square_box() -> void:
 				remove_child(b)
 
 
+## UI review F03 (2026-10-17): the Heavenly icon drew as a tiny dot because its pale rays sat on a
+## button filled in the same pale colour. Every Type icon is a pip on a dark disc that contrasts with
+## its own button fill (disc or rim), and the Type buttons of one choice share one width.
+func test_type_icons_are_pips_that_contrast_with_their_button_and_widths_are_even() -> void:
+	for t in UIStyle.TYPE_COLORS.keys():
+		var b: Button = auto_free(GamePromptBanner.type_button(t if t != "" else "No type"))
+		var icon: TypeIcons.TypeBadge = b.get_children().filter(func(c): return c is TypeIcons.TypeBadge)[0]
+		assert_bool(icon.pip).override_failure_message("%s icon is not a pip" % t).is_true()
+		var fill: Color = (b.get_theme_stylebox("normal") as StyleBoxFlat).bg_color
+		# The pip's edge (dark disc or ivory rim) stands out from the fill by at least 3:1 (WCAG 1.4.11).
+		var edge := maxf(GamePromptBanner._contrast(fill, TypeIcons.PIP_BACKING), GamePromptBanner._contrast(fill, TypeIcons.OUTLINE))
+		assert_float(edge).override_failure_message("%s pip edge %.2f:1" % [t, edge]).is_greater(3.0)
+	var r := await _screen_with_type_choice(102)
+	var gs: GameScreen = r[0]
+	await await_idle_frame()
+	var widths := _type_buttons(gs).map(func(b): return roundi((b as Button).size.x))
+	assert_int(widths.size()).is_greater(1)
+	for w in widths:
+		assert_int(w).is_equal(widths[0])
+
+
 func test_non_type_mode_choice_is_not_type_styled() -> void:
 	var pd := {"kind": "mode", "options": [{"label": "10 Burn"}, {"label": "Water"}]}
 	assert_bool(GamePromptBanner.is_type_choice(pd)).is_false()
@@ -111,3 +132,53 @@ func test_banner_is_clear_of_board_zones_and_plates() -> void:
 		for z in gs.board.piles[side]:
 			assert_bool(br.intersects((gs.board.piles[side][z] as Control).get_global_rect())).is_false()
 	assert_str(gs.prompt.banner_tag.text).contains("YOUR DECISION")
+
+
+## Every zone, pile and plate the settled panel could cover, as global rects.
+func _board_rects(gs: GameScreen) -> Array:
+	var out := []
+	for k in gs.board.slots:
+		out.append((gs.board.slots[k]["zone_node"] as Control).get_global_rect())
+	for pl in gs.board.plates:
+		out.append((pl as Control).get_global_rect())
+	for side in 2:
+		for z in gs.board.piles[side]:
+			out.append((gs.board.piles[side][z] as Control).get_global_rect())
+	return out
+
+
+func _assert_settled_panel_clear(gs: GameScreen) -> void:
+	for i in 10:
+		await await_idle_frame()
+	assert_bool(gs.prompt.ctx_banner.visible).is_true()
+	var br := gs.prompt.ctx_banner.get_global_rect()
+	for rc in _board_rects(gs):
+		assert_bool(br.intersects(rc)).override_failure_message("panel %s covers %s" % [br, rc]).is_false()
+	var tag := gs.prompt.banner_tag
+	var need := tag.get_theme_font("font").get_string_size(tag.text, HORIZONTAL_ALIGNMENT_LEFT, -1, tag.get_theme_font_size("font_size")).x
+	assert_float(tag.size.x).override_failure_message("tag '%s' clipped" % tag.text).is_greater_equal(need)
+
+
+## UI review (1600x900, the narrow side column): once settled, a long Type choice and a zone pick
+## cover no zone, pile or plate (my own plate included), the tag is not clipped and the card strip
+## really stacks.
+func test_settled_panel_in_the_narrow_column_covers_nothing_and_clips_nothing() -> void:
+	var r := await _screen_with_type_choice(13)          # Chaos Witch: every Type, the longest choice
+	var gs: GameScreen = r[0]
+	await _assert_settled_panel_clear(gs)
+	var host: LocalHost = r[1]
+	var m: MatchEngine = r[2]
+	(_type_buttons(gs)[0] as Button).pressed.emit()
+	await await_idle_frame()
+	assert_bool(m.pending.is_empty()).is_true()
+	var hu := -1
+	for u in m.players[r[4]]["hand"]:
+		if m.is_unit(u) and m.validate(r[4], {"t": "summon", "uid": u}) == "":
+			hu = u
+	assert_int(hu).is_not_equal(-1)
+	host.handle(r[4], {"t": "summon", "uid": hu, "stance": "atk"})
+	await await_idle_frame()
+	assert_str(String(m.pending.get("kind", ""))).is_equal("slot")
+	await _assert_settled_panel_clear(gs)
+	if gs.prompt.ctx_banner.size.x < GamePromptBanner.BANNER_NARROW_W:
+		assert_bool((gs.prompt.subject_card.get_parent() as BoxContainer).vertical).is_true()

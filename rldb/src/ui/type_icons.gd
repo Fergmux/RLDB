@@ -37,11 +37,13 @@ static func draw_icon(ci: CanvasItem, type: String, center: Vector2, radius: flo
 
 
 ## Icon on a dark disc with a type-colour rim: used where the icon sits on busy art.
-static func draw_pip(ci: CanvasItem, type: String, center: Vector2, radius: float) -> void:
+## `rim` overrides the type-colour rim (Type buttons pass OUTLINE: their fill is the type colour).
+static func draw_pip(ci: CanvasItem, type: String, center: Vector2, radius: float, rim: Color = Color(0, 0, 0, 0)) -> void:
 	# Near-opaque dark backing + light rim so every type (dark Earth, pale Heavenly, yellow Lightning)
 	# keeps contrast on any art.
 	ci.draw_circle(center, radius * PIP_K, PIP_BACKING)
-	ci.draw_arc(center, radius * PIP_K, 0.0, TAU, 28, UIStyle.type_color(type).lightened(0.25), maxf(0.7, radius * 0.04), true)
+	var rc := rim if rim.a > 0.0 else UIStyle.type_color(type).lightened(0.25)
+	ci.draw_arc(center, radius * PIP_K, 0.0, TAU, 28, rc, maxf(0.7, radius * (0.07 if rim.a > 0.0 else 0.04)), true)
 	draw_icon(ci, type, center, radius * PIP_ICON_K)
 
 
@@ -53,6 +55,13 @@ class TypeBadge extends Control:
 			type_name = v
 			queue_redraw()
 
+	## True: drawn as a pip (dark disc + type-colour rim filling the box) so the icon keeps its contrast
+	## and footprint on any fill, including a fill in its own colour (the pale Heavenly Type button).
+	var pip := false:
+		set(v):
+			pip = v
+			queue_redraw()
+
 	## `px` is the square side; tags pass their text line height so the icon never makes the tag taller
 	## than its text-only peers (F03-03). The icon is drawn from vectors into this box and scales to it.
 	func _init(t: String = "", px: float = 22.0) -> void:
@@ -62,7 +71,11 @@ class TypeBadge extends Control:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _draw() -> void:
-		TypeIcons.draw_icon(self, type_name, size / 2.0, minf(size.x, size.y) * 0.46)
+		var half := minf(size.x, size.y) / 2.0
+		if pip:
+			TypeIcons.draw_pip(self, type_name, size / 2.0, half * 0.97 / TypeIcons.PIP_K, TypeIcons.OUTLINE)
+		else:
+			TypeIcons.draw_icon(self, type_name, size / 2.0, half * 0.92)
 
 
 # ---------------------------------------------------------------- helpers

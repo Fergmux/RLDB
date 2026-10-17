@@ -202,6 +202,16 @@ func attach(c: SeatClient) -> void:
 
 
 ## A full-rect click-through layer added on top of the current children.
+## The nodes a camera move (FxPlayer.camera_shake) moves: the table and board, the hand, the arrows
+## and the effects. Never the sidebar, the top strip, the input panel or the modals.
+func camera_nodes() -> Array:
+	var out := []
+	for n in [board.table, board.deco, board.layer, hand.layer, arrow, hover_layer, fx_layer]:
+		if n != null and is_instance_valid(n):
+			out.append(n)
+	return out
+
+
 func passive_layer() -> Control:
 	var c := Control.new()
 	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

@@ -316,31 +316,43 @@ func start_game_end(winner: int) -> void:
 	_game_end.start(winner)
 
 
-## Camera-shake equivalent (F04-07): jolts the whole screen node (board, sidebar and hand) with a decaying
-## wobble, scaled up just enough that the window edge never shows. Skipped under reduced motion.
+## Camera-shake equivalent (F04-07): jolts the play area (table, board, hand, arrows and effects:
+## GameScreen.camera_nodes) with a decaying wobble, scaled up about the play-area centre just enough
+## that its edge never shows. The sidebar, top strip, input panel and modals stay still, so the
+## Game Log and the Menu never move (UI review F12). Skipped under reduced motion.
 func camera_shake(amp: float, secs: float) -> void:
 	if UIStyle.reduce_motion or screen == null:
 		return
-	var n: Control = screen
+	var nodes: Array = screen.camera_nodes()
+	var pivot: Vector2 = screen.play_area.get_center()
+	var span: float = maxf(screen.play_area.size.x, 1.0)
 	if _cam_users == 0:
-		_cam_rest = {"pos": n.position, "scale": n.scale, "pivot": n.pivot_offset}
-		n.pivot_offset = n.size / 2.0
+		_cam_rest = {}
+		for n in nodes:
+			var c: Control = n
+			_cam_rest[c] = {"pos": c.position, "scale": c.scale, "pivot": c.pivot_offset}
+			c.pivot_offset = pivot - c.position      # every node scales about the same point
 	_cam_users += 1
 	var restore := func():
-		if is_instance_valid(n) and not _cam_rest.is_empty():
-			n.position = _cam_rest["pos"]
-			n.scale = _cam_rest["scale"]
-			n.pivot_offset = _cam_rest["pivot"]
+		for c in _cam_rest:
+			if is_instance_valid(c):
+				var r: Dictionary = _cam_rest[c]
+				c.position = r["pos"]
+				c.scale = r["scale"]
+				c.pivot_offset = r["pivot"]
+		_cam_rest = {}
 	add_cleanup(func():
 		_cam_users = 0
 		restore.call())
 	var wobble := func(p: float):
-		if not is_instance_valid(n):
-			return
 		var k := pow(1.0 - p, 2.0) * amp
-		n.position = _cam_rest["pos"] + Vector2(sin(p * 97.0) * k, cos(p * 83.0) * k * 0.8)
-		var sc: float = 1.0 + 2.4 * k / maxf(n.size.x, 1.0)
-		n.scale = Vector2(sc, sc) * (_cam_rest["scale"] as Vector2)
+		var off := Vector2(sin(p * 97.0) * k, cos(p * 83.0) * k * 0.8)
+		var sc: float = 1.0 + 2.4 * k / span
+		for c in _cam_rest:
+			if is_instance_valid(c):
+				var r: Dictionary = _cam_rest[c]
+				c.position = (r["pos"] as Vector2) + off
+				c.scale = Vector2(sc, sc) * (r["scale"] as Vector2)
 	var tw := new_tween()
 	tw.tween_method(wobble, 0.0, 1.0, UIStyle.dur(secs))
 	tw.tween_callback(func():

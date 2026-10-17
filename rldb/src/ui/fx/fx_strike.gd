@@ -335,6 +335,11 @@ func _overflow(ctx: Dictionary, reach: float) -> void:
 	if is_instance_valid(pl):
 		pl.pulse()
 		_fx.shake(pl, 12.0)
+		# UI review F12: the struck plate reads above its own blast (the HP drop is the point).
+		var z0 := pl.z_index
+		pl.z_index = UiLayers.FX + 1
+		_fx.add_cleanup(func(): if is_instance_valid(pl): pl.z_index = z0)
+		_fx.screen.get_tree().create_timer(UIStyle.dur(1.6)).timeout.connect(func(): if is_instance_valid(pl): pl.z_index = z0)
 	Sfx.play("boom", 0.0, 0.0)
 	_blast(FxBlast.Look.BLAST, c, tcol, reach * 0.26, 1.4)
 	_fx.burst(FxBurst.Kind.SPARK, c, tcol.lightened(0.5), 30, reach * 0.36, 0.9)
