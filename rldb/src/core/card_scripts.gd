@@ -245,7 +245,7 @@ static func _build() -> Dictionary:
 			{"label": "Destroy a face-down card", "ops": [ch({"kind": "facedown"}, "u"), {"op": "destroy", "target": "$u"}]}]}], true, {"hp": 10})]}
 	t[161] = {"on": [trig("summoned", GOD_SUMMON), trig("destroyed", GOD_DESTROY), trig("start_turn", [st("self", "eternal")], "own_turn", "start of turn")],
 		"abilities": [abil("Exhaust this unit: opponent loses 10 HP x Eternal", [{"op": "let", "as": "e", "n": {"status": "eternal", "of": "self"}},
-			{"op": "move", "target": "self", "to": "exhaust"}, hp("opp", {"value": "$e", "mul": -10})])]}
+			{"op": "move", "target": "self", "to": "exhaust", "cost": true}, hp("opp", {"value": "$e", "mul": -10})])]}
 	t[24] = {"on": [trig("summoned", [st("self", "infiltrate")])]}
 	t[25] = {"on": [trig("summoned", [all_({"kind": "unit", "basic": true, "unprotected": true}), {"op": "destroy", "target": "$all"}])]}
 	t[26] = {"on": [trig("summoned", tag_team([ch({"kind": "draw", "side": "self", "cost_eq": 0}, "c", false, "Add a 0-cost card from Draw to Hand."), {"op": "move", "target": "$c", "to": "hand"}])),
@@ -279,7 +279,7 @@ static func _build() -> Dictionary:
 		"aura": [{"to": "self", "atk": {"count": {"kind": "unit", "side": "self", "adjacent": true}, "mul": -6}, "def": {"count": {"kind": "unit", "side": "self", "adjacent": true}, "mul": -6}}]}
 	t[39] = {"flags": ["battle_immune_30atk"]}
 	t[67] = {"on": [trig("summoned", [ch({"kind": "unit", "column": true}, "u", true, "Apply 2 Paralyse to a unit in this column?"), st("$u", "paralyse", 2)])],
-		"abilities": [abil("Exhaust this unit: Fusion Summon (Field and/or Spent)", [{"op": "move", "target": "self", "to": "exhaust"}, {"op": "fusion", "sources": ["field", "spent"]}], false)]}
+		"abilities": [abil("Exhaust this unit: Fusion Summon (Field and/or Spent)", [{"op": "move", "target": "self", "to": "exhaust", "cost": true}, {"op": "fusion", "sources": ["field", "spent"]}], false)]}
 	t[68] = {"abilities": [abil("Destroy this unit: Fusion Summon (Field)", [{"op": "destroy", "target": "self"}, {"op": "fusion", "sources": ["field"]}], false)]}
 	t[69] = {"tribute_bonus": {"s": "pierce", "n": 2}, "on": [trig("summoned", [ch({"kind": "unit", "side": "self", "adjacent": true}, "u", false, "Apply 2 Pierce to an adjacent unit."), st("$u", "pierce", 2)])],
 		"abilities": [abil("Fusion Summon (Field)", [{"op": "fusion", "sources": ["field"]}], false)]}
