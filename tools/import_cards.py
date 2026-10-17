@@ -1,10 +1,20 @@
 """Import the RLDB source CSVs into rldb/data/*.json.
 
-Applies only the confirmed corrections from rules/06-OPEN-DECISIONS-AND-CORRECTIONS.md.
-Run from the repo root:  python -I tools/import_cards.py
+Active card source (production batch 2026-10-17, design/implement-card-database-update-2026-10-17.md):
+    rules/sources/RLDB Master - Card Database (2026-10-17).csv   (SHA-256 8ac4a39a...6d693da3)
+The undated `RLDB Master - Card Database.csv` is the historical comparison baseline only and is
+never read here. Neither CSV is modified.
+
+Applies only confirmed corrections (rules/06, design/decision-register-answers.md, playtest
+feedback 03-06) and records every raw cell the importer changed under `source.raw`, so the
+export stays auditable.
+
+Run from the repo root:  python -I tools/import_cards.py          (regenerate)
+                         python -I tools/import_cards.py --check  (exit 1 if the JSON is stale)
 The output is deterministic so it can be committed and re-generated.
 """
 import csv
+import hashlib
 import json
 import os
 import sys
@@ -12,6 +22,12 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "rules", "sources")
 OUT = os.path.join(ROOT, "rldb", "data")
+
+CARD_SOURCE = "RLDB Master - Card Database (2026-10-17).csv"
+CARD_SOURCE_SHA256 = "8ac4a39a70069a8586b1e5139e5999a57aa837e8064e83ef365e91b36d693da3"
+BASELINE_SOURCE = "RLDB Master - Card Database.csv"   # audit history only; never imported
+STATUS_SOURCE = "RLDB Master - status.csv"
+EXPECTED_CARDS = 183
 
 CATEGORY_KEYS = {
     "Basic Unit": "basic_unit",
@@ -24,24 +40,43 @@ CATEGORY_KEYS = {
     "Arcane Unit": "arcane",
 }
 
-# Confirmed corrections (file 06): misplaced On Summon effects stored in the condition column.
-CONDITION_TO_SUMMON = {"63", "97"}
+# The 2026-10-17 export carries a literal `temp` in twenty `condition` cells. It is editorial
+# spreadsheet metadata, not a trigger (decisions.md): stripped here, kept in source.raw.
+EDITORIAL_CONDITIONS = {"temp"}
 
-# User-confirmed rewordings (design/decision-register-answers.md P-19, P-23, P-30, and
-# confirmation C-03). Field -> replacement text; source CSVs stay unchanged.
+# Legacy correction (file 06): IDs 63 and 97 once stored their On Summon effect in the
+# `condition` column. The move is now source-aware: it happens only when the On Summon cell is
+# empty and the condition is real effect text. The 2026-10-17 export populates both properly.
+LEGACY_CONDITION_TO_SUMMON = {63, 97}
+
+# User-confirmed rewordings, audited per ID against the 2026-10-17 export. Field -> text.
+#   45/47 (C-03): Magic Cylinder / Damage Conversion trigger only on an attack on a unit in
+#         this column (raw text still says "this Column").
+#   48 (F03-19): Overextend's controller chooses the target; raw text still says highest ATK.
+#   169 (P-23): Options is a per-copy additional draw; raw text still says "draw 5".
+# Dropped as obsolete (the export now carries the confirmed wording): 90 Chains of Binding
+# ("you can"), 183 Yamata ("At the start of your turn").
 TEXT_CORRECTIONS = {
     45: {"condition": "If your opponent declares an attack on one of your units in this Column:"},
     47: {"condition": "If your opponent declares an attack on one of your units in this Column:"},
-    90: {"on_field": "Once per turn, you can Apply 1 Paralyse to a Unit."},
-    169: {"on_field": "At the start of your turn, draw one additional card."},
-    183: {"on_field": "At the start of your turn, your opponent loses 6 HP."},
-    # F03-19 (design/playtest-feedback-03.md, user-confirmed 2026-10-16): chosen target.
     48: {"condition": "If your opponent Summons a Unit and now has 3 or more Units on the Field:",
          "on_summon": "Choose an opponent's Unit; it loses 20 ATK."},
+    169: {"on_field": "At the start of your turn, draw one additional card."},
 }
+
+# F03-04: Arcane material is an exact payment. The export's requirement text ("Cost
+# equivilant to Arcane") is replaced by the confirmed wording in both condition and material.
+ARCANE_REQUIREMENT = "Exhaust Units from your Spent whose costs total exactly its Arcane cost"
 
 # F03-09: basic-unit display names drop the redundant "(Type)" suffix; Type stays in `type`.
 BASIC_TYPE_SUFFIX = " ("
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        h.update(f.read())
+    return h.hexdigest()
 
 
 def nullable_type(value):
@@ -70,27 +105,52 @@ def parse_cost(category, raw):
     return "ap", int(raw)
 
 
-def main():
-    rows = list(csv.DictReader(open(os.path.join(SRC, "RLDB Master - Card Database.csv"), encoding="utf-8", newline="")))
+def describe(c):
+    """Full display text rebuilt from the structured fields."""
+    unit = c["category"] in ("basic_unit", "unit", "fusion", "ritual", "arcane")
+    parts = []
+    if c["condition"]:
+        parts.append(c["condition"])
+    for label, key in (("On Summon: " if unit else "", "on_summon"), ("", "on_field"), ("On Destroy: ", "on_destruction")):
+        if c[key]:
+            parts.append(label + c[key])
+    return " ".join(parts)
+
+
+def build(card_csv=None):
+    """Returns {"cards": [...], "unassigned_source_notes": [...]} from the card CSV."""
+    path = card_csv or os.path.join(SRC, CARD_SOURCE)
+    with open(path, encoding="utf-8-sig", newline="") as fh:
+        rows = list(csv.DictReader(fh))
     cards = []
-    notes = []
     for row in rows:
-        name = row["name"].strip()
+        raw_name = row["name"]
+        name = raw_name.strip()
         if not name:
-            if any(v.strip() for k, v in row.items() if k != "index"):
-                notes.append({"source_index": row["index"], "text": " ".join(v.strip() for v in row.values() if v and v.strip() and v != row["index"])})
+            # Unidentified rows (blank, or an unassigned effect) are not cards. The 2026-10-17
+            # export has none; an orphan effect is never attached to a card or shown in play.
             continue
+        cid = int(row["id"])
+        raw = {}
         category = CATEGORY_KEYS[row["category"].strip()]
         cost_kind, cost = parse_cost(category, row["cost"])
         condition = row["condition"].strip()
         on_summon = row["On Summon/Play"].strip()
-        if row["id"].strip() in CONDITION_TO_SUMMON:
-            on_summon = (condition + " " + on_summon).strip()
+        material = row["material"].strip()
+        description = row["description"].strip()
+        if condition.lower() in EDITORIAL_CONDITIONS:
+            raw["condition"] = row["condition"]
             condition = ""
+        if cid in LEGACY_CONDITION_TO_SUMMON and condition and not on_summon:
+            raw["condition"] = row["condition"]
+            raw["On Summon/Play"] = row["On Summon/Play"]
+            on_summon, condition = condition, ""
         if category == "basic_unit" and name.endswith(")") and BASIC_TYPE_SUFFIX in name:
             name = name[:name.rindex(BASIC_TYPE_SUFFIX)]
-        cards.append({
-            "id": int(row["id"]),
+        if name != raw_name:
+            raw["name"] = raw_name
+        c = {
+            "id": cid,
             "name": name,
             "category": category,
             "race": nullable_type(row["race"]),
@@ -104,38 +164,75 @@ def main():
             "on_summon": on_summon,
             "on_field": row["On Field"].strip(),
             "on_destruction": row["On Destruction"].strip(),
-            "material": row["material"].strip(),
-            "description": row["description"].strip(),
+            "material": material,
+            "description": description,
             "art": {"image": row["image"].strip(), "card_img": row["card_img"].strip(), "type_icon": row["type_icon"].strip()},
-            "source": {"sheet": row["sheet"].strip(), "index": int(row["index"])},
-        })
-    for c in cards:
-        for field, text in TEXT_CORRECTIONS.get(c["id"], {}).items():
-            c[field] = text
-        if c["id"] in TEXT_CORRECTIONS:
-            parts = []
-            if c["condition"]:
-                parts.append(c["condition"])
-            for label, key in (("On Summon: ", "on_summon"), ("", "on_field"), ("On Destroy: ", "on_destruction")):
-                if c[key]:
-                    parts.append(label + c[key])
-            c["description"] = " ".join(parts)
+            "source": {"file": os.path.basename(path), "sheet": row["sheet"].strip(), "index": int(row["index"])},
+        }
+        rebuild = "On Summon/Play" in raw
+        if category == "arcane":
+            for key, col in (("condition", "condition"), ("material", "material")):
+                if c[key] != ARCANE_REQUIREMENT:
+                    raw[col] = row[col]
+                    c[key] = ARCANE_REQUIREMENT
+        for field, text in TEXT_CORRECTIONS.get(cid, {}).items():
+            col = {"on_summon": "On Summon/Play", "on_field": "On Field", "on_destruction": "On Destruction"}.get(field, field)
+            if c[field] != text:
+                raw[col] = row[col]
+                c[field] = text
+                rebuild = True
+        if rebuild:
+            raw["description"] = row["description"]
+            c["description"] = describe(c)
+        if raw:
+            c["source"]["raw"] = dict(sorted(raw.items()))
+        cards.append(c)
     ids = [c["id"] for c in cards]
-    assert len(cards) == 183, len(cards)
+    assert len(cards) == EXPECTED_CARDS, len(cards)
     assert len(set(ids)) == len(ids), "duplicate ids"
-    cards.sort(key=lambda c: c["source"]["index"])
+    for c in cards:
+        assert "temp" not in (c["condition"] + c["on_summon"]).lower().split(), c["id"]
+    cards.sort(key=lambda c: (c["source"]["index"], c["id"]))
+    return {"cards": cards, "unassigned_source_notes": []}
 
-    statuses = []
-    for row in csv.DictReader(open(os.path.join(SRC, "RLDB Master - status.csv"), encoding="utf-8", newline="")):
-        statuses.append({"id": row["id"], "name": row["name"], "source_class": row["type"], "source_text": row["description"]})
 
+def build_statuses():
+    path = os.path.join(SRC, STATUS_SOURCE)
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8-sig", newline="") as fh:
+        return [{"id": r["id"], "name": r["name"], "source_class": r["type"], "source_text": r["description"]} for r in csv.DictReader(fh)]
+
+
+def serialise(data):
+    return json.dumps(data, ensure_ascii=False, indent=1)
+
+
+def main(argv):
+    path = os.path.join(SRC, CARD_SOURCE)
+    digest = sha256(path)
+    if digest != CARD_SOURCE_SHA256:
+        print("card source hash mismatch: %s (expected %s)" % (digest, CARD_SOURCE_SHA256))
+        return 2
+    data = build(path)
+    text = serialise(data)
+    out_cards = os.path.join(OUT, "cards.json")
+    if "--check" in argv:
+        with open(out_cards, encoding="utf-8", newline="") as f:
+            same = f.read() == text
+        print("cards.json up to date" if same else "cards.json is stale: run tools/import_cards.py")
+        return 0 if same else 1
     os.makedirs(OUT, exist_ok=True)
-    with open(os.path.join(OUT, "cards.json"), "w", encoding="utf-8", newline="\n") as f:
-        json.dump({"cards": cards, "unassigned_source_notes": notes}, f, ensure_ascii=False, indent=1)
-    with open(os.path.join(OUT, "status_source.json"), "w", encoding="utf-8", newline="\n") as f:
-        json.dump(statuses, f, ensure_ascii=False, indent=1)
-    print("cards:", len(cards), "notes:", len(notes), "statuses:", len(statuses))
+    with open(out_cards, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    statuses = build_statuses()
+    if statuses is not None:   # the status CSV is unchanged by this batch; keep the JSON if absent
+        with open(os.path.join(OUT, "status_source.json"), "w", encoding="utf-8", newline="\n") as f:
+            json.dump(statuses, f, ensure_ascii=False, indent=1)
+    print("source:", CARD_SOURCE, digest[:12], "cards:", len(data["cards"]),
+          "notes:", len(data["unassigned_source_notes"]), "statuses:", "unchanged" if statuses is None else len(statuses))
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
