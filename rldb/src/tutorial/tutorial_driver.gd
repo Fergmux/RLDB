@@ -196,9 +196,9 @@ func _play_lesson(li: int) -> void:
 	await _shot("L%d_complete" % (li + 1))
 
 
-## F05-01: the Arcane picker offers no 0-cost unit; picking both Dragons (4 of exactly 3) by
-## clicking them keeps Confirm disabled and the banner shows the total; an over-pay command is
-## refused with the total hint; deselecting restores an empty pick.
+## F05-01 / F08: the Arcane picker offers no 0-cost unit; after one Dragon (2 of 3) the other is
+## disabled (it would over-pay); an over-pay command is still refused by the authority with the
+## total hint; deselecting restores an empty pick.
 func _check_arcane_overpay(h: TutorialHost) -> void:
 	var gs: GameScreen = main.screen
 	var o := _overlay()
@@ -207,25 +207,28 @@ func _check_arcane_overpay(h: TutorialHost) -> void:
 	for x in pd.get("options", []):
 		offered.append(int(x.get("card", {}).get("uid", -1)))
 	_check("Arcane picker does not offer the 0-cost Drake", not (int(h.keys["s_drake"]) in offered) and offered.size() == 3)
-	_check("Arcane banner shows the exact total", gs.prompt._banner_how.contains("cost total 0 / exactly 3"))
+	_check("Arcane banner asks for exactly 3", gs.prompt._banner_how.contains("Pay exactly 3"))
 	await _shot("L7_arcane_picker")
-	for k in ["s_wyvern", "s_hydra"]:
-		await _click(o._card_rect(int(h.keys[k])).get_center())
-		await _wait(0.3)
+	# F08: after one Dragon (2 of 3) the other Dragon would over-pay, so it is disabled.
+	await _click(o._card_rect(int(h.keys["s_wyvern"])).get_center())
+	await _wait(0.3)
+	await _click(o._card_rect(int(h.keys["s_hydra"])).get_center())
+	await _wait(0.3)
 	var confirm := _find_button(gs.prompt.banner_btns, "Confirm")
-	_check("over-pay (4 of exactly 3) keeps Confirm disabled", gs.multi.size() == 2 and confirm != null and confirm.disabled)
-	_check("over-pay banner reads 4 / exactly 3", gs.prompt._banner_how.contains("cost total 4 / exactly 3"))
-	var rings := o.target_rects()
-	_check("over-pay: only the Dragon to deselect is ringed", rings.size() == 1 and (rings[0] as Rect2).is_equal_approx(o._card_rect(int(h.keys["s_hydra"]))))
+	_check("over-pay option is disabled (Cannot overpay); Confirm stays off", gs.multi.size() == 1 and confirm != null and confirm.disabled)
+	_check("over-pay banner reads 2 of 3 paid", gs.prompt._banner_how.contains("2 of 3 paid"))
 	await _shot("L7_arcane_overpay")
 	var before := h.refused
-	h.handle(TutorialLessons.PLAYER, {"t": "choose", "id": int(h.game().pending["id"]), "indices": gs.multi.duplicate()})
+	var both := []
+	for x in gs.pending().get("options", []):
+		if int(x.get("card", {}).get("uid", -1)) in [int(h.keys["s_wyvern"]), int(h.keys["s_hydra"])]:
+			both.append(int(x["i"]))
+	h.handle(TutorialLessons.PLAYER, {"t": "choose", "id": int(h.game().pending["id"]), "indices": both})
 	await _wait(0.3)
 	_check("an over-pay command is refused", h.refused == before + 1 and h.game().pending.get("total_exact", false))
 	await _shot("L7_arcane_overpay_hint")
-	for k in ["s_hydra", "s_wyvern"]:
-		await _click(o._card_rect(int(h.keys[k])).get_center())
-		await _wait(0.3)
+	await _click(o._card_rect(int(h.keys["s_wyvern"])).get_center())
+	await _wait(0.3)
 	_check("deselecting clears the pick", gs.multi.is_empty())
 
 
