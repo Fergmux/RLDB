@@ -51,20 +51,13 @@ func build_top_strip() -> void:
 ## Builds the in-game menu and the settings popup (hidden).
 func build_popups() -> void:
 	# In-game menu (Menu button / Esc): Settings, Concede, Return to menu, Quit to desktop.
-	game_menu = PanelContainer.new()
-	var gms := UIStyle.panel_style(Color(0.05, 0.045, 0.04, 0.98), UIStyle.GOLD, 10)
-	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		gms.set_content_margin(side, 14)
-	gms.shadow_size = 14
-	gms.shadow_color = Color(0, 0, 0, 0.6)
-	game_menu.add_theme_stylebox_override("panel", gms)
+	var menu_plate := HousePanel.new("Menu", "Esc", Vector2(14, 14), 8)
+	game_menu = menu_plate
 	game_menu.visible = false
 	game_menu.z_index = UiLayers.GAME_MENU
 	gs.add_child(game_menu)
-	var gmv := VBoxContainer.new()
-	gmv.add_theme_constant_override("separation", 8)
-	game_menu.add_child(gmv)
-	for it in [["Settings", func(): game_menu.visible = false; settings_popup.visible = true],
+	var gmv := menu_plate.body
+	for it in [["Settings", func(): game_menu.visible = false; _show_popup(settings_popup)],
 			["Concede game", func(): game_menu.visible = false; _confirm_concede()],
 			["Return to menu", func(): confirm_forfeit(false)],
 			["Quit to desktop", func(): confirm_forfeit(true)]]:
@@ -73,15 +66,14 @@ func build_popups() -> void:
 		gb.pressed.connect(it[1])
 		gmv.add_child(gb)
 	# Settings
-	settings_popup = PanelContainer.new()
-	settings_popup.add_theme_stylebox_override("panel", UIStyle.panel_style(Color(0.07, 0.065, 0.06, 0.99), UIStyle.GOLD, 10))
+	var set_plate := HousePanel.new("Settings", "Interface", Vector2(16, 14), 6)
+	settings_popup = set_plate
 	settings_popup.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	settings_popup.visible = false
+	settings_popup.z_index = UiLayers.GAME_MENU
 	gs.add_child(settings_popup)
-	var sv := VBoxContainer.new()
-	sv.add_theme_constant_override("separation", 6)
-	settings_popup.add_child(sv)
-	sv.add_child(GameUi.header("Interface settings"))
+	var sv := set_plate.body
+	set_plate.add_headline("Interface settings", 19)
 	var rm := CheckBox.new()
 	rm.text = "Reduced motion (no travel, shake or particles)"
 	rm.button_pressed = UIStyle.reduce_motion
@@ -107,7 +99,9 @@ func layout(w: float) -> void:
 
 ## Places the settings popup and the menu (called after the banner and pause are placed).
 func layout_popups(w: float) -> void:
-	settings_popup.position = Vector2(w - gs.sidebar_w - SETTINGS_W, GameScreen.TOP_H + 4.0)
+	settings_popup.reset_size()
+	var sw := maxf(SETTINGS_W, settings_popup.get_combined_minimum_size().x)
+	settings_popup.position = Vector2(w - gs.sidebar_w - sw - 10.0, GameScreen.TOP_H + 4.0)
 	game_menu.reset_size()
 	game_menu.position = Vector2(w - gs.sidebar_w - game_menu.get_combined_minimum_size().x - 10.0, GameScreen.TOP_H + 4.0)
 
@@ -130,9 +124,17 @@ func update_conn() -> void:
 func toggle() -> void:
 	Sfx.play("select")
 	settings_popup.visible = false
-	game_menu.visible = not game_menu.visible
 	if game_menu.visible:
+		game_menu.visible = false
+	else:
+		_show_popup(game_menu)
 		gs.hover.clear()
+
+
+## Shows a house popover with its opening animation.
+func _show_popup(p: Control) -> void:
+	p.visible = true
+	(p as HousePanel).appear()
 
 
 ## Return to menu / Quit to desktop: an unfinished series is forfeited (after a warning).
@@ -159,9 +161,9 @@ func confirm_forfeit(quit: bool) -> void:
 
 
 ## Opens the shared confirmation dialog over the screen (one at a time).
-func _dialog(title: String, text: String, confirm: String, on_yes: Callable) -> void:
+func _dialog(title: String, text: String, confirm: String, on_yes: Callable, tag: String = "Leave game") -> void:
 	close_dialog()
-	_dialog_root = ConfirmDialog.open(gs, title, text, confirm, on_yes)
+	_dialog_root = ConfirmDialog.open(gs, title, text, confirm, on_yes, "Keep playing", tag)
 	gs.hover.clear()
 
 
@@ -176,7 +178,7 @@ func close_dialog() -> bool:
 
 
 func _confirm_concede() -> void:
-	_dialog("Concede this game?", "Your opponent wins this game; the series continues.", "Concede", func(): gs.send({"t": "concede"}))
+	_dialog("Concede this game?", "Your opponent wins this game; the series continues.", "Concede", func(): gs.send({"t": "concede"}), "Concede")
 
 
 ## Music and sound-effect volume sliders with mute boxes (game settings and main menu).

@@ -16,6 +16,7 @@ const SEARCH_TIMEOUT := 12.0
 var _list: VBoxContainer
 var _status: Label
 var _done := false
+var _panel: HousePanel
 
 
 func _init() -> void:
@@ -30,23 +31,12 @@ func _init() -> void:
 	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(cc)
-	var panel := PanelContainer.new()
-	var sb := UIStyle.panel_style(Color(0.05, 0.045, 0.04, 0.99), UIStyle.GOLD, 12)
-	for side in [SIDE_LEFT, SIDE_RIGHT]:
-		sb.set_content_margin(side, 30)
-	for side in [SIDE_TOP, SIDE_BOTTOM]:
-		sb.set_content_margin(side, 22)
-	sb.shadow_size = 20
-	sb.shadow_color = Color(0, 0, 0, 0.6)
-	panel.add_theme_stylebox_override("panel", sb)
-	panel.custom_minimum_size = Vector2(PANEL_W, 0)
-	cc.add_child(panel)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
-	panel.add_child(v)
-	var t := UIStyle.label("Public RLDB lobbies", 26, UIStyle.GOLD, false, true)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
+	_panel = HousePanel.new("Join game", "Steam", Vector2(26, 22), 12)
+	_panel.arm = 18.0
+	_panel.custom_minimum_size = Vector2(PANEL_W, 0)
+	cc.add_child(_panel)
+	var v := _panel.body
+	_panel.add_headline("Public RLDB lobbies", 26, true, 12.0)
 	_status = UIStyle.label("Searching…", 16, UIStyle.TEXT, true)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(_status)
@@ -61,6 +51,7 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	_panel.appear()
 	get_tree().create_timer(SEARCH_TIMEOUT).timeout.connect(func():
 		if is_instance_valid(self) and not _done:
 			_status.text = "Steam did not answer the search. Check that Steam is online and try again.")
