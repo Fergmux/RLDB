@@ -1,20 +1,25 @@
 # Production batch 2026-10-17: decisions
 
-## Questions put to the owner (Stage 0), with recommendations
+## Questions and owner answers (source: `design/production-batch-owner-answers-2026-10-17.md`, which overrides the recommendations)
 
 | # | Question | Recommendation | Owner answer |
 | --- | --- | --- | --- |
-| Q1 | Is the 99-card deck cap combined (Main + Extra) or per deck? | Combined. Saved decks are one list, and the deck builder shows one total | (pending) |
-| Q2 | Ingestion architecture: Cloud Functions (needs the Blaze plan) or direct client writes on Spark? | Blaze plus an HTTPS Cloud Function, with deny-all Firestore rules. It costs about £0 at playtest volume; set a budget alert | (pending) |
-| Q3 | Deployment authorisation and access: may I deploy rules, functions and indexes to `rldb-b5593`? The owner would run `firebase login` | Yes. Deploy deny-all rules first, because the database is currently open to anyone | (pending) |
-| Q4 | Online result finalisation | Two matching reports make a game verified; one report makes it provisional (included by default, flagged); disagreeing reports make it conflicted (excluded) | (pending) |
-| Q5 | Retention | Raw event batches 180 days; game, draft and reward reports 2 years; aggregates kept; deletion by UID with an admin script | (pending) |
-| Q6 | Disclosure and consent | One Settings checkbox, "Share anonymous gameplay statistics" (on by default), plus a privacy note document | (pending) |
-| Q7 | Environment label for current builds | `playtest` for current builds; `production` reserved for a release; `dev` and `test` for editor and automated runs | (pending) |
-| Q8 | Draft-order drag-and-drop versus F07's "no-drag-and-drop input model" | Remove the drag; keep the arrow buttons | (pending) |
-| Q9 | Lone Warrior / Revealed third Extra Deck card (`#REF!` in the sheet) | Owner to name it; otherwise the deck keeps 2 | (pending) |
+| Q1 | Is the 99-card deck cap combined (Main + Extra) or per deck? | Combined. Saved decks are one list, and the deck builder shows one total | **99 combined (Main + Extra), and Extra at most 15 within that.** No visible limit labels; oversized saves are preserved safely |
+| Q2 | Ingestion architecture: Cloud Functions (needs the Blaze plan) or direct client writes on Spark? | Blaze plus an HTTPS Cloud Function, with deny-all Firestore rules. It costs about £0 at playtest volume; set a budget alert | **Spark only.** No Blaze, no billing, no Cloud Functions. Direct client writes under strict rules; integrity limits documented; aggregation by an authorised local/admin tool, never freely writable totals |
+| Q3 | Deployment authorisation and access: may I deploy rules, functions and indexes to `rldb-b5593`? The owner would run `firebase login` | Yes. Deploy deny-all rules first, because the database is currently open to anyone | Authorised: the Firebase CLI and Java installed, and security rules deployed to rldb-b5593. Done 17 Oct: CLI 15.34, Temurin JRE 21, owner logged in. Interim deny-all deployed and verified (403 for unauthenticated). Nothing unrelated or paid |
+| Q4 | Online result finalisation | Two matching reports make a game verified; one report makes it provisional (included by default, flagged); disagreeing reports make it conflicted (excluded) | **As recommended.** Agreeing reports: verified. One report: provisional (included, flagged). Disagreeing: conflicted (excluded). Later agreement upgrades without double counting; a later conflict removes the provisional contribution on rebuild. Classification is done by trusted reconciliation (the admin tool), never declared by a client |
+| Q5 | Retention | Raw event batches 180 days; game, draft and reward reports 2 years; aggregates kept; deletion by UID with an admin script | **Keep all gameplay data indefinitely**; no age-based deletion. Documented admin deletion process, kill switch, monitor Spark quota. The local outbox is still bounded |
+| Q6 | Disclosure and consent | One Settings checkbox, "Share anonymous gameplay statistics" (on by default), plus a privacy note document | **Settings checkbox "Share anonymous gameplay statistics"**, on by default, with a privacy note; turning it off stops future collection and upload (queued-data treatment documented). Owner wants a **stable Steam-linked ID** without the persona name; it must be securely linked, not a trusted client-supplied Steam ID. The pseudonymous data may still be personal data (owner intent recorded, not a legal finding) |
+| Q7 | Environment label for current builds | `playtest` for current builds; `production` reserved for a release; `dev` and `test` for editor and automated runs | As recommended: playtest / production / dev / test, set by build configuration and stamped on every record and aggregate key; production aggregates exclude the others by default. Labels are not a security boundary |
+| Q8 | Draft-order drag-and-drop versus F07's "no-drag-and-drop input model" | Remove the drag; keep the arrow buttons | **Remove draft-order dragging**; keep the up/down arrows, focus behaviour and order |
+| Q9 | Lone Warrior / Revealed third Extra Deck card (`#REF!` in the sheet) | Owner to name it; otherwise the deck keeps 2 | Unknown: leave Lone Warrior / Revealed with its 2 valid Extra Deck cards; the owner will update it later |
 
-## Autonomous decisions (recorded as made)
+## Genuine blocker reported to the owner
+
+- **Verified Steam-linked identity is not possible on Spark.** It needs a trusted server to check a Steam auth ticket with a publisher Web API key, plus the owner's own App ID; the game is still on Spacewar 480. Chosen fallback: a stable anonymous Firebase UID per install (refresh token in a local credential file) plus a salted one-way hash of the Steam ID, explicitly flagged `unverified`. It is used for grouping, never treated as proof of identity. A verified link can be added later (own App ID plus a trusted server) without changing collected data.
+- **No trusted aggregation in the cloud on Spark.** Totals are computed by an owner-run admin tool (`firebase/tools/`), which also does the verified / provisional / conflicted classification.
+
+## Autonomous decisions (proposed by the agent; NOT owner-confirmed, reported at the end)
 
 - **`temp` in `condition`:** treated as editorial metadata. It is stripped at import and never shown or compiled. The raw value is kept in the provenance field.
 - **Illusionist (177) On Destruction:** you may move one card from YOUR Exhaust to YOUR Draw whose current ordinary AP cost is at most 1. Special-cost (Extra Deck) cards are not eligible. It uses the same Draw-placement semantics as the existing "move to Draw" effects. It is optional. Necrovast's exception is unchanged.

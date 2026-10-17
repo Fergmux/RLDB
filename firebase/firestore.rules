@@ -1,0 +1,10 @@
+rules_version = '2';
+// Interim lockdown (17 Oct 2026): no game build uploads yet, so every client read and write is
+// denied. Replaced by the tested direct-write telemetry rules (see design/production-batch-2026-10-17/).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
