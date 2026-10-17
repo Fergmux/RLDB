@@ -19,7 +19,17 @@ var selected: bool = false:
 		selected = v
 		queue_redraw()
 var _hover := 0.0
+## False until the first frame: the rim and glow then start at their resting state instead of
+## easing in from nothing (G02: a re-rendered list never flashes its hover or selection glow).
+var _primed := false
 var _box: StyleBoxFlat
+var _root: VBoxContainer
+var _brow: HBoxContainer
+var _tog: Button
+var _main: Array = []
+var _extra: Array = []
+## The open card list (rule + Main / Extra sections) while the tile is open.
+var _list_nodes: Array = []
 
 
 ## Builds the tile. `d`: title, theme, main (Array of card summaries), extra, btn_text, open (bool),
@@ -39,12 +49,18 @@ func _init(d: Dictionary = {}) -> void:
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	selected = bool(d.get("open", false))
 	_build(d)
+	# A tile built open shows its gold rim from its first drawn frame (no fade-in flash).
+	_hover = 1.0 if selected else 0.0
+	_apply_rim()
 
 
 func _build(d: Dictionary) -> void:
 	var main: Array = d.get("main", [])
 	var extra: Array = d.get("extra", [])
+	_main = main
+	_extra = extra
 	var root := VBoxContainer.new()
+	_root = root
 	root.add_theme_constant_override("separation", 10)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
@@ -108,16 +124,14 @@ func _build(d: Dictionary) -> void:
 			gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			sig.add_child(gap)
-	if selected:
-		root.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.5), false, 8.0))
-		root.add_child(_list_section("MAIN DECK", main, UIStyle.GOLD))
-		root.add_child(_list_section("EXTRA DECK", extra, Color("9d7ae8")))
 	# Buttons.
 	var brow := HBoxContainer.new()
+	_brow = brow
 	brow.add_theme_constant_override("separation", 8)
 	brow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(brow)
 	var tog := UIStyle.button("Hide full list" if selected else "View full list", 13)
+	_tog = tog
 	tog.pressed.connect(func(): toggled.emit())
 	brow.add_child(tog)
 	var sp := Control.new()
@@ -133,6 +147,34 @@ func _build(d: Dictionary) -> void:
 		pick.disabled = true
 		pick.tooltip_text = blocked
 	brow.add_child(pick)
+	if selected:
+		_add_list()
+
+
+## Opens or closes the full card list in place (G02): the tile keeps its node, hover state and
+## focus, and the list around it keeps its scroll position, so nothing is rebuilt or flashes.
+func set_open(v: bool) -> void:
+	if v == selected and (_list_nodes.is_empty() != v):
+		return
+	selected = v
+	_tog.text = "Hide full list" if v else "View full list"
+	if v and _list_nodes.is_empty():
+		_add_list()
+	elif not v:
+		for n in _list_nodes:
+			_root.remove_child(n)
+			n.queue_free()
+		_list_nodes.clear()
+	_apply_rim()
+
+
+func _add_list() -> void:
+	_list_nodes = [Ornate.Rule.new(Color(UIStyle.GOLD, 0.5), false, 8.0),
+		_list_section("MAIN DECK", _main, UIStyle.GOLD),
+		_list_section("EXTRA DECK", _extra, Color("9d7ae8"))]
+	for n in _list_nodes:
+		_root.add_child(n)
+		_root.move_child(n, _brow.get_index())
 
 
 static func _type_word(t: String) -> Label:
@@ -217,14 +259,20 @@ func _process(delta: float) -> void:
 	var tgt := 1.0 if selected else want
 	var cur := _hover
 	_hover = move_toward(_hover, tgt, delta * 8.0)
-	if UIStyle.reduce_motion:
+	if UIStyle.reduce_motion or not _primed:
 		_hover = tgt
-	if _hover != cur:
-		queue_redraw()
-		_box.border_color = UIStyle.BRONZE.lerp(UIStyle.GOLD_HI if selected else UIStyle.GOLD, _hover)
-		_box.shadow_color = Color(0, 0, 0, 0.5).lerp(Color(UIStyle.GOLD, 0.34), _hover)
-		_box.shadow_size = int(lerpf(8.0, 16.0, _hover))
-		_box.shadow_offset = Vector2(0, lerpf(3.0, 0.0, _hover))
+	if _hover != cur or not _primed:
+		_primed = true
+		_apply_rim()
+
+
+## Rim, glow and shadow for the current hover / selection blend.
+func _apply_rim() -> void:
+	queue_redraw()
+	_box.border_color = UIStyle.BRONZE.lerp(UIStyle.GOLD_HI if selected else UIStyle.GOLD, _hover)
+	_box.shadow_color = Color(0, 0, 0, 0.5).lerp(Color(UIStyle.GOLD, 0.34), _hover)
+	_box.shadow_size = int(lerpf(8.0, 16.0, _hover))
+	_box.shadow_offset = Vector2(0, lerpf(3.0, 0.0, _hover))
 
 
 func _draw() -> void:

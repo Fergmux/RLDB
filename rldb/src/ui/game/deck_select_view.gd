@@ -35,6 +35,7 @@ func _init(overlay: GameSeriesOverlay) -> void:
 ## (a scrolling list), false when the modal should shrink to its content.
 func render() -> bool:
 	list_area = null
+	_tiles.clear()
 	var gs := ov.gs
 	var view := gs.view
 	var p := gs.me()
@@ -182,13 +183,29 @@ func _tabs_and_list(box: VBoxContainer) -> void:
 func _add_tile(grid: GridContainer, id: String, title: String, theme: String, main: Array, extra: Array, btn: String, on_pick: Callable, blocked: String = "") -> void:
 	var t := DeckTile.new({"title": title, "theme": theme, "main": main, "extra": extra, "btn_text": btn, "open": ov.deck_open.get(id, false), "blocked": blocked})
 	t.chosen.connect(on_pick)
-	t.toggled.connect(func():
-		var was: bool = ov.deck_open.get(id, false)
-		ov.deck_open.clear()
-		ov.deck_open[id] = not was
-		_remember_scroll()
-		ov.refresh())
+	t.toggled.connect(func(): _toggle_tile(id))
+	_tiles[id] = t
 	grid.add_child(t)
+
+
+## Opens tile `id`'s full card list (closing any other) or closes it. G02: the tiles change in
+## place; rebuilding the modal reset every tile's rim and glow and the list's scroll for a frame
+## or two, which showed as a flash on both opening and closing.
+func _toggle_tile(id: String) -> void:
+	var was: bool = ov.deck_open.get(id, false)
+	for k in ov.deck_open.keys():
+		var other = _tiles.get(k)
+		if other != null and is_instance_valid(other):
+			other.set_open(false)
+	ov.deck_open.clear()
+	ov.deck_open[id] = not was
+	var t = _tiles.get(id)
+	if t == null or not is_instance_valid(t):
+		_remember_scroll()
+		ov.refresh()
+		return
+	t.set_open(not was)
+	ov.mark_rendered()
 
 
 ## Keeps the list where it is across the re-render a selection causes.
@@ -198,6 +215,8 @@ func _remember_scroll() -> void:
 
 
 var _saved_scroll: int = 0
+## Deck tiles of the shown list by id ("s0", "c1", ...), for opening and closing in place.
+var _tiles: Dictionary = {}
 
 
 ## Re-applies the remembered scroll position once the new list has been laid out.

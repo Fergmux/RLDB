@@ -234,11 +234,7 @@ func render() -> void:
 	var stage: String = view.get("stage", "")
 	if stage != "game" and stage != "" and gs.fx != null and gs.fx.game_end_hold:
 		return   # F03-13: held back until the victory / defeat presentation has played
-	var sig := 1
-	if stage != "game":
-		var vv := view.duplicate()
-		vv.erase("match")
-		sig = hash([vv, deck_open])
+	var sig := _view_sig()
 	if sig == overlay_sig:
 		return
 	overlay_sig = sig
@@ -330,6 +326,22 @@ func _seat_plate(nm: String, mine: bool) -> Control:
 		h.add_child(yt)
 	h.add_child(UIStyle.label(nm, 17, UIStyle.TEXT if mine else UIStyle.MUTED, false, true))
 	return p
+
+
+## Signature of what the modal shows: the series view (without the match) and the open deck tile.
+func _view_sig() -> int:
+	var view := gs.view
+	if String(view.get("stage", "")) == "game":
+		return 1
+	var vv := view.duplicate()
+	vv.erase("match")
+	return hash([vv, deck_open])
+
+
+## Records the current content as rendered after a change made in place (G02: a deck tile opened
+## or closed without a rebuild), so the next view update does not rebuild for it.
+func mark_rendered() -> void:
+	overlay_sig = _view_sig()
 
 
 ## Forces the modal to rebuild now (after a local choice that the view does not reflect).
