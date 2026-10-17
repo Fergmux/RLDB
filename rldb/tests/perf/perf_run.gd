@@ -62,7 +62,9 @@ func _decide(p: int) -> Dictionary:
 		"rewards":
 			return {"t": "reward_finish"} if not v["rewards"]["done"] else {}
 		"first_player":
-			return {"t": "first_player", "who": 0} if v["last_loser"] == p else {}
+			if v["last_loser"] == p and not v["next"]["first_chosen"]:
+				return {"t": "first_player", "who": 0}
+			return {"t": "start_duel"} if not v["next"]["you_ready"] else {}
 		"game":
 			var mv: Dictionary = v["match"]
 			var pd: Dictionary = mv["pending"]

@@ -440,7 +440,17 @@ func hover_blocked() -> bool:
 		or overlays.pause_dim.visible or mv.is_empty() or inspect.is_open() or details.method_picker_open()
 
 
-## True while a series is being played on this screen (leaving it would forfeit).
+## True for a hot-seat series (both players at this screen).
+func is_hotseat() -> bool:
+	return String(view.get("mode", "")) == "local"
+
+
+## True in a networked (LAN / Steam) series.
+func is_network() -> bool:
+	return view.has("net")
+
+
+## True while a series is being played on this screen (leaving it unsaved would forfeit).
 func has_live_series() -> bool:
 	return view.get("stage", "") not in ["", "over"]
 

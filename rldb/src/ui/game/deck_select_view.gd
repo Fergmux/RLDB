@@ -224,8 +224,11 @@ func restore_scroll() -> void:
 	if list_area == null or _saved_scroll == 0:
 		return
 	var a := list_area
-	await ov.gs.get_tree().process_frame
-	await ov.gs.get_tree().process_frame
+	if not a.is_inside_tree():
+		return
+	var tree := a.get_tree()
+	await tree.process_frame
+	await tree.process_frame
 	if is_instance_valid(a):
 		a.scroll.scroll_vertical = _saved_scroll
 		a.scroll.scroll_to(float(_saved_scroll))

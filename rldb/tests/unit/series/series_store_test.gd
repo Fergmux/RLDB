@@ -68,3 +68,12 @@ func test_valid_checkpoint_round_trips() -> void:
 	assert_object(r).is_not_null()
 	assert_str(r.stage).is_equal(Series.STAGE_REWARDS)
 	assert_array(r.scores).is_equal(s.scores)
+
+
+## Automated runs never default to the player's real saves (test runs once wiped real data).
+func test_automated_runs_default_to_a_test_save_directory() -> void:
+	assert_str(SeriesStore._default_dir()).is_not_equal(SeriesStore.PLAYER_DIR)
+	assert_str(SeriesStore.dir_for(PackedStringArray(["--headless", "-s", "res://x.gd"]), PackedStringArray())).is_equal(SeriesStore.TEST_DIR)
+	assert_str(SeriesStore.dir_for(PackedStringArray(["res://addons/gdUnit4/bin/GdUnitCmdTool.gd"]), PackedStringArray())).is_equal(SeriesStore.TEST_DIR)
+	assert_str(SeriesStore.dir_for(PackedStringArray(["--path", "."]), PackedStringArray(["--f04-series-shots=out"]))).is_equal(SeriesStore.DEV_DIR)
+	assert_str(SeriesStore.dir_for(PackedStringArray(["--path", "."]), PackedStringArray(["--no-steam"]))).is_equal(SeriesStore.PLAYER_DIR)

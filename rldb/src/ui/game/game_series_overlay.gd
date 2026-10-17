@@ -128,9 +128,13 @@ func place_modals() -> void:
 
 ## Shrinks the modal to its content once the layout has settled (two frames).
 func _fit_overlay() -> void:
-	await gs.get_tree().process_frame
-	await gs.get_tree().process_frame
-	if not overlay.visible:
+	if not gs.is_inside_tree():
+		return
+	var tree := gs.get_tree()
+	await tree.process_frame
+	await tree.process_frame
+	# The screen may have been closed meanwhile (left to the menu right after a re-render).
+	if not is_instance_valid(gs) or not is_instance_valid(overlay) or not overlay.visible:
 		return
 	var need := overlay_box.get_combined_minimum_size().y + _chrome_h()
 	if _fixed_height:
@@ -433,24 +437,69 @@ static func _grouped_names(cards: Array) -> String:
 	return ", ".join(order.map(func(c): return c["name"] + (" ×%d" % n[c["id"]] if n[c["id"]] > 1 else "")))
 
 
+## Who-goes-first stage (G05 / G06), centred: the last game's result, the loser's choice and the
+## Start next duel button. The next duel starts once the loser has chosen and both seats have
+## pressed Start (the bot presses at once; in hot-seat one press counts for both players).
 func _render_first() -> void:
 	var view := gs.view
+	var me := gs.me()
+	var opp := String(view["names"][1 - me])
+	var nx: Dictionary = view.get("next", {})
+	var chosen: bool = bool(nx.get("first_chosen", false))
+	var first: int = int(nx.get("first_player", -1))
+	var you_ready: bool = bool(nx.get("you_ready", false))
+	var opp_ready: bool = bool(nx.get("opponent_ready", false))
+	var next_no: int = int(view["game_no"]) + 1
 	var line := game_result_line()
 	if line != "":
-		overlay_box.add_child(UIStyle.label(line, 17, UIStyle.TEXT, true))
-	if view["last_loser"] == gs.me():
-		overlay_box.add_child(UIStyle.label("You lost the last game, so you choose who goes first in game %d." % (view["game_no"] + 1), 18, UIStyle.ACCENT, true))
+		overlay_box.add_child(_centred(line, 17, UIStyle.TEXT))
+	var chooser: bool = int(view["last_loser"]) == me
+	if chooser:
+		overlay_box.add_child(_centred("You lost the last game, so you choose who goes first in game %d." % next_no, 18, UIStyle.ACCENT))
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 10)
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 12)
 		overlay_box.add_child(row)
-		var b1 := UIStyle.primary_button("I go first", 17)
-		b1.pressed.connect(func(): gs.send({"t": "first_player", "who": gs.me()}))
-		row.add_child(b1)
-		var b2 := UIStyle.button("My opponent goes first", 17)
-		b2.pressed.connect(func(): gs.send({"t": "first_player", "who": 1 - gs.me()}))
-		row.add_child(b2)
+		for who in [me, 1 - me]:
+			var txt: String = "I go first" if who == me else "My opponent goes first"
+			var picked: bool = chosen and first == who
+			var b := UIStyle.primary_button(txt, 17) if picked else UIStyle.button(txt, 17)
+			b.custom_minimum_size = Vector2(220, 46)
+			b.toggle_mode = false
+			b.disabled = you_ready
+			b.tooltip_text = "Chosen" if picked else "Choose this"
+			var w: int = who
+			b.pressed.connect(func(): gs.send({"t": "first_player", "who": w}))
+			row.add_child(b)
+	elif chosen:
+		overlay_box.add_child(_centred(("%s chose you to go first in game %d." if first == me else "%s chose to go first in game %d.") % [opp, next_no], 18, UIStyle.ACCENT))
 	else:
-		overlay_box.add_child(UIStyle.label("Your opponent lost the last game and is choosing who goes first…", 17, UIStyle.TEXT, true))
+		overlay_box.add_child(_centred("%s lost the last game and is choosing who goes first in game %d…" % [opp, next_no], 17, UIStyle.TEXT))
+	if you_ready:
+		var sub := "Waiting for %s to choose who goes first…" % opp if not chosen else "Waiting for %s to start the next duel…" % opp
+		var chips := [{"text": "You: ready", "done": true},
+			{"text": "%s: %s" % [opp, "ready" if opp_ready else "not ready yet"], "done": opp_ready}]
+		var wp := WaitPlate.new("Ready for game %d" % next_no, sub, chips)
+		wp.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		wp.custom_minimum_size = Vector2(minf(420.0, overlay_box.custom_minimum_size.x), 0)
+		overlay_box.add_child(wp)
+		return
+	var start := UIStyle.primary_button("Start next duel", 19)
+	start.custom_minimum_size = Vector2(260, 52)
+	start.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	start.disabled = chooser and not chosen
+	start.tooltip_text = "Choose who goes first, then start the next duel." if start.disabled else "Start game %d" % next_no
+	start.pressed.connect(func(): gs.send({"t": "start_duel"}))
+	overlay_box.add_child(start)
+	if opp_ready and not gs.is_hotseat():
+		overlay_box.add_child(_centred("%s is ready." % opp, 15, UIStyle.GOOD))
+
+
+## A centred, wrapping label for the stage modal.
+func _centred(text: String, fs: int, col: Color) -> Label:
+	var l := UIStyle.label(text, fs, col, true)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return l
 
 
 func _render_over() -> void:

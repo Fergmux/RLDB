@@ -233,8 +233,12 @@ func series_command(s: Series) -> Dictionary:
 			var types := ["unit", "unit", "unit", "spell", "trap", "power"]
 			return {"t": "reward_type", "category": types[rng.randi_range(0, types.size() - 1)]}
 		Series.STAGE_FIRST:
-			if s.last_loser == me:
+			# G05: choose (when the bot lost), then press Start next duel at once, so the bot
+			# never keeps the player waiting.
+			if s.last_loser == me and not s.first_chosen:
 				return {"t": "first_player", "who": me}
+			if not s.duel_ready[me]:
+				return {"t": "start_duel"}
 	return {}
 
 

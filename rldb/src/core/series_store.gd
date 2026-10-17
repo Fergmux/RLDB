@@ -3,8 +3,31 @@ extends RefCounted
 ## Between-game series saves (P-02: a series can be paused and resumed at a later date,
 ## at between-game checkpoints only). Saves live in user://saves/<save_id>.json.
 
-## Save directory; tests point this elsewhere so they never touch real saves.
-static var DIR := "user://saves"
+## Save directory. Automated runs (GdUnit, `-s` dev scripts, `--*-shots` drivers) start in a test
+## directory, like DeckStore and PlayerStats, so no test can create, list or delete the player's
+## real saves even if it forgets to set DIR itself. Tests may still point DIR elsewhere.
+static var DIR := _default_dir()
+const PLAYER_DIR := "user://saves"
+const TEST_DIR := "user://test_saves"
+## Scripted screenshot runs (main.gd sets this too, for `--*-shots` arguments).
+const DEV_DIR := "user://dev_saves"
+
+
+## The save directory for this process: TEST_DIR under a test runner or `-s` script, DEV_DIR for
+## a shots run, PLAYER_DIR otherwise.
+static func _default_dir() -> String:
+	return dir_for(OS.get_cmdline_args(), OS.get_cmdline_user_args())
+
+
+## The save directory for these command-line arguments (see `_default_dir`).
+static func dir_for(args: PackedStringArray, user_args: PackedStringArray) -> String:
+	for a in args:
+		if a == "-s" or a == "--script" or String(a).contains("GdUnitCmdTool"):
+			return TEST_DIR
+	for a in user_args:
+		if String(a).contains("shots"):
+			return DEV_DIR
+	return PLAYER_DIR
 
 
 static func save(s: Series) -> void:

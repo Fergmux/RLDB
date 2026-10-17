@@ -83,6 +83,8 @@ func test_only_loser_chooses_first_player() -> void:
 		s.submit(p, {"t": "reward_finish"})
 	assert_str(s.submit(1 - loser, {"t": "first_player", "who": 0})).is_not_empty()
 	assert_str(s.submit(loser, {"t": "first_player", "who": 1 - loser})).is_empty()
+	for q in 2:
+		s.submit(q, {"t": "start_duel"})   # G05
 	assert_int(s.game.active).is_equal(1 - loser)
 	assert_int(s.game_no).is_equal(2)
 
@@ -99,6 +101,8 @@ func test_new_game_resets_hp_statuses_runes_exhaust_and_costs() -> void:
 	for p in 2:
 		s.submit(p, {"t": "reward_finish"})
 	s.submit(loser, {"t": "first_player", "who": 0})
+	for q in 2:
+		s.submit(q, {"t": "start_duel"})   # G05
 	var m2 := s.game
 	assert_object(m2).is_not_same(m)
 	for p in 2:
@@ -119,6 +123,8 @@ func test_series_ends_when_a_player_reaches_required_wins() -> void:
 		for p in 2:
 			s.submit(p, {"t": "reward_finish"})
 		s.submit(1, {"t": "first_player", "who": 0})
+		for q in 2:
+			s.submit(q, {"t": "start_duel"})   # G05
 	assert_str(s.stage).is_equal(Series.STAGE_OVER)
 	assert_int(s.scores[0]).is_equal(2)
 
@@ -252,6 +258,8 @@ func test_series_saves_and_resumes_between_games() -> void:
 	for p in 2:
 		r.submit(p, {"t": "reward_finish"})
 	assert_str(r.submit(r.last_loser, {"t": "first_player", "who": 0})).is_empty()
+	for q in 2:
+		assert_str(r.submit(q, {"t": "start_duel"})).is_empty()   # G05
 	assert_str(r.stage).is_equal(Series.STAGE_GAME)
 	assert_int(r.game_no).is_equal(2)
 
