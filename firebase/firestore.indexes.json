@@ -1,0 +1,15 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "submissions",
+      "fieldPath": "body",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aggregates",
+      "fieldPath": "body",
+      "indexes": []
+    }
+  ]
+}
