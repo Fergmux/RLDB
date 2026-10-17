@@ -23,6 +23,9 @@ const GODOT = process.env.GODOT || 'C:/Users/fergm/Downloads/Godot_v4.6.1-stable
   const res = await runReconcile(null, raws, { env: 'test', filter: { modes: ['bot'], statuses: ['local'] } });
   const kinds = raws.reduce((m, r) => { m[r.data.kind] = (m[r.data.kind] || 0) + 1; return m; }, {});
   console.log(`submissions by kind: ${JSON.stringify(kinds)}`);
+  const bytes = raws.reduce((m, r) => { m[r.data.kind] = Math.max(m[r.data.kind] || 0, String(r.data.body).length); return m; }, {});
+  const total = raws.reduce((a, r) => a + String(r.data.body).length, 0);
+  console.log(`largest body by kind (chars): ${JSON.stringify(bytes)}; total body chars for the series: ${total}`);
   console.log(`rejected: ${JSON.stringify(res.rejected)}; duels: ${JSON.stringify(res.health)}`);
   const m = res.metrics;
   const drafted = Object.values(m.cards).filter((c) => c.selections > 0).length;
