@@ -192,3 +192,49 @@ test('REST: spoofed paths, missing auth and invalid schema are refused', async (
     { headers: { Authorization: `Bearer ${b.idToken}` } });
   assert.equal(g.status, 403);
 });
+
+// ------------------------------------------------------------------ security review additions
+
+test('review: nested, array and wrong-typed fields are refused; body must be a string', async () => {
+  const p = (id) => doc(alice(), `users/alice/submissions/${id}`);
+  await assertFails(setDoc(p('game_n1'), submission('alice', 'game', { body: ['x'.repeat(10)] })));
+  await assertFails(setDoc(p('game_n2'), submission('alice', 'game', { body: { nested: { deep: 1 } } })));
+  await assertFails(setDoc(p('game_n3'), submission('alice', 'game', { build: { x: 1 } })));
+  await assertFails(setDoc(p('game_n4'), submission('alice', 'game', { created_at: 1760000000000.5 })));
+  await assertFails(setDoc(p('game_n5'), submission('alice', 'game', { uid: ['alice'] })));
+  await assertFails(setDoc(p('game_n6'), submission('alice', 'game', { kind: ['game'] })));
+  await assertFails(setDoc(p('game_n7'), submission('alice', 'game', { seq: -1 })));
+  const noTime = submission('alice', 'game');
+  delete noTime.received_at;
+  await assertFails(setDoc(p('game_n8'), noTime));
+  await assertFails(setDoc(p('game_n9'), submission('alice', 'game', { received_at: new Date(Date.now() + 3600e3) })));
+});
+
+test('review: document-id kind spoofing and path tricks are refused', async () => {
+  const p = (id) => doc(alice(), `users/alice/submissions/${id}`);
+  await assertFails(setDoc(p('gclient_x1'), submission('alice', 'game')));
+  await assertFails(setDoc(p('game_x1'), submission('alice', 'gclient')));
+  await assertFails(setDoc(p('xgame_x1'), submission('alice', 'game')));
+  await assertFails(setDoc(p('game_'), submission('alice', 'game')));
+  await assertFails(setDoc(p(`game_${'a'.repeat(121)}`), submission('alice', 'game')));
+  await assertFails(setDoc(doc(alice(), 'users/alice/submissions/game_x/nested/game_y'), submission('alice', 'game')));
+  await assertSucceeds(setDoc(p(`game_${'a'.repeat(120)}`), submission('alice', 'game')));
+});
+
+test('review: no client can list or query any collection, including its own', async () => {
+  const { query, where } = require('firebase/firestore');
+  await seed('users/alice/submissions/game_q1', submission('alice', 'game', { received_at: new Date() }));
+  await assertFails(getDocs(query(collection(alice(), 'users/alice/submissions'), where('uid', '==', 'alice'))));
+  await assertFails(getDocs(collectionGroup(alice(), 'submissions')));
+  await assertFails(getDocs(collection(alice(), 'canonical_games')));
+  await assertFails(getDocs(collection(alice(), 'aggregates')));
+  await assertFails(getDocs(collection(alice(), 'users')));
+});
+
+test('review: the rules file has no unconditional allow', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(!/if\s+true/.test(src));
+  assert.ok(!/allow[^;]*if\s+request\.auth\s*!=\s*null\s*;/.test(src));
+  const allows = src.match(/allow [^:]+:/g);
+  assert.deepEqual(allows, ['allow create:', 'allow get:', 'allow list, update, delete:', 'allow read, write:']);
+});
