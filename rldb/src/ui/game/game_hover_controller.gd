@@ -27,8 +27,18 @@ static func make_item(key: String, w: CardWidget, holder: Control, uid: int, kin
 	return {"key": key, "w": w, "holder": holder, "uid": uid, "kind": kind, "own": own}
 
 
+## F06: true while my pending choice is a zone to summon / place a card in. Field cards then do
+## not hover (no enlargement, lift or peek) so the legal zones stay readable; the zone highlights
+## and clicks are unaffected. Read from the current state every frame, so ordinary hover returns
+## by itself when the choice is made, cancelled or replaced (a new prompt, the game ending).
+func zone_choice() -> bool:
+	var pd := gs.pending()
+	return not pd.is_empty() and bool(pd.get("mine", false)) and String(pd.get("kind", "")) == "slot"
+
+
 ## Visible card under global point m (hand cards topmost first), skipping `exclude_key`.
-func items_under(m: Vector2, exclude_key: String) -> Dictionary:
+## `field`: false leaves the board's cards out (F06 zone choice).
+func items_under(m: Vector2, exclude_key: String, field: bool = true) -> Dictionary:
 	var hand := gs.hand
 	# Hand cards: topmost (last) first.
 	for i in range(hand.order.size() - 1, -1, -1):
@@ -37,6 +47,8 @@ func items_under(m: Vector2, exclude_key: String) -> Dictionary:
 		var h: Control = it["holder"]
 		if "h:%d" % uid != exclude_key and h.get_global_rect().has_point(m):
 			return make_item("h:%d" % uid, it["widget"], h, uid, "hand", true)
+	if not field:
+		return {}
 	var slots := gs.board.slots
 	for k in slots.keys():
 		var sl: Dictionary = slots[k]
@@ -60,15 +72,19 @@ func update(m: Vector2) -> void:
 	var prompt := gs.prompt
 	var on_row := gs.action_row.stack_rect().grow(3.0).has_point(m) or (prompt.tray.visible and prompt.tray.get_global_rect().has_point(m)) \
 		or (prompt.ctx_banner.visible and prompt.ctx_banner.get_global_rect().has_point(m))
+	var field := not zone_choice()
 	if not hv.is_empty():
 		if not is_instance_valid(hv["w"]) or not (hv["w"] as Node).is_inside_tree():
 			clear()
+			return
+		if not field and hv["kind"] != "hand":
+			clear()          # F06: a field card hovered when the zone choice opened drops at once
 			return
 		var tr := target_rect(hv)
 		if tr.has_point(m) or (on_row and hv["uid"] == gs.selected_uid):
 			_close_at = -1.0
 		else:
-			var cand := {} if on_row else items_under(m, hv["key"])
+			var cand := {} if on_row else items_under(m, hv["key"], field)
 			if not cand.is_empty():
 				set_hover(cand)
 			else:
@@ -80,7 +96,7 @@ func update(m: Vector2) -> void:
 				elif now >= _close_at:
 					clear()
 	elif not on_row:
-		var cand2 := items_under(m, "")
+		var cand2 := items_under(m, "", field)
 		if not cand2.is_empty():
 			set_hover(cand2)
 

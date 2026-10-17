@@ -18,6 +18,14 @@ const BANNER_GAP := 12.0
 ## Breathing border period (s).
 const BANNER_BREATH := 1.4
 const OPTION_H := 32
+## F05: size of the card image in the input panel, and the most rules-text lines shown there
+## (the full text is its tooltip and the right-click inspection).
+const SUBJECT_CARD := Vector2(64, 96)
+const SUBJECT_LINES := 6
+## Type-choice buttons (F03): the icon box's left inset and its largest side (the left content
+## margin of 42 px holds it with a gap before the label).
+const TYPE_ICON_X := 9.0
+const TYPE_ICON_MAX := 28.0
 
 ## The host screen this component works on.
 var gs: GameScreen
@@ -31,6 +39,13 @@ var banner_sub: RichTextLabel
 var banner_btns: HFlowContainer
 ## Banner flow of option buttons.
 var banner_flow: HFlowContainer
+## F08: circles of an exact material cost (shown only for exact-total choices).
+var cost_pips: CostPips
+## F05: the card the choice is about (image, name and rules text), hidden when there is none.
+var subject_box: PanelContainer
+var subject_card: CardWidget
+var subject_name: Label
+var subject_text: Label
 ## Tray offering pile cards for a choice (a HousePanel).
 var tray: PanelContainer
 ## Container of the tray cards.
@@ -72,6 +87,7 @@ func build() -> void:
 	var bcol := plate.body
 	banner_tag = plate.title_label
 	banner_title = plate.add_headline("", 21)
+	_build_subject(bcol)
 	banner_sub = RichTextLabel.new()
 	banner_sub.bbcode_enabled = true
 	banner_sub.fit_content = true
@@ -84,6 +100,9 @@ func build() -> void:
 	banner_sub.add_theme_font_override("normal_font", UIStyle.font_body())
 	banner_sub.add_theme_font_override("bold_font", UIStyle.font_bold())
 	bcol.add_child(banner_sub)
+	cost_pips = CostPips.new()
+	cost_pips.visible = false
+	bcol.add_child(cost_pips)
 	banner_flow = HFlowContainer.new()
 	banner_flow.add_theme_constant_override("h_separation", 6)
 	banner_flow.add_theme_constant_override("v_separation", 6)
@@ -105,6 +124,84 @@ func build() -> void:
 	tray_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tray_box.add_theme_constant_override("separation", 8)
 	tsc.add_child(tray_box)
+
+
+## F05: the card-context strip of the input panel: the card on the left, its name and rules
+## text beside it. Right-click the card to inspect it in full.
+func _build_subject(col: VBoxContainer) -> void:
+	subject_box = PanelContainer.new()
+	var sb := UIStyle.flat(Color(0.045, 0.035, 0.025, 0.92), Color(UIStyle.BRONZE, 0.75), 1, 8)
+	sb.content_margin_left = 6
+	sb.content_margin_right = 8
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	subject_box.add_theme_stylebox_override("panel", sb)
+	subject_box.visible = false
+	subject_box.mouse_filter = Control.MOUSE_FILTER_PASS
+	col.add_child(subject_box)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 8)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	subject_box.add_child(h)
+	subject_card = CardWidget.new().setup(null, "mini")
+	GameUi.resize_card(subject_card, SUBJECT_CARD)
+	subject_card.auto_hover = false
+	subject_card.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	subject_card.tooltip_text = "Right-click to inspect"
+	subject_card.right_pressed.connect(func(w): gs.inspect.inspect_widget(w))
+	h.add_child(subject_card)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(v)
+	subject_name = UIStyle.label("", 15, UIStyle.GOLD_HI, true, true)
+	subject_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(subject_name)
+	subject_text = UIStyle.label("", 13, UIStyle.TEXT, true)
+	subject_text.max_lines_visible = SUBJECT_LINES
+	subject_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	subject_text.mouse_filter = Control.MOUSE_FILTER_PASS
+	v.add_child(subject_text)
+
+
+## F05: the visible card my choice `pd` is about, or {}: the card a placement prompt names (a
+## Fusion unit), else the choice's source. Only cards this seat may see are ever used: the source
+## is given only when visible (MatchView._add_source) and the name is matched among my own visible
+## cards; a Trap response names no card (which face-down card may respond stays hidden).
+func subject_for(pd: Dictionary) -> Dictionary:
+	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) == "trap_response":
+		return {}
+	var src := gs.details.find_card(int(pd.get("source_uid", -1)))
+	var prompt := String(pd.get("prompt", ""))
+	if not src.is_empty() and prompt.contains(String(src.get("name", "~"))):
+		return src
+	# The prompt names another card of mine (the Fusion unit being summoned with a Spell's
+	# materials, zone and stance): show that one. Longest name wins ("Dragon" vs "Ultimate Dragon").
+	var best := {}
+	var pv := gs.pv(gs.me())
+	for z in ["extra", "hand"]:
+		for c in pv.get(z, []):
+			if c == null or c.get("hidden", false):
+				continue
+			var nm := String(c.get("name", ""))
+			if nm != "" and prompt.contains(nm) and nm.length() > String(best.get("name", "")).length():
+				best = c
+	return best if not best.is_empty() else src
+
+
+func _render_subject(pd: Dictionary) -> void:
+	var c := subject_for(pd)
+	subject_box.visible = not c.is_empty()
+	if c.is_empty():
+		return
+	subject_card.setup(c, "mini")
+	GameUi.resize_card(subject_card, SUBJECT_CARD)
+	subject_name.text = String(c.get("name", ""))
+	var txt := String(c.get("text", "")).strip_edges()
+	subject_text.text = txt if txt != "" else "No rules text."
+	subject_text.tooltip_text = txt
+	subject_box.tooltip_text = "%s\n%s" % [String(c.get("name", "")), txt]
 
 
 ## Builds the opponent-is-deciding notice and the toast (hidden).
@@ -162,6 +259,10 @@ func render() -> void:
 		gs.multi, view.get("deck_ready", []), view.get("you", 0)])
 	if sig == prompt_sig:
 		return
+	# F04: a Fusion started from the Extra Deck list answers its "which Fusion unit" prompt
+	# with the unit the player chose there; the banner then shows the next step instead.
+	if gs.details.consume_fusion_intent():
+		return
 	prompt_sig = sig
 	gs.targeting.hover_opt = -1
 	_render_banner()
@@ -169,6 +270,9 @@ func render() -> void:
 
 
 func _multi_status(pd: Dictionary) -> String:
+	var ep := exact_payment(pd, gs.multi)
+	if not ep.is_empty():
+		return exact_status(ep)
 	var total_txt := ""
 	if pd.get("min_total", 0) > 0:
 		var total := 0
@@ -179,6 +283,62 @@ func _multi_status(pd: Dictionary) -> String:
 		total_txt = "  ·  cost total %d / %s%d" % [total, "exactly " if pd.get("total_exact", false) else "", pd["min_total"]]
 	var rng := "%d" % pd["min"] if pd["min"] == pd["max"] else "%d–%d" % [pd["min"], pd["max"]]
 	return "Selected %d of %s%s" % [gs.multi.size(), rng, total_txt]
+
+
+## F08: the exact-total payment of a material choice for picks `picks`:
+## {"need", "paid", "remaining", "costs"} (costs: each pick's current cost, in pick order), or {}
+## when the choice has no exact total. Values are the authority's current modified costs.
+static func exact_payment(pd: Dictionary, picks: Array) -> Dictionary:
+	if pd.is_empty() or not bool(pd.get("total_exact", false)) or not pd.has("total_required"):
+		return {}
+	var need := int(pd["total_required"])
+	var costs := []
+	for i in picks:
+		costs.append(option_value(pd, int(i)))
+	var paid := 0
+	for v in costs:
+		paid += int(v)
+	return {"need": need, "paid": paid, "remaining": need - paid, "costs": costs}
+
+
+## Current cost an option pays (its `value`, else its card's cost; never below 0).
+static func option_value(pd: Dictionary, i: int) -> int:
+	for o in pd.get("options", []):
+		if int(o["i"]) == i:
+			return maxi(int(o.get("value", o.get("card", {}).get("cost", 0))), 0)
+	return 0
+
+
+## F08: whether option `o` is offered at all in an exact-total choice: its cost must be above 0
+## and no more than the whole total (other choices offer every option).
+static func payable_option(pd: Dictionary, o: Dictionary) -> bool:
+	var ep := exact_payment(pd, [])
+	if ep.is_empty():
+		return true
+	var v := option_value(pd, int(o["i"]))
+	return v > 0 and v <= int(ep["need"])
+
+
+## F08: true when adding option `i` to `picks` would pay more than the exact total. A picked
+## option never overpays (it can always be deselected).
+static func would_overpay(pd: Dictionary, picks: Array, i: int) -> bool:
+	if i in picks:
+		return false
+	var ep := exact_payment(pd, picks)
+	if ep.is_empty():
+		return false
+	return option_value(pd, i) > int(ep["remaining"])
+
+
+## Status line of an exact payment: what is still owed, or that it is paid exactly.
+static func exact_status(ep: Dictionary) -> String:
+	var need := int(ep["need"])
+	var paid := int(ep["paid"])
+	if paid == 0:
+		return "Pay exactly %d: select materials whose costs fill the circles." % need
+	if paid == need:
+		return "Exact cost paid (%d of %d). Confirm to continue." % [paid, need]
+	return "%d of %d paid · %d remaining." % [paid, need, need - paid]
 
 
 ## F02-07 context banner: what is being chosen, for which effect, how many and in what order,
@@ -195,6 +355,7 @@ func _render_banner() -> void:
 	if not on:
 		return
 	banner_title.text = String(pd["prompt"])
+	_render_subject(pd)
 	banner_tag.text = ("%s · your decision" % String(gs.pv(gs.me())["name"])).to_upper()
 	var pick := gs.selection.board_targeting()
 	var how := ""
@@ -211,6 +372,11 @@ func _render_banner() -> void:
 	elif int(pd["max"]) > 1:
 		how = _multi_status(pd)
 	_banner_how = how
+	var ep := exact_payment(pd, gs.multi)
+	cost_pips.visible = not ep.is_empty()
+	if not ep.is_empty():
+		cost_pips.set_payment(int(ep["need"]), ep["costs"])
+		cost_pips.tooltip_text = exact_status(ep)
 	update_banner_sub()
 	# Card/zone options are picked on the board; every other option is a button here.
 	var row: Control = banner_btns if pick else banner_flow
@@ -277,6 +443,7 @@ func place_banner() -> void:
 	if have_zones and side_w >= BANNER_SIDE_MIN_W:
 		_size_banner(side_w)
 		ctx_banner.position = Vector2(col_left, top)
+		_after_banner_settles()
 		return
 	var left := area.position.x + 230.0
 	var plates := board.plates
@@ -284,6 +451,18 @@ func place_banner() -> void:
 	var bw := clampf(right - left, BANNER_MIN_W, BANNER_MAX_W)
 	_size_banner(bw)
 	ctx_banner.position = Vector2(maxf(area.position.x + 8.0, (left + right) / 2.0 - bw / 2.0), 10.0)
+	_after_banner_settles()
+
+
+## Re-places the tray once the banner has measured itself (HousePanel.fit settles over frames).
+func _after_banner_settles() -> void:
+	if tray == null or not tray.visible or not is_instance_valid(gs) or not gs.is_inside_tree():
+		return
+	var tree := gs.get_tree()
+	await tree.process_frame
+	await tree.process_frame
+	if is_instance_valid(gs) and gs.is_inside_tree() and is_instance_valid(tray) and tray.visible:
+		place_tray()
 
 
 func _size_banner(w: float) -> void:
@@ -361,13 +540,28 @@ static func type_button(type_name: String, size: int = 15) -> Button:
 		b.add_theme_stylebox_override(k, sb)
 		b.add_theme_color_override("font_color" if k == "normal" else "font_%s_color" % k, type_text_color(fill))
 	b.add_theme_color_override("font_focus_color", type_text_color(col))
-	var badge := TypeIcons.TypeBadge.new(ty)
-	badge.set_anchor_and_offset(SIDE_TOP, 0.5, -13.0)
-	badge.set_anchor_and_offset(SIDE_BOTTOM, 0.5, 13.0)
-	badge.set_anchor_and_offset(SIDE_LEFT, 0.0, 9.0)
-	badge.set_anchor_and_offset(SIDE_RIGHT, 0.0, 35.0)
+	# F03: a fixed square icon box, centred on the button's vertical middle. The bottom anchor is
+	# set before the top one: setting the top anchor (0.5) above a bottom anchor still at 0 made
+	# Godot clamp it back to 0, which stretched the box from the button's top and drew every icon
+	# high (Waang's Type choice). The box scales with the label size, not with the button height.
+	var px := icon_box(size)
+	var badge := TypeIcons.TypeBadge.new(ty, px)
+	badge.anchor_bottom = 0.5
+	badge.anchor_top = 0.5
+	badge.anchor_left = 0.0
+	badge.anchor_right = 0.0
+	badge.offset_top = -px / 2.0
+	badge.offset_bottom = px / 2.0
+	badge.offset_left = TYPE_ICON_X
+	badge.offset_right = TYPE_ICON_X + px
+	badge.set_meta("type_icon", true)
 	b.add_child(badge)
 	return b
+
+
+## Side of the Type icon box of a Type button whose label is `font_px` (fits the left margin).
+static func icon_box(font_px: int) -> float:
+	return clampf(roundf(font_px * 1.6), 18.0, TYPE_ICON_MAX)
 
 
 ## Banner sub-line: how to answer the choice, or the hovered battle target coloured by the
@@ -413,6 +607,13 @@ func place_tray() -> void:
 		w += 12.0   # room for the scroll bar
 	tray.size = Vector2(w, h)
 	tray.position = (area.position + (area.size - tray.size) / 2.0).round()
+	# The input panel (taller with its card context, F05) must never cover the offered cards: when
+	# it sits over the tray (the top-strip fallback), the tray moves down below it.
+	if ctx_banner != null and ctx_banner.visible:
+		var br := Rect2(ctx_banner.position, ctx_banner.size)
+		if br.intersects(Rect2(tray.position, tray.size)):
+			tray.position.y = roundf(br.end.y + BANNER_GAP)
+			tray.size.y = maxf(chrome.y + 60.0, minf(tray.size.y, area.end.y - tray.position.y - 8.0))
 
 
 ## F02-10 tray of the cards offered from a pile (Spent, Draw, Extra, an opponent's pile when
@@ -448,7 +649,13 @@ func _render_tray() -> void:
 		tray_cards[uid] = cv
 		var idx: int = o["i"]
 		var w := CardWidget.new().setup(cv, "mini")
-		w.set_marks(true, idx in gs.multi)
+		# F08: a material that would pay more than what remains is visibly unavailable.
+		var over := would_overpay(pd, gs.multi, idx)
+		w.set_marks(not over, idx in gs.multi, over)
+		if over:
+			w.tooltip_text = "Cannot overpay"
+			w.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN
+		w.set_meta("overpay", over)
 		w.order_no = gs.selection.order_no(idx)
 		w.pressed.connect(func(_w): gs.selection.pick_option(idx))
 		w.right_pressed.connect(gs.inspect.inspect_widget)

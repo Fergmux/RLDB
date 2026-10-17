@@ -427,7 +427,7 @@ func locked() -> bool:
 ## True while a modal, popup, menu or pause covers the board (no hover).
 func hover_blocked() -> bool:
 	return overlays.overlay.visible or overlays.pile_popup.visible or menu.settings_popup.visible or menu.game_menu.visible \
-		or overlays.pause_dim.visible or mv.is_empty() or inspect.is_open()
+		or overlays.pause_dim.visible or mv.is_empty() or inspect.is_open() or details.method_picker_open()
 
 
 ## True while a series is being played on this screen (leaving it would forfeit).
