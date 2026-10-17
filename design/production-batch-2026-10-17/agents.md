@@ -18,4 +18,8 @@ To resume an agent, send it a message by id. To check one without opening its tr
 
 ## Stalls and recoveries
 
-None yet.
+- **All agents:** hit 10–20 turn limits repeatedly and were resumed each time, with nothing lost because of commit-as-you-go instructions.
+- **A1, A6:** each reported the same status twice; checked by git, both were making real progress (uncommitted work), so they were told to commit WIP.
+- **Tutorial driver hang (F04 era):** fixed with a watchdog and per-step limits.
+- **A6:** used 7 windowed runs, against 5 allowed.
+- **No orphan Godot processes found at checks.**
