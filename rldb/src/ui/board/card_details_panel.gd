@@ -33,6 +33,9 @@ const BLOCK_BAR_W := 3
 var compact: bool = false
 ## Text size multiplier (the large card inspector reads at a distance: > 1).
 var text_scale: float = 1.0
+## Deck-construction rendering (F19): ATK / DEF tiles show one prominent printed value with no
+## Base / Current split (they cannot differ outside a match). Off everywhere in a match.
+var construction: bool = false
 ## Section ids in the order they were built by the last show_* call (used by tests).
 var sections: Array[String] = []
 
@@ -237,6 +240,8 @@ func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	left.add_child(trend)
 	var col := UIStyle.TEXT
 	var trend_mark: Mark = null
+	if construction:
+		return _plain_stat_tile(pc, hb, left, trend, cap, printed if printed != null or cur == null else cur)
 	trend.add_child(_lbl("Base: %s" % ("?" if printed == null else str(printed)), SMALL, UIStyle.MUTED, false, false, false))
 	if cur != null and printed != null and cur != printed:
 		var up: bool = cur > printed
@@ -251,6 +256,34 @@ func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	num.add_theme_color_override("font_color", col)
 	num.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hb.add_child(num)
+	return pc
+
+
+## Construction-mode tile body: big caption on the left, large value on the right. A printed
+## value of null (dynamic stat, e.g. "copies the target") reads "?" with a "Varies" note.
+func _plain_stat_tile(pc: PanelContainer, hb: HBoxContainer, left: VBoxContainer, trend: HBoxContainer, cap: String, value: Variant) -> Control:
+	left.remove_child(trend)
+	trend.free()
+	var cap_l := left.get_child(0) as Label
+	cap_l.add_theme_font_override("font", UIStyle.font_display(700))
+	cap_l.add_theme_font_size_override("font_size", _fs(17))
+	cap_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	left.alignment = BoxContainer.ALIGNMENT_CENTER
+	if value == null:
+		left.add_child(_lbl("Varies", SMALL, UIStyle.MUTED, false, false, false))
+	var num := Label.new()
+	num.text = "?" if value == null else str(value)
+	num.add_theme_font_override("font", UIStyle.font_display(700))
+	num.add_theme_font_size_override("font_size", _fs(36) if not compact else 24)
+	num.add_theme_color_override("font_color", UIStyle.GOLD_HI if value == null else UIStyle.TEXT)
+	num.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	num.add_theme_constant_override("outline_size", 4)
+	num.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hb.add_child(num)
+	var sb := pc.get_theme_stylebox("panel") as StyleBoxFlat
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	sb.border_color = Color(UIStyle.GOLD, 0.7)
 	return pc
 
 

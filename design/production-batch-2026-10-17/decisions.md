@@ -26,3 +26,4 @@
 - **Stormcaller (25):** "Destroy all Unprotected Basic Units" hits both players' unprotected basic units and is mandatory. The same reading as Dante's "all Units".
 - **Dante (36):** the manual once-per-turn effect is "Apply 1 Cleanse or 10 Burn to a Unit": any unit, with the player choosing which. The ATK bonus is +1 per Burn on Dante, continuous.
 - **Tag Team names:** follow the new CSV by ID. This resolves the F06-03 sheet mismatch: 7 = Tag Team - B, 11 = Tag Team - J.
+- **F18 (A4):** clicking a card in the deck builder now selects it instead of adding it, because add/remove happens only in the preview. Add is select, then Add (or Enter / +). The hover no longer changes the preview. Rename is hidden along with Delete. A refused save of an oversized old deck names the cap in its error message. A sort control was added to the catalogue only. (Toss-up: restoring click-to-add is a small change.)

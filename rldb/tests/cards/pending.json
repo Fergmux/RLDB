@@ -1,0 +1,4 @@
+{
+	"_about": "Card id -> exact reason its behaviour is pending (unresolved text, suspected bug). _revalidated: ids changed in the 2026-10-17 CSV whose tests were rewritten against the migrated behaviour. Read by tools/card_test_manifest.py.",
+	"_revalidated": []
+}
