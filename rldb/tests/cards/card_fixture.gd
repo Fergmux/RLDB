@@ -63,9 +63,36 @@ static func offered(m: MatchEngine) -> Array:
 		return []
 	var out := []
 	for o in m.pending["options"]:
-		if o.has("uid") and int(o["uid"]) != -1:
-			out.append(int(o["uid"]))
+		var v = o.get("uid", o.get("v", -1))
+		if (v is int or v is float) and int(v) != -1 and m.cards.has(int(v)):
+			out.append(int(v))
 	return out
+
+
+## Drives a Fusion summon flow that is already open (Fusion unit pick, materials, zone, stance
+## and -- before F07 removed it -- the explicit Confirm). Robust to the confirm step existing
+## or not. Returns "" once nothing is pending.
+static func finish_fusion(m: MatchEngine, fusion_uid: int, mats: Array, zone_label: String, stance: String = "Attack") -> String:
+	var left := mats.duplicate()
+	for _i in 12:
+		if m.pending.is_empty():
+			return ""
+		var picked := false
+		for o in m.pending["options"]:
+			var v = o.get("v", -1)
+			var lab := String(o["label"])
+			if (v is int or v is float) and (int(v) == fusion_uid or int(v) in left):
+				left.erase(int(v))
+				TB.choose_uids(m, [int(v)])
+				picked = true
+				break
+			if lab == zone_label or lab.begins_with(stance) or lab == "Confirm" or lab == "Yes":
+				TB.choose(m, [lab])
+				picked = true
+				break
+		if not picked:
+			return "stuck at %s: %s" % [m.pending.get("kind", ""), labels(m)]
+	return "fusion flow did not finish"
 
 
 ## The labels of the pending choice.
@@ -91,6 +118,20 @@ static func end_turn(m: MatchEngine) -> void:
 static func fusion_mats_ok(m: MatchEngine, fusion_id: int, mats: Array) -> bool:
 	var reqs: Array = CardScripts.get_entry(fusion_id).get("fusion", [])
 	return reqs.size() == mats.size() and m._assignable(reqs, mats, [])
+
+
+## Answers zone/stance prompts of a resolving summon: the first offered zone whose label
+## contains `zone_label`, and the stance whose label starts with `stance`.
+static func place(m: MatchEngine, zone_label: String, stance: String = "Attack") -> void:
+	for _i in 3:
+		var hit := ""
+		for lab in labels(m):
+			if lab.contains(zone_label) or lab.begins_with(stance):
+				hit = lab
+				break
+		if hit == "":
+			return
+		TB.choose(m, [hit])
 
 
 ## Card ids of every Basic Unit in the catalogue (35 at the time of writing).
