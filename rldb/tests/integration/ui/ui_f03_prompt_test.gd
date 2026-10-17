@@ -91,6 +91,27 @@ func test_type_icon_is_centred_in_a_fixed_square_box() -> void:
 				remove_child(b)
 
 
+## UI review F03 (2026-10-17): the Heavenly icon drew as a tiny dot because its pale rays sat on a
+## button filled in the same pale colour. Every Type icon is a pip on a dark disc that contrasts with
+## its own button fill (disc or rim), and the Type buttons of one choice share one width.
+func test_type_icons_are_pips_that_contrast_with_their_button_and_widths_are_even() -> void:
+	for t in UIStyle.TYPE_COLORS.keys():
+		var b: Button = auto_free(GamePromptBanner.type_button(t if t != "" else "No type"))
+		var icon: TypeIcons.TypeBadge = b.get_children().filter(func(c): return c is TypeIcons.TypeBadge)[0]
+		assert_bool(icon.pip).override_failure_message("%s icon is not a pip" % t).is_true()
+		var fill: Color = (b.get_theme_stylebox("normal") as StyleBoxFlat).bg_color
+		# The pip's edge (dark disc or ivory rim) stands out from the fill by at least 3:1 (WCAG 1.4.11).
+		var edge := maxf(GamePromptBanner._contrast(fill, TypeIcons.PIP_BACKING), GamePromptBanner._contrast(fill, TypeIcons.OUTLINE))
+		assert_float(edge).override_failure_message("%s pip edge %.2f:1" % [t, edge]).is_greater(3.0)
+	var r := await _screen_with_type_choice(102)
+	var gs: GameScreen = r[0]
+	await await_idle_frame()
+	var widths := _type_buttons(gs).map(func(b): return roundi((b as Button).size.x))
+	assert_int(widths.size()).is_greater(1)
+	for w in widths:
+		assert_int(w).is_equal(widths[0])
+
+
 func test_non_type_mode_choice_is_not_type_styled() -> void:
 	var pd := {"kind": "mode", "options": [{"label": "10 Burn"}, {"label": "Water"}]}
 	assert_bool(GamePromptBanner.is_type_choice(pd)).is_false()

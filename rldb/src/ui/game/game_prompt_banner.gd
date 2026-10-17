@@ -407,6 +407,8 @@ func _render_banner() -> void:
 		row.add_child(b)
 	if not pick and row.get_child_count() > 0:
 		banner_flow.visible = true
+	if type_choice:
+		even_type_widths(row)
 	if int(pd["max"]) > 1:
 		var c := UIStyle.primary_button("Confirm", 14)
 		c.custom_minimum_size = Vector2(0, OPTION_H)
@@ -564,6 +566,7 @@ static func type_button(type_name: String, size: int = 15) -> Button:
 	# high (Waang's Type choice). The box scales with the label size, not with the button height.
 	var px := icon_box(size)
 	var badge := TypeIcons.TypeBadge.new(ty, px)
+	badge.pip = true          # review F03: the same filled disc for every Type, readable on its own fill
 	badge.anchor_bottom = 0.5
 	badge.anchor_top = 0.5
 	badge.anchor_left = 0.0
@@ -575,6 +578,17 @@ static func type_button(type_name: String, size: int = 15) -> Button:
 	badge.set_meta("type_icon", true)
 	b.add_child(badge)
 	return b
+
+
+## Review F03: every Type button in `row` as wide as the widest, so the rows read as an even grid.
+static func even_type_widths(row: Control) -> void:
+	var w := 0.0
+	for b in row.get_children():
+		if b is Button and b.has_meta("type_choice"):
+			w = maxf(w, (b as Button).get_combined_minimum_size().x)
+	for b in row.get_children():
+		if b is Button and b.has_meta("type_choice"):
+			(b as Button).custom_minimum_size.x = w
 
 
 ## Side of the Type icon box of a Type button whose label is `font_px` (fits the left margin).
