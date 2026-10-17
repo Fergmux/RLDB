@@ -22,6 +22,10 @@ const BANNER_SIDE_MAX_W := 300.0
 ## Headline size of the panel, and its size in the narrow side column (keeps titles to a few lines).
 const HEADLINE_PX := 21
 const HEADLINE_NARROW_PX := 17
+## G04: the headline of an exact-payment (Arcane) choice is a step smaller; with the cost circles
+## it is the whole instruction (no status line between them).
+const HEADLINE_PAY_PX := 19
+const HEADLINE_PAY_NARROW_PX := 16
 const BANNER_GAP := 12.0
 ## Breathing border period (s).
 const BANNER_BREATH := 1.4
@@ -62,6 +66,8 @@ var cost_pips: CostPips
 ## F05: the card the choice is about (image, name and rules text), hidden when there is none.
 var subject_box: PanelContainer
 var _has_subject := false
+## G04: the current choice pays an exact total (the cost circles replace the status line).
+var _exact_pay := false
 ## True while the panel sits in the top strip (the side column cannot hold it): it is then a
 ## compact bar over the opponent's hand, without the card strip, so it never hides their zones.
 var _in_top_strip := false
@@ -392,6 +398,7 @@ func _render_banner() -> void:
 	banner_flow.visible = false
 	GameUi.clear(type_grid)
 	type_grid.visible = false
+	_exact_pay = false
 	if not on:
 		return
 	banner_title.text = String(pd["prompt"])
@@ -414,7 +421,8 @@ func _render_banner() -> void:
 		how = _multi_status(pd)
 	_banner_how = how
 	var ep := exact_payment(pd, gs.multi)
-	cost_pips.visible = not ep.is_empty()
+	_exact_pay = not ep.is_empty()
+	cost_pips.visible = _exact_pay
 	if not ep.is_empty():
 		cost_pips.set_payment(int(ep["need"]), ep["costs"])
 		cost_pips.tooltip_text = exact_status(ep)
@@ -563,7 +571,10 @@ func _fit_subject(w: float, compact: bool = false) -> void:
 	# The narrow column: a smaller headline and the tag without the player's name, so neither
 	# wraps word by word nor clips (UI review, 1600x900).
 	var thin := w < BANNER_NARROW_W
-	banner_title.add_theme_font_size_override("font_size", HEADLINE_NARROW_PX if thin or compact else HEADLINE_PX)
+	var px := HEADLINE_NARROW_PX if thin or compact else HEADLINE_PX
+	if _exact_pay:
+		px = HEADLINE_PAY_NARROW_PX if thin or compact else HEADLINE_PAY_PX
+	banner_title.add_theme_font_size_override("font_size", px)
 	if _tag_full != "":
 		banner_tag.text = "YOUR DECISION" if thin else _tag_full
 		banner_tag.tooltip_text = _tag_full
@@ -721,6 +732,13 @@ func update_banner_sub() -> void:
 		# breakdown stays in the tooltip.
 		var col: Color = GameScreen.VERDICT_COLORS.get(pv.verdict, UIStyle.TEXT)
 		t = "[b][color=#%s]%s[/color][/b]" % [col.to_html(false), pv.target.replace("[", "(")]
+	# G04: an exact payment reads from its headline and circles alone; the status stays the circles'
+	# tooltip. A battle preview (never during a payment) would still show.
+	var shown := not (_exact_pay and pv.text == "")
+	if banner_sub.visible != shown:
+		banner_sub.visible = shown
+		if ctx_banner != null and ctx_banner.visible:
+			place_banner()
 	if banner_sub.text != t:
 		banner_sub.text = t
 		banner_sub.tooltip_text = pv.text if pv.text != "" else _banner_how

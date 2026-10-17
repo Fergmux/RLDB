@@ -207,7 +207,8 @@ func _check_arcane_overpay(h: TutorialHost) -> void:
 	for x in pd.get("options", []):
 		offered.append(int(x.get("card", {}).get("uid", -1)))
 	_check("Arcane picker does not offer the 0-cost Drake", not (int(h.keys["s_drake"]) in offered) and offered.size() == 3)
-	_check("Arcane banner asks for exactly 3", gs.prompt._banner_how.contains("Pay exactly 3"))
+	# G04: the headline and the three empty circles ask for the cost; no status line above the circles.
+	_check("Arcane banner asks for exactly 3", gs.prompt.banner_title.text.contains("exactly 3") and gs.prompt.cost_pips.visible 		and gs.prompt.cost_pips.need == 3 and gs.prompt.cost_pips.paid() == 0 and not gs.prompt.banner_sub.visible)
 	await _shot("L7_arcane_picker")
 	# F08: after one Dragon (2 of 3) the other Dragon would over-pay, so it is disabled.
 	await _click(o._card_rect(int(h.keys["s_wyvern"])).get_center())
@@ -216,7 +217,7 @@ func _check_arcane_overpay(h: TutorialHost) -> void:
 	await _wait(0.3)
 	var confirm := _find_button(gs.prompt.banner_btns, "Confirm")
 	_check("over-pay option is disabled (Cannot overpay); Confirm stays off", gs.multi.size() == 1 and confirm != null and confirm.disabled)
-	_check("over-pay banner reads 2 of 3 paid", gs.prompt._banner_how.contains("2 of 3 paid"))
+	_check("over-pay banner shows 2 of 3 circles paid", gs.prompt.cost_pips.paid() == 2 and gs.prompt.cost_pips.need == 3 		and gs.prompt.cost_pips.tooltip_text.contains("2 of 3 paid") and not gs.prompt.banner_sub.visible)
 	await _shot("L7_arcane_overpay")
 	var before := h.refused
 	var both := []
