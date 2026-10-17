@@ -69,7 +69,8 @@ function computeMetrics(env, catalog, filter = {}) {
     if (r.kind === 'gclient' && gameIds.has(r.body.gclient.game_id) && !detailById[r.body.gclient.game_id]) detailById[r.body.gclient.game_id] = r;
   }
   const ids = catalog.map((c) => String(c.id));
-  const card = {};
+  // Null-prototype map: card keys come from client data (validated upstream as digits).
+  const card = Object.create(null);
   for (const c of catalog) {
     card[String(c.id)] = { id: c.id, category: c.category, main: { inclusions: 0, copies: 0 }, extra: { inclusions: 0, copies: 0 },
       plays: 0, plays_by_kind: {}, games_played_in: 0, activations: 0, activations_by_kind: {},
@@ -77,7 +78,7 @@ function computeMetrics(env, catalog, filter = {}) {
       offer_opps: 0, offered_copies: 0, selections: 0, selected_copies: 0, pick_positions: [],
       reward_offer_opps: 0, reward_selections: 0, win_with: { num: 0, den: 0 }, by_copies: {} };
   }
-  const ensure = (k) => card[k] || (card[k] = { id: Number(k), category: 'unknown', main: { inclusions: 0, copies: 0 }, extra: { inclusions: 0, copies: 0 },
+  const ensure = (k) => (Object.hasOwn(card, k) ? card[k] : null) || (card[k] = { id: Number(k), category: 'unknown', main: { inclusions: 0, copies: 0 }, extra: { inclusions: 0, copies: 0 },
     plays: 0, plays_by_kind: {}, games_played_in: 0, activations: 0, activations_by_kind: {}, draw_opps: 0, draw_opps_played: 0,
     hand_plays: 0, draws: 0, drawn_never_played: 0, offer_opps: 0, offered_copies: 0, selections: 0, selected_copies: 0, pick_positions: [],
     reward_offer_opps: 0, reward_selections: 0, win_with: { num: 0, den: 0 }, by_copies: {} });
