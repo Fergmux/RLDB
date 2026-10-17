@@ -447,6 +447,31 @@ func method_label(m: Dictionary) -> String:
 	return nm
 
 
+## The action of a Fusion method without its card: Cast, Activate or the ability's short label.
+func method_action(m: Dictionary) -> String:
+	match String(m.get("t", "")):
+		"cast": return "Cast"
+		"activate_set": return "Activate"
+		"ability":
+			var abs: Array = find_card(int(m.get("via", -1))).get("abilities", [])
+			var i := int(m.get("idx", -1))
+			if i >= 0 and i < abs.size():
+				return String(abs[i].get("short", abs[i].get("label", "Ability")))
+			return "Ability"
+	return "Use"
+
+
+## The full description of a Fusion method: its card and, for an ability, the whole ability text.
+func method_full(m: Dictionary) -> String:
+	if String(m.get("t", "")) == "ability":
+		var c := find_card(int(m.get("via", -1)))
+		var abs: Array = c.get("abilities", [])
+		var i := int(m.get("idx", -1))
+		if i >= 0 and i < abs.size():
+			return "%s: %s" % [String(c.get("name", "a card")), String(abs[i].get("label", abs[i].get("short", "ability")))]
+	return method_label(m)
+
+
 ## F04: Fusion Summon of `fu` from the Extra Deck list. One method runs at once; several open the
 ## method picker. Never picks a method on the player's behalf.
 func start_fusion(fu: int) -> void:
@@ -558,11 +583,11 @@ func open_method_picker(fu: int) -> void:
 		cw.mouse_entered.connect(func(): gs.overlays._lift(cw, 1.05))
 		cw.mouse_exited.connect(func(): gs.overlays._lift(cw, 1.0))
 		holder.add_child(cw)
-		var b := UIStyle.button(method_label(m), 13)
+		# The card is shown above, so the button names only the action; the full label is the tooltip.
+		var b := UIStyle.button(method_action(m), 13)
 		b.custom_minimum_size = Vector2(CardWidget.SIZES["hand"].x + 40.0, 34)
-		b.clip_text = true
-		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		b.tooltip_text = method_label(m)
+		b.set_meta("method_button", true)
+		b.tooltip_text = method_full(m)
 		b.pressed.connect(func(): run_fusion(fu, mm))
 		cell.add_child(b)
 	hp.body.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.45), true, 10.0))

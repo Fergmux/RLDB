@@ -304,3 +304,30 @@ func test_method_picker_closes_on_cancel_and_when_the_state_changes() -> void:
 	host.broadcast()
 	await await_idle_frame()
 	assert_bool(gs.details.method_picker_open()).is_false()
+
+
+## UI review F04: each method button names only the action (the card is shown above it), its full
+## label is in the tooltip, and no button text is clipped.
+func test_method_picker_buttons_name_the_action_and_are_not_clipped() -> void:
+	var r := await _extra_board()
+	var gs: GameScreen = r[0]
+	var wyrm: int = r[5]
+	gs.details.open_method_picker(wyrm)
+	for i in 3:
+		await await_idle_frame()
+	var btns: Array = _all(gs.details._method_dim).filter(func(n): return n is Button and n.text != "Cancel")
+	assert_int(btns.size()).is_equal(2)
+	var texts := []
+	for b in btns:
+		var bt: Button = b
+		texts.append(bt.text)
+		var font := bt.get_theme_font("font")
+		var fs := bt.get_theme_font_size("font_size")
+		var sb := bt.get_theme_stylebox("normal")
+		var need := font.get_string_size(bt.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + sb.get_margin(SIDE_LEFT) + sb.get_margin(SIDE_RIGHT)
+		assert_float(bt.size.x).override_failure_message("'%s' needs %.0f px, has %.0f" % [bt.text, need, bt.size.x]).is_greater_equal(need)
+		assert_str(bt.tooltip_text).is_not_equal(bt.text)        # the tooltip carries the full label
+		assert_bool(bt.tooltip_text.begins_with("Cast Polymerization") or bt.tooltip_text.begins_with("Aleister the Invoker:")).is_true()
+	assert_array(texts).contains(["Cast"])
+	assert_bool(texts.all(func(t): return not String(t).contains("Aleister"))).is_true()   # no card name on the button
+	gs.details.close_method_picker()
