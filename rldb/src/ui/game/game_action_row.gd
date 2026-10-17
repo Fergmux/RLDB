@@ -48,7 +48,7 @@ func actions_for_card(uid: int) -> Array:
 static func _act_sig(acts: Array) -> String:
 	var parts := []
 	for a in acts:
-		parts.append("%s/%s/%s/%s/%s" % [a["t"], a.get("idx", ""), a.get("stance", ""), a["ok"], a.get("reason", "")])
+		parts.append("%s/%s/%s/%s/%s/%s" % [a["t"], a.get("idx", ""), a.get("stance", ""), a.get("mode", ""), a["ok"], a.get("reason", "")])
 	return "|".join(parts)
 
 
@@ -163,7 +163,7 @@ func run_action(uid: int, a: Dictionary) -> void:
 	# Ignore a stale click: the action must still be legal for this card instance.
 	var still := false
 	for b in gs.mv.get("actions", []):
-		if b.get("uid", -1) == uid and b["t"] == a["t"] and b.get("idx", -1) == a.get("idx", -1) and b.get("stance", "") == a.get("stance", "") and b["ok"]:
+		if b.get("uid", -1) == uid and b["t"] == a["t"] and b.get("idx", -1) == a.get("idx", -1) and b.get("stance", "") == a.get("stance", "") 				and b.get("mode", "") == a.get("mode", "") and b["ok"]:
 			still = true
 	if not still or gs.locked():
 		Sfx.play("deny")
@@ -173,6 +173,8 @@ func run_action(uid: int, a: Dictionary) -> void:
 		cmd["idx"] = a["idx"]
 	if a.has("stance"):
 		cmd["stance"] = a["stance"]
+	if a.has("mode"):
+		cmd["mode"] = a["mode"]          # G07: Attack / Attack Direct
 	gs.selected_uid = uid
 	gs.acting_uid = uid
 	gs.row_open = false

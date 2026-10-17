@@ -140,7 +140,7 @@ func _op_move_unit(f: Dictionary, op: Dictionary) -> int:
 	var opts := []
 	for s in slots:
 		opts.append({"v": s, "label": "%s row, column %d" % ["Front" if slot_row(s) == 0 else "Back", slot_col(s) + 1], "slot": s, "zone": "unit"})
-	return ask(f, f["ctl"], "slot", "Move %s to which zone?" % name_of(u), opts)
+	return ask(f, f["ctl"], "slot", "Move %s to which zone?" % name_of(u), opts, 1, 1, false, {"placing": u})
 
 
 ## Special summon of a chosen card from a pile.
