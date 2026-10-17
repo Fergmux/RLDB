@@ -49,6 +49,7 @@ func _start_turn(p: int) -> void:
 	phase = PHASE_MAIN1
 	add_log("— Turn %d: %s —" % [turn, pname(p)])
 	add_fx({"k": "turn", "p": p, "turn": turn})
+	note("turn", {"p": p, "turn": turn})
 	# P-07: reset AP to base, then delayed modifiers, then draw, then start-of-turn effects.
 	var ap := BASE_AP
 	var notes := []
@@ -210,6 +211,7 @@ func submit(p: int, cmd: Dictionary) -> String:
 			_after_command()
 		return e2
 	if t == "concede":
+		note("concede", {"p": p})
 		end_game(opp(p), "%s conceded" % pname(p))
 		_after_command()
 		return ""
@@ -598,6 +600,7 @@ func _op_pay(f: Dictionary, op: Dictionary) -> int:
 		add_log("Not enough AP; action fails.")
 		return R.END
 	players[f["ctl"]]["ap"] -= cost
+	note("play", {"uid": uid, "p": f["ctl"], "ap": cost, "set": f["ops"].any(func(o): return o["op"] == "set_card")})
 	add_log("%s pays %d AP (AP %d)." % [pname(f["ctl"]), cost, players[f["ctl"]]["ap"]])
 	return R.CONT
 
@@ -617,6 +620,7 @@ func _op_to_limbo(f: Dictionary, op: Dictionary) -> int:
 
 
 func _op_check_negated(f: Dictionary, op: Dictionary) -> int:
+	note("activation", {"frame": f})
 	if f["negated"]:
 		add_log("%s was negated." % f["label"])
 		var uid: int = f["src"]

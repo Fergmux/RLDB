@@ -47,6 +47,15 @@ var swap_count: int = 0
 ## switch carry "pre_swap"; later ones were already switched as they were applied.
 var swapped: Dictionary = {}
 var _next_log_seq: int = 1
+## Optional telemetry observer (TelemetryCollector): it only reads, the rules never depend on it,
+## and clone_for_sim() does not copy it, so look-ahead copies stay silent.
+var observer: Object = null
+
+
+## Reports a committed rules event to the telemetry observer, if any. No effect on play.
+func note(kind: String, data: Dictionary) -> void:
+	if observer != null:
+		observer.on_core_event(self, kind, data)
 
 
 # ---------------------------------------------------------------- setup
@@ -633,6 +642,7 @@ func change_hp(p: int, amount: int, reason: String) -> bool:
 	else:
 		add_log("%s gains %d HP%s (HP %d)." % [pname(p), amount, reason, players[p]["hp"]])
 	add_fx({"k": "hp", "p": p, "d": amount})
+	note("hp", {"p": p, "d": amount})
 	if players[p]["hp"] <= 0:
 		players[p]["hp"] = 0
 		end_game(opp(p), "%s reached 0 HP" % pname(p))
@@ -646,6 +656,7 @@ func end_game(win: int, reason: String) -> void:
 		return
 	winner = win
 	phase = PHASE_OVER
+	note("game_over", {"winner": win, "reason": reason})
 	add_log("GAME OVER: %s wins (%s)." % [pname(win), reason])
 	add_fx({"k": "game_over", "winner": win})
 	_on_game_over()
@@ -678,6 +689,8 @@ func _remove_from_zone(uid: int) -> void:
 		"power":
 			players[p]["powers"][inst["slot"]] = -1
 		"hand", "draw", "spent", "exhaust", "extra":
+			if inst["zone"] == "hand":
+				note("hand_exit", {"uid": uid})
 			players[inst["owner"]][inst["zone"]].erase(uid)
 	inst["slot"] = -1
 
@@ -707,6 +720,7 @@ func _reset_field_state(uid: int) -> void:
 func move_to_pile(uid: int, dest: String) -> void:
 	var inst: Dictionary = cards[uid]
 	var was_field := on_field(uid)
+	var from_zone: String = inst["zone"]
 	if inst["zone"] == "hand" and dest != "hand":
 		inst["st"] = {}
 	if was_field and inst["zone"] == "unit":
@@ -728,6 +742,8 @@ func move_to_pile(uid: int, dest: String) -> void:
 		_:
 			players[owner][dest].append(uid)
 			inst["zone"] = dest
+	if dest == "hand" and from_zone != "hand":
+		note("to_hand", {"uid": uid, "from": from_zone})
 	inst["face_up"] = false
 	inst["slot"] = -1
 
@@ -780,6 +796,7 @@ func draw_cards(p: int, n: int) -> Array:
 		cards[uid]["zone"] = "hand"
 		players[p]["hand"].append(uid)
 		drawn.append(uid)
+		note("draw", {"p": p, "uid": uid})
 	if not drawn.is_empty():
 		var names := ", ".join(drawn.map(func(u): return name_of(u)))
 		add_log("%s draws %d card%s." % [pname(p), drawn.size(), "" if drawn.size() == 1 else "s"],

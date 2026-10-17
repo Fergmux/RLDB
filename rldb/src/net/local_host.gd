@@ -16,6 +16,7 @@ func start(overrides: Dictionary) -> void:
 	else:
 		series.setup(overrides.duplicate())
 	series.checkpoint.connect(func(): SeriesStore.save(series))
+	Telemetry.attach_series(series, String(series.cfg.get("mode", "local")), "local")
 	for p in 2:
 		var s := LocalSeat.new()
 		s.seat = p

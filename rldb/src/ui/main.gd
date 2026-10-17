@@ -70,6 +70,7 @@ func _ready() -> void:
 	if not " ".join(args).contains("shots"):
 		UIStyle.apply_window_mode()
 	Music.start()
+	Telemetry.boot(self)   # background statistics; silent, never blocks (docs/telemetry)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if not ("--no-steam" in args):
 		SteamBridge.init()

@@ -1,0 +1,6 @@
+node_modules/
+*-debug.log
+# Admin credentials and reconciliation outputs never belong in the repository.
+*.key.json
+service-account*.json
+tools/out/

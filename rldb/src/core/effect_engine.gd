@@ -526,6 +526,7 @@ func _flush_triggers() -> void:
 	var by_player := {active: [], opp(active): []}
 	for t in trigger_queue:
 		by_player[t["ctl"]].append(t)
+		note("trigger", t)
 	trigger_queue.clear()
 	# Stack is LIFO: push the opponent's group first so the active player's resolves first.
 	for p in [opp(active), active]:
@@ -691,6 +692,7 @@ func activate_trap(uid: int, p: int, ev: Dictionary) -> void:
 	add_log("%s activates Trap %s." % [pname(p), name_of(uid)])
 	add_fx({"k": "spotlight", "p": p, "id": d(uid)["id"], "how": "trap", "at": fx_pos(uid)})
 	emit("trap_activated", {"player": p, "card": uid})
+	note("trap", {"uid": uid, "p": p})
 	var tr: Dictionary = script_of(uid)["trap"]
 	var ops: Array = tr["ops"].duplicate()
 	ops.append({"op": "finish_card", "target": "self"})

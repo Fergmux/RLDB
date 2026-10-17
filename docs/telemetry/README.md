@@ -1,0 +1,209 @@
+# RLDB gameplay telemetry (Firebase Spark plan)
+
+Implemented 17 Oct 2026 (production batch Stage 3, package A3). Records: [schema-v1.md](schema-v1.md).
+Player disclosure: [privacy.md](privacy.md). Specification: `design/firebase-game-statistics-request-2026-10-17.md`,
+overridden by `design/production-batch-owner-answers-2026-10-17.md` (Spark only, direct writes, indefinite
+retention, default-on setting, environment labels).
+
+## Architecture
+
+```
+Godot client (rldb/src/telemetry)                     Firestore rldb-b5593 (default)       Owner PC (firebase/tools)
+ Series / MatchEngine --note()--> TelemetryCollector   users/{uid}/submissions/{doc}  <---  rldb-admin.js (Admin SDK, ADC)
+      (read-only observer)            | records          create-once, rules-validated          reconcile -> canonical_games/
+                                 TelemetryOutbox  --->  TelemetryUploader (REST commit) ---->           -> aggregates/
+                                 user://telemetry/outbox   TelemetryAuth (anonymous)                    metrics JSON (tools/out)
+```
+
+- **No backend.** Spark has no Cloud Functions, so the game writes directly. The rules allow one thing only:
+  the signed-in owner creates an immutable, schema-checked document in their own folder.
+- **Trust.** Classification as verified, provisional, conflicted, local or abandoned, and all aggregation, run
+  only in the owner's admin tool (`firebase/tools/rldb-admin.js`) with Google IAM credentials. A client cannot
+  write canonical games or aggregates, or declare anything verified.
+- **Who reports.** The process that runs the `Series` (hot-seat, bot, network host) reports both seats: drafts,
+  rewards, starting decks, events, results. A network client sends only a `gclient` corroboration report per duel,
+  built from its own views.
+
+### Integrity limits (honest)
+
+- Anonymous auth proves only "the same installation". It does not prove that a duel happened. A modified client
+  can submit invented reports into its own folder, and the rules check shape and size, not truth.
+- `verified` means two different installations reported the same duel identically. Two colluding installs, or one
+  person with two installs, can still forge a verified duel. Do not market these as cheat-proof competitive stats.
+- A network host sees and reports both seats' hidden cards. That goes only to the database, never to the opponent.
+  A malicious host could also misreport the remote seat's draft and deck; the client's corroboration covers only
+  the result fields and its own deck.
+- There is no App Check: Firebase App Check has no supported attestation provider for native Godot desktop builds,
+  and a custom provider needs a backend. Abuse protection is Firebase Auth's per-IP sign-up limits, the rules' size
+  caps and the Spark quota itself. If a spammer exhausts the daily free quota, telemetry stops for the day; the game
+  is unaffected (uploads just back off).
+
+## Client behaviour (silent, never blocking)
+
+- **Start-up.** `Telemetry.boot()` is the one line in `main.gd`. GdUnit runs never boot it, so the static entry
+  points (`attach_series`, `client_view`, `net_pause`) are no-ops there. The dev drivers resolve to environment
+  `test` with target `none`, so they collect nothing.
+- **Hooks.** These are additive `note()` calls in `game_core.gd`, `match_engine.gd`, `summon_ops.gd`,
+  `effect_engine.gd` and `series.gd`, plus one-line attach points in `local_host.gd` and `net_session.gd`. The
+  observer is null unless the service attached it. Bot look-ahead copies (`clone_for_sim`) never carry it. UI clicks
+  and animations are never hooked.
+- **Outbox.** `user://telemetry/outbox` holds one JSON file per record. Writes go to a temp file, then a rename;
+  the previous version is kept as `.bak` until the rename succeeds and is restored at load. Defaults:
+  400 items / 8 MiB. Eviction order: sessions and profiles, then the per-event list of the oldest game reports
+  (counters, opportunities and the result are kept, and `completeness.events_dropped` is set), then drafts and
+  rewards, then game and series reports, and open records last. Quarantine: 25 entries, oldest dropped, each with
+  a redacted 300-character diagnostic. Open records (a duel or draft in progress) are rewritten at each turn or pick
+  and become `abandoned` reports at the next start-up once they are 12 h old.
+- **Uploader.** One HTTPS request at a time, ticked once a second. It uses `documents:commit` with
+  `currentDocument.exists=false` and a `REQUEST_TIME` transform.
+  - 200 is accepted.
+  - 409 means the document already exists (a lost acknowledgement), so it counts as a duplicate and is
+    acknowledged.
+  - 401 triggers one token refresh, then backoff.
+  - 403 triggers an owner GET: if the document exists it is a duplicate, otherwise it is quarantined.
+  - Other 4xx are quarantined and never retried.
+  - Offline, timeout, 408, 429 and 5xx back off: `min(900 s, 5 s · 2^n) · U(0.5, 1)` across the whole uploader, so
+    there are no retry storms.
+  - When idle, the uploader polls every 60 s; a newly finished record triggers an immediate attempt.
+- **Auth.** `accounts:signUp` runs once per install. The refresh token is stored in
+  `user://telemetry/credential.cfg` (emulator identities in `credential_emulator.cfg`) and never logged. ID tokens
+  live in memory and are refreshed through `securetoken.googleapis.com`. A revoked refresh token falls back to a new
+  anonymous account, so the uid changes.
+- **Errors** never reach the player. Bounded diagnostics (`Telemetry.diagnostics`, 50 lines, redacted) and the
+  developer tool are the only outputs.
+
+## Player setting
+
+The setting is in Settings (main menu and in-game): "Share anonymous gameplay statistics", on by default, with a
+privacy note. It is stored in `user://ui_settings.cfg` `[privacy] share_gameplay_stats`.
+
+Turning it **off** has these effects:
+- the collector detaches;
+- the uploader stops;
+- **the local queue of unsent records is deleted**, so nothing collected before opting out is sent later;
+- the identity file is kept, so turning it back on resumes with the same uid.
+
+Records already uploaded stay until the owner runs `delete-uid`.
+
+## Environments and kill switch
+
+| Run | `environment` | Target |
+|---|---|---|
+| Editor (`OS.has_feature("editor")`) | `dev` | live |
+| Exported build | `playtest` | live |
+| Public release | set `"environment": "production"` in `rldb/data/telemetry_config.json` for that build | live |
+| GdUnit, dev drivers (`*shots*`, `*driver*`), `--telemetry-env=test` | `test` | none (add `--telemetry-emulator` or `--telemetry-live`) |
+
+- The environment is stamped on every record when it is queued, so a later build never relabels old records.
+- The admin tool partitions by environment and defaults to `production`. Labels are not a security boundary, and
+  they share one database and one quota. Separate Firebase projects would be the stronger option and are not
+  configured.
+- Kill switches:
+  - `"enabled": false` in `telemetry_config.json`;
+  - `user://telemetry/dev.cfg` `[dev] enabled=false` (developer override, which can also set `environment` or
+    `target`);
+  - the `--telemetry-off` argument;
+  - the environment variable `RLDB_TELEMETRY=off`.
+
+## Developer tool (no player UI)
+
+Run it from `rldb/` with the editor console binary:
+
+```
+godot --headless --path . -s res://src/dev/telemetry_tool.gd -- --inspect
+godot --headless --path . -s res://src/dev/telemetry_tool.gd -- --flush --telemetry-live
+godot --headless --path . -s res://src/dev/telemetry_tool.gd -- --test-upload --telemetry-live      # env test; exit 0 = accepted
+godot --headless --path . -s res://src/dev/telemetry_tool.gd -- --sim-series --telemetry-emulator   # bot Bo3 draft series
+godot --headless --path . -s res://src/dev/telemetry_tool.gd -- --purge
+```
+
+## Security rules (deployed 17 Oct 2026; `firebase/firestore.rules`, sha256 `2fcd870c…bfa0`)
+
+- `users/{uid}/submissions/{docId}`:
+  - **create** only if `request.auth.uid == uid`, all 11 envelope fields are present and nothing else, `uid`
+    equals the path uid, the kind, environment and mode are from fixed lists, `docId` starts with `<kind>_`, the
+    content hash is 64 hex, `received_at == request.time`, and `body` is a string of 2 to 200,000 characters;
+  - **get** only by the owner;
+  - **list, update and delete** always denied.
+- Every other path, including `canonical_games`, `aggregates` and `admin`, is denied to every client. The Admin
+  SDK bypasses rules, so the admin tool is tested separately (`firebase/tests/admin.test.js`).
+- `firestore.indexes.json` exempts the large `body` strings from single-field indexing, which saves storage.
+
+## Owner operations
+
+Install once with `cd firebase && npm install`. Java 21 must be on PATH for the emulators.
+
+- Rules and admin tests on the emulators:
+  `npx firebase emulators:exec --only firestore,auth --project rldb-b5593 "node --test --test-concurrency=1 tests/rules.test.js tests/admin.test.js"`
+- Godot end-to-end on the emulators:
+  `npx firebase emulators:exec --only firestore,auth --project rldb-b5593 "node tests/e2e_godot.js"`
+- Fixture metric tests (no emulator): `node --test tools/test/metrics.test.js`
+- Deploy: `firebase deploy --only firestore:rules,firestore:indexes --project rldb-b5593`
+- **Admin credentials** (choice: IAM via Application Default Credentials, *not* an allowlisted email/password
+  account). Run `gcloud auth application-default login` with the owner Google account, or set
+  `GOOGLE_APPLICATION_CREDENTIALS` to a service-account key stored outside the repository
+  (`firebase/.gitignore` also blocks `*.key.json` and `service-account*.json`). Why this choice: an allowlisted
+  password account would have to open read-everything rules to one client identity, and anyone holding that
+  password could read or overwrite all data. IAM keeps the rules closed to every client.
+- Reconcile and metrics:
+  `node tools/rldb-admin.js reconcile --env=production [--modes=lan,steam] [--statuses=verified,provisional] [--player=u:<uid>] [--from=2026-11-01] [--content-hash=<hex>] [--write]`.
+  - The output goes to `tools/out/metrics-<env>.json` (ignored by git).
+  - `--write` stores only changed `canonical_games/{env}__{game_id}`, deletes canonical games whose submissions
+    are gone, and writes `aggregates/{env}__default`.
+  - The run is idempotent: aggregates are always recomputed from the full canonical set, never incremented.
+  - Defaults are human network duels, verified plus provisional (provisional is flagged and filterable), with
+    conflicted, abandoned, bot and hot-seat duels excluded. Pass `--modes=bot,local --statuses=local` for local
+    play.
+- Deletion: `node tools/rldb-admin.js delete-uid <uid>` lists the documents; add `--confirm` to delete them, then
+  run `reconcile --write` for each environment.
+- Health: `node tools/rldb-admin.js health --env=production` reports accepted and rejected counts by reason, each
+  classification count, and network duels missing a client report.
+
+## Cost and quota (Spark: 20,000 writes/day, 50,000 reads/day, 20,000 deletes/day, 1 GiB stored)
+
+Measured on a real Bo3 bot draft series (`tests/e2e_godot.js`): 11 documents.
+
+| Record | Count | Size |
+|---|---|---|
+| draft | 2 | about 4.1 KB each |
+| game | 3 | up to 33 KB each |
+| reward | 4 | about 1.4 KB each |
+| series | 1 | 1.2 KB |
+| session | 1 | 0.6 KB |
+
+That totals about 88 KB of body, roughly 100 KB stored with overhead. A network series adds one `gclient` per duel
+(about 1 KB). Launches add a session each (about 0.6 KB).
+
+| Load | Writes/day | Storage growth |
+|---|---|---|
+| Playtest: 20 players × 3 series/day | about 700 (3.5 % of quota) | about 6 MB/day |
+| Daily write ceiling | about 1,800 Bo3 series | |
+| 1 GiB with indefinite retention (owner decision) | | about 10,000 Bo3 series (about 30,000 duels) |
+
+- Monitor storage in the Firebase console. If it grows too fast, lower `collect.max_events_per_game`: the event
+  list is about 70 % of a game report, and the counters and opportunities alone support every metric.
+- Reads: a full `reconcile` reads every submission once. That fits the 50k/day read quota up to about 50,000
+  documents (about 4,500 series). Beyond that, run it on alternate days, or add an incremental mode or export
+  (future work).
+- Admin writes: only changed canonical games plus one aggregate per run.
+- Monthly cost: £0 (Spark, no billing enabled). Quota exhaustion only pauses uploads, which back off and resume
+  the next day with nothing lost locally, within the 400-item / 8 MiB outbox budget.
+
+## Identity
+
+- One anonymous Firebase uid per installation (per target), reused across launches through the stored refresh
+  token. It is per install, not per human: a reinstall or second device is a new profile, and the metrics say
+  "profiles", not "players".
+- Hot-seat: seat 0 is the profile; seat 1 is an unlinked guest (`guest_<series id>`). Bots are `kind: "bot"`.
+- **A verified Steam link is not possible on Spark.** It would need a trusted server that checks a Steam auth
+  ticket with a publisher Web API key, plus the owner's own App ID; the game uses Spacewar 480. The fallback is a
+  salted one-way hash of the Steam ID marked `steam_link: "unverified"`. It is used for grouping only, never as
+  proof: any client can send any value. Because SteamIDs are enumerable and the salt ships in the game, anyone
+  holding both the salt and the data can reverse it. Adding a verified link later (own App ID plus a trusted
+  service) needs no change to what is collected.
+
+## Retention
+
+- Server: indefinite, with no age-based deletion (owner decision). The deletion process is `delete-uid` (above).
+- Local: the bounded outbox as described above. Delivered records are deleted from the device after
+  acknowledgement.

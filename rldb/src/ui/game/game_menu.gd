@@ -86,6 +86,7 @@ func build_popups() -> void:
 	sv.add_child(fa)
 	sv.add_child(UIStyle.display_controls(14))
 	sv.add_child(audio_controls(14))
+	sv.add_child(Telemetry.settings_control(13))
 	var cl := UIStyle.button("Close", 13)
 	cl.pressed.connect(func(): settings_popup.visible = false)
 	sv.add_child(cl)
