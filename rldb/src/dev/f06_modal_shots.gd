@@ -12,6 +12,7 @@ var main: Node
 var gs: GameScreen
 var host: LocalHost
 var big := Vector2i.ZERO
+var small := Vector2i(1600, 900)
 
 
 func _initialize() -> void:
@@ -25,8 +26,7 @@ func _initialize() -> void:
 	if args.size() > 2:
 		var q := String(args[2]).split("x")
 		big = Vector2i(int(q[0]), int(q[1]))
-	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-	DisplayServer.window_set_size(sz)
+	small = sz
 	create_timer(200.0).timeout.connect(func(): quit(1))
 	run.call_deferred()
 
@@ -45,17 +45,32 @@ func _shot(name: String) -> void:
 
 func _widgets() -> Array:
 	var out := []
-	for n in gs.find_children("*", "", true, false):
+	var stack: Array = [gs]
+	var all := []
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		all.append(n)
+		stack.append_array(n.get_children())
+	for n in all:
 		var w := n as CardWidget
-		if w != null and w.visible and w.view.get("face_up", true) and CardInspector.is_inspectable(w.view):
+		if w != null and w.is_visible_in_tree() and w.view.get("face_up", true) and CardInspector.is_inspectable(w.view):
 			out.append(w)
 	return out
+
+
+func _size_window(sz: Vector2i) -> void:
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_size(sz)
+	await create_timer(1.2).timeout
+	print("WINDOW ", DisplayServer.window_get_size(), " ROOT ", root.size)
 
 
 func run() -> void:
 	main = load("res://main.tscn").instantiate()
 	root.add_child(main)
 	await _frames(8)
+	# The main scene applies the saved display mode (borderless full screen); size the window after it.
+	await _size_window(small)
 	# Main-menu centre panel (Settings) and the lobby list.
 	var mm := main.menu as MainMenu
 	if mm != null:
@@ -134,8 +149,7 @@ func run() -> void:
 	await create_timer(9.0).timeout
 	await _shot("13_rewards")
 	if big != Vector2i.ZERO:
-		DisplayServer.window_set_size(big)
-		await create_timer(1.5).timeout
+		await _size_window(big)
 		await _shot("big_13_rewards")
 		gs.menu.toggle()
 		await _shot("big_06_game_menu")
