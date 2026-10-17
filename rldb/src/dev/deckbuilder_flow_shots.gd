@@ -1,8 +1,9 @@
 extends SceneTree
-## Dev-only windowed evidence + flow check for the deck builder (F03-24). Run NOT headless:
+## Dev-only windowed evidence + flow check for the deck builder (F03-24, F15-F24). Run NOT headless:
 ##   godot --path rldb -s res://src/dev/deckbuilder_flow_shots.gd -- <absolute output dir> [WxH]
-## Drives the builder with real pointer / key events (add, inspect, name, save, new, load,
-## rename, delete) and saves screenshots. Leaves the player's saved decks untouched.
+## Drives the builder with real pointer / key events (select, preview Add/Remove, rapid clicks,
+## caps, inspect, Esc priority, name, save, new, load, rename, delete, Esc back with the unsaved
+## question) and saves screenshots. Leaves the player's saved decks untouched.
 
 const DECK_A := "Flow Test Deck"
 const DECK_B := "Flow Test Renamed"
@@ -34,6 +35,10 @@ func _frames(n: int) -> void:
 
 func _shot(name: String) -> void:
 	await create_timer(0.45).timeout
+	await _snap(name)
+
+
+func _snap(name: String) -> void:
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png(out_dir.path_join("%s_%s.png" % [name, tag]))
 
@@ -53,21 +58,35 @@ func _move(pos: Vector2) -> void:
 	await _frames(3)
 
 
+func _press(pos: Vector2, button: int, pressed: bool) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.position = pos
+	ev.global_position = pos
+	ev.button_index = button
+	ev.pressed = pressed
+	root.push_input(ev, true)
+
+
 func _click(pos: Vector2, button: int = MOUSE_BUTTON_LEFT) -> void:
 	await _move(pos)
 	for pressed in [true, false]:
-		var ev := InputEventMouseButton.new()
-		ev.position = pos
-		ev.global_position = pos
-		ev.button_index = button
-		ev.pressed = pressed
-		root.push_input(ev, true)
+		_press(pos, button, pressed)
 		await _frames(1)
 	await _frames(3)
 
 
 func _click_node(c: Control, button: int = MOUSE_BUTTON_LEFT) -> void:
 	await _click(c.get_global_rect().get_center(), button)
+
+
+## `n` clicks one frame apart at `pos` (rapid input).
+func _rapid(pos: Vector2, n: int) -> void:
+	await _move(pos)
+	for i in n:
+		_press(pos, MOUSE_BUTTON_LEFT, true)
+		await process_frame
+		_press(pos, MOUSE_BUTTON_LEFT, false)
+		await process_frame
 
 
 func _key(code: int) -> void:
@@ -105,6 +124,20 @@ func _type_name(text: String) -> void:
 	db.deck_name_edit.text = text
 	db.deck_name_edit.text_changed.emit(text)
 	await _frames(2)
+	# Leave the field so the edit keys (+ / - / Esc) reach the builder, as after a click elsewhere.
+	db.deck_name_edit.release_focus()
+
+
+func _extra_n() -> int:
+	return DeckStore.split_counts(DeckBuilder.counts_to_cards(db.counts))["extra"]
+
+
+func _select_and_add(id: int, times: int = 1) -> void:
+	var w := db.cell_widget(id)
+	await _scroll_into_view(w)
+	await _click_node(w)
+	for i in times:
+		await _click_node(db.add_button())
 
 
 func run() -> void:
@@ -117,7 +150,9 @@ func run() -> void:
 	DeckStore.delete_deck(DECK_A)
 	DeckStore.delete_deck(DECK_B)
 
-	_check("one grid cell per catalogue card", db._grid.get_child_count() == CardDB.all().size())
+	_check("one grid cell per catalogue card", db.browser.grid.get_child_count() == CardDB.all().size())
+	_check("F23 no Delete on a new deck", not db.delete_button().visible)
+	_check("F20 tabs without counts", db._tab_saved.text == "Saved Decks" and db._tab_starters.text == "Starter Decks")
 	await _shot("01_empty")
 
 	# Same-name basic variants: find two ids whose names share a stem but differ in Type.
@@ -133,110 +168,172 @@ func run() -> void:
 	_check("found same-name basic variants", pair.size() == 2)
 	var a: int = pair[0]
 	var b: int = pair[1]
-	print("variants: ", CardDB.get_def(a)["name"], " type=", CardDB.get_def(a)["type"], " | ", CardDB.get_def(b)["name"], " type=", CardDB.get_def(b)["type"])
 
-	# Hover highlight + left-click add (real events).
+	# Hover, then a left-click selects into the preview without editing (F18).
 	var wa := db.cell_widget(a)
 	await _scroll_into_view(wa)
 	await _move(wa.get_global_rect().get_center())
 	await _shot("02_hover")
 	await _click_node(wa)
-	await _click_node(wa)
-	var wb := db.cell_widget(b)
-	await _scroll_into_view(wb)
-	await _click_node(wb)
-	_check("left-click adds the clicked variant id", int(db.counts.get(a, 0)) == 2 and int(db.counts.get(b, 0)) == 1 and db.counts.size() == 2)
+	_check("click selects into preview", db.preview_id() == a and db.counts.is_empty())
+	await _move(db.add_button().get_global_rect().get_center())
+	_press(db.add_button().get_global_rect().get_center(), MOUSE_BUTTON_LEFT, true)
+	await process_frame
+	_press(db.add_button().get_global_rect().get_center(), MOUSE_BUTTON_LEFT, false)
+	await create_timer(0.14).timeout
+	await _snap("02b_add_in_flight")
+	_check("ghost card in flight during add", db.ghost_count() >= 1 or UIStyle.reduce_motion)
+	await create_timer(0.5).timeout
+	await _click_node(db.add_button())
+	await _select_and_add(b)
+	_check("preview Add adds the selected variant id", int(db.counts.get(a, 0)) == 2 and int(db.counts.get(b, 0)) == 1 and db.counts.size() == 2)
+	var ctag: Control = db.browser.cell(a).get_meta("tag")
+	_check("catalogue count tag below the card", db.cell_count_text(a) == "x2" and ctag.get_global_rect().position.y >= wa.get_global_rect().end.y - 1)
+	await _shot("02c_added")
 
-	# Right-click inspects without changing the deck.
+	# Right-click inspects; Esc closes only the inspector (F21).
 	var before := db.counts.duplicate()
-	await _click_node(wb, MOUSE_BUTTON_RIGHT)
+	await _click_node(db.cell_widget(b), MOUSE_BUTTON_RIGHT)
 	_check("right-click opens inspector", CardInspector.open_count() == 1)
 	_check("right-click leaves deck unchanged", db.counts == before)
 	await _shot("03_inspector")
 	await _key(KEY_ESCAPE)
+	await _frames(4)
 	_check("Esc closes inspector", CardInspector.open_count() == 0)
+	_check("Esc with inspector open stays in the builder", main.menu == db and not db._modal_open())
 
-	# Add a spread of other cards through the grid (more than a screen of deck rows).
+	# A spread of categories (more than a screen of deck rows).
 	for cat in ["fusion", "ritual", "arcane", "spell", "trap", "power", "unit"]:
 		for d in CardDB.all():
 			if d["category"] == cat:
-				var w := db.cell_widget(int(d["id"]))
-				await _scroll_into_view(w)
-				await _click_node(w)
+				await _select_and_add(int(d["id"]))
 				break
-	_check("extra-deck cards routed", DeckStore.split_counts(DeckBuilder.counts_to_cards(db.counts))["extra"] >= 3)
+	_check("extra-deck cards routed", _extra_n() >= 3)
 
-	# Remove via the cell "-" button.
-	var minus: Button = db._cells[a]["remove"]
+	# F17: deck tiles in canonical catalogue order.
+	var idx := CardBrowser.catalogue_index()
+	var ordered := true
+	for key in ["main", "extra"]:
+		var ids: Array = (db._sections[key]["flow"] as Node).get_children().map(func(t): return idx[int(t.get_meta("card_id"))])
+		var sorted := ids.duplicate()
+		sorted.sort()
+		ordered = ordered and ids == sorted
+	_check("F17 deck tiles in catalogue order", ordered)
+
+	# Remove through the preview (select variant a again).
 	await _scroll_into_view(wa)
-	await _click_node(minus)
-	_check("cell minus removes one copy", int(db.counts.get(a, 0)) == 1)
+	await _click_node(wa)
+	await _click_node(db.remove_button())
+	_check("preview Remove removes one copy", int(db.counts.get(a, 0)) == 1)
 
-	# Deck grid: tiles exist for the deck, click removes one, right-click inspects, + adds.
+	# Deck grid: click selects, right-click inspects.
 	var dw := db.deck_widget(b)
 	_check("deck grid has a tile for a deck card", dw != null)
 	await _scroll_into_view(dw)
+	await _click_node(dw)
+	_check("deck tile click selects it", db.preview_id() == b and int(db.counts.get(b, 0)) == 1)
 	await _shot("03b_deck_grid")
 	await _click_node(dw, MOUSE_BUTTON_RIGHT)
 	_check("deck tile right-click inspects", CardInspector.open_count() == 1)
 	await _key(KEY_ESCAPE)
+
+	# F24: rapid clicking (one frame apart) never loses or duplicates an edit.
 	var nb := int(db.counts.get(b, 0))
-	await _click_node(db.deck_widget(b))
-	_check("deck tile click removes one", int(db.counts.get(b, 0)) == nb - 1)
-	await _scroll_into_view(wb)
-	await _click_node(wb)
-	_check("catalogue click re-adds", int(db.counts.get(b, 0)) == nb)
+	await _rapid(db.add_button().get_global_rect().get_center(), 8)
+	await _snap("03c_rapid_adds")
+	_check("8 rapid Add clicks = 8 copies", int(db.counts.get(b, 0)) == nb + 8)
+	await _rapid(db.remove_button().get_global_rect().get_center(), 14)
+	await create_timer(0.7).timeout
+	_check("14 rapid Remove clicks stop at zero", not db.counts.has(b) and db.deck_widget(b) == null and db.ghost_count() == 0)
+	await _move(db.cell_widget(a).get_global_rect().get_center())
+	await _key(KEY_EQUAL)
+	_check("+ key adds the selected card", int(db.counts.get(b, 0)) == 1)
+	await _key(KEY_MINUS)
+	_check("- key removes it", not db.counts.has(b))
+	await _key(KEY_EQUAL)
+
+	# F16 cap: fill the Extra Deck to 15; Add becomes unavailable for Extra cards.
+	var ex := -1
+	for d in CardDB.all():
+		if d["category"] == "fusion":
+			ex = int(d["id"])
+			break
+	db.add_card(ex, DeckStore.MAX_EXTRA - _extra_n() + 5)
+	await _scroll_into_view(db.cell_widget(ex))
+	await _click_node(db.cell_widget(ex))
+	_check("F16 Extra Deck stops at 15", _extra_n() == DeckStore.MAX_EXTRA)
+	_check("F16 Add unavailable for a full Extra Deck", db.add_button().disabled)
+	await _click_node(db.add_button())
+	_check("F16 disabled Add does nothing", _extra_n() == DeckStore.MAX_EXTRA)
+	await _move(db.add_button().get_global_rect().get_center())
+	await _shot("03d_extra_full")
+	for i in 5:
+		db.remove_card(ex)
 
 	# Unnamed save: inline error beside the name field, not at the bottom.
 	await _click_node(_find_button(db, "Save"))
 	_check("unnamed save shows inline error", db.name_error() != "" and not DeckStore.list().any(func(e): return e["name"] == ""))
 	await create_timer(0.4).timeout   # let the shake settle
 	_check("error sits under the name field", db._name_err.get_global_rect().position.y >= db.deck_name_edit.get_global_rect().end.y - 2 and absf(db._name_err.get_global_rect().position.x - db.deck_name_edit.get_global_rect().position.x) < 4)
-	await _shot("03c_name_error")
 
 	# Name, save.
 	await _type_name(DECK_A)
 	_check("typing clears the inline error", db.name_error() == "")
-	await _shot("04_named_unsaved")
 	await _click_node(_find_button(db, "Save"))
 	var saved := false
 	for dk in DeckStore.list():
 		if dk["name"] == DECK_A:
 			saved = dk["cards"].size() == DeckBuilder.counts_to_cards(db.counts).size()
 	_check("Save writes the deck", saved and not db.dirty)
+	_check("F23 Delete shows for the saved deck", db.delete_button().is_visible_in_tree())
 	await _shot("05_saved")
 
 	# New (clean, no prompt) then load back through the saved list.
 	await _click_node(_find_button(db, "New"))
 	_check("New empties the deck", db.counts.is_empty())
+	_check("F23 Delete hidden after New", not db.delete_button().visible)
 	var row := db.saved_row(DECK_A)
 	_check("saved deck has a tile", row != null)
-	await _shot("05b_saved_tiles")
 	await _click_node(row)
 	_check("Load restores the deck", int(db.counts.get(b, 0)) == 1 and int(db.counts.get(a, 0)) == 1 and db.deck_name_edit.text == DECK_A)
 
-	# Filter + search in the grid.
+	# Search in the grid.
 	db.set_filters("dragon")
 	await _frames(3)
 	_check("search narrows the grid", db.visible_cell_count() < CardDB.all().size() and db.visible_cell_count() > 0)
 	await _shot("06_search_dragon")
+	db.set_filters("zzzz-nothing")
+	await _shot("06b_no_results")
 	db.set_filters("")
 
 	# Rename then delete.
 	await _type_name(DECK_B)
-	await _shot("06b_rename_typed")
 	await _click_node(_find_button(db, "Rename"))
 	var names := DeckStore.list().map(func(e): return e["name"])
 	_check("Rename replaces the saved name", names.has(DECK_B) and not names.has(DECK_A))
-	await _click_node(_find_button(db, "Delete"))
+	await _click_node(db.delete_button())
 	await _shot("07_delete_confirm")
 	await _click_node(_find_button(db._overlay, "Delete"))
 	names = DeckStore.list().map(func(e): return e["name"])
 	_check("Delete (confirmed) removes the deck", not names.has(DECK_B))
-	await _shot("08_after_delete")
-	db._tab_starters.pressed.emit()
+	_check("F23 Delete hidden after deleting", not db.delete_button().visible)
+	await _click_node(db._tab_starters)
 	await _frames(3)
 	await _shot("09_starters")
+
+	# F21: Esc with unsaved edits asks; Esc again cancels; Esc then Discard leaves once.
+	await _click_node(db.cell_widget(a))
+	await _click_node(db.add_button())
+	await _key(KEY_ESCAPE)
+	_check("Esc with unsaved edits asks first", db._modal_open() and main.menu == db)
+	await _shot("10_esc_unsaved")
+	await _key(KEY_ESCAPE)
+	await _frames(2)
+	_check("Esc again cancels the question", not db._modal_open() and main.menu == db)
+	await _key(KEY_ESCAPE)
+	await _click_node(_find_button(db._overlay, "Discard"))
+	await create_timer(1.4).timeout
+	_check("Discard returns to the main menu", main.menu is MainMenu)
 
 	DeckStore.delete_deck(DECK_A)
 	DeckStore.delete_deck(DECK_B)
