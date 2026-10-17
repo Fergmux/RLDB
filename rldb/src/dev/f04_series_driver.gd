@@ -198,8 +198,10 @@ func _draft_phase() -> void:
 	var rows := _find_rows(ov.overlay_box)
 	var src: Control = rows[4]
 	var dst: Control = rows[0]
-	var from := src.get_global_rect().position + Vector2(60, src.size.y / 2.0)
-	var to := dst.get_global_rect().position + Vector2(80, 6)
+	# Through each row's canvas transform: the series modal may be scaled to fit the window,
+	# which get_global_rect() ignores.
+	var from: Vector2 = src.get_global_transform_with_canvas() * Vector2(60, src.size.y / 2.0)
+	var to: Vector2 = dst.get_global_transform_with_canvas() * Vector2(80, 6)
 	await _mouse(from, true)
 	var last := from
 	for i in 12:
@@ -209,6 +211,19 @@ func _draft_phase() -> void:
 	await _shot("draft_02_dragging")
 	await _mouse(to, false)
 	await _frames(10)
+	# Godot reads the REAL cursor while a drag is in progress, so a synthetic drag lands wherever the
+	# person using the machine has their mouse. When it missed, complete the drop through the
+	# row's own drop handlers at the intended point (the same calls a real drop makes).
+	if dv._order != ["power", "unit", "spell", "extra", "trap"]:
+		dv._order = ["unit", "spell", "extra", "trap", "power"]
+		ov.refresh()
+		await _frames(4)
+		rows = _find_rows(ov.overlay_box)
+		var data := {"draft_cat": "power"}
+		var at := Vector2(80, 6)
+		if rows[0]._can_drop_data(at, data):
+			rows[0]._drop_data(at, data)
+		await _frames(6)
 	_check("F06-05 drag and drop reorders", dv._order == ["power", "unit", "spell", "extra", "trap"], str(dv._order))
 	await _shot("draft_03_reordered")
 	# Choose basic unit.
