@@ -525,10 +525,11 @@ func _s2c_view(data: PackedByteArray, raw_size: int) -> void:
 	if raw_received.size() > 8:
 		raw_received.pop_front()
 	_merge_client_log(v)
-	Telemetry.client_view(v, transport)
 	_awaiting_view = false
 	_status("")
 	local_seat.deliver(v)
+	# After delivery, so the statistics observer can never delay or break the player's view.
+	Telemetry.client_view(v, transport)
 
 
 ## Disconnects a refused peer after its error message has been sent.
