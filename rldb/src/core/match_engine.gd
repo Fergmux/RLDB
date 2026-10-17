@@ -316,7 +316,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 			if has_flag(uid, "no_defense") and inst["stance"] == "atk": return "This unit cannot be in Defense stance."
 			return ""
 		"attack":
-			return _attack_check(p, uid)
+			return _attack_check(p, uid, String(cmd.get("mode", "")))
 		"sacrifice":
 			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
 			if not main: return "Sacrifice is only allowed in the Setup or Recovery Phase (proposal P-21)."
@@ -511,7 +511,9 @@ func _execute(p: int, cmd: Dictionary) -> void:
 			cards[uid]["stance_turn"] = turn
 			_flip_stance(uid)
 		"attack":
-			push_frame(make_frame(uid, p, [{"op": "attack_target", "as": "target"}, {"op": "attack_declare"},
+			# G07: an optional "mode" ("unit" / "direct") narrows the targets of a unit that
+			# may attack directly; see BattleOps.attack_modes.
+			push_frame(make_frame(uid, p, [{"op": "attack_target", "as": "target", "mode": String(cmd.get("mode", ""))}, {"op": "attack_declare"},
 				{"op": "attack_window"}, {"op": "battle"}], "attack with " + name_of(uid)))
 		"sacrifice":
 			push_frame(make_frame(uid, p, [{"op": "sacrifice", "target": "self"}], "sacrifice " + name_of(uid)))

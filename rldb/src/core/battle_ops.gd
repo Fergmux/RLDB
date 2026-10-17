@@ -6,7 +6,7 @@ extends FusionOps
 
 # ---------------------------------------------------------------- combat
 
-func _attack_check(p: int, uid: int) -> String:
+func _attack_check(p: int, uid: int, mode: String = "") -> String:
 	var inst: Dictionary = cards[uid]
 	if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
 	if phase != PHASE_BATTLE: return "Attacks happen in the Battle Phase."
@@ -16,7 +16,7 @@ func _attack_check(p: int, uid: int) -> String:
 	var why := _cannot_attack_reason(uid)
 	if why != "": return why
 	if attack_targets(uid).is_empty(): return "No legal attack target."
-	return ""
+	return _attack_mode_check(uid, mode)
 
 
 func _cannot_attack_reason(uid: int) -> String:
@@ -47,6 +47,44 @@ func attack_targets(uid: int) -> Array:
 	return out
 
 
+## G07: the attack modes `uid` offers as separate actions. A unit that may attack directly
+## (Diggie, Flying Sandworm) while there are opposing units it could attack instead gets two:
+## "unit" (pick an opposing unit) and "direct" (no choice). Every other unit has one
+## action and returns []. Blind units attack a random legal target, so they never split.
+func attack_modes(uid: int) -> Array:
+	if status_count(uid, "blind") > 0:
+		return []
+	var targets := attack_targets(uid)
+	if not (-1 in targets) or targets.size() < 2:
+		return []
+	return ["unit", "direct"]
+
+
+## Why the attack mode `mode` ("unit" / "direct", "" = no mode) is not legal for `uid` now.
+func _attack_mode_check(uid: int, mode: String) -> String:
+	if mode == "":
+		return ""
+	if not (mode in ["unit", "direct"]):
+		return "Invalid attack mode."
+	if status_count(uid, "blind") > 0:
+		return "Blind: this unit attacks a random target."
+	var targets := attack_targets(uid)
+	if mode == "direct" and not (-1 in targets):
+		return "This unit cannot attack directly now."
+	if mode == "unit" and targets.filter(func(t): return t != -1).is_empty():
+		return "No opposing unit can be attacked."
+	return ""
+
+
+## Attack targets narrowed to the declared mode: "unit" drops the direct attack, "direct"
+## keeps only it, "" keeps every legal target.
+func _mode_targets(targets: Array, mode: String) -> Array:
+	match mode:
+		"unit": return targets.filter(func(t): return t != -1)
+		"direct": return targets.filter(func(t): return t == -1)
+	return targets
+
+
 func _op_attack_target(f: Dictionary, op: Dictionary) -> int:
 	var uid: int = f["src"]
 	var targets := attack_targets(uid)
@@ -54,6 +92,10 @@ func _op_attack_target(f: Dictionary, op: Dictionary) -> int:
 		f["vars"][op["as"]] = targets[rng.randi_range(0, targets.size() - 1)]
 		f["vars"]["blind"] = true
 		return R.CONT
+	targets = _mode_targets(targets, String(op.get("mode", "")))
+	if targets.is_empty():
+		add_log("%s has no legal attack target." % name_of(uid))
+		return R.END
 	if targets == [-1]:
 		f["vars"][op["as"]] = -1          # "Attack Direct": nothing to choose
 		return R.CONT

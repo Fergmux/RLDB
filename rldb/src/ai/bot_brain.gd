@@ -99,6 +99,8 @@ func candidates(m: MatchEngine) -> Array:
 			cmd["idx"] = a["idx"]
 		if a.has("stance"):
 			cmd["stance"] = a["stance"]
+		if a.has("mode"):
+			cmd["mode"] = a["mode"]          # G07: Attack / Attack Direct
 		out.append(cmd)
 	return out
 

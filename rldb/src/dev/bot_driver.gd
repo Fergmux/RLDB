@@ -84,6 +84,8 @@ func _human_move(m: MatchEngine) -> void:
 			var cmd := {"t": a["t"], "uid": a["uid"]}
 			if a.has("stance"):
 				cmd["stance"] = a["stance"]
+			if a.has("mode"):
+				cmd["mode"] = a["mode"]
 			host.handle(0, cmd)
 			return
 	host.handle(0, {"t": "next_phase"})

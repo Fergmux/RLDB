@@ -375,6 +375,11 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 	for u in m.field_units(viewer):
 		if m.attack_targets(u) == [-1]:
 			cands.append({"t": "attack", "uid": u, "label": "Attack Direct", "full": "Attack the opponent directly"})
+		elif not m.attack_modes(u).is_empty():
+			# G07: a unit that may attack directly chooses how to attack with two actions.
+			cands.append({"t": "attack", "uid": u, "mode": "unit", "label": "Attack", "full": "Attack an opposing unit"})
+			cands.append({"t": "attack", "uid": u, "mode": "direct", "label": "Attack Direct",
+				"full": "Attack the opponent directly, bypassing their units"})
 		else:
 			cands.append({"t": "attack", "uid": u, "label": "Attack", "full": "Declare an attack"})
 		var to_def: bool = m.cards[u]["stance"] == "atk"

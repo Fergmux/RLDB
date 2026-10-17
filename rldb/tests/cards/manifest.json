@@ -2757,6 +2757,14 @@
 					]
 				},
 				{
+					"file": "res://tests/cards/direct_attack_cards_test.gd",
+					"tests": [
+						"test_c162_diggie_attack_direct_deals_its_atk_past_units",
+						"test_c162_diggie_attack_targets_the_chosen_unit_not_the_player",
+						"test_c162_diggie_offers_attack_and_attack_direct_in_battle"
+					]
+				},
+				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
 						"test_c162_diggie_destroyed_keeps_its_cost",
@@ -2938,6 +2946,13 @@
 					"file": "res://tests/cards/changed_cards_test.gd",
 					"tests": [
 						"test_changed_cards_use_their_new_stats_and_costs_in_play"
+					]
+				},
+				{
+					"file": "res://tests/cards/direct_attack_cards_test.gd",
+					"tests": [
+						"test_c171_flying_sandworm_attack_hits_a_unit_and_attack_direct_hits_the_player",
+						"test_c171_flying_sandworm_offers_attack_and_attack_direct_in_battle"
 					]
 				},
 				{
