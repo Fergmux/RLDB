@@ -12,9 +12,10 @@ Read this first after a context compaction. The items are in `design/playtest-fe
 ## Status
 | Agent | Branch | State |
 | --- | --- | --- |
-| A | (worktree) | dispatched |
-| B | (worktree) | dispatched |
-| C | (worktree) | dispatched |
+| A | (worktree, ui-programmer) | running (dispatched 17 Oct) |
+| B | (worktree, ui-programmer) | running |
+| C | (worktree, gameplay-programmer) | running |
 
 ## Decisions
 (added as made)
+- Records were first written over the existing `playtest-feedback-04.md` and `-05.md` by mistake; both were restored from git unchanged, and this round uses `08`.
