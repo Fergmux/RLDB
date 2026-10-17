@@ -728,7 +728,8 @@ func show_toast(text: String, col: Color, secs: float) -> void:
 	toast.add_theme_color_override("font_color", col)
 	var t := gs.get_tree().create_timer(secs)
 	t.timeout.connect(func():
-		if toast.text == text:
+		# The screen (and its toast) may be gone by now: a SceneTree timer outlives it.
+		if is_instance_valid(toast) and toast.text == text:
 			toast.text = ""
 			toast.visible = false)
 
