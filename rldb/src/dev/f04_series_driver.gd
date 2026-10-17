@@ -9,6 +9,8 @@ var out_dir: String
 var host: LocalHost
 var _fail := 0
 var _pass := 0
+## F01: the deck modal's rect on the first (Structured) tab; every tab must keep it.
+var _f01_rect := Rect2()
 
 
 func run(main_node: Node, dir: String) -> void:
@@ -27,15 +29,25 @@ func run(main_node: Node, dir: String) -> void:
 	var gs: GameScreen = main.screen
 	var ov: GameSeriesOverlay = gs.overlays
 	await _shot("series_01_structured")
+	_f01_rect = ov.overlay.get_global_rect()
 	ov.deck_open["s0"] = true
 	ov.refresh()
 	await _frames(8)
 	await _shot("series_02_structured_selected")
+	_check("F01 opening a deck tile keeps the modal's size", ov.overlay.get_global_rect().is_equal_approx(_f01_rect), str(ov.overlay.get_global_rect()))
 	ov.deck_open.clear()
 	ov.decks.tab = "custom"
 	ov.refresh()
 	await _frames(8)
 	await _shot("series_03_custom_empty")
+	_check("F01 empty Custom tab keeps the modal's size and place", ov.overlay.get_global_rect().is_equal_approx(_f01_rect), "%s vs %s" % [ov.overlay.get_global_rect(), _f01_rect])
+	# F01: one saved deck (sparse tab) must not shrink the modal either.
+	DeckStore.save_deck("Lone Deck", [112, 112, 36, 34])
+	ov.refresh()
+	await _frames(10)
+	_check("F01 sparse Custom tab keeps the modal's size and place", ov.overlay.get_global_rect().is_equal_approx(_f01_rect), str(ov.overlay.get_global_rect()))
+	await _shot("series_03b_custom_sparse")
+	DeckStore.delete_deck("Lone Deck")
 	var ids := [112, 112, 36, 34, 70, 162, 29, 54, 51, 37, 28, 13, 102]
 	for n in ["Ember Rush", "Tidal Control", "Stone Wall", "Storm Caller", "Grave Whisper", "Holy Light", "Blade Dance"]:
 		DeckStore.save_deck(n, ids)
@@ -194,37 +206,19 @@ func _draft_phase() -> void:
 	_check("F06-05 arrows move a category", dv._order == ["unit", "spell", "extra", "trap", "power"], str(dv._order))
 	var fo := gs.get_viewport().gui_get_focus_owner()
 	_check("F06-05 focus stays on the moved row's arrow", fo is Button and fo.tooltip_text == "Move Extra Deck up", str(fo))
-	# A real mouse drag: Power onto the top half of the Unit row.
+	# Owner answer 2026-10-17 §8: no drag-and-drop. The rows take no drag; Power goes to the top
+	# with its Up arrow (pressed four times, as a player would, the list rebuilding each time).
 	var rows := _find_rows(ov.overlay_box)
-	var src: Control = rows[4]
-	var dst: Control = rows[0]
-	# Through each row's canvas transform: the series modal may be scaled to fit the window,
-	# which get_global_rect() ignores.
-	var from: Vector2 = src.get_global_transform_with_canvas() * Vector2(60, src.size.y / 2.0)
-	var to: Vector2 = dst.get_global_transform_with_canvas() * Vector2(80, 6)
-	await _mouse(from, true)
-	var last := from
-	for i in 12:
-		var at := from.lerp(to, float(i + 1) / 12.0)
-		await _motion(at, at - last)
-		last = at
-	await _shot("draft_02_dragging")
-	await _mouse(to, false)
-	await _frames(10)
-	# Godot reads the REAL cursor while a drag is in progress, so a synthetic drag lands wherever the
-	# person using the machine has their mouse. When it missed, complete the drop through the
-	# row's own drop handlers at the intended point (the same calls a real drop makes).
-	if dv._order != ["power", "unit", "spell", "extra", "trap"]:
-		dv._order = ["unit", "spell", "extra", "trap", "power"]
-		ov.refresh()
+	_check("§8 draft rows are not draggable", not rows.is_empty() and rows.all(func(r): return not r.has_method("_get_drag_data")))
+	for i in 4:
+		var upb := _find_button(ov.overlay_box, "", "Move Power up")
+		if upb != null and not upb.disabled:
+			upb.pressed.emit()
 		await _frames(4)
-		rows = _find_rows(ov.overlay_box)
-		var data := {"draft_cat": "power"}
-		var at := Vector2(80, 6)
-		if rows[0]._can_drop_data(at, data):
-			rows[0]._drop_data(at, data)
-		await _frames(6)
-	_check("F06-05 drag and drop reorders", dv._order == ["power", "unit", "spell", "extra", "trap"], str(dv._order))
+	await _frames(6)
+	_check("F06-05 Up arrow moves Power to the top", dv._order == ["power", "unit", "spell", "extra", "trap"], str(dv._order))
+	var upb2 := _find_button(ov.overlay_box, "", "Move Power up")
+	_check("F06-05 top row's Up arrow is disabled", upb2 != null and upb2.disabled)
 	await _shot("draft_03_reordered")
 	# Choose basic unit.
 	dv._open_picker(host.series.view_for(0)["draft"])
@@ -318,13 +312,13 @@ func _find_picker(n: Node) -> BasicUnitPicker:
 	return null
 
 
-func _find_button(n: Node, prefix: String) -> Button:
+func _find_button(n: Node, prefix: String, tip: String = "") -> Button:
 	if n == null:
 		return null
-	if n is Button and (n as Button).text.begins_with(prefix):
+	if n is Button and (n as Button).text.begins_with(prefix) and (tip == "" or (n as Button).tooltip_text == tip):
 		return n
 	for c in n.get_children():
-		var f := _find_button(c, prefix)
+		var f := _find_button(c, prefix, tip)
 		if f != null:
 			return f
 	return null
