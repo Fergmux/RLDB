@@ -273,6 +273,8 @@ func test_g09_toast_appears_above_its_card_and_falls_back_to_the_top() -> void:
 	assert_float(card.position.y - tr.end.y).is_less(20.0)
 	assert_float(absf(tr.get_center().x - card.get_center().x)).is_less(2.0)
 	assert_int((gs.prompt.toast as GamePromptBanner.ToastLabel).pointer).is_equal(1)
+	var ptl := gs.prompt.toast as GamePromptBanner.ToastLabel
+	assert_float(ptl.pointer_x).is_equal_approx(card.get_center().x - tr.position.x, 1.5)
 	# A card no longer visible: the top of the board, as before.
 	gs.prompt.show_toast("Gone: no legal target.", UIStyle.GOLD_HI, 4.0, {"uid": 987654})
 	await await_idle_frame()
