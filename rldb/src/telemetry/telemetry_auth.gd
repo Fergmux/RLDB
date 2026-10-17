@@ -108,8 +108,9 @@ func _on_refresh(res: Dictionary) -> void:
 		_finish(OK_)
 		return
 	var kind := _classify(res)
-	if res.get("network_ok", false) and int(res["status"]) == 400:
+	if res.get("network_ok", false) and int(res["status"]) == 400 and _dead_token(d):
 		# Revoked / expired / deleted refresh token: start over with a new anonymous account.
+		# Any other 400 (bad API key, malformed request) keeps the identity and backs off.
 		_refresh_token = ""
 		uid = ""
 		_save()
@@ -125,6 +126,20 @@ func _finish(kind: String) -> void:
 	_waiters = []
 	for w in ws:
 		w.call(kind)
+
+
+## Secure Token errors that mean the refresh token can never work again.
+const DEAD_TOKEN_ERRORS := ["TOKEN_EXPIRED", "INVALID_REFRESH_TOKEN", "USER_DISABLED", "USER_NOT_FOUND", "INVALID_GRANT_TYPE"]
+
+
+static func _dead_token(d) -> bool:
+	if not (d is Dictionary) or not (d.get("error") is Dictionary):
+		return false
+	var msg := String(d["error"].get("message", ""))
+	for e in DEAD_TOKEN_ERRORS:
+		if msg.begins_with(e):
+			return true
+	return false
 
 
 static func _classify(res: Dictionary) -> String:

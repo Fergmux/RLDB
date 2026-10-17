@@ -204,7 +204,9 @@ func _emit_item(kind: String, doc_id: String, state: String, mode: String, body:
 		return                            # already final: duplicate completion signal
 	var created: int = int(prev["fields"]["created_at"]) if not prev.is_empty() else _now()
 	var seq: int = int(prev["fields"]["seq"]) if not prev.is_empty() else _next_seq()
-	var meta := {"schema_version": TelemetryConfig.SCHEMA_VERSION, "env": config.environment, "build": config.build_label(),
+	# An open record keeps the environment it was first queued under (owner answers section 7).
+	var env: String = String(prev["fields"].get("env", config.environment)) if not prev.is_empty() else config.environment
+	var meta := {"schema_version": TelemetryConfig.SCHEMA_VERSION, "env": env, "build": config.build_label(),
 		"content_hash": content_hash, "session_id": session_id, "created_at": created, "seq": seq, "updated_at": _now()}
 	var b := body.duplicate()
 	b["meta"] = meta
@@ -219,7 +221,7 @@ func _emit_item(kind: String, doc_id: String, state: String, mode: String, body:
 		_diag("record %s too large (%d)" % [doc_id, text.length()])
 		return
 	outbox.put({"id": doc_id, "kind": kind, "state": state, "created_at": created, "updated_at": _now(),
-		"fields": {"schema_version": TelemetryConfig.SCHEMA_VERSION, "kind": kind, "env": config.environment,
+		"fields": {"schema_version": TelemetryConfig.SCHEMA_VERSION, "kind": kind, "env": env,
 			"build": config.build_label(), "content_hash": content_hash, "mode": mode, "created_at": created, "seq": seq},
 		"body": text})
 	if state == "ready":
