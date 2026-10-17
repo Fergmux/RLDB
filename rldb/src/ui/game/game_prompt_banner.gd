@@ -22,6 +22,10 @@ const BANNER_SIDE_MAX_W := 300.0
 ## Headline size of the panel, and its size in the narrow side column (keeps titles to a few lines).
 const HEADLINE_PX := 21
 const HEADLINE_NARROW_PX := 17
+## G04: the headline of an exact-payment (Arcane) choice is a step smaller; with the cost circles
+## it is the whole instruction (no status line between them).
+const HEADLINE_PAY_PX := 19
+const HEADLINE_PAY_NARROW_PX := 16
 const BANNER_GAP := 12.0
 ## Breathing border period (s).
 const BANNER_BREATH := 1.4
@@ -30,6 +34,9 @@ const OPTION_H := 32
 ## (the full text is its tooltip and the right-click inspection).
 const SUBJECT_CARD := Vector2(64, 96)
 const SUBJECT_LINES := 6
+## The card strip in a short side column (compact): a smaller card and fewer rules lines.
+const SUBJECT_CARD_COMPACT := Vector2(44, 66)
+const SUBJECT_LINES_COMPACT := 2
 ## Type-choice buttons (F03): the icon box's left inset and its largest side (the left content
 ## margin of 42 px holds it with a gap before the label).
 const TYPE_ICON_X := 9.0
@@ -41,6 +48,34 @@ const TYPE_GRID_SEP := 6
 const TYPE_GRID_MAX_COLS := 3
 const TYPE_COMPACT_PX := 13
 const TYPE_COMPACT_LEFT := 38
+## G03: largest and smallest card of the response strip (attacker -> target, the responding card),
+## and the card size in the compact top-strip panel.
+const MENTION_CARD_MAX := 56.0
+const MENTION_CARD_MIN := 38.0
+const MENTION_CARD_TOP := Vector2(36, 54)
+## Card width of the strip in a short side column (compact), and the rules lines of a responding card.
+const MENTION_CARD_COMPACT := 42.0
+const RESPONSE_LINES := 2
+## Name size under a strip card, and the smallest it shrinks to so a long word fits.
+const MENTION_NAME_PX := 12
+const MENTION_NAME_MIN_PX := 9
+## Name size of a responding card beside its picture.
+const RESPONSE_NAME_PX := 14
+## Width of the arrow between an attacker and its target in the response strip.
+const MENTION_ARROW_W := 22.0
+## Option labels that decline a choice: always the last button, below the accepting ones (G03).
+const DECLINE_LABELS := ["Pass", "No", "Skip"]
+## Prompt kinds whose options are a vertical list (accept first, decline last) rather than a flow.
+const LIST_KINDS := ["trap_response", "confirm", "order"]
+## G09: gap between a card and the toast about it, the toast pointer's length, its fade-in (s), and
+## how long after a command a refusal is still taken to be about that command's card (ms).
+const TOAST_GAP := 10.0   # clears the ready badge over a board card
+const TOAST_POINTER := 7.0
+const TOAST_FADE := 0.12
+const STATUS_ANCHOR_MS := 1500
+## G03: caption under each card of the response strip, by role.
+const ROLE_CAPTIONS := {"attacker": "Attacker", "target": "Target", "summoned": "Summoned",
+	"activated": "Activated", "destroyed": "Destroyed", "direct": "Direct attack"}
 
 ## The host screen this component works on.
 var gs: GameScreen
@@ -62,12 +97,26 @@ var cost_pips: CostPips
 ## F05: the card the choice is about (image, name and rules text), hidden when there is none.
 var subject_box: PanelContainer
 var _has_subject := false
+## G04: the current choice pays an exact total (the cost circles replace the status line).
+var _exact_pay := false
 ## True while the panel sits in the top strip (the side column cannot hold it): it is then a
 ## compact bar over the opponent's hand, without the card strip, so it never hides their zones.
 var _in_top_strip := false
 var subject_card: CardWidget
 var subject_name: Label
 var subject_text: Label
+## G03: the cards a response prompt mentions: what it responds to (attacker -> target, or the card
+## summoned / activated / destroyed) and each of my cards that may respond. Hidden otherwise.
+var mention_box: PanelContainer
+## Row of the cards responded to, and the column of my responding cards.
+var mention_row: HBoxContainer
+var respond_col: VBoxContainer
+var _has_mentions := false
+## Whether the strip was built for the top strip (one row) or the side column.
+var _mentions_top := false
+## G03: option buttons of a response, yes / no or ordering prompt, one per row, the declining
+## option (Pass, No, Skip) always last, below the accepting ones.
+var banner_list: VBoxContainer
 ## Tray offering pile cards for a choice (a HousePanel).
 var tray: PanelContainer
 ## Container of the tray cards.
@@ -91,6 +140,9 @@ var banner_tag: Label
 var _banner_pid: int = -2
 var _wait_tween: Tween
 var _toast_game: int = -99
+## G09: the card of the last command sent and when (a refusal of it shows over that card).
+var _sent_uid: int = -1
+var _sent_ms: int = 0
 ## Full actor tag ("BEN · YOUR DECISION"); the narrow panel shows only "YOUR DECISION".
 var _tag_full: String = ""
 ## Prompt + column for which the side column proved too short (the panel then uses the top strip).
@@ -117,6 +169,7 @@ func build() -> void:
 	banner_tag = plate.title_label
 	banner_title = plate.add_headline("", 21)
 	_build_subject(bcol)
+	_build_mentions(bcol)
 	banner_sub = RichTextLabel.new()
 	banner_sub.bbcode_enabled = true
 	banner_sub.fit_content = true
@@ -141,6 +194,10 @@ func build() -> void:
 	type_grid.add_theme_constant_override("v_separation", 6)
 	type_grid.visible = false
 	bcol.add_child(type_grid)
+	banner_list = VBoxContainer.new()
+	banner_list.add_theme_constant_override("separation", 6)
+	banner_list.visible = false
+	bcol.add_child(banner_list)
 	banner_btns = HFlowContainer.new()
 	banner_btns.add_theme_constant_override("h_separation", 6)
 	banner_btns.add_theme_constant_override("v_separation", 6)
@@ -214,20 +271,27 @@ func subject_for(pd: Dictionary) -> Dictionary:
 	if not placing.is_empty():
 		return placing
 	var src := gs.details.find_card(int(pd.get("source_uid", -1)))
+	var sc: Variant = pd.get("source_card", {})
+	if src.is_empty() and sc is Dictionary and (sc as Dictionary).has("uid") and not (sc as Dictionary).get("hidden", false):
+		src = sc   # e.g. a resolving Spell, which no pile of the view lists
 	var prompt := String(pd.get("prompt", ""))
 	if not src.is_empty() and prompt.contains(String(src.get("name", "~"))):
 		return src
 	# The prompt names another card of mine (the Fusion unit being summoned with a Spell's
 	# materials, zone and stance): show that one. Longest name wins ("Dragon" vs "Ultimate Dragon").
+	# G03: also a unit or set card on either side of the Field the prompt names ("Move X to which
+	# zone?"); hidden cards never match (they carry no name).
 	var best := {}
-	var pv := gs.pv(gs.me())
-	for z in ["extra", "hand"]:
-		for c in pv.get(z, []):
-			if c == null or c.get("hidden", false):
-				continue
-			var nm := String(c.get("name", ""))
-			if nm != "" and prompt.contains(nm) and nm.length() > String(best.get("name", "")).length():
-				best = c
+	for p in 2:
+		var pv := gs.pv(p)
+		var zones := ["extra", "hand", "units", "backrow", "powers"] if p == gs.me() else ["units", "backrow", "powers"]
+		for z in zones:
+			for c in pv.get(z, []):
+				if c == null or c.get("hidden", false):
+					continue
+				var nm := String(c.get("name", ""))
+				if nm != "" and prompt.contains(nm) and nm.length() > String(best.get("name", "")).length():
+					best = c
 	return best if not best.is_empty() else src
 
 
@@ -244,6 +308,284 @@ func _render_subject(pd: Dictionary) -> void:
 	subject_text.text = txt if txt != "" else "No rules text."
 	subject_text.tooltip_text = txt
 	subject_box.tooltip_text = "%s\n%s" % [String(c.get("name", "")), txt]
+
+
+## G03: the response strip, in the card strip's style: a row of the cards responded to over a
+## column of my responding cards.
+func _build_mentions(col: VBoxContainer) -> void:
+	mention_box = PanelContainer.new()
+	var sb := UIStyle.flat(Color(0.045, 0.035, 0.025, 0.92), Color(UIStyle.BRONZE, 0.75), 1, 8)
+	sb.content_margin_left = 6
+	sb.content_margin_right = 6
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	mention_box.add_theme_stylebox_override("panel", sb)
+	mention_box.visible = false
+	mention_box.mouse_filter = Control.MOUSE_FILTER_PASS
+	col.add_child(mention_box)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mention_box.add_child(v)
+	mention_row = HBoxContainer.new()
+	mention_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	mention_row.add_theme_constant_override("separation", 4)
+	mention_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(mention_row)
+	respond_col = VBoxContainer.new()
+	respond_col.add_theme_constant_override("separation", 6)
+	respond_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(respond_col)
+
+
+## G03: the cards a response prompt `pd` mentions, in reading order: [{"role", "card"}] of what it
+## responds to (MatchView.event_cards, already redacted for this seat), then {"role": "response"}
+## for each card of mine that may respond (an "Activate" option). [] for any other prompt.
+static func mentions_for(pd: Dictionary) -> Array:
+	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) != "trap_response":
+		return []
+	var out: Array = []
+	for e in pd.get("mentions", []):
+		out.append(e)
+	for o in pd.get("options", []):
+		if o.has("card") and not is_decline(String(o.get("label", ""))):
+			out.append({"role": "response", "card": o["card"], "label": String(o["label"])})
+	return out
+
+
+## True for an option that declines the choice (Pass, Pass (no Trap can respond), No, Skip).
+static func is_decline(label: String) -> bool:
+	return label in DECLINE_LABELS or label.begins_with("Pass ")
+
+
+func _render_mentions(pd: Dictionary) -> void:
+	var ms := mentions_for(pd)
+	_has_mentions = not ms.is_empty()
+	_mentions_top = _in_top_strip
+	mention_box.visible = _has_mentions
+	GameUi.clear(mention_row)
+	GameUi.clear(respond_col)
+	if not _has_mentions:
+		return
+	var cause := ms.filter(func(e): return String(e.get("role", "")) != "response")
+	var resp := ms.filter(func(e): return String(e.get("role", "")) == "response")
+	for i in cause.size():
+		var e: Dictionary = cause[i]
+		if i > 0:
+			var arrow := MentionArrow.new()
+			arrow.attack = String(e.get("role", "")) in ["target", "direct"]
+			arrow.custom_minimum_size = Vector2(MENTION_ARROW_W, 0)
+			arrow.size_flags_vertical = Control.SIZE_FILL
+			arrow.tooltip_text = "attacks" if arrow.attack else ""
+			mention_row.add_child(arrow)
+		mention_row.add_child(_mention_figure(e))
+	if _in_top_strip:
+		# The compact top-strip panel: one row, the responding cards after a divider.
+		for e in resp:
+			if mention_row.get_child_count() > 0:
+				var div := ColorRect.new()
+				div.color = Color(UIStyle.BRONZE, 0.55)
+				div.custom_minimum_size = Vector2(1, 0)
+				div.size_flags_vertical = Control.SIZE_FILL
+				div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				div.set_meta("divider", true)
+				mention_row.add_child(div)
+			mention_row.add_child(_mention_figure(e))
+		resp = []
+	mention_row.visible = mention_row.get_child_count() > 0
+	if not resp.is_empty():
+		if not cause.is_empty():
+			var rule := ColorRect.new()
+			rule.color = Color(UIStyle.BRONZE, 0.55)
+			rule.custom_minimum_size = Vector2(0, 1)
+			rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			respond_col.add_child(rule)
+		var cap := UIStyle.label("YOUR RESPONSE" if resp.size() == 1 else "YOUR RESPONSES", 10, UIStyle.MUTED)
+		cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		respond_col.add_child(cap)
+		for e in resp:
+			respond_col.add_child(_response_row(e))
+	respond_col.visible = not resp.is_empty()
+
+
+## A card of the response strip with its role and name beneath (a direct attack is a plain token
+## for the defending player). Right-click a visible card to inspect it.
+func _mention_figure(e: Dictionary) -> Control:
+	var role := String(e.get("role", ""))
+	var fig := VBoxContainer.new()
+	fig.add_theme_constant_override("separation", 1)
+	fig.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fig.set_meta("role", role)
+	var c: Dictionary = e.get("card", {})
+	var nm := ""
+	if role == "direct":
+		var tok := DirectToken.new()
+		var p := int(e.get("p", gs.me()))
+		tok.who = "YOU" if p == gs.me() else String(gs.pv(p).get("name", "")).to_upper()
+		tok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		tok.tooltip_text = "A direct attack on %s" % ("you" if p == gs.me() else String(gs.pv(p).get("name", "")))
+		fig.add_child(tok)
+		nm = "Direct attack"
+	else:
+		var w := CardWidget.new().setup(c, "mini")
+		w.auto_hover = false
+		w.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		w.set_meta("mention", true)
+		if role == "response":
+			w.set_meta("response", true)
+		w.right_pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
+		var hidden := bool(c.get("hidden", false)) or not c.has("name")
+		nm = ("Face-down card" if String(c.get("zone", "")) == "backrow" else "Hidden card") if hidden else String(c.get("name", ""))
+		w.tooltip_text = "%s: %s" % [ROLE_CAPTIONS.get(role, role.capitalize()), nm] + ("" if hidden else "\nRight-click to inspect")
+		fig.add_child(w)
+	var cap := "TARGET" if role == "direct" else String(ROLE_CAPTIONS.get(role, role.capitalize())).to_upper()
+	var role_l := UIStyle.label(cap, 10, UIStyle.MUTED)
+	role_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	role_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fig.add_child(role_l)
+	# The name wraps onto a second line before it is cut (the full name is its tooltip).
+	var name_l := UIStyle.label(nm, MENTION_NAME_PX, UIStyle.GOLD_HI, true, true)
+	name_l.autowrap_mode = TextServer.AUTOWRAP_WORD     # between words only ("Radablast" never splits)
+	name_l.set_meta("name", true)
+	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_l.max_lines_visible = 2
+	name_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_l.tooltip_text = nm
+	name_l.mouse_filter = Control.MOUSE_FILTER_PASS
+	fig.add_child(name_l)
+	return fig
+
+
+## A card of mine that may respond: the card, its name and the start of its rules text (like the
+## card strip, F05).
+func _response_row(e: Dictionary) -> Control:
+	var c: Dictionary = e["card"]
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var w := CardWidget.new().setup(c, "mini")
+	w.auto_hover = false
+	w.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	w.set_meta("mention", true)
+	w.set_meta("response", true)
+	w.tooltip_text = "Right-click to inspect"
+	w.right_pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
+	row.add_child(w)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(v)
+	var nm := UIStyle.label(String(c.get("name", "")), 14, UIStyle.GOLD_HI, true, true)
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	nm.autowrap_mode = TextServer.AUTOWRAP_WORD
+	nm.set_meta("rname", true)
+	v.add_child(nm)
+	var txt := String(c.get("text", "")).strip_edges()
+	var t := UIStyle.label(txt if txt != "" else "No rules text.", 12, UIStyle.TEXT, true)
+	t.max_lines_visible = RESPONSE_LINES
+	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	t.tooltip_text = txt
+	t.mouse_filter = Control.MOUSE_FILTER_PASS
+	t.set_meta("rules", true)
+	v.add_child(t)
+	return row
+
+
+## G03: sizes the response strip for a panel `w` wide. The figures share the row (each card no
+## larger than MENTION_CARD_MAX, the names wrapping in the figure's share); `compact` (a short side
+## column) and the top strip use smaller cards, and the responding card's rules text then hides.
+func _fit_mentions(w: float, compact: bool = false) -> void:
+	if mention_box == null or not _has_mentions:
+		return
+	var content := w - (ctx_banner as HousePanel).chrome_size().x - 12.0
+	var figs := mention_row.get_children().filter(func(n): return n.has_meta("role"))
+	var arrows := mention_row.get_children().filter(func(n): return n is MentionArrow).size()
+	var divs := mention_row.get_children().filter(func(n): return n.has_meta("divider")).size()
+	var share := content
+	if not figs.is_empty():
+		share = floorf((content - arrows * (MENTION_ARROW_W + 4.0) - divs * 5.0) / figs.size()) - 4.0
+	var top_c := MENTION_CARD_TOP.x if _in_top_strip else (MENTION_CARD_COMPACT if compact else MENTION_CARD_MAX)
+	var cw := clampf(share - 8.0, MENTION_CARD_MIN, top_c)
+	var sz := Vector2(cw, roundf(cw * 1.5))
+	for a in mention_row.get_children():
+		if a is MentionArrow:
+			(a as MentionArrow).card_h = sz.y
+			(a as Control).queue_redraw()
+	for f in figs:
+		var fw := maxf(sz.x + 8.0, share)
+		(f as Control).custom_minimum_size.x = fw
+		for n in (f as Node).get_children():
+			if n is CardWidget:
+				GameUi.resize_card(n, sz)
+			elif n is DirectToken:
+				(n as Control).custom_minimum_size = sz
+			elif n is Label and n.has_meta("name"):
+				_fit_name(n as Label, fw)
+	var rsz := Vector2(MENTION_CARD_COMPACT, MENTION_CARD_COMPACT * 1.5) if compact else Vector2(48, 72)
+	for row in respond_col.get_children():
+		for n in (row as Node).get_children():
+			if n is CardWidget:
+				GameUi.resize_card(n, rsz)
+			elif n is VBoxContainer:
+				for l in (n as Node).get_children():
+					if l.has_meta("rname"):
+						_fit_name(l as Label, content - rsz.x - 8.0, RESPONSE_NAME_PX)
+					if l.has_meta("rules"):
+						(l as Label).visible = not compact
+
+
+## A strip name in the largest size (MENTION_NAME_PX down to MENTION_NAME_MIN_PX) at which its
+## longest word fits the figure width `w`, so a name wraps between words instead of being cut.
+static func _fit_name(l: Label, w: float, start_px: int = MENTION_NAME_PX) -> void:
+	var font := l.get_theme_font("font")
+	var px := start_px
+	var longest := 0.0
+	while px > MENTION_NAME_MIN_PX:
+		longest = 0.0
+		for word in l.text.split(" ", false):
+			longest = maxf(longest, font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x)
+		if longest <= w - 2.0:
+			break
+		px -= 1
+	l.add_theme_font_size_override("font_size", px)
+
+
+## The arrow from an attacker to its target in the response strip (hostile red, like the board's
+## attack arrow); between other cards a plain bronze chevron.
+class MentionArrow extends Control:
+	var attack := true
+	## Height of the cards beside it (the arrow sits on their middle, above the captions).
+	var card_h := 0.0
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_PASS
+
+	func _draw() -> void:
+		var col := GameTargeting.HOSTILE_COLOR if attack else Color(UIStyle.BRONZE, 0.9)
+		var y := card_h / 2.0 if card_h > 0.0 else size.y * 0.38
+		var x0 := 2.0
+		var x1 := size.x - 2.0
+		draw_line(Vector2(x0, y), Vector2(x1 - 6.0, y), col, 3.0, true)
+		draw_colored_polygon(PackedVector2Array([Vector2(x1, y), Vector2(x1 - 9.0, y - 6.0), Vector2(x1 - 9.0, y + 6.0)]), col)
+
+
+## The defending player of a direct attack, in the strip in place of a target card.
+class DirectToken extends Control:
+	var who := "YOU"
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_PASS
+
+	func _draw() -> void:
+		var r := Rect2(Vector2.ZERO, size)
+		var sb := UIStyle.flat(Color(0.12, 0.05, 0.04, 0.95), GameTargeting.HOSTILE_COLOR, 2, 6)
+		draw_style_box(sb, r)
+		var f := UIStyle.font_display(600)
+		var fs := 12 if size.x >= 44.0 else 10
+		var tw := f.get_string_size(who, HORIZONTAL_ALIGNMENT_CENTER, -1, fs).x
+		var txt := who if tw <= size.x - 6.0 else "YOU"
+		draw_string(f, Vector2(3.0, size.y / 2.0 + fs * 0.35), txt, HORIZONTAL_ALIGNMENT_CENTER, size.x - 6.0, fs, UIStyle.TEXT)
 
 
 ## Builds the opponent-is-deciding notice and the toast (hidden).
@@ -274,7 +616,10 @@ func build_notices() -> void:
 	wrow.add_child(rune)
 	wrow.add_child(wait_label)
 	gs.add_child(wait_chip)
-	toast = UIStyle.label("", 15, UIStyle.BAD, true)
+	var tl := ToastLabel.new()
+	tl.follow = place_toast
+	toast = tl
+	toast.add_theme_color_override("font_color", UIStyle.BAD)
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	toast.add_theme_constant_override("outline_size", 4)
@@ -394,12 +739,16 @@ func _render_banner() -> void:
 	GameUi.clear(banner_btns)
 	GameUi.clear(banner_flow)
 	banner_flow.visible = false
+	GameUi.clear(banner_list)
+	banner_list.visible = false
 	GameUi.clear(type_grid)
 	type_grid.visible = false
+	_exact_pay = false
 	if not on:
 		return
 	banner_title.text = String(pd["prompt"])
 	_render_subject(pd)
+	_render_mentions(pd)
 	_tag_full = ("%s · your decision" % String(gs.pv(gs.me())["name"])).to_upper()
 	banner_tag.text = _tag_full
 	var pick := gs.selection.board_targeting()
@@ -413,56 +762,98 @@ func _render_banner() -> void:
 		if pd["kind"] == "attack_target":
 			how = "Hover a target to preview the battle, click to attack."
 	elif pd["kind"] == "trap_response":
-		how = "Your opponent is waiting: activate a Trap or pass."
+		# G03: with my responding cards shown under what they answer, the buttons say the rest.
+		var responders := mentions_for(pd).filter(func(e): return String(e.get("role", "")) == "response")
+		how = "" if not responders.is_empty() else ("Your opponent is waiting: activate a Trap or pass." if _has_activate(pd) else "Your opponent is waiting: pass to continue.")
 	elif int(pd["max"]) > 1:
 		how = _multi_status(pd)
 	_banner_how = how
 	var ep := exact_payment(pd, gs.multi)
-	cost_pips.visible = not ep.is_empty()
+	_exact_pay = not ep.is_empty()
+	cost_pips.visible = _exact_pay
 	if not ep.is_empty():
 		cost_pips.set_payment(int(ep["need"]), ep["costs"])
 		cost_pips.tooltip_text = exact_status(ep)
 	update_banner_sub()
-	# Card/zone options are picked on the board; every other option is a button here.
+	# Card/zone options are picked on the board; every other option is a button here. G03: a
+	# response, yes / no or ordering prompt lists its options one per row, and the declining option
+	# (Pass, No, Skip) always comes last, below the accepting ones (Activate, Yes, Confirm).
 	var row: Control = banner_btns if pick else banner_flow
 	var type_choice := is_type_choice(pd)
 	if type_choice and not pick:
 		row = type_grid
+	elif not pick and (String(pd["kind"]) in LIST_KINDS or _has_decline(pd)):
+		row = banner_list
+	var declines: Array[Button] = []
 	for o in pd["options"]:
 		if pick and (o.has("ref") or o.has("slot") or o.has("card")):
 			continue
 		var idx: int = o["i"]
 		var chosen: bool = idx in gs.multi
 		var label := ("✓ " if chosen else "") + String(o["label"])
+		var decline := is_decline(String(o["label"]))
 		var b: Button
 		if type_choice:
 			b = type_button(String(o["label"]), 15)
 			b.set_meta("type_choice", String(o["label"]))
-		elif pd["kind"] == "attack_target" or (not pick and String(o["label"]).begins_with("Activate")):
+		elif pd["kind"] == "attack_target" or (not pick and not decline and (String(o["label"]).begins_with("Activate") or (pd["kind"] == "confirm" and String(o["label"]) == "Yes"))):
 			b = UIStyle.primary_button(label, 14)
 		else:
 			b = UIStyle.button(label, 14)
 		b.custom_minimum_size = Vector2(0, OPTION_H + (6 if type_choice else 0))
+		b.set_meta("option", idx)
 		b.pressed.connect(gs.selection.pick_option.bind(idx))
 		b.mouse_entered.connect(func(): gs.targeting.hover_opt = idx)
 		b.mouse_exited.connect(func(): if gs.targeting.hover_opt == idx: gs.targeting.hover_opt = -1)
+		if row == banner_list:
+			list_button(b, String(o["label"]))
+		if decline:
+			b.set_meta("decline", true)
+			declines.append(b)
+			continue
 		row.add_child(b)
-	if not pick and row.get_child_count() > 0:
-		row.visible = true
-	if type_choice:
-		even_type_widths(row)
 	if int(pd["max"]) > 1:
 		var c := UIStyle.primary_button("Confirm", 14)
 		c.custom_minimum_size = Vector2(0, OPTION_H)
 		c.disabled = MatchView.multi_pick_error(pd, gs.multi) != ""   # count and exact Arcane total (F03-04)
 		c.pressed.connect(gs.selection.confirm_multi)
 		banner_btns.add_child(c)
+	for b in declines:
+		row.add_child(b)
+	if not pick and row.get_child_count() > 0:
+		row.visible = true
+	if type_choice:
+		even_type_widths(row)
 	if pd["cancellable"] and not gs.view.has("tutorial"):   # a forced tutorial step has no Cancel button
 		var x := UIStyle.button("Cancel", 14)
 		x.custom_minimum_size = Vector2(0, OPTION_H)
 		x.pressed.connect(gs.selection.cancel)
 		banner_btns.add_child(x)
 	place_banner()
+
+
+## True when one of the prompt's options activates a card ("Activate ...").
+static func _has_activate(pd: Dictionary) -> bool:
+	for o in pd.get("options", []):
+		if String(o.get("label", "")).begins_with("Activate"):
+			return true
+	return false
+
+
+## True when one of the prompt's options declines it (Pass, No, Skip).
+static func _has_decline(pd: Dictionary) -> bool:
+	for o in pd.get("options", []):
+		if is_decline(String(o.get("label", ""))):
+			return true
+	return false
+
+
+## A full-width row button of the option list (G03): its label wraps instead of widening the panel,
+## and the full label is its tooltip.
+static func list_button(b: Button, full: String) -> void:
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.tooltip_text = full
 
 
 ## Where the banner goes (F03-25). Preferred: the free column left of the board below the
@@ -513,6 +904,9 @@ func _set_top_strip(on: bool) -> void:
 	_in_top_strip = on
 	if subject_box != null:
 		subject_box.visible = _has_subject and not on
+	# G03: the response strip is laid out differently there (one row); rebuild it on a change.
+	if mention_box != null and _has_mentions and _mentions_top != on:
+		_render_mentions(gs.pending())
 
 
 ## Once the panel has settled (HousePanel.fit takes a few frames), a side-column panel taller than
@@ -558,16 +952,25 @@ func _size_banner(w: float, compact: bool = false) -> void:
 func _fit_subject(w: float, compact: bool = false) -> void:
 	if subject_box == null or subject_text == null:
 		return
+	_fit_mentions(w, compact)
 	var narrow := w < BANNER_NARROW_W or ctx_banner.position.y < 20.0 or compact
 	subject_text.max_lines_visible = SUBJECT_LINES_NARROW if narrow else SUBJECT_LINES
 	_fit_type_buttons(w - (ctx_banner as HousePanel).chrome_size().x, compact)
 	var row := subject_card.get_parent()
+	# A short column (compact): a smaller card beside two lines of text, so the panel can stay in
+	# the side column instead of falling back to the top strip over the opponent's zones.
+	GameUi.resize_card(subject_card, SUBJECT_CARD_COMPACT if compact else SUBJECT_CARD)
+	if compact:
+		subject_text.max_lines_visible = SUBJECT_LINES_COMPACT
 	if row is BoxContainer:
-		(row as BoxContainer).vertical = w < BANNER_NARROW_W
+		(row as BoxContainer).vertical = w < BANNER_NARROW_W and not compact
 	# The narrow column: a smaller headline and the tag without the player's name, so neither
 	# wraps word by word nor clips (UI review, 1600x900).
 	var thin := w < BANNER_NARROW_W
-	banner_title.add_theme_font_size_override("font_size", HEADLINE_NARROW_PX if thin or compact else HEADLINE_PX)
+	var px := HEADLINE_NARROW_PX if thin or compact else HEADLINE_PX
+	if _exact_pay:
+		px = HEADLINE_PAY_NARROW_PX if thin or compact else HEADLINE_PAY_PX
+	banner_title.add_theme_font_size_override("font_size", px)
 	if _tag_full != "":
 		banner_tag.text = "YOUR DECISION" if thin else _tag_full
 		banner_tag.tooltip_text = _tag_full
@@ -725,6 +1128,14 @@ func update_banner_sub() -> void:
 		# breakdown stays in the tooltip.
 		var col: Color = GameScreen.VERDICT_COLORS.get(pv.verdict, UIStyle.TEXT)
 		t = "[b][color=#%s]%s[/color][/b]" % [col.to_html(false), pv.target.replace("[", "(")]
+	# G04: an exact payment reads from its headline and circles alone; the status stays the circles'
+	# tooltip. A battle preview (never during a payment) would still show. A prompt with nothing to
+	# say here (yes / no, a mode) leaves no empty line either.
+	var shown := pv.text != "" or not (_exact_pay or _banner_how == "")
+	if banner_sub.visible != shown:
+		banner_sub.visible = shown
+		if ctx_banner != null and ctx_banner.visible:
+			place_banner()
 	if banner_sub.text != t:
 		banner_sub.text = t
 		banner_sub.tooltip_text = pv.text if pv.text != "" else _banner_how
@@ -849,37 +1260,138 @@ func show_wait(text: String) -> void:
 		_wait_tween.tween_property(wait_chip, "modulate:a", 1.0, 0.9).set_trans(Tween.TRANS_SINE)
 
 
-## Short non-blocking message over the board; it never waits for input.
-func show_toast(text: String, col: Color, secs: float) -> void:
-	var area := gs.play_area
+
+## Short non-blocking message over the board; it never waits for input. G09: with an `anchor`
+## ({"uid": card uid, "at": {p, zone, slot}}) about a card, it appears just above that card on the
+## board, in the Hand or in the pile tray (below it when there is no room above), kept on screen,
+## and follows the card while shown; it falls back to the top of the board when the card cannot be
+## found (no longer visible).
+func show_toast(text: String, col: Color, secs: float, anchor: Dictionary = {}) -> void:
 	toast.text = text
 	toast.visible = text != ""
 	toast.size = Vector2.ZERO
-	toast.position = Vector2(area.position.x + (area.size.x - minf(area.size.x - 120.0, toast.get_combined_minimum_size().x)) / 2.0, GameScreen.TOP_H + 8.0)
 	toast.add_theme_color_override("font_color", col)
+	(toast as ToastLabel).anchor = anchor
+	place_toast()
+	if toast.visible and not UIStyle.reduce_motion:
+		toast.modulate.a = 0.0
+		gs.create_tween().tween_property(toast, "modulate:a", 1.0, UIStyle.dur(TOAST_FADE))
+	else:
+		toast.modulate.a = 1.0
 	var t := gs.get_tree().create_timer(secs)
 	t.timeout.connect(func():
 		# The screen (and its toast) may be gone by now: a SceneTree timer outlives it.
 		if is_instance_valid(toast) and toast.text == text:
 			toast.text = ""
-			toast.visible = false)
+			toast.visible = false
+			(toast as ToastLabel).anchor = {})
 
 
-## Hides the toast at once (a command was sent).
+## Places the toast over its card (G09) or, without one, centred at the top of the board.
+func place_toast() -> void:
+	if toast == null or not toast.visible:
+		return
+	var tl := toast as ToastLabel
+	var area := gs.play_area
+	var sz := toast.get_combined_minimum_size()
+	toast.size = sz
+	var r := toast_anchor_rect(tl.anchor)
+	if r.size == Vector2.ZERO:
+		tl.pointer = 0
+		toast.position = Vector2(area.position.x + (area.size.x - minf(area.size.x - 120.0, sz.x)) / 2.0, GameScreen.TOP_H + 8.0).round()
+		return
+	var inv := gs.get_global_transform().affine_inverse()
+	var lr := Rect2(inv * r.position, inv * r.end - inv * r.position)
+	var view := gs.get_rect().size
+	var gap := TOAST_GAP + TOAST_POINTER
+	var y := lr.position.y - gap - sz.y
+	tl.pointer = 1                               # pointing down at the card under it
+	if y < GameScreen.TOP_H + 4.0:
+		y = lr.end.y + gap                       # no room above (the opponent's top row): below it
+		tl.pointer = -1
+	y = clampf(y, 4.0, view.y - sz.y - 4.0)
+	var x := clampf(lr.get_center().x - sz.x / 2.0, 8.0, maxf(8.0, view.x - sz.x - 8.0))
+	toast.position = Vector2(x, y).round()
+	tl.pointer_x = clampf(lr.get_center().x - toast.position.x, 12.0, sz.x - 12.0)
+	toast.queue_redraw()
+
+
+## Global rect of the card a toast anchor names, or Rect2() when it is not visible: the card by uid
+## (board, Hand, pile tray), else the board zone it was in.
+func toast_anchor_rect(anchor: Dictionary) -> Rect2:
+	if anchor.is_empty():
+		return Rect2()
+	var uid := int(anchor.get("uid", -1))
+	if uid != -1:
+		var slots := gs.board.slots
+		for k in slots:
+			var w: CardWidget = slots[k]["widget"]
+			if w.visible and not w.view.get("hidden", false) and int(w.view.get("uid", -9)) == uid:
+				return (slots[k]["holder"] as Control).get_global_rect()
+		var items := gs.hand.items
+		if items.has(uid) and (items[uid]["holder"] as Control).is_visible_in_tree():
+			return (items[uid]["holder"] as Control).get_global_rect()
+		if tray != null and tray.visible:
+			for w in _tray_widgets():
+				if int(w.view.get("uid", -9)) == uid:
+					return w.get_global_rect()
+	var at: Dictionary = anchor.get("at", {})
+	if not at.is_empty():
+		var it: Dictionary = gs.fx_slot_item(int(at["p"]), String(at["zone"]), int(at["slot"]))
+		if not it.is_empty():
+			var w2: CardWidget = it["widget"]
+			# Only while a card is still in that zone (the uid lookup above failed: it may be hidden).
+			if w2.visible and (uid == -1 or int(w2.view.get("uid", uid)) == uid):
+				return (it["holder"] as Control).get_global_rect()
+	return Rect2()
+
+
+func _tray_widgets() -> Array:
+	var out := []
+	var stack: Array = [tray_box]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		for c in n.get_children():
+			if c is CardWidget:
+				out.append(c)
+			else:
+				stack.append(c)
+	return out
+
+
+## Hides the toast at once (a command was sent). G09: remembers the card the command is about,
+## so a refusal of it (on_status) appears over that card.
 func hide_toast() -> void:
 	toast.text = ""
 	toast.visible = false
+	(toast as ToastLabel).anchor = {}
+	_sent_uid = gs.acting_uid
+	_sent_ms = Time.get_ticks_msec()
 
 
-## A rejected command / status message from the seat client.
+## A rejected command / status message from the seat client. A refusal that answers a card's
+## command just sent shows over that card (G09); connection messages stay at the top.
 func on_status(text: String) -> void:
 	if text != "":
 		Sfx.play("deny")
-	show_toast(text, UIStyle.BAD, 4.0)
+	var anchor := {}
+	if _sent_uid != -1 and Time.get_ticks_msec() - _sent_ms <= STATUS_ANCHOR_MS and not _is_connection_text(text):
+		anchor = {"uid": _sent_uid}
+	show_toast(text, UIStyle.BAD, 4.0, anchor)
+
+
+## True for a session / connection message (never about a card).
+static func _is_connection_text(text: String) -> bool:
+	var t := text.to_lower()
+	for w in ["connect", "host", "lobby", "steam", "reconnect"]:
+		if t.contains(w):
+			return true
+	return false
 
 
 ## F02-09: log entries flagged as toasts (e.g. a triggered effect with no legal target)
 ## also show briefly over the board. Only new entries of the current game; never on attach.
+## G09: over the card the entry is about when every shown entry is about the same card.
 func show_log_toasts() -> void:
 	var mv := gs.mv
 	if mv.is_empty():
@@ -896,8 +1408,58 @@ func show_log_toasts() -> void:
 	var shown := []
 	for e in entries:
 		if int(e["seq"]) > seen_toast_seq and e.get("toast", false) and String(e["text"]) != "":
-			shown.append(String(e["text"]))
+			shown.append(e)
 	seen_toast_seq = maxi(seen_toast_seq, maxseq)
-	if not shown.is_empty():
-		Sfx.play("notice")
-		show_toast("  ·  ".join(shown.slice(maxi(0, shown.size() - 2))), UIStyle.GOLD_HI, 4.5)
+	if shown.is_empty():
+		return
+	shown = shown.slice(maxi(0, shown.size() - 2))
+	var anchor := log_toast_anchor(shown)
+	Sfx.play("notice")
+	show_toast("  ·  ".join(shown.map(func(e): return String(e["text"]))), UIStyle.GOLD_HI, 4.5, anchor)
+
+
+## The card shared by toast log rows `rows` ({"uid", "at"}), or {} when they name different cards
+## or none.
+static func log_toast_anchor(rows: Array) -> Dictionary:
+	var anchor := {}
+	for e in rows:
+		var a := {}
+		if e.has("toast_uid"):
+			a["uid"] = int(e["toast_uid"])
+		if not (e.get("toast_at", {}) as Dictionary).is_empty():
+			a["at"] = e["toast_at"]
+		if a.is_empty():
+			return {}
+		if not anchor.is_empty() and (int(anchor.get("uid", -1)) != int(a.get("uid", -1)) or str(anchor.get("at", {})) != str(a.get("at", {}))):
+			return {}
+		anchor = a
+	return anchor
+
+
+## The toast label (G09): follows its card every frame while shown and draws a small pointer
+## toward it.
+class ToastLabel extends Label:
+	## {"uid", "at"} of the card the toast is about, or {}.
+	var anchor: Dictionary = {}
+	## 1: pointing down (the toast is above its card), -1: pointing up, 0: no pointer.
+	var pointer: int = 0
+	## Pointer position along the toast (local x).
+	var pointer_x: float = 0.0
+	## Re-places the toast (the banner's place_toast).
+	var follow: Callable
+
+	func _process(_d: float) -> void:
+		if visible and not anchor.is_empty() and follow.is_valid():
+			follow.call()
+
+	func _draw() -> void:
+		if pointer == 0:
+			return
+		var h := GamePromptBanner.TOAST_POINTER
+		var y := size.y if pointer == 1 else 0.0
+		var tip := Vector2(pointer_x, y + h * pointer)
+		var fill := Color(0.06, 0.05, 0.045, 0.94)
+		var base := y - 1.5 * pointer             # over the plate's border, so the pointer joins it
+		var pts := PackedVector2Array([Vector2(pointer_x - 7.0, base), Vector2(pointer_x + 7.0, base), tip])
+		draw_colored_polygon(pts, fill)
+		draw_polyline(PackedVector2Array([pts[0], tip, pts[1]]), Color(UIStyle.GOLD, 0.7), 1.0, true)

@@ -235,6 +235,35 @@ static func _pending_view(m: MatchEngine, viewer: int) -> Dictionary:
 		out["total_exact"] = pd.get("total_exact", false)
 	if pd["kind"] == "trap_response" and pd.has("event"):
 		out["cause"] = _cause_refs(m, pd["event"])
+		out["mentions"] = event_cards(m, pd["event"], viewer)
+	# The card itself, so the input panel can show it wherever it is (a resolving Spell is in no
+	# pile the viewer's player view lists). Given only with source_uid, i.e. when visible.
+	if out.has("source_uid"):
+		out["source_card"] = card_view(m, int(out["source_uid"]), viewer)
+	return out
+
+
+## G03: the cards a response window is about, in reading order, each {"role", "card"}: the attacker
+## and its target ({"role": "direct", "p": the defending seat} for a direct attack), or the card
+## summoned / activated / destroyed. A card the viewer may not see is its hidden view (the back,
+## never its identity), so the panel shows it without revealing it.
+static func event_cards(m: MatchEngine, ev: Dictionary, viewer: int) -> Array:
+	var out := []
+	var add := func(uid: int, role: String) -> void:
+		if uid != -1 and m.cards.has(uid):
+			out.append({"role": role, "card": card_view(m, uid, viewer)})
+	var what := String(ev.get("name", ""))
+	if what == "attack":
+		add.call(int(ev.get("attacker", -1)), "attacker")
+		var t := int(ev.get("target", -1))
+		if t != -1:
+			add.call(t, "target")
+		else:
+			out.append({"role": "direct", "p": m.opp(int(ev.get("player", 0)))})
+	elif what == "destroyed":
+		add.call(int(ev.get("self", -1)), "destroyed")
+	elif what in ["summon", "activate"]:
+		add.call(int(ev.get("card", -1)), "summoned" if what == "summon" else "activated")
 	return out
 
 
@@ -333,6 +362,13 @@ static func log_for(m: MatchEngine, viewer: int, since: int = 0) -> Array:
 			var row := {"seq": e["seq"], "turn": e["turn"], "text": text, "fx": redact_fx(e.get("fx", []), viewer)}
 			if e.get("toast", false):
 				row["toast"] = true
+				# G09: the card the toast is about, so it can appear over that card: its board position
+				# when the entry was made (public), and its uid while this seat may see the card.
+				if not (e.get("toast_at", {}) as Dictionary).is_empty():
+					row["toast_at"] = e["toast_at"]
+				var tu := int(e.get("toast_src", -1))
+				if m.cards.has(tu) and can_see(m, tu, viewer):
+					row["toast_uid"] = tu
 			out.append(row)
 		elif e["pub"] != "" and not e.get("fx", []).is_empty():
 			# Presentation-only events carry public board positions/amounts, never identities.

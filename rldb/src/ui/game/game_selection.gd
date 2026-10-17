@@ -191,7 +191,8 @@ func pick_option(i: int) -> void:
 					o = oo
 			if o.is_empty() or not GamePromptBanner.payable_option(pd, o) or GamePromptBanner.would_overpay(pd, gs.multi, i):
 				Sfx.play("deny")
-				gs.prompt.show_toast("Cannot overpay", UIStyle.BAD, 2.0)
+				# G09: over the material that was refused.
+				gs.prompt.show_toast("Cannot overpay", UIStyle.BAD, 2.0, {"uid": int(o.get("card", {}).get("uid", -1))} if not o.is_empty() else {})
 				return
 		if i in gs.multi:
 			gs.multi.erase(i)
