@@ -18,3 +18,4 @@ Run everything from `rldb/`. `<godot>` is `/c/Users/fergm/Downloads/Godot_v4.6.1
 | 17 Oct | Unauthenticated REST read of Firestore before any change | 404 NOT_FOUND: the database was open (test rules) |
 | 17 Oct | Interim deny-all rules deployed; the same request repeated | 403 PERMISSION_DENIED |
 | 17 Oct | A7 bot branch: full suite | 621/621 (agent run) |
+| 17 Oct | Integrated suite after A1, A2, A4, A5, A6 and A7 | 825/825; one SCRIPT ERROR (toast timer on a freed label) fixed |
