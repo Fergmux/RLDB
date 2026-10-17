@@ -16,6 +16,7 @@ var selected: bool = false:
 var _hover := 0.0
 var _box: StyleBoxFlat
 var _compact := false
+var _title: Label
 
 
 ## `kind` is "add", "remove", "swap" or a card category ("unit", "spell", ...). `compact` lays the
@@ -44,6 +45,7 @@ func _init(title: String = "", caption: String = "", color: Color = UIStyle.GOLD
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	box.add_child(ic)
 	var tl := UIStyle.label(title, 15 if compact else 17, UIStyle.TEXT, false, true)
+	_title = tl
 	tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if compact else HORIZONTAL_ALIGNMENT_CENTER
 	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -56,6 +58,11 @@ func _init(title: String = "", caption: String = "", color: Color = UIStyle.GOLD
 		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(cl)
+
+
+## Overrides the title's font size (narrow tiles, e.g. the basic-unit pickers).
+func set_title_size(px: int) -> void:
+	_title.add_theme_font_size_override("font_size", px)
 
 
 func _gui_input(event: InputEvent) -> void:

@@ -201,8 +201,11 @@ func _draft_phase() -> void:
 	var from := src.get_global_rect().position + Vector2(60, src.size.y / 2.0)
 	var to := dst.get_global_rect().position + Vector2(80, 6)
 	await _mouse(from, true)
+	var last := from
 	for i in 12:
-		await _motion(from.lerp(to, float(i + 1) / 12.0))
+		var at := from.lerp(to, float(i + 1) / 12.0)
+		await _motion(at, at - last)
+		last = at
 	await _shot("draft_02_dragging")
 	await _mouse(to, false)
 	await _frames(10)
@@ -256,6 +259,7 @@ func _draft_phase() -> void:
 	host.handle(host.series.game.active, {"t": "concede"})
 	await _frames(6)
 	_view_seat(0)
+	await get_tree().create_timer(5.0).timeout     # the victory / defeat presentation plays first
 	await _frames(6)
 	ov.rewards.mode = "basic"
 	ov.refresh()
@@ -320,10 +324,13 @@ func _mouse(at: Vector2, down: bool) -> void:
 	await _frames(2)
 
 
-func _motion(at: Vector2) -> void:
+## Mouse motion with the left button held; `rel` feeds the viewport's drag threshold.
+func _motion(at: Vector2, rel: Vector2) -> void:
 	var ev := InputEventMouseMotion.new()
 	ev.position = at
 	ev.global_position = at
+	ev.relative = rel
+	ev.screen_relative = rel
 	ev.button_mask = MOUSE_BUTTON_MASK_LEFT
 	get_viewport().push_input(ev)
 	await _frames(2)

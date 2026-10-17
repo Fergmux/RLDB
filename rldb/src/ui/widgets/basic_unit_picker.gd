@@ -10,9 +10,15 @@ extends HBoxContainer
 ## Emitted when the chosen Type or Race changes.
 signal changed(type: String, race: String)
 
-## Preview card size (the reward panel's preview size).
+## Preview card size, tile size and tile title size: roomy (the Choose basic unit popup) and
+## narrow (the 740 px rewards modal). Sized so the longest Type, "Lightning", is not clipped.
 const PREVIEW := Vector2(170, 255)
-## Type and Race tiles per row (fits the 740 px rewards modal).
+const PREVIEW_NARROW := Vector2(150, 225)
+const TILE := Vector2(166, 46)
+const TILE_NARROW := Vector2(148, 44)
+const TITLE_PX := 15
+const TITLE_PX_NARROW := 13
+## Type and Race tiles per row.
 const TYPE_COLUMNS := 3
 
 ## The chosen Type and Race.
@@ -26,11 +32,15 @@ var _race_tiles: Dictionary = {}
 var _preview: CardWidget
 var _name: Label
 var _marks: Dictionary = {}
+var _narrow := false
+var _card := PREVIEW
 
 
 ## `types` / `races`: the choices in display order; `options`: card summaries of every basic unit;
-## `marked`: ids to tag as "in your deck" beside the preview name.
-func _init(types: Array, races: Array, opts: Array, cur_type: String, cur_race: String, marked: Array = []) -> void:
+## `marked`: ids to tag as "in your deck" beside the preview name; `narrow` fits a narrow modal.
+func _init(types: Array, races: Array, opts: Array, cur_type: String, cur_race: String, marked: Array = [], narrow: bool = false) -> void:
+	_narrow = narrow
+	_card = PREVIEW_NARROW if narrow else PREVIEW
 	options = opts
 	type = cur_type
 	race = cur_race
@@ -70,7 +80,7 @@ func _init(types: Array, races: Array, opts: Array, cur_type: String, cur_race: 
 	right.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	add_child(right)
 	var holder := CenterContainer.new()
-	holder.custom_minimum_size = PREVIEW + Vector2(12, 12)
+	holder.custom_minimum_size = _card + Vector2(12, 12)
 	right.add_child(holder)
 	_preview = CardWidget.new()
 	_preview.auto_hover = false
@@ -78,7 +88,7 @@ func _init(types: Array, races: Array, opts: Array, cur_type: String, cur_race: 
 	holder.add_child(_preview)
 	_name = UIStyle.label("", 15, UIStyle.GOLD_HI, false, true)
 	_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_name.custom_minimum_size = Vector2(PREVIEW.x + 12, 0)
+	_name.custom_minimum_size = Vector2(_card.x + 12, 0)
 	_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(_name)
 	_sync()
@@ -115,7 +125,7 @@ func _sync() -> void:
 		_race_tiles[k].selected = k == race
 	var c := chosen()
 	_preview.setup(MatchView.summary_view(c) if not c.is_empty() else null, "big")
-	GameUi.resize_card(_preview, PREVIEW)
+	GameUi.resize_card(_preview, _card)
 	if c.is_empty():
 		_name.text = "No such basic unit"
 	else:
@@ -128,7 +138,8 @@ func _caption(text: String) -> Label:
 
 func _tile(title: String, col: Color, kind: String) -> ChoiceTile:
 	var t := ChoiceTile.new(title, "", col, kind, true)
-	t.custom_minimum_size = Vector2(118, 44)
+	t.custom_minimum_size = TILE_NARROW if _narrow else TILE
+	t.set_title_size(TITLE_PX_NARROW if _narrow else TITLE_PX)
 	t.focus_mode = Control.FOCUS_ALL
 	t.tooltip_text = title
 	return t

@@ -383,10 +383,15 @@ func _draft_setup(box: VBoxContainer) -> void:
 	cols.add_theme_constant_override("separation", 16)
 	box.add_child(cols)
 	cols.add_child(_basic_plate(dr))
-	var op := _order_plate(dr)
-	op.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cols.add_child(op)
-	box.add_child(_sequence_plate(dr))
+	# The order and the sequence it gives share the right-hand column, beside the basic unit.
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 12)
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cols.add_child(right)
+	right.add_child(_order_plate(dr))
+	var sq := _sequence_plate(dr)
+	sq.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right.add_child(sq)
 	var foot := VBoxContainer.new()
 	foot.add_theme_constant_override("separation", 6)
 	box.add_child(foot)

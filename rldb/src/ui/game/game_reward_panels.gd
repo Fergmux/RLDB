@@ -403,7 +403,7 @@ func _basic_change_panel(r: Dictionary, order: Array, counts: Dictionary) -> Con
 	now.add_child(cap)
 	for c in basics:
 		now.add_child(GameUi.pill("%s (%s) ×%d" % [c["name"], c["type"], counts[c["id"]]], UIStyle.type_color(c["type"]), 14))
-	var picker := BasicUnitPicker.new(r.get("basic_types", []), r.get("basic_races", []), r.get("basic_options", []), _basic_type, _basic_race, ids)
+	var picker := BasicUnitPicker.new(r.get("basic_types", []), r.get("basic_races", []), r.get("basic_options", []), _basic_type, _basic_race, ids, true)
 	col.add_child(picker)
 	var ok := UIStyle.primary_button("", 15)
 	ok.custom_minimum_size = Vector2(0, 40)
