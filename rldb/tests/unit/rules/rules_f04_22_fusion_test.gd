@@ -248,3 +248,43 @@ func test_f04_22_material_lost_in_response_window_fails_cleanly() -> void:
 	assert_str(m.cards[wyrm]["zone"]).is_equal("extra")
 	assert_str(m.cards[b]["zone"]).is_equal("unit")
 	assert_str(TB.log_text(m)).contains("no longer available")
+
+
+## Review 2026-10-17: a method's self-destruction / exhaustion is a cost, paid right after the
+## committing stance and before the response window (F04-22: "After Confirm, costs and
+## self-destruction resolve, then the summon"). Before the fix the paying unit was still on the
+## Field in the window; if it was destroyed there, Void Basilisk's cost then pulled it from Spent.
+func test_f04_22_self_cost_is_paid_before_the_response_window() -> void:
+	for method in ["sepukku", "basilisk"]:
+		var d := _setup(method)
+		var m: MatchEngine = d["m"]
+		TB.set_card(m, 1, TRAP, 0)
+		m.config["hidden_response_windows"] = true
+		var src: int = d["src"]
+		m.submit(0, d["cmd"])
+		for v in d["answers"]:
+			assert_str(_answer(m, v)).override_failure_message(method).is_empty()
+		assert_str(TB.pend_kind(m)).override_failure_message(method).is_equal("trap_response")
+		var paid_zone := "spent" if method == "sepukku" else "exhaust"
+		assert_str(m.cards[src]["zone"]).override_failure_message("%s: cost not paid before the window" % method).is_equal(paid_zone)
+		while not m.pending.is_empty() and TB.pend_kind(m) == "trap_response":
+			TB.choose(m, ["Pass"])
+		assert_str(m.cards[d["wyrm"]]["zone"]).override_failure_message(method).is_equal("unit")
+		assert_str(m.cards[src]["zone"]).override_failure_message(method).is_equal(paid_zone)
+
+
+## A self-destruction prevented by Eternal pays nothing more: no window, no summon, materials kept.
+func test_f04_22_sepukku_saved_by_eternal_ends_before_the_window() -> void:
+	var d := _setup("sepukku")
+	var m: MatchEngine = d["m"]
+	TB.set_card(m, 1, TRAP, 0)
+	m.config["hidden_response_windows"] = true
+	m.apply_status(d["src"], "eternal", 1)
+	m.submit(0, d["cmd"])
+	for v in d["answers"]:
+		_answer(m, v)
+	assert_bool(m.pending.is_empty()).override_failure_message(str(m.pending)).is_true()
+	assert_str(m.cards[d["src"]]["zone"]).is_equal("unit")
+	assert_str(m.cards[d["wyrm"]]["zone"]).is_equal("extra")
+	for mat in d["mats"]:
+		assert_str(m.cards[mat]["zone"]).is_equal("unit")
