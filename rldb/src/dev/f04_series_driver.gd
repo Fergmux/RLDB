@@ -138,7 +138,6 @@ func run(main_node: Node, dir: String) -> void:
 	rr._remove_sel = -1
 	ov.refresh()
 	await _frames(8)
-	rr._basic_sel = 112
 	rr._basic_race = "Warrior"
 	rr._basic_type = "Fire"
 	ov.refresh()
@@ -160,6 +159,7 @@ func run(main_node: Node, dir: String) -> void:
 	_view_seat(loser)
 	await _frames(8)
 	await _shot("series_08_first_player")
+	await _draft_phase()
 	DeckStore._write([])
 	if saved_file != "":
 		var f := FileAccess.open(DeckStore.PATH, FileAccess.WRITE)
@@ -169,6 +169,173 @@ func run(main_node: Node, dir: String) -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(DeckStore.PATH))
 	print("F04 SERIES DONE pass=%d fail=%d" % [_pass, _fail])
 	get_tree().quit()
+
+
+## F06-04..06: the Change basic units reward picker was shot above (rewards_05_basic); here a
+## draft series: the setup (default, reordered by keyboard and by a real mouse drag, the Choose
+## basic unit picker), the picks in the chosen order and the waiting state.
+func _draft_phase() -> void:
+	main._start_local({"seed": 777, "best_of": 3, "deck_mode": "draft", "names": ["Ana", "Ben"]})
+	await _frames(10)
+	host = main.local_host
+	var gs: GameScreen = main.screen
+	var ov: GameSeriesOverlay = gs.overlays
+	_view_seat(0)
+	await _frames(10)
+	var dv: DeckSelectView = ov.decks
+	_check("F06-05 setup shown before the picks", not host.series.draft[0]["setup_done"] and dv._order == ["unit", "spell", "trap", "power", "extra"], str(dv._order))
+	_check("F06-05 setup modal inside the window", get_viewport().get_visible_rect().grow(1).encloses(ov.overlay.get_global_rect()), str(ov.overlay.get_global_rect()))
+	await _shot("draft_01_setup_default")
+	# Keyboard / button reorder: Extra Deck up twice.
+	dv._move("extra", -1)
+	await _frames(4)
+	dv._move("extra", -1)
+	await _frames(8)
+	_check("F06-05 arrows move a category", dv._order == ["unit", "spell", "extra", "trap", "power"], str(dv._order))
+	var fo := gs.get_viewport().gui_get_focus_owner()
+	_check("F06-05 focus stays on the moved row's arrow", fo is Button and fo.tooltip_text == "Move Extra Deck up", str(fo))
+	# A real mouse drag: Power onto the top half of the Unit row.
+	var rows := _find_rows(ov.overlay_box)
+	var src: Control = rows[4]
+	var dst: Control = rows[0]
+	var from := src.get_global_rect().position + Vector2(60, src.size.y / 2.0)
+	var to := dst.get_global_rect().position + Vector2(80, 6)
+	await _mouse(from, true)
+	var last := from
+	for i in 12:
+		var at := from.lerp(to, float(i + 1) / 12.0)
+		await _motion(at, at - last)
+		last = at
+	await _shot("draft_02_dragging")
+	await _mouse(to, false)
+	await _frames(10)
+	_check("F06-05 drag and drop reorders", dv._order == ["power", "unit", "spell", "extra", "trap"], str(dv._order))
+	await _shot("draft_03_reordered")
+	# Choose basic unit.
+	dv._open_picker(host.series.view_for(0)["draft"])
+	await _frames(12)
+	await _shot("draft_04_picker_open")
+	var picker := _find_picker(gs)
+	_check("F06-06 picker opens with the current basic", picker != null and picker.type == "Water" and picker.race == "Mage")
+	if picker != null:
+		picker.choose("Necrotic", "Dragon")
+		await _frames(6)
+		await _shot("draft_05_picker_chosen")
+		var use := _find_button(dv._picker_dim, "Use ")
+		if use != null:
+			use.pressed.emit()
+	await _frames(10)
+	_check("F06-06 picker choice shown in the setup", dv._btype == "Necrotic" and dv._brace == "Dragon" and dv._picker_dim == null)
+	await _shot("draft_06_setup_chosen")
+	var go := _find_button(ov.overlay_box, "Start drafting")
+	_check("F06-05 Start drafting button", go != null and not go.disabled)
+	if go != null:
+		go.pressed.emit()
+	await _frames(10)
+	var st: Dictionary = host.series.draft[0]
+	_check("F06-05 seat 0 locked in its order", st["setup_done"] and st["cat_order"] == ["power", "unit", "spell", "extra", "trap"])
+	_check("F06-06 three chosen basics", st["picked"].count(Series.basic_for("Necrotic", "Dragon")) == 3)
+	_check("F06-05 first pick is Power", String(host.series.view_for(0)["draft"]["category"]) == "power")
+	await _shot("draft_07_picking_power")
+	# Seat 1: its own setup screen, independent of seat 0.
+	_view_seat(1)
+	await _frames(10)
+	await _shot("draft_08_seat1_setup")
+	host.handle(1, BotBrain.draft_setup_command(host.series))
+	# Seat 0 finishes drafting; it then waits for seat 1.
+	_view_seat(0)
+	var guard := 0
+	while not host.series.deck_ready[0] and guard < 60:
+		host.handle(0, {"t": "draft_pick", "index": 0})
+		guard += 1
+	await _frames(10)
+	_check("F06 seat 0 deck drafted", host.series.deck_ready[0] and host.series.decks[0].size() == 23, str(host.series.decks[0].size()))
+	_view_seat(0)        # hot-seat follows the seat that still has to act; look at seat 0's wait
+	await _frames(6)
+	await _shot("draft_09_waiting")
+	# Rewards: Change basic units after a game.
+	while not host.series.deck_ready[1] and guard < 200:
+		host.handle(1, {"t": "draft_pick", "index": 0})
+		guard += 1
+	await _frames(6)
+	host.handle(host.series.game.active, {"t": "concede"})
+	await _frames(6)
+	_view_seat(0)
+	await get_tree().create_timer(5.0).timeout     # the victory / defeat presentation plays first
+	await _frames(6)
+	ov.rewards.mode = "basic"
+	ov.refresh()
+	await _frames(10)
+	await _shot("draft_10_reward_basic")
+	_check("F06-04 rewards modal within 760 px", ov.overlay.size.x <= 760.0, str(ov.overlay.size))
+	var ok := _find_button(ov.overlay_box, "Your basic units are already")
+	_check("F06-04 no-op change cannot be confirmed", ok != null and ok.disabled)
+	var pk := _find_picker(ov.overlay_box)
+	if pk != null:
+		pk.choose("Fire", "Beast")
+	await _frames(6)
+	var ch := _find_button(ov.overlay_box, "Change 3 basic units")
+	_check("F06-04 confirm names the change", ch != null and not ch.disabled)
+	await _shot("draft_11_reward_basic_chosen")
+	if ch != null:
+		ch.pressed.emit()
+	await _frames(10)
+	_check("F06-04 every basic changed", host.series.decks[0].count(Series.basic_for("Fire", "Beast")) == 3 and int(host.series.rewards[0]["left"]) == 3)
+	await _shot("draft_12_reward_taken")
+
+
+func _find_rows(n: Node) -> Array:
+	var out := []
+	if n is DeckSelectView.OrderRow:
+		out.append(n)
+	for c in n.get_children():
+		out.append_array(_find_rows(c))
+	return out
+
+
+func _find_picker(n: Node) -> BasicUnitPicker:
+	if n is BasicUnitPicker:
+		return n
+	for c in n.get_children():
+		var f := _find_picker(c)
+		if f != null:
+			return f
+	return null
+
+
+func _find_button(n: Node, prefix: String) -> Button:
+	if n == null:
+		return null
+	if n is Button and (n as Button).text.begins_with(prefix):
+		return n
+	for c in n.get_children():
+		var f := _find_button(c, prefix)
+		if f != null:
+			return f
+	return null
+
+
+func _mouse(at: Vector2, down: bool) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.position = at
+	ev.global_position = at
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = down
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT if down else 0
+	get_viewport().push_input(ev, true)   # canvas coordinates: no window stretch applied
+	await _frames(2)
+
+
+## Mouse motion with the left button held; `rel` feeds the viewport's drag threshold.
+func _motion(at: Vector2, rel: Vector2) -> void:
+	var ev := InputEventMouseMotion.new()
+	ev.position = at
+	ev.global_position = at
+	ev.relative = rel
+	ev.screen_relative = rel
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT
+	get_viewport().push_input(ev, true)   # canvas coordinates: no window stretch applied
+	await _frames(2)
 
 
 func _fake(gs: GameScreen, name: String, pd: Dictionary) -> void:
@@ -208,6 +375,8 @@ func _frames(n: int) -> void:
 func _shot(name: String) -> void:
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
+	if img == null or img.is_empty():
+		return   # headless (dummy renderer): the checks still run, there is nothing to save
 	img.save_png(out_dir.path_join(name + ".png"))
 
 

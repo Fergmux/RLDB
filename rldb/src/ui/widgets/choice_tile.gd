@@ -16,6 +16,7 @@ var selected: bool = false:
 var _hover := 0.0
 var _box: StyleBoxFlat
 var _compact := false
+var _title: Label
 
 
 ## `kind` is "add", "remove", "swap" or a card category ("unit", "spell", ...). `compact` lays the
@@ -44,6 +45,7 @@ func _init(title: String = "", caption: String = "", color: Color = UIStyle.GOLD
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	box.add_child(ic)
 	var tl := UIStyle.label(title, 15 if compact else 17, UIStyle.TEXT, false, true)
+	_title = tl
 	tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if compact else HORIZONTAL_ALIGNMENT_CENTER
 	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -58,10 +60,24 @@ func _init(title: String = "", caption: String = "", color: Color = UIStyle.GOLD
 		box.add_child(cl)
 
 
+## Overrides the title's font size (narrow tiles, e.g. the basic-unit pickers).
+func set_title_size(px: int) -> void:
+	_title.add_theme_font_size_override("font_size", px)
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		pressed.emit()
 		accept_event()
+	elif has_focus() and event.is_action_pressed("ui_accept"):
+		# Keyboard use when a host makes the tile focusable (F06-05 / F06-06 pickers).
+		pressed.emit()
+		accept_event()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_FOCUS_ENTER or what == NOTIFICATION_FOCUS_EXIT:
+		queue_redraw()
 
 
 func _process(delta: float) -> void:
@@ -91,6 +107,8 @@ func _draw() -> void:
 		Ornate.corners(self, Rect2(Vector2.ZERO, size), Color(accent.lightened(0.2), 0.45 + 0.45 * _hover), 11.0, 5.0, 1.3)
 	if selected:
 		draw_rect(Rect2(Vector2(4, 4), size - Vector2(8, 8)), Color(UIStyle.GOLD, 0.5), false, 1.0)
+	if has_focus():
+		draw_rect(Rect2(Vector2(5, 5), size - Vector2(10, 10)), Color(UIStyle.GOLD_HI, 0.9), false, 1.5)
 
 
 ## The drawn icon.

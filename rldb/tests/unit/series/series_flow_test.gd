@@ -63,7 +63,7 @@ func test_rewards_accept_any_combination_and_persist_into_next_game() -> void:
 	assert_str(_add(s, 0, "spell", 0)).is_empty()
 	assert_str(_add(s, 0, "unit", 1)).is_empty()
 	assert_str(s.submit(0, {"t": "reward_remove", "card_id": 166})).is_empty()   # Saboteurs Guild
-	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 4, "to_type": "Fire"})).is_empty()
+	assert_str(s.submit(0, {"t": "reward_basic", "to_type": "Fire", "to_race": "Beast"})).is_empty()
 	assert_bool(s.rewards[0]["done"]).is_true()
 	assert_int(s.decks[0].size()).is_equal(size_before + 1)
 	assert_int(s.decks[0].count(113)).is_equal(3)   # all three Water Beasts became Fire Beasts
@@ -123,10 +123,16 @@ func test_series_ends_when_a_player_reaches_required_wins() -> void:
 	assert_int(s.scores[0]).is_equal(2)
 
 
+## F06-05 / F06-06: the default draft setup (default order, the first Type and Race basic unit).
+func _setup_default(s: Series, p: int) -> String:
+	return s.submit(p, BotBrain.draft_setup_command(s))
+
+
 func test_draft_builds_deck_from_category_quotas() -> void:
 	var s := Series.new()
 	s.setup({"seed": 5, "deck_mode": "draft"})
 	for p in 2:
+		assert_str(_setup_default(s, p)).is_empty()
 		var guard := 0
 		while not s.deck_ready[p] and guard < 50:
 			assert_str(s.submit(p, {"t": "draft_pick", "index": 0})).is_empty()
@@ -137,6 +143,7 @@ func test_draft_builds_deck_from_category_quotas() -> void:
 
 func _draft_all(s: Series) -> void:
 	for p in 2:
+		assert_str(_setup_default(s, p)).is_empty()
 		var guard := 0
 		while not s.deck_ready[p] and guard < 100:
 			assert_str(s.submit(p, {"t": "draft_pick", "index": 0})).is_empty()
@@ -149,7 +156,9 @@ func test_f03_10_configured_draft_counts_are_used_and_shown() -> void:
 	var dv: Dictionary = s.view_for(1)["draft"]
 	assert_int(int(dv["total"])).is_equal(5)
 	assert_str(String(dv["composition"])).is_equal("2 Unit, 1 Spell, 2 Extra Deck")
-	assert_str(String(dv["category_label"])).is_equal("Unit")
+	assert_str(_setup_default(s, 1)).is_empty()
+	assert_str(String(s.view_for(1)["draft"]["category_label"])).is_equal("Unit")
+	s.draft[1] = s._new_draft()
 	_draft_all(s)
 	var cats := {}
 	for id in s.decks[0]:
@@ -158,7 +167,8 @@ func test_f03_10_configured_draft_counts_are_used_and_shown() -> void:
 	assert_int(cats.get("unit", 0)).is_equal(2)
 	assert_int(cats.get("spell", 0)).is_equal(1)
 	assert_int(int(cats.get("fusion", 0)) + int(cats.get("ritual", 0)) + int(cats.get("arcane", 0))).is_equal(2)
-	assert_int(s.decks[0].size()).is_equal(5)
+	assert_int(cats.get("basic_unit", 0)).is_equal(3)              # F06-06: the chosen basic unit, x3
+	assert_int(s.decks[0].size()).is_equal(8)
 	# Extra Deck picks still route to the Extra Deck at game start.
 	assert_int(s.game.players[0]["extra"].size()).is_equal(2)
 
@@ -167,7 +177,7 @@ func test_f03_10_partial_quota_override_keeps_other_draft_settings() -> void:
 	var s := Series.new()
 	s.setup({"seed": 9, "deck_mode": "draft", "draft_quota": {"unit": 1}})
 	assert_int(int(s.cfg["draft"]["offer"])).is_equal(3)
-	assert_int(int(s.cfg["draft"]["quota"]["basic"])).is_equal(0)
+	assert_bool(s.cfg["draft"]["quota"].has("basic")).is_false()   # F06-06: no basic-unit category
 
 
 func test_f03_10_invalid_draft_counts_are_explained() -> void:
@@ -316,10 +326,10 @@ func test_basic_change_can_change_race_and_type() -> void:
 	s.submit(s.game.active, {"t": "concede"})
 	var n: int = s.decks[0].count(4)                         # Basic Beast (Water)
 	assert_int(n).is_greater(0)
-	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 4, "to_type": "Fire", "to_race": "Dragon"})).is_empty()
+	assert_str(s.submit(0, {"t": "reward_basic", "to_type": "Fire", "to_race": "Dragon"})).is_empty()
 	assert_int(s.decks[0].count(111)).is_equal(n)            # Basic Dragon (Fire)
 	assert_int(s.decks[0].count(4)).is_equal(0)
-	assert_str(s.submit(0, {"t": "reward_basic", "from_id": 111, "to_type": "Fire", "to_race": "Dragon"})).contains("different")
+	assert_str(s.submit(0, {"t": "reward_basic", "to_type": "Fire", "to_race": "Dragon"})).contains("different")
 
 
 ## In-game menu "Return to menu / Quit": the leaving player forfeits the whole series and the

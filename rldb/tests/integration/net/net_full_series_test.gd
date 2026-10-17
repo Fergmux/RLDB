@@ -57,7 +57,15 @@ func _decide(p: int) -> Dictionary:
 			if v["deck_ready"][p]:
 				return {}
 			if v.has("draft"):
-				return {"t": "draft_pick", "index": rng.randi_range(0, v["draft"]["offer"].size() - 1)}
+				var dv: Dictionary = v["draft"]
+				if not dv["setup_done"]:
+					# F06-05 / F06-06: a shuffled order and a random basic unit, through the network.
+					var order: Array = dv["cat_order"].duplicate()
+					order.shuffle()
+					var bt: Array = dv["basic_types"]
+					var br: Array = dv["basic_races"]
+					return {"t": "draft_setup", "order": order, "basic_type": bt[rng.randi_range(0, bt.size() - 1)], "basic_race": br[rng.randi_range(0, br.size() - 1)]}
+				return {"t": "draft_pick", "index": rng.randi_range(0, dv["offer"].size() - 1)}
 			return {"t": "pick_starter", "index": rng.randi_range(0, v["starters"].size() - 1)}
 		"rewards":
 			var r: Dictionary = v["rewards"]
@@ -72,7 +80,7 @@ func _decide(p: int) -> Dictionary:
 					for c in v["deck"]:
 						if c["category"] == "basic_unit":
 							var types: Array = r["basic_types"].filter(func(t): return t != c["type"])
-							return {"t": "reward_basic", "from_id": c["id"], "to_type": types[rng.randi_range(0, types.size() - 1)]}
+							return {"t": "reward_basic", "to_type": types[rng.randi_range(0, types.size() - 1)], "to_race": c["race"]}
 			return {"t": "reward_type", "category": r["types"][0]}
 		"first_player":
 			return {"t": "first_player", "who": rng.randi_range(0, 1)} if v["last_loser"] == p else {}

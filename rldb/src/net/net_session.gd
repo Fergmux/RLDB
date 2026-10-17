@@ -474,7 +474,9 @@ func _c2s_command(seq: int, cmd: Dictionary) -> void:
 
 
 const _INT_FIELDS := ["uid", "idx", "id", "index", "who", "card_id", "from_id"]
-const _STR_FIELDS := ["t", "to_type", "to_race", "category", "name", "stance"]
+const _STR_FIELDS := ["t", "to_type", "to_race", "category", "name", "stance", "basic_type", "basic_race"]
+## Longest list of names a command may carry (a draft setup's category order, F06-05).
+const _MAX_NAME_LIST := 16
 
 
 ## Rejects remote commands whose fields have the wrong types (never trust a client).
@@ -498,6 +500,13 @@ static func sanitize_command(cmd: Dictionary) -> String:
 				if not (x is int or x is float):
 					return "Malformed command."
 			cmd[k] = v.map(func(x): return int(x))
+		elif k == "order":
+			# F06-05 draft setup: a short list of category names (the authority checks the set).
+			if not (v is Array) or v.size() > _MAX_NAME_LIST:
+				return "Malformed command."
+			for x in v:
+				if not (x is String) or (x as String).length() > 32:
+					return "Malformed command."
 		elif k == "cards":
 			if not (v is Array):
 				return "Malformed command."

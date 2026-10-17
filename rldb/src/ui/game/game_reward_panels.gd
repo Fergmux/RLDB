@@ -1,9 +1,9 @@
 class_name GameRewardPanels
 extends RefCounted
 ## Rewards stage of the series modal (F04-03): picks remaining as gems, the three reward kinds as
-## illustrated tiles (add / remove / change a basic unit), the sub-panel of the open reward and the
+## illustrated tiles (add / remove / change basic units), the sub-panel of the open reward and the
 ## offer of new cards. Local choices that are not sent yet (which reward is open, the card to
-## remove, the basic unit being changed) live here.
+## remove, the basic-unit Type and Race) live here.
 
 const OFFER_CARD := Vector2(168, 252)
 const PREVIEW_CARD := Vector2(150, 225)
@@ -14,8 +14,7 @@ var gs: GameScreen
 ## Reward being set up ("", "add", "remove", "basic").
 var mode: String = ""
 var _remove_sel: int = -1
-## Basic-unit change being composed (unit id, chosen Race and Type).
-var _basic_sel: int = -1
+## Basic-unit change being composed (F06-04: the chosen Type and Race for every basic unit).
 var _basic_race: String = ""
 var _basic_type: String = ""
 
@@ -53,7 +52,7 @@ func render() -> void:
 	# Three reward kinds as illustrated tiles; the open one shows its panel below.
 	var modes := [["add", "Add a card", "Pick a card type, then take one of three.", "add", UIStyle.GOOD.darkened(0.15)],
 		["remove", "Remove a card", "Take one card out of your deck.", "remove", UIStyle.BAD],
-		["basic", "Change a basic unit", "New Race and Type, all copies.", "swap", UIStyle.RUNE_BLUE]]
+		["basic", "Change basic units", "Every basic unit becomes a new Type and Race.", "swap", UIStyle.RUNE_BLUE]]
 	var mrow := HBoxContainer.new()
 	mrow.add_theme_constant_override("separation", 10)
 	box.add_child(mrow)
@@ -66,7 +65,8 @@ func render() -> void:
 		tile.pressed.connect(func():
 			mode = "" if mode == key else key
 			_remove_sel = -1
-			_basic_sel = -1
+			_basic_type = ""
+			_basic_race = ""
 			gs.overlays.refresh())
 		mrow.add_child(tile)
 	var counts := {}
@@ -375,79 +375,59 @@ func _find_area(n: Node) -> ScrollArea:
 	return null
 
 
-## Basic-unit change: pick one of your basic units, then a Race and a Type, then Confirm.
-## Applies to every copy.
+## F06-04 "Change basic units": the basic units now in the deck, then one Type and one Race in the
+## shared picker with the resulting card; Confirm turns EVERY basic unit into it for one pick.
+## A change that would alter nothing cannot be confirmed (the authority refuses it too).
 func _basic_change_panel(r: Dictionary, order: Array, counts: Dictionary) -> Control:
-	var pv: Array = _reward_panel("Change a basic unit", "Choose a unit, then its new Race and Type. All copies change.")
-	var right: VBoxContainer = pv[1]
+	var pv: Array = _reward_panel("Change basic units", "Choose a Type and a Race. Every basic unit in your deck becomes that unit, for one pick.")
+	var col: VBoxContainer = pv[1]
 	var basics := order.filter(func(c): return c["category"] == "basic_unit")
 	if basics.is_empty():
-		right.add_child(_info_chip("No basic units in your deck", false))
+		col.add_child(_info_chip("No basic units in your deck", false))
 		return pv[0]
-	var sel: Dictionary = {}
+	var n := 0
+	var ids := []
 	for c in basics:
-		if int(c["id"]) == _basic_sel:
-			sel = c
-	var uf := GridContainer.new()
-	uf.columns = 2
-	uf.add_theme_constant_override("h_separation", 8)
-	uf.add_theme_constant_override("v_separation", 8)
-	right.add_child(uf)
+		n += int(counts[c["id"]])
+		ids.append(int(c["id"]))
+	if _basic_type == "" or _basic_race == "":
+		_basic_type = String(basics[0]["type"])
+		_basic_race = String(basics[0]["race"])
+	var now := HFlowContainer.new()
+	now.alignment = FlowContainer.ALIGNMENT_CENTER
+	now.add_theme_constant_override("h_separation", 8)
+	now.add_theme_constant_override("v_separation", 6)
+	col.add_child(now)
+	var cap := UIStyle.label("IN YOUR DECK", 12, UIStyle.GOLD, false, true)
+	cap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	now.add_child(cap)
 	for c in basics:
-		var on: bool = int(c["id"]) == _basic_sel
-		var ub := ChoiceTile.new("%s ×%d" % [c["name"], counts[c["id"]]], "", UIStyle.type_color(c["type"]), "basic_unit", true)
-		ub.selected = on
-		ub.custom_minimum_size = Vector2(0, 48)
-		var cc: Dictionary = c
-		ub.pressed.connect(func():
-			_basic_sel = int(cc["id"])
-			_basic_race = String(cc["race"])
-			_basic_type = String(cc["type"])
-			gs.overlays.refresh())
-		uf.add_child(ub)
-	if sel.is_empty():
-		return pv[0]
-	for pair in [["Race", r.get("basic_races", []), "_basic_race"], ["Type", r.get("basic_types", []), "_basic_type"]]:
-		var cap := UIStyle.label(String(pair[0]).to_upper(), 12, UIStyle.GOLD, false, true)
-		right.add_child(cap)
-		var rf := HFlowContainer.new()
-		rf.add_theme_constant_override("h_separation", 8)
-		rf.add_theme_constant_override("v_separation", 8)
-		right.add_child(rf)
-		for val in pair[1]:
-			var key: String = pair[2]
-			var cur: String = String(get(key))
-			var chosen: bool = String(val) == cur
-			var v2: String = String(val)
-			var vb: Control
-			if pair[0] == "Type":
-				var tt := ChoiceTile.new(v2, "", UIStyle.type_color(v2), v2, true)
-				tt.selected = chosen
-				tt.custom_minimum_size = Vector2(150, 46)
-				tt.size_flags_horizontal = Control.SIZE_FILL
-				tt.pressed.connect(func():
-					set(key, v2)
-					gs.overlays.refresh())
-				vb = tt
-			else:
-				var rb := UIStyle.button(("✓ " if chosen else "") + v2, 15)
-				rb.custom_minimum_size = Vector2(0, 40)
-				if chosen:
-					rb.add_theme_stylebox_override("normal", UIStyle.flat(Color(UIStyle.GOLD, 0.22), UIStyle.GOLD_HI, 2, 6))
-				rb.pressed.connect(func():
-					set(key, v2)
-					gs.overlays.refresh())
-				vb = rb
-			rf.add_child(vb)
-	var same: bool = _basic_race == String(sel["race"]) and _basic_type == String(sel["type"])
-	var ok := UIStyle.primary_button("Confirm: Basic %s (%s)" % [_basic_race, _basic_type] if not same else "Choose a new Race or Type", 15)
-	ok.disabled = same
+		now.add_child(GameUi.pill("%s (%s) ×%d" % [c["name"], c["type"], counts[c["id"]]], UIStyle.type_color(c["type"]), 14))
+	var picker := BasicUnitPicker.new(r.get("basic_types", []), r.get("basic_races", []), r.get("basic_options", []), _basic_type, _basic_race, ids, true)
+	col.add_child(picker)
+	var ok := UIStyle.primary_button("", 15)
 	ok.custom_minimum_size = Vector2(0, 40)
-	var fid: int = int(sel["id"])
+	ok.clip_text = true
+	col.add_child(ok)
+	var sync := func():
+		var c: Dictionary = picker.chosen()
+		var same: bool = not c.is_empty() and ids.size() == 1 and int(ids[0]) == int(c["id"])
+		ok.disabled = c.is_empty() or same
+		if c.is_empty():
+			ok.text = "Choose a Type and a Race"
+		elif same:
+			ok.text = "Your basic units are already %s (%s)" % [c["name"], c["type"]]
+		else:
+			ok.text = "Change %d basic unit%s to %s (%s)" % [n, "" if n == 1 else "s", c["name"], c["type"]]
+	sync.call()
+	picker.changed.connect(func(t, rc):
+		_basic_type = t
+		_basic_race = rc
+		sync.call())
 	ok.pressed.connect(func():
-		var cmd := {"t": "reward_basic", "from_id": fid, "to_type": _basic_type, "to_race": _basic_race}
-		_basic_sel = -1
+		var cmd := {"t": "reward_basic", "to_type": _basic_type, "to_race": _basic_race}
+		_basic_type = ""
+		_basic_race = ""
 		mode = ""
 		gs.send(cmd))
-	right.add_child(ok)
 	return pv[0]

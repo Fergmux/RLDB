@@ -165,7 +165,7 @@ func test_commands_sent_across_stage_transitions_are_refused_cleanly() -> void:
 	for pair in [[{"t": "next_phase"}, "reward"], [{"t": "pick_starter", "index": 1}, "reward"],
 			[{"t": "first_player", "who": 1}, "reward"], [{"t": "reward_add", "index": 99}, "type first"],
 			[{"t": "reward_type", "category": "nope"}, "card type"],
-			[{"t": "reward_remove", "card_id": 999999}, "not in your deck"], [{"t": "reward_basic", "from_id": 21, "to_type": "Fire"}, "basic unit"]]:
+			[{"t": "reward_remove", "card_id": 999999}, "not in your deck"], [{"t": "reward_basic", "to_type": "Nope", "to_race": "Mage"}, "Type and a Race"]]:
 		var n := client_errors.size()
 		client.local_seat.send(pair[0])
 		assert_str(await _client_err_after(n)).contains(pair[1])

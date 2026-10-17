@@ -19,10 +19,15 @@ const STAGE_OVER := "over"
 ## Card types offered by an add-card reward (user feedback 2026-10-16: choose the type first).
 ## F03-11: Fusion, Ritual and Arcane form one "extra" (Extra Deck) group drawing from all three.
 const REWARD_TYPES := ["unit", "spell", "trap", "power", "extra"]
-## Draft categories in pick order (F03-10 / F03-11: one combined Extra Deck category).
-const DRAFT_CATEGORIES := ["basic", "unit", "spell", "trap", "power", "extra"]
+## Draft categories in their default pick order (F03-10 / F03-11: one combined Extra Deck
+## category). F06-06: the basic unit is not a drafted category; each player chooses it by Type
+## and Race in the draft setup and gets `basic_copies` copies. F06-05: each player may reorder
+## these categories in the draft setup.
+const DRAFT_CATEGORIES := ["unit", "spell", "trap", "power", "extra"]
+## Quota key of the basic-unit category before F06-06; still accepted (and ignored) in old overrides.
+const LEGACY_BASIC_KEY := "basic"
 ## Player-facing names of draft / reward categories.
-const DRAFT_LABELS := {"basic": "Basic Unit", "unit": "Unit", "spell": "Spell", "trap": "Trap", "power": "Power", "extra": "Extra Deck"}
+const DRAFT_LABELS := {"unit": "Unit", "spell": "Spell", "trap": "Trap", "power": "Power", "extra": "Extra Deck"}
 ## Upper bound per draft category (a sanity limit for the setup steppers, not a deck rule).
 const DRAFT_MAX_PER_CATEGORY := 40
 const EXTRA_CATEGORIES := ["fusion", "ritual", "arcane"]
@@ -75,11 +80,13 @@ static func default_draft_quota() -> Dictionary:
 
 ## Why a draft composition is unusable ("" when it is fine): every category must be a whole
 ## number from 0 to DRAFT_MAX_PER_CATEGORY, unknown categories are refused, and at least one
-## pick must be drafted (F03-10).
+## pick must be drafted (F03-10). The pre-F06-06 "basic" count is ignored, not refused.
 static func validate_draft_quota(q) -> String:
 	if not (q is Dictionary):
 		return "The draft composition is missing."
 	for k in q:
+		if String(k) == LEGACY_BASIC_KEY:
+			continue
 		if not (String(k) in DRAFT_CATEGORIES):
 			return "Unknown draft category \"%s\"." % String(k)
 	var total := 0
@@ -95,14 +102,71 @@ static func validate_draft_quota(q) -> String:
 	return ""
 
 
-## Player-facing summary of a draft composition: "1 Basic Unit (x3), 9 Unit, ..." (zeros omitted).
-static func draft_composition_text(q: Dictionary, basic_copies: int) -> String:
+## Player-facing summary of a draft composition in `order` (default: DRAFT_CATEGORIES):
+## "9 Unit, 3 Spell, ..." (zeros omitted).
+static func draft_composition_text(q: Dictionary, order: Array = DRAFT_CATEGORIES) -> String:
 	var parts := []
-	for cat in DRAFT_CATEGORIES:
+	for cat in order:
 		var n := int(q.get(cat, 0))
 		if n > 0:
-			parts.append("%d %s%s" % [n, DRAFT_LABELS[cat], (" (x%d copies)" % basic_copies) if cat == "basic" and basic_copies > 1 else ""])
+			parts.append("%d %s" % [n, DRAFT_LABELS[cat]])
 	return ", ".join(parts)
+
+
+## The draft categories with at least one pick, in the default order: the categories a draft
+## setup orders (F06-05).
+static func draft_order_default(q: Dictionary) -> Array:
+	return DRAFT_CATEGORIES.filter(func(cat): return int(q.get(cat, 0)) > 0)
+
+
+## Why `order` is not a usable draft order for quota `q` ("" when it is): it must name every
+## category with picks exactly once and nothing else (F06-05).
+static func validate_draft_order(q: Dictionary, order) -> String:
+	if not (order is Array):
+		return "Choose an order for your draft categories."
+	var want := draft_order_default(q)
+	if order.size() != want.size():
+		return "Order every draft category exactly once."
+	var seen := {}
+	for cat in order:
+		if not (cat is String) or not (String(cat) in want) or seen.has(String(cat)):
+			return "Order every draft category exactly once."
+		seen[String(cat)] = true
+	return ""
+
+
+## The basic unit with this Type and Race, or -1 (F06-04 / F06-06).
+static func basic_for(to_type: String, to_race: String) -> int:
+	for d in CardDB.all():
+		if d["category"] == "basic_unit" and d["type"] == to_type and d["race"] == to_race:
+			return int(d["id"])
+	return -1
+
+
+## Every basic-unit Race, in card-database order (the Race choices of the basic-unit pickers).
+static func basic_races() -> Array:
+	var races := []
+	for d in CardDB.all():
+		if d["category"] == "basic_unit" and not (d["race"] in races):
+			races.append(d["race"])
+	return races
+
+
+## The default basic unit of a draft setup: the first Type and the first Race (F06-06).
+static func default_basic() -> int:
+	var races := basic_races()
+	for t in CardDB.ELEMENTS:
+		for r in races:
+			var id := basic_for(t, r)
+			if id != -1:
+				return id
+	return -1
+
+
+## "Basic Mage (Water)": basic-unit names do not carry their Type (F03-09), so it is added.
+static func basic_label(id: int) -> String:
+	var d := CardDB.get_def(id)
+	return "%s (%s)" % [d["name"], d["type"]]
 
 
 ## overrides: best_of, deck_mode, seed, names, rewards_per_game, draft_quota (F03-10) ...
@@ -125,6 +189,8 @@ func setup(overrides: Dictionary = {}) -> void:
 			for cat in DRAFT_CATEGORIES:
 				q[cat] = int(overrides["draft_quota"].get(cat, 0))
 			cfg["draft"]["quota"] = q
+	# F06-06: no basic-unit count (a pre-F06-06 config or override may still carry one).
+	cfg["draft"]["quota"].erase(LEGACY_BASIC_KEY)
 	_seed = int(cfg.get("seed", Time.get_ticks_usec()))
 	rng.seed = _seed
 	if cfg.has("names"):
@@ -140,7 +206,7 @@ func setup(overrides: Dictionary = {}) -> void:
 		if quota_error != "":
 			# Explained, never silent: the menu blocks this, but a bad config from elsewhere is reported.
 			_log("Draft composition not used (%s) The default counts apply." % quota_error)
-		_log("Draft: %s." % draft_composition_text(cfg["draft"]["quota"], int(cfg["draft"]["basic_copies"])))
+		_log("Draft: %s, plus %d copies of a basic unit each player chooses." % [draft_composition_text(cfg["draft"]["quota"]), int(cfg["draft"]["basic_copies"])])
 
 
 func _log(text: String) -> void:
@@ -326,9 +392,17 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 			deck_names[p] = String(cmd.get("name", "Custom deck")).substr(0, 40)
 			deck_ready[p] = true
 			_log("%s locks in a custom deck." % names[p])
+		"draft_setup":
+			if cfg["deck_mode"] != "draft":
+				return "This series uses starter decks."
+			var e0 := _draft_setup(p, cmd)
+			if e0 != "":
+				return e0
 		"draft_pick":
 			if cfg["deck_mode"] != "draft":
 				return "This series uses starter decks."
+			if not draft[p]["setup_done"]:
+				return "Choose your basic unit and category order, then start drafting."
 			var e := _draft_pick(p, int(cmd.get("index", -1)))
 			if e != "":
 				return e
@@ -341,13 +415,66 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 	return ""
 
 
+## A seat's draft before its setup (F06-05): the default category order and basic unit until the
+## seat locks in its own with "draft_setup"; no picks are offered until then.
 func _new_draft() -> Dictionary:
 	var quota: Dictionary = cfg["draft"]["quota"]
+	var cats := draft_order_default(quota)
+	return {"setup_done": false, "cat_order": cats, "basic": default_basic(),
+		"order": _expand_order(cats), "step": 0, "picked": [], "offer": []}
+
+
+## The pick sequence of a category order: each category repeated by its configured count.
+func _expand_order(cats: Array) -> Array:
+	var quota: Dictionary = cfg["draft"]["quota"]
 	var order := []
-	for cat in DRAFT_CATEGORIES:
+	for cat in cats:
 		for i in int(quota.get(cat, 0)):
 			order.append(cat)
-	return {"order": order, "step": 0, "picked": [], "offer": []}
+	return order
+
+
+## F06-05 / F06-06: locks in seat p's category order and basic unit, then drafting starts.
+## cmd: {"t": "draft_setup", "order": [category, ...], "basic_type": Type, "basic_race": Race}.
+func _draft_setup(p: int, cmd: Dictionary) -> String:
+	var st: Dictionary = draft[p]
+	if st["setup_done"]:
+		return "Your draft setup is already locked in."
+	var quota: Dictionary = cfg["draft"]["quota"]
+	var order = cmd.get("order", null)
+	var oerr := validate_draft_order(quota, order)
+	if oerr != "":
+		return oerr
+	var copies := int(cfg["draft"]["basic_copies"])
+	var basic := -1
+	if copies > 0:
+		basic = basic_for(String(cmd.get("basic_type", "")), String(cmd.get("basic_race", "")))
+		if basic == -1:
+			return "Choose a Type and a Race for your basic unit."
+	var cats: Array = order.map(func(c): return String(c))
+	st["cat_order"] = cats
+	st["order"] = _expand_order(cats)
+	st["basic"] = basic
+	st["setup_done"] = true
+	st["step"] = 0
+	st["offer"] = []
+	st["picked"] = []
+	for i in copies:
+		st["picked"].append(basic)
+	var basic_part: String = ("%d× %s, then " % [copies, basic_label(basic)]) if copies > 0 else ""
+	_log("%s starts drafting: %s%s." % [names[p], basic_part, draft_composition_text(quota, cats)])
+	if st["order"].is_empty():
+		_finish_draft(p)
+	else:
+		_ensure_offer(p)
+	return ""
+
+
+func _finish_draft(p: int) -> void:
+	decks[p] = draft[p]["picked"].duplicate()
+	deck_names[p] = "Drafted deck"
+	deck_ready[p] = true
+	_log("%s finishes drafting." % names[p])
 
 
 func _draft_pool(cat: String) -> Array:
@@ -358,7 +485,6 @@ func _draft_pool(cat: String) -> Array:
 		var c: String = d["category"]
 		var ok := false
 		match cat:
-			"basic": ok = c == "basic_unit"
 			"unit": ok = c == "unit"
 			"spell", "trap", "power": ok = c == cat
 			"extra": ok = c in EXTRA_CATEGORIES
@@ -369,7 +495,7 @@ func _draft_pool(cat: String) -> Array:
 
 func _ensure_offer(p: int) -> void:
 	var st: Dictionary = draft[p]
-	if st["step"] >= st["order"].size() or not st["offer"].is_empty():
+	if not st.get("setup_done", true) or st["step"] >= st["order"].size() or not st["offer"].is_empty():
 		return
 	var pool := _draft_pool(st["order"][st["step"]])
 	var offer := []
@@ -386,16 +512,11 @@ func _draft_pick(p: int, index: int) -> String:
 	if index < 0 or index >= st["offer"].size():
 		return "Invalid draft choice."
 	var id: int = st["offer"][index]
-	var copies: int = int(cfg["draft"]["basic_copies"]) if st["order"][st["step"]] == "basic" else 1
-	for i in copies:
-		st["picked"].append(id)
+	st["picked"].append(id)
 	st["step"] += 1
 	st["offer"] = []
 	if st["step"] >= st["order"].size():
-		decks[p] = st["picked"].duplicate()
-		deck_names[p] = "Drafted deck"
-		deck_ready[p] = true
-		_log("%s finishes drafting." % names[p])
+		_finish_draft(p)
 	else:
 		_ensure_offer(p)
 	return ""
@@ -491,22 +612,9 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 			decks[p].erase(id2)
 			r["taken"].append("Removed %s" % CardDB.get_def(id2)["name"])
 		"reward_basic":
-			var from_id := int(cmd.get("from_id", -1))
-			var to_type: String = cmd.get("to_type", "")
-			if not (from_id in decks[p]) or CardDB.get_def(from_id)["category"] != "basic_unit":
-				return "Choose a basic unit in your deck."
-			# Race and/or Type may change (user feedback 2026-10-16); an omitted race keeps the current one.
-			var to_id := basic_variant(from_id, to_type, String(cmd.get("to_race", "")))
-			if to_id == -1 or to_id == from_id:
-				return "Choose a different Race or Type."
-			var changed_n := 0
-			for i in decks[p].size():
-				if decks[p][i] == from_id:
-					decks[p][i] = to_id
-					changed_n += 1
-					if not cfg["basic_change_all_copies"]:
-						break
-			r["taken"].append("Changed %d %s to %s" % [changed_n, CardDB.get_def(from_id)["name"], CardDB.get_def(to_id)["name"]])
+			var eb := _change_basics(p, cmd)
+			if eb != "":
+				return eb
 		"reward_finish":
 			r["left"] = 0
 		_:
@@ -519,6 +627,37 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 	if rewards[0]["done"] and rewards[1]["done"]:
 		stage = STAGE_FIRST
 	checkpoint.emit()
+	return ""
+
+
+## F06-04 "Change basic units": EVERY basic unit in p's deck becomes the chosen variant in one
+## step. cmd: {"t": "reward_basic", "to_type": Type, "to_race": Race}. A pre-F06-04 command with
+## `from_id` is still accepted: an omitted race then keeps that unit's Race (otherwise the Race of
+## the deck's first basic unit). A change that would alter nothing is refused.
+func _change_basics(p: int, cmd: Dictionary) -> String:
+	var idx := []
+	for i in decks[p].size():
+		if CardDB.get_def(decks[p][i])["category"] == "basic_unit":
+			idx.append(i)
+	if idx.is_empty():
+		return "You have no basic units to change."
+	var race := String(cmd.get("to_race", ""))
+	if race == "":
+		var from_id := int(cmd.get("from_id", -1))
+		var src: int = decks[p][idx[0]]
+		if from_id in decks[p] and CardDB.get_def(from_id)["category"] == "basic_unit":
+			src = from_id
+		race = String(CardDB.get_def(src)["race"])
+	var to_id := basic_for(String(cmd.get("to_type", "")), race)
+	if to_id == -1:
+		return "Choose a Type and a Race for your basic units."
+	var deck: Array = decks[p]
+	if idx.all(func(i): return deck[i] == to_id):
+		return "Your basic units are already %s. Choose a different Type or Race." % basic_label(to_id)
+	for i in idx:
+		deck[i] = to_id
+	rewards[p]["taken"].append("Changed %d basic unit%s to %s" % [idx.size(), "" if idx.size() == 1 else "s", basic_label(to_id)])
+	_log("%s changes their basic units to %s." % [names[p], basic_label(to_id)])
 	return ""
 
 
@@ -562,31 +701,52 @@ func view_for(p: int) -> Dictionary:
 				v["starters"] = starters.map(func(s): return {"name": s["name"], "theme": s["theme"],
 					"main": s["main"].map(func(i): return card_summary(i)), "extra": s["extra"].map(func(i): return card_summary(i))})
 			else:
-				_ensure_offer(p)
-				var st: Dictionary = draft[p]
-				var dcat: String = st["order"][st["step"]] if st["step"] < st["order"].size() else ""
-				v["draft"] = {"step": st["step"], "total": st["order"].size(),
-					"category": dcat, "category_label": DRAFT_LABELS.get(dcat, dcat.capitalize()),
-					"quota": cfg["draft"]["quota"].duplicate(),
-					"composition": draft_composition_text(cfg["draft"]["quota"], int(cfg["draft"]["basic_copies"])),
-					"offer": st["offer"].map(func(i): return card_summary(i)), "picked": st["picked"].map(func(i): return card_summary(i))}
+				v["draft"] = _draft_view(p)
 		STAGE_REWARDS:
 			var r: Dictionary = rewards[p]
 			var types := []
 			for cat in REWARD_TYPES:
 				if not reward_pool(cat).is_empty():
 					types.append(cat)
-			var races := []
-			for d in CardDB.all():
-				if d["category"] == "basic_unit" and not (d["race"] in races):
-					races.append(d["race"])
+			var races := basic_races()
 			v["rewards"] = {"left": r["left"], "done": r["done"], "taken": r["taken"].duplicate(),
 				"offer": r["offer"].map(func(i): return card_summary(i)), "pending": r.get("pending", false),
 				"offer_type": r.get("offer_type", ""), "types": types,
-				"opponent_done": rewards[1 - p]["done"], "basic_types": CardDB.ELEMENTS, "basic_races": races}
+				"opponent_done": rewards[1 - p]["done"], "basic_types": CardDB.ELEMENTS, "basic_races": races,
+				"basic_options": basic_options()}
 	if stage in [STAGE_REWARDS, STAGE_FIRST, STAGE_OVER, STAGE_DECKS]:
 		v["deck"] = decks[p].map(func(i): return card_summary(i))
 	return v
+
+
+## Seat p's draft: its setup (order, basic unit, the Type and Race choices), its progress and
+## offer. Of the other seat only the progress is shown, never its offer or picks (hidden info).
+func _draft_view(p: int) -> Dictionary:
+	_ensure_offer(p)
+	var st: Dictionary = draft[p]
+	var quota: Dictionary = cfg["draft"]["quota"]
+	var dcat: String = st["order"][st["step"]] if st["setup_done"] and st["step"] < st["order"].size() else ""
+	var opp: Dictionary = draft[1 - p]
+	return {"setup_done": st["setup_done"], "cat_order": st["cat_order"].duplicate(),
+		"basic": card_summary(st["basic"]) if st["basic"] != -1 else {},
+		"basic_copies": int(cfg["draft"]["basic_copies"]), "basic_options": [] if st["setup_done"] else basic_options(),
+		"basic_types": CardDB.ELEMENTS, "basic_races": basic_races(),
+		"labels": DRAFT_LABELS.duplicate(),
+		"step": st["step"], "total": st["order"].size(),
+		"category": dcat, "category_label": DRAFT_LABELS.get(dcat, dcat.capitalize()),
+		"quota": quota.duplicate(),
+		"composition": draft_composition_text(quota, st["cat_order"]),
+		"offer": st["offer"].map(func(i): return card_summary(i)), "picked": st["picked"].map(func(i): return card_summary(i)),
+		"opponent": {"setup_done": opp["setup_done"], "step": opp["step"], "total": opp["order"].size()}}
+
+
+## Card summaries of every basic unit (the Type x Race pickers' previews).
+static func basic_options() -> Array:
+	var out := []
+	for d in CardDB.all():
+		if d["category"] == "basic_unit":
+			out.append(card_summary(int(d["id"])))
+	return out
 
 
 ## Display summary of card `id` (name, cost, stats, rules text, support status) for menus and rewards.

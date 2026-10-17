@@ -23,6 +23,8 @@ const COIN_FLIP := 85
 const SCREEN_FLASH := 87
 const GAME_END := 88
 const PILE_POPUP := 90
+## A picker opened from a series-stage modal (F06-06 Choose basic unit), over it and its dim.
+const MODAL_PICKER := 92
 const GAME_MENU := 95
 ## Spell/Trap spotlight: backdrop, card, caption pill (above lifted cards, status glows, floating text).
 const SPOTLIGHT_DIM := 95

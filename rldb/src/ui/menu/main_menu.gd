@@ -337,6 +337,11 @@ func _draft_quota_box(opts: Dictionary) -> VBoxContainer:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
 	box.add_child(UIStyle.label("Draft picks per category", 15, UIStyle.MUTED))
+	# F06-06: the basic unit is no longer a counted category; F06-05: each player orders these.
+	var copies := int(Series.load_mode_config()["draft"].get("basic_copies", 3))
+	var note := UIStyle.label("Before drafting, each player chooses a basic unit (×%d copies) and the order of these categories." % copies, 13, UIStyle.TEXT_DIM, true)
+	note.custom_minimum_size = Vector2(300, 0)
+	box.add_child(note)
 	var total_l := UIStyle.label("", 14, UIStyle.MUTED)
 	var warn := UIStyle.label("", 14, Color("ff6b5e"))
 	var refresh := func():
