@@ -637,17 +637,29 @@ func _build() -> void:
 	_build_preview(body)
 	_build_deck(body)
 
+	# Status toast: floats over the bottom edge so a message never pushes the columns around.
 	_status_panel = PanelContainer.new()
-	var ssb := UIStyle.flat(Color(0, 0, 0, 0.3), Color(UIStyle.BRONZE, 0.5), 1, 6)
-	ssb.content_margin_left = 12
-	ssb.content_margin_right = 12
+	var ssb := UIStyle.flat(Color(0.05, 0.04, 0.03, 0.94), Color(UIStyle.GOLD, 0.6), 1, 8)
+	ssb.content_margin_left = 16
+	ssb.content_margin_right = 16
+	ssb.content_margin_top = 6
+	ssb.content_margin_bottom = 6
+	UIStyle.lift_style(ssb, Color(0, 0, 0, 0.6), 10, 2)
 	_status_panel.add_theme_stylebox_override("panel", ssb)
 	_status_panel.visible = false
-	_status_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_status_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_status_panel.anchor_left = 0.5
+	_status_panel.anchor_right = 0.5
+	_status_panel.anchor_top = 1.0
+	_status_panel.anchor_bottom = 1.0
+	_status_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_status_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_status_panel.offset_bottom = -MARGIN - 8
+	_status_panel.offset_top = -MARGIN - 8
+	_status_panel.z_index = 4
 	_status = UIStyle.label("", 14, UIStyle.TEXT)
 	_status_panel.add_child(_status)
-	root.add_child(_status_panel)
+	add_child(_status_panel)
 
 	# Ghost cards fly on this layer; it never takes input.
 	_fx_layer = Control.new()
@@ -799,6 +811,7 @@ func _build_deck(body: HBoxContainer) -> void:
 	_list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list_box.add_theme_constant_override("separation", 5)
 	list_sc.add_child(_list_box)
+	_list_box.minimum_size_changed.connect(_fit_list)
 
 	v.add_child(Rule.new(false))
 	# Summary pills: built once, values in fixed-width slots so nothing shifts (F16).
@@ -1072,9 +1085,15 @@ func _refresh_saved() -> void:
 	else:
 		for dk in decks:
 			_list_box.add_child(_deck_tile(String(dk["name"]), dk["cards"], String(dk["name"]) == _loaded_name, false))
-	# Fit the list to its content (tiles + gaps), scrolling only beyond LIST_MAX_H.
-	_list_scroll.custom_minimum_size.y = clampf(_list_box.get_combined_minimum_size().y + 4.0, 40.0, LIST_MAX_H)
+	_fit_list()
 	_update_actions()
+
+
+## Fits the saved/starter list to its content (tiles + gaps), scrolling only beyond LIST_MAX_H.
+## Re-run whenever the content's minimum size settles (wrapped text measures tall until it has
+## its real width).
+func _fit_list() -> void:
+	_list_scroll.custom_minimum_size.y = clampf(_list_box.get_combined_minimum_size().y + 4.0, 40.0, LIST_MAX_H)
 
 
 ## One deck tile: accent bar, name, Main/Extra counts, dominant Type icons, hover and loaded states, actions.
