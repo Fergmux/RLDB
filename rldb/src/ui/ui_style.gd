@@ -356,12 +356,29 @@ const BACKGROUND := "res://assets/art/background.jpg"   # full 4096x4096 origina
 const MENU_BACKGROUND := "res://assets/art/menu_background.jpg"   # 4096x4096 forest arch (a JPEG)
 
 
+## Loaded background textures, kept for the whole run: a screen change (back to the menu after
+## a duel) never depends on reloading a 4096x4096 image (playtest feedback 08, G10).
+static var _backgrounds := {}
+
+
+## The texture at `path`, loaded once; a failed load is retried on the next call.
+static func background_texture(path: String) -> Texture2D:
+	var t: Texture2D = _backgrounds.get(path)
+	if t == null:
+		t = load(path) as Texture2D
+		if t == null:
+			push_warning("Background image could not be loaded: %s" % path)
+		else:
+			_backgrounds[path] = t
+	return t
+
+
 static func background(dim: float = 0.0, path: String = BACKGROUND) -> Control:
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var tr := TextureRect.new()
-	tr.texture = load(path)
+	tr.texture = background_texture(path)
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # crisp when scaled below 4K
