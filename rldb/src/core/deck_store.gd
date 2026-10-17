@@ -1,10 +1,21 @@
 class_name DeckStore
 extends RefCounted
-## Locally saved custom decks (P-03: unrestricted size, mix and duplicates for now).
-## Stored in user://decks.json as [{name, cards: [card ids]}]. Main/Extra placement is
-## decided by each card's category when a game starts, so a deck is one id list.
+## Locally saved custom decks. Stored in user://decks.json as [{name, cards: [card ids]}].
+## Main/Extra placement is decided by each card's category when a game starts, so a deck is
+## one id list.
+##
+## Size caps (owner answers 2026-10-17 section 1, F16): the combined Main + Extra Deck holds at
+## most MAX_CARDS cards, and at most MAX_EXTRA of those may be Extra Deck cards. Category mix and
+## duplicates stay unrestricted. The caps are enforced the same way everywhere a custom deck is
+## built or used: editing (`add_block_reason`), saving (`validate`) and the start-of-series
+## check (Series `custom_deck` calls `validate`). Loading never trims a deck: an oversized save
+## from before the cap is listed and opened intact, can only shrink, and saves again once legal.
 
 const PATH := "user://decks.json"
+## Most cards in a deck, Main and Extra Deck combined.
+const MAX_CARDS := 99
+## Most Extra Deck (Fusion / Ritual / Arcane) cards, counted within MAX_CARDS.
+const MAX_EXTRA := 15
 
 
 static func list() -> Array:
@@ -41,8 +52,34 @@ static func split_counts(cards: Array) -> Dictionary:
 	var main := 0
 	var extra := 0
 	for id in cards:
-		if CardDB.is_extra_category(CardDB.get_def(int(id))["category"]):
+		if CardDB.has(int(id)) and CardDB.is_extra_category(CardDB.get_def(int(id))["category"]):
 			extra += 1
 		else:
 			main += 1
 	return {"main": main, "extra": extra}
+
+
+## True when card `id` belongs in the Extra Deck (unknown ids count as Main).
+static func is_extra(id: int) -> bool:
+	return CardDB.has(id) and CardDB.is_extra_category(CardDB.get_def(id)["category"])
+
+
+## Why one more copy of card `id` cannot join a deck holding `main` + `extra` cards, or ""
+## when it can. The editor uses this to disable its Add action (legal-action availability).
+static func add_block_reason(main: int, extra: int, id: int) -> String:
+	if main + extra >= MAX_CARDS:
+		return "The deck is full."
+	if is_extra(id) and extra >= MAX_EXTRA:
+		return "The Extra Deck is full."
+	return ""
+
+
+## Why deck `cards` (id list) is not legal to save or play, or "" when it is.
+static func validate(cards: Array) -> String:
+	var c := split_counts(cards)
+	var total: int = c["main"] + c["extra"]
+	if total > MAX_CARDS:
+		return "This deck has %d cards; a deck holds at most %d. Remove cards first." % [total, MAX_CARDS]
+	if c["extra"] > MAX_EXTRA:
+		return "This deck has %d Extra Deck cards; at most %d are allowed. Remove some first." % [c["extra"], MAX_EXTRA]
+	return ""
