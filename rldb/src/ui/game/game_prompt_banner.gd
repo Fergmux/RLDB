@@ -18,6 +18,10 @@ const BANNER_GAP := 12.0
 ## Breathing border period (s).
 const BANNER_BREATH := 1.4
 const OPTION_H := 32
+## Type-choice buttons (F03): the icon box's left inset and its largest side (the left content
+## margin of 42 px holds it with a gap before the label).
+const TYPE_ICON_X := 9.0
+const TYPE_ICON_MAX := 28.0
 
 ## The host screen this component works on.
 var gs: GameScreen
@@ -361,13 +365,28 @@ static func type_button(type_name: String, size: int = 15) -> Button:
 		b.add_theme_stylebox_override(k, sb)
 		b.add_theme_color_override("font_color" if k == "normal" else "font_%s_color" % k, type_text_color(fill))
 	b.add_theme_color_override("font_focus_color", type_text_color(col))
-	var badge := TypeIcons.TypeBadge.new(ty)
-	badge.set_anchor_and_offset(SIDE_TOP, 0.5, -13.0)
-	badge.set_anchor_and_offset(SIDE_BOTTOM, 0.5, 13.0)
-	badge.set_anchor_and_offset(SIDE_LEFT, 0.0, 9.0)
-	badge.set_anchor_and_offset(SIDE_RIGHT, 0.0, 35.0)
+	# F03: a fixed square icon box, centred on the button's vertical middle. The bottom anchor is
+	# set before the top one: setting the top anchor (0.5) above a bottom anchor still at 0 made
+	# Godot clamp it back to 0, which stretched the box from the button's top and drew every icon
+	# high (Waang's Type choice). The box scales with the label size, not with the button height.
+	var px := icon_box(size)
+	var badge := TypeIcons.TypeBadge.new(ty, px)
+	badge.anchor_bottom = 0.5
+	badge.anchor_top = 0.5
+	badge.anchor_left = 0.0
+	badge.anchor_right = 0.0
+	badge.offset_top = -px / 2.0
+	badge.offset_bottom = px / 2.0
+	badge.offset_left = TYPE_ICON_X
+	badge.offset_right = TYPE_ICON_X + px
+	badge.set_meta("type_icon", true)
 	b.add_child(badge)
 	return b
+
+
+## Side of the Type icon box of a Type button whose label is `font_px` (fits the left margin).
+static func icon_box(font_px: int) -> float:
+	return clampf(roundf(font_px * 1.6), 18.0, TYPE_ICON_MAX)
 
 
 ## Banner sub-line: how to answer the choice, or the hovered battle target coloured by the

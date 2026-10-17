@@ -72,6 +72,25 @@ func test_type_button_text_is_readable_in_every_state() -> void:
 			assert_float(GamePromptBanner._contrast(fill, txt)).is_greater(4.0)
 
 
+## F03 (2026-10-17): every Type icon sits in a square box centred on its button's vertical middle,
+## for each label size and button height (the icon used to sit high, e.g. Waang's choice).
+func test_type_icon_is_centred_in_a_fixed_square_box() -> void:
+	for t in UIStyle.TYPE_COLORS.keys() + ["No type"]:
+		for px in [13, 15, 18]:
+			for h in [32.0, 38.0, 52.0]:
+				var b: Button = auto_free(GamePromptBanner.type_button(t if t != "" else "No type", px))
+				add_child(b)
+				b.size = Vector2(170, h)
+				await await_idle_frame()
+				var icon: Control = b.get_children().filter(func(c): return c is TypeIcons.TypeBadge)[0]
+				var r := icon.get_rect()
+				assert_float(r.size.x).is_equal_approx(r.size.y, 0.01)
+				assert_float(r.size.y).is_less_equal(GamePromptBanner.TYPE_ICON_MAX)
+				assert_float(r.get_center().y).is_equal_approx(h / 2.0, 0.5)
+				assert_float(r.end.x).is_less_equal(42.0)   # inside the left content margin
+				remove_child(b)
+
+
 func test_non_type_mode_choice_is_not_type_styled() -> void:
 	var pd := {"kind": "mode", "options": [{"label": "10 Burn"}, {"label": "Water"}]}
 	assert_bool(GamePromptBanner.is_type_choice(pd)).is_false()
