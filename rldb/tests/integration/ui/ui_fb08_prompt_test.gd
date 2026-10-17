@@ -210,6 +210,108 @@ func test_g03_subject_falls_back_to_the_source_card_of_the_view() -> void:
 	assert_dict(gs.prompt.subject_for(pd)).is_empty()
 
 
+# ---------------------------------------------------------------- G09
+
+func _no_target(m: MatchEngine, src: int, p: int) -> void:
+	var f := m.make_frame(src, p, [], m.name_of(src))
+	m._op_choose(f, {"op": "choose", "sel": {"kind": "unit", "side": "opp"}, "as": "t"})
+
+
+func test_g09_no_target_log_row_names_its_card_only_to_seats_that_see_it() -> void:
+	var r := await _screen()
+	var m: MatchEngine = r[2]
+	var a: int = r[3]
+	for s in 6:
+		if m.players[1 - a]["units"][s] != -1:
+			m.players[1 - a]["units"][s] = -1
+	var on_field := TB.unit(m, a, 77, 2, "atk")
+	_no_target(m, on_field, a)
+	var rows := MatchView.log_for(m, a, m.log_entries[-1]["seq"] - 1)
+	assert_bool(rows[-1].get("toast", false)).is_true()
+	assert_int(int(rows[-1]["toast_uid"])).is_equal(on_field)
+	assert_dict(rows[-1]["toast_at"]).is_equal({"p": a, "zone": "unit", "slot": 2})
+	var opp_rows := MatchView.log_for(m, 1 - a, m.log_entries[-1]["seq"] - 1)
+	assert_int(int(opp_rows[-1].get("toast_uid", -1))).is_equal(on_field)   # a Field unit is public
+	# A card in my Hand: its toast is private, and the opponent gets no row (nor the uid).
+	var in_hand := TB.card(m, a, 77, "hand")
+	_no_target(m, in_hand, a)
+	var seq: int = m.log_entries[-1]["seq"]
+	var mine := MatchView.log_for(m, a, seq - 1)
+	assert_int(int(mine[-1]["toast_uid"])).is_equal(in_hand)
+	assert_bool(mine[-1].has("toast_at")).is_false()
+	for row in MatchView.log_for(m, 1 - a, seq - 1):
+		assert_bool(row.has("toast_uid")).is_false()
+
+
+func test_g09_toast_appears_above_its_card_and_falls_back_to_the_top() -> void:
+	var r := await _screen()
+	var gs: GameScreen = r[0]
+	var m: MatchEngine = r[2]
+	var a: int = r[3]
+	var u := TB.unit(m, a, 77, 1, "atk")
+	r[1].broadcast()
+	await await_idle_frame()
+	gs.prompt.show_toast("Radablast: no legal target.", UIStyle.GOLD_HI, 4.0, {"uid": u})
+	await await_idle_frame()
+	var card := gs.board.slot_global_rect(a, "unit", 1)
+	var tr := gs.prompt.toast.get_global_rect()
+	assert_bool(tr.end.y <= card.position.y).is_true()
+	assert_float(card.position.y - tr.end.y).is_less(20.0)
+	assert_float(absf(tr.get_center().x - card.get_center().x)).is_less(2.0)
+	assert_int((gs.prompt.toast as GamePromptBanner.ToastLabel).pointer).is_equal(1)
+	# A card no longer visible: the top of the board, as before.
+	gs.prompt.show_toast("Gone: no legal target.", UIStyle.GOLD_HI, 4.0, {"uid": 987654})
+	await await_idle_frame()
+	assert_float(gs.prompt.toast.position.y).is_equal(GameScreen.TOP_H + 8.0)
+	assert_int((gs.prompt.toast as GamePromptBanner.ToastLabel).pointer).is_equal(0)
+	gs.prompt.hide_toast()
+
+
+func test_g09_toast_over_a_card_at_the_top_goes_below_it_and_stays_on_screen() -> void:
+	var r := await _screen()
+	var gs: GameScreen = r[0]
+	var m: MatchEngine = r[2]
+	var a: int = r[3]
+	var u := TB.unit(m, 1 - a, 77, 3, "atk")          # the opponent's back row: the top of the board
+	r[1].broadcast()
+	await await_idle_frame()
+	var long_text := "A very long toast about this card that is wider than the card itself: no legal target."
+	gs.prompt.show_toast(long_text, UIStyle.GOLD_HI, 4.0, {"uid": u})
+	await await_idle_frame()
+	var card := gs.board.slot_global_rect(1 - a, "unit", 3)
+	var tr := gs.prompt.toast.get_global_rect()
+	assert_bool(tr.intersects(card)).is_false()
+	assert_bool(Rect2(Vector2.ZERO, gs.size).encloses(tr)).is_true()
+	gs.prompt.hide_toast()
+
+
+func test_g09_log_toast_anchor_needs_one_shared_card() -> void:
+	var one := {"toast_uid": 5, "toast_at": {"p": 0, "zone": "unit", "slot": 1}}
+	var other := {"toast_uid": 6, "toast_at": {"p": 0, "zone": "unit", "slot": 2}}
+	assert_int(int(GamePromptBanner.log_toast_anchor([one])["uid"])).is_equal(5)
+	assert_int(int(GamePromptBanner.log_toast_anchor([one, one])["uid"])).is_equal(5)
+	assert_dict(GamePromptBanner.log_toast_anchor([one, other])).is_empty()
+	assert_dict(GamePromptBanner.log_toast_anchor([{"text": "x"}])).is_empty()
+
+
+func test_g09_refused_command_shows_over_its_card_but_connection_text_stays_on_top() -> void:
+	var r := await _screen()
+	var gs: GameScreen = r[0]
+	var m: MatchEngine = r[2]
+	var a: int = r[3]
+	var u := TB.unit(m, a, 77, 1, "atk")
+	r[1].broadcast()
+	await await_idle_frame()
+	gs.acting_uid = u
+	gs.prompt.hide_toast()                             # what GameScreen.send does
+	gs.prompt.on_status("No legal target.")
+	assert_int(int((gs.prompt.toast as GamePromptBanner.ToastLabel).anchor.get("uid", -1))).is_equal(u)
+	gs.prompt.on_status("Not connected to the host.")
+	assert_dict((gs.prompt.toast as GamePromptBanner.ToastLabel).anchor).is_empty()
+	gs.acting_uid = -1
+	gs.prompt.hide_toast()
+
+
 # ---------------------------------------------------------------- G04
 
 func test_g04_exact_payment_has_no_status_line_and_a_smaller_headline() -> void:

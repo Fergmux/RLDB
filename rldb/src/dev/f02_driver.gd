@@ -172,6 +172,11 @@ func _steps() -> void:
 	await _click(_zone_rect(a, "unit", 5).get_center())
 	await _wait(0.5)
 	_check("F02-09 toast explains missing target", gs.prompt.toast.text.contains("no legal target"), gs.prompt.toast.text)
+	# G09: the toast sits just above Loak (back row, column 3), not at the top of the board.
+	var tr := gs.prompt.toast.get_global_rect()
+	var lr := _slot_rect(a, "unit", 5)
+	_check("G09 no-legal-target toast is above the card that used the effect", tr.end.y <= lr.position.y + 1.0 and lr.position.y - tr.end.y < 24.0 \
+		and tr.position.x <= lr.get_center().x and tr.end.x >= lr.get_center().x, "toast %s card %s" % [tr, lr])
 	_check("F02-09 no fake choice / queue not stuck", m.pending.is_empty() and m.stack.is_empty())
 	await _shot("08_no_target_toast")
 	# F02-10 single pick from a pile tray (Anduras: unit from Spent to Draw).

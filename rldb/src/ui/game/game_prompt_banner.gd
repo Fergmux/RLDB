@@ -56,6 +56,12 @@ const MENTION_ARROW_W := 22.0
 const DECLINE_LABELS := ["Pass", "No", "Skip"]
 ## Prompt kinds whose options are a vertical list (accept first, decline last) rather than a flow.
 const LIST_KINDS := ["trap_response", "confirm", "order"]
+## G09: gap between a card and the toast about it, the toast pointer's length, its fade-in (s), and
+## how long after a command a refusal is still taken to be about that command's card (ms).
+const TOAST_GAP := 4.0
+const TOAST_POINTER := 7.0
+const TOAST_FADE := 0.12
+const STATUS_ANCHOR_MS := 1500
 ## G03: caption under each card of the response strip, by role.
 const ROLE_CAPTIONS := {"attacker": "Attacker", "target": "Target", "summoned": "Summoned",
 	"activated": "Activated", "destroyed": "Destroyed", "direct": "Direct attack"}
@@ -121,6 +127,9 @@ var banner_tag: Label
 var _banner_pid: int = -2
 var _wait_tween: Tween
 var _toast_game: int = -99
+## G09: the card of the last command sent and when (a refusal of it shows over that card).
+var _sent_uid: int = -1
+var _sent_ms: int = 0
 ## Full actor tag ("BEN · YOUR DECISION"); the narrow panel shows only "YOUR DECISION".
 var _tag_full: String = ""
 ## Prompt + column for which the side column proved too short (the panel then uses the top strip).
@@ -545,7 +554,10 @@ func build_notices() -> void:
 	wrow.add_child(rune)
 	wrow.add_child(wait_label)
 	gs.add_child(wait_chip)
-	toast = UIStyle.label("", 15, UIStyle.BAD, true)
+	var tl := ToastLabel.new()
+	tl.follow = place_toast
+	toast = tl
+	toast.add_theme_color_override("font_color", UIStyle.BAD)
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	toast.add_theme_constant_override("outline_size", 4)
@@ -1167,37 +1179,138 @@ func show_wait(text: String) -> void:
 		_wait_tween.tween_property(wait_chip, "modulate:a", 1.0, 0.9).set_trans(Tween.TRANS_SINE)
 
 
-## Short non-blocking message over the board; it never waits for input.
-func show_toast(text: String, col: Color, secs: float) -> void:
-	var area := gs.play_area
+
+## Short non-blocking message over the board; it never waits for input. G09: with an `anchor`
+## ({"uid": card uid, "at": {p, zone, slot}}) about a card, it appears just above that card on the
+## board, in the Hand or in the pile tray (below it when there is no room above), kept on screen,
+## and follows the card while shown; it falls back to the top of the board when the card cannot be
+## found (no longer visible).
+func show_toast(text: String, col: Color, secs: float, anchor: Dictionary = {}) -> void:
 	toast.text = text
 	toast.visible = text != ""
 	toast.size = Vector2.ZERO
-	toast.position = Vector2(area.position.x + (area.size.x - minf(area.size.x - 120.0, toast.get_combined_minimum_size().x)) / 2.0, GameScreen.TOP_H + 8.0)
 	toast.add_theme_color_override("font_color", col)
+	(toast as ToastLabel).anchor = anchor
+	place_toast()
+	if toast.visible and not UIStyle.reduce_motion:
+		toast.modulate.a = 0.0
+		gs.create_tween().tween_property(toast, "modulate:a", 1.0, UIStyle.dur(TOAST_FADE))
+	else:
+		toast.modulate.a = 1.0
 	var t := gs.get_tree().create_timer(secs)
 	t.timeout.connect(func():
 		# The screen (and its toast) may be gone by now: a SceneTree timer outlives it.
 		if is_instance_valid(toast) and toast.text == text:
 			toast.text = ""
-			toast.visible = false)
+			toast.visible = false
+			(toast as ToastLabel).anchor = {})
 
 
-## Hides the toast at once (a command was sent).
+## Places the toast over its card (G09) or, without one, centred at the top of the board.
+func place_toast() -> void:
+	if toast == null or not toast.visible:
+		return
+	var tl := toast as ToastLabel
+	var area := gs.play_area
+	var sz := toast.get_combined_minimum_size()
+	toast.size = sz
+	var r := toast_anchor_rect(tl.anchor)
+	if r.size == Vector2.ZERO:
+		tl.pointer = 0
+		toast.position = Vector2(area.position.x + (area.size.x - minf(area.size.x - 120.0, sz.x)) / 2.0, GameScreen.TOP_H + 8.0).round()
+		return
+	var inv := gs.get_global_transform().affine_inverse()
+	var lr := Rect2(inv * r.position, inv * r.end - inv * r.position)
+	var view := gs.get_rect().size
+	var gap := TOAST_GAP + TOAST_POINTER
+	var y := lr.position.y - gap - sz.y
+	tl.pointer = 1                               # pointing down at the card under it
+	if y < GameScreen.TOP_H + 4.0:
+		y = lr.end.y + gap                       # no room above (the opponent's top row): below it
+		tl.pointer = -1
+	y = clampf(y, 4.0, view.y - sz.y - 4.0)
+	var x := clampf(lr.get_center().x - sz.x / 2.0, 8.0, maxf(8.0, view.x - sz.x - 8.0))
+	toast.position = Vector2(x, y).round()
+	tl.pointer_x = clampf(lr.get_center().x - toast.position.x, 12.0, sz.x - 12.0)
+	toast.queue_redraw()
+
+
+## Global rect of the card a toast anchor names, or Rect2() when it is not visible: the card by uid
+## (board, Hand, pile tray), else the board zone it was in.
+func toast_anchor_rect(anchor: Dictionary) -> Rect2:
+	if anchor.is_empty():
+		return Rect2()
+	var uid := int(anchor.get("uid", -1))
+	if uid != -1:
+		var slots := gs.board.slots
+		for k in slots:
+			var w: CardWidget = slots[k]["widget"]
+			if w.visible and not w.view.get("hidden", false) and int(w.view.get("uid", -9)) == uid:
+				return (slots[k]["holder"] as Control).get_global_rect()
+		var items := gs.hand.items
+		if items.has(uid) and (items[uid]["holder"] as Control).is_visible_in_tree():
+			return (items[uid]["holder"] as Control).get_global_rect()
+		if tray != null and tray.visible:
+			for w in _tray_widgets():
+				if int(w.view.get("uid", -9)) == uid:
+					return w.get_global_rect()
+	var at: Dictionary = anchor.get("at", {})
+	if not at.is_empty():
+		var it: Dictionary = gs.fx_slot_item(int(at["p"]), String(at["zone"]), int(at["slot"]))
+		if not it.is_empty():
+			var w2: CardWidget = it["widget"]
+			# Only while a card is still in that zone (the uid lookup above failed: it may be hidden).
+			if w2.visible and (uid == -1 or int(w2.view.get("uid", uid)) == uid):
+				return (it["holder"] as Control).get_global_rect()
+	return Rect2()
+
+
+func _tray_widgets() -> Array:
+	var out := []
+	var stack: Array = [tray_box]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		for c in n.get_children():
+			if c is CardWidget:
+				out.append(c)
+			else:
+				stack.append(c)
+	return out
+
+
+## Hides the toast at once (a command was sent). G09: remembers the card the command is about,
+## so a refusal of it (on_status) appears over that card.
 func hide_toast() -> void:
 	toast.text = ""
 	toast.visible = false
+	(toast as ToastLabel).anchor = {}
+	_sent_uid = gs.acting_uid
+	_sent_ms = Time.get_ticks_msec()
 
 
-## A rejected command / status message from the seat client.
+## A rejected command / status message from the seat client. A refusal that answers a card's
+## command just sent shows over that card (G09); connection messages stay at the top.
 func on_status(text: String) -> void:
 	if text != "":
 		Sfx.play("deny")
-	show_toast(text, UIStyle.BAD, 4.0)
+	var anchor := {}
+	if _sent_uid != -1 and Time.get_ticks_msec() - _sent_ms <= STATUS_ANCHOR_MS and not _is_connection_text(text):
+		anchor = {"uid": _sent_uid}
+	show_toast(text, UIStyle.BAD, 4.0, anchor)
+
+
+## True for a session / connection message (never about a card).
+static func _is_connection_text(text: String) -> bool:
+	var t := text.to_lower()
+	for w in ["connect", "host", "lobby", "steam", "reconnect"]:
+		if t.contains(w):
+			return true
+	return false
 
 
 ## F02-09: log entries flagged as toasts (e.g. a triggered effect with no legal target)
 ## also show briefly over the board. Only new entries of the current game; never on attach.
+## G09: over the card the entry is about when every shown entry is about the same card.
 func show_log_toasts() -> void:
 	var mv := gs.mv
 	if mv.is_empty():
@@ -1214,8 +1327,58 @@ func show_log_toasts() -> void:
 	var shown := []
 	for e in entries:
 		if int(e["seq"]) > seen_toast_seq and e.get("toast", false) and String(e["text"]) != "":
-			shown.append(String(e["text"]))
+			shown.append(e)
 	seen_toast_seq = maxi(seen_toast_seq, maxseq)
-	if not shown.is_empty():
-		Sfx.play("notice")
-		show_toast("  ·  ".join(shown.slice(maxi(0, shown.size() - 2))), UIStyle.GOLD_HI, 4.5)
+	if shown.is_empty():
+		return
+	shown = shown.slice(maxi(0, shown.size() - 2))
+	var anchor := log_toast_anchor(shown)
+	Sfx.play("notice")
+	show_toast("  ·  ".join(shown.map(func(e): return String(e["text"]))), UIStyle.GOLD_HI, 4.5, anchor)
+
+
+## The card shared by toast log rows `rows` ({"uid", "at"}), or {} when they name different cards
+## or none.
+static func log_toast_anchor(rows: Array) -> Dictionary:
+	var anchor := {}
+	for e in rows:
+		var a := {}
+		if e.has("toast_uid"):
+			a["uid"] = int(e["toast_uid"])
+		if not (e.get("toast_at", {}) as Dictionary).is_empty():
+			a["at"] = e["toast_at"]
+		if a.is_empty():
+			return {}
+		if not anchor.is_empty() and (int(anchor.get("uid", -1)) != int(a.get("uid", -1)) or str(anchor.get("at", {})) != str(a.get("at", {}))):
+			return {}
+		anchor = a
+	return anchor
+
+
+## The toast label (G09): follows its card every frame while shown and draws a small pointer
+## toward it.
+class ToastLabel extends Label:
+	## {"uid", "at"} of the card the toast is about, or {}.
+	var anchor: Dictionary = {}
+	## 1: pointing down (the toast is above its card), -1: pointing up, 0: no pointer.
+	var pointer: int = 0
+	## Pointer position along the toast (local x).
+	var pointer_x: float = 0.0
+	## Re-places the toast (the banner's place_toast).
+	var follow: Callable
+
+	func _process(_d: float) -> void:
+		if visible and not anchor.is_empty() and follow.is_valid():
+			follow.call()
+
+	func _draw() -> void:
+		if pointer == 0:
+			return
+		var h := GamePromptBanner.TOAST_POINTER
+		var y := size.y if pointer == 1 else 0.0
+		var tip := Vector2(pointer_x, y + h * pointer)
+		var fill := Color(0.06, 0.05, 0.045, 0.94)
+		var base := y - 1.5 * pointer             # over the plate's border, so the pointer joins it
+		var pts := PackedVector2Array([Vector2(pointer_x - 7.0, base), Vector2(pointer_x + 7.0, base), tip])
+		draw_colored_polygon(pts, fill)
+		draw_polyline(PackedVector2Array([pts[0], tip, pts[1]]), Color(UIStyle.GOLD, 0.7), 1.0, true)

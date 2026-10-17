@@ -36,6 +36,9 @@ func _op_choose(f: Dictionary, op: Dictionary) -> int:
 			var msg := "%s: no legal target." % f["label"]
 			add_log(msg if is_public_card(f["src"]) else "", {f["ctl"]: msg})
 			log_entries[-1]["toast"] = true
+			# G09: shown over the card whose effect found nothing (MatchView.log_for redacts the uid).
+			log_entries[-1]["toast_src"] = f["src"]
+			log_entries[-1]["toast_at"] = fx_pos(f["src"])
 		return R.END if op.get("end_if_none", false) else R.CONT
 	if op.get("random", false):
 		f["vars"][op["as"]] = [cands[rng.randi_range(0, cands.size() - 1)]]

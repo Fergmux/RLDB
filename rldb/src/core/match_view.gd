@@ -347,6 +347,13 @@ static func log_for(m: MatchEngine, viewer: int, since: int = 0) -> Array:
 			var row := {"seq": e["seq"], "turn": e["turn"], "text": text, "fx": redact_fx(e.get("fx", []), viewer)}
 			if e.get("toast", false):
 				row["toast"] = true
+				# G09: the card the toast is about, so it can appear over that card: its board position
+				# when the entry was made (public), and its uid while this seat may see the card.
+				if not (e.get("toast_at", {}) as Dictionary).is_empty():
+					row["toast_at"] = e["toast_at"]
+				var tu := int(e.get("toast_src", -1))
+				if m.cards.has(tu) and can_see(m, tu, viewer):
+					row["toast_uid"] = tu
 			out.append(row)
 		elif e["pub"] != "" and not e.get("fx", []).is_empty():
 			# Presentation-only events carry public board positions/amounts, never identities.
