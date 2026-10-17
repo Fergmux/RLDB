@@ -46,13 +46,18 @@ var title_label: Label
 var tag_label: Label
 ## Content column under the header; add the panel's content here.
 var body: VBoxContainer
-## Corner flourish arm length (px).
-var arm: float = 14.0
+## Corner flourish arm length (px); the header row keeps its tag clear of the flourish.
+var arm: float = 14.0:
+	set(v):
+		arm = v
+		_fit_head_end()
+		queue_redraw()
 ## Draw the faint diagonal weave over the body.
 var weave: bool = true
 
 var _box: StyleBoxFlat
 var _col: VBoxContainer
+var _head_end: Control
 var _header: bool = true
 var _tween: Tween
 var _gen := 0
@@ -92,10 +97,20 @@ func _init(title: String = "", tag: String = "", pad: Vector2 = Vector2(22, 18),
 		tag_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		tag_label.visible = tag != ""
 		head_row.add_child(tag_label)
+		_head_end = Control.new()
+		_head_end.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		head_row.add_child(_head_end)
+		_fit_head_end()
 	body = VBoxContainer.new()
 	body.add_theme_constant_override("separation", gap)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_col.add_child(body)
+
+
+# Room at the right end of the header row so the tag never runs under the corner flourish.
+func _fit_head_end() -> void:
+	if _head_end != null:
+		_head_end.custom_minimum_size.x = maxf(0.0, arm + 8.0 - _box.content_margin_right)
 
 
 ## The rim style (border colour, glow, content margins).
@@ -126,9 +141,10 @@ func chrome_size() -> Vector2:
 
 
 ## Adds the house headline to the body: a display-face title over a fading gold rule. Returns
-## the title label.
-func add_headline(text: String, font_size: int = 21, centred: bool = false, rule_h: float = 8.0) -> Label:
-	var t := UIStyle.label(text, font_size, UIStyle.GOLD_HI, true, true)
+## the title label. `wrap` word-wraps it: use it only on a panel with a set width (a wrapped label
+## in a content-sized panel measures itself one word wide and makes the panel tall).
+func add_headline(text: String, font_size: int = 21, centred: bool = false, rule_h: float = 8.0, wrap: bool = true) -> Label:
+	var t := UIStyle.label(text, font_size, UIStyle.GOLD_HI, wrap, true)
 	t.custom_minimum_size = Vector2(40, 0)
 	if centred:
 		t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

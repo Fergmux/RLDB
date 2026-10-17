@@ -73,7 +73,7 @@ func build_popups() -> void:
 	settings_popup.z_index = UiLayers.GAME_MENU
 	gs.add_child(settings_popup)
 	var sv := set_plate.body
-	set_plate.add_headline("Interface settings", 19)
+	set_plate.add_headline("Interface settings", 19, false, 8.0, false)
 	var rm := CheckBox.new()
 	rm.text = "Reduced motion (no travel, shake or particles)"
 	rm.button_pressed = UIStyle.reduce_motion
@@ -134,6 +134,7 @@ func toggle() -> void:
 ## Shows a house popover with its opening animation.
 func _show_popup(p: Control) -> void:
 	p.visible = true
+	p.reset_size()
 	(p as HousePanel).appear()
 
 

@@ -239,7 +239,7 @@ func render() -> void:
 	overlay.visible = true
 	overlay_dim.visible = true
 	var house := overlay as HousePanel
-	house.set_title("Series · game %d" % int(view.get("game_no", 1)) if stage != "over" else "Series")
+	house.set_title("Series · %s" % String({"decks": "deck choice", "rewards": "rewards", "first_player": "next game", "over": "final result"}.get(stage, stage)))
 	house.set_tag("Best of %d" % int(view.get("best_of", 3)))
 	if opening:
 		house.appear()
