@@ -35,6 +35,8 @@ var banner_sub: RichTextLabel
 var banner_btns: HFlowContainer
 ## Banner flow of option buttons.
 var banner_flow: HFlowContainer
+## F08: circles of an exact material cost (shown only for exact-total choices).
+var cost_pips: CostPips
 ## Tray offering pile cards for a choice (a HousePanel).
 var tray: PanelContainer
 ## Container of the tray cards.
@@ -88,6 +90,9 @@ func build() -> void:
 	banner_sub.add_theme_font_override("normal_font", UIStyle.font_body())
 	banner_sub.add_theme_font_override("bold_font", UIStyle.font_bold())
 	bcol.add_child(banner_sub)
+	cost_pips = CostPips.new()
+	cost_pips.visible = false
+	bcol.add_child(cost_pips)
 	banner_flow = HFlowContainer.new()
 	banner_flow.add_theme_constant_override("h_separation", 6)
 	banner_flow.add_theme_constant_override("v_separation", 6)
@@ -173,6 +178,9 @@ func render() -> void:
 
 
 func _multi_status(pd: Dictionary) -> String:
+	var ep := exact_payment(pd, gs.multi)
+	if not ep.is_empty():
+		return exact_status(ep)
 	var total_txt := ""
 	if pd.get("min_total", 0) > 0:
 		var total := 0
@@ -183,6 +191,62 @@ func _multi_status(pd: Dictionary) -> String:
 		total_txt = "  ·  cost total %d / %s%d" % [total, "exactly " if pd.get("total_exact", false) else "", pd["min_total"]]
 	var rng := "%d" % pd["min"] if pd["min"] == pd["max"] else "%d–%d" % [pd["min"], pd["max"]]
 	return "Selected %d of %s%s" % [gs.multi.size(), rng, total_txt]
+
+
+## F08: the exact-total payment of a material choice for picks `picks`:
+## {"need", "paid", "remaining", "costs"} (costs: each pick's current cost, in pick order), or {}
+## when the choice has no exact total. Values are the authority's current modified costs.
+static func exact_payment(pd: Dictionary, picks: Array) -> Dictionary:
+	if pd.is_empty() or not bool(pd.get("total_exact", false)) or not pd.has("total_required"):
+		return {}
+	var need := int(pd["total_required"])
+	var costs := []
+	for i in picks:
+		costs.append(option_value(pd, int(i)))
+	var paid := 0
+	for v in costs:
+		paid += int(v)
+	return {"need": need, "paid": paid, "remaining": need - paid, "costs": costs}
+
+
+## Current cost an option pays (its `value`, else its card's cost; never below 0).
+static func option_value(pd: Dictionary, i: int) -> int:
+	for o in pd.get("options", []):
+		if int(o["i"]) == i:
+			return maxi(int(o.get("value", o.get("card", {}).get("cost", 0))), 0)
+	return 0
+
+
+## F08: whether option `o` is offered at all in an exact-total choice: its cost must be above 0
+## and no more than the whole total (other choices offer every option).
+static func payable_option(pd: Dictionary, o: Dictionary) -> bool:
+	var ep := exact_payment(pd, [])
+	if ep.is_empty():
+		return true
+	var v := option_value(pd, int(o["i"]))
+	return v > 0 and v <= int(ep["need"])
+
+
+## F08: true when adding option `i` to `picks` would pay more than the exact total. A picked
+## option never overpays (it can always be deselected).
+static func would_overpay(pd: Dictionary, picks: Array, i: int) -> bool:
+	if i in picks:
+		return false
+	var ep := exact_payment(pd, picks)
+	if ep.is_empty():
+		return false
+	return option_value(pd, i) > int(ep["remaining"])
+
+
+## Status line of an exact payment: what is still owed, or that it is paid exactly.
+static func exact_status(ep: Dictionary) -> String:
+	var need := int(ep["need"])
+	var paid := int(ep["paid"])
+	if paid == 0:
+		return "Pay exactly %d: select materials whose costs fill the circles." % need
+	if paid == need:
+		return "Exact cost paid (%d of %d). Confirm to continue." % [paid, need]
+	return "%d of %d paid · %d remaining." % [paid, need, need - paid]
 
 
 ## F02-07 context banner: what is being chosen, for which effect, how many and in what order,
@@ -215,6 +279,11 @@ func _render_banner() -> void:
 	elif int(pd["max"]) > 1:
 		how = _multi_status(pd)
 	_banner_how = how
+	var ep := exact_payment(pd, gs.multi)
+	cost_pips.visible = not ep.is_empty()
+	if not ep.is_empty():
+		cost_pips.set_payment(int(ep["need"]), ep["costs"])
+		cost_pips.tooltip_text = exact_status(ep)
 	update_banner_sub()
 	# Card/zone options are picked on the board; every other option is a button here.
 	var row: Control = banner_btns if pick else banner_flow
@@ -467,7 +536,13 @@ func _render_tray() -> void:
 		tray_cards[uid] = cv
 		var idx: int = o["i"]
 		var w := CardWidget.new().setup(cv, "mini")
-		w.set_marks(true, idx in gs.multi)
+		# F08: a material that would pay more than what remains is visibly unavailable.
+		var over := would_overpay(pd, gs.multi, idx)
+		w.set_marks(not over, idx in gs.multi, over)
+		if over:
+			w.tooltip_text = "Cannot overpay"
+			w.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN
+		w.set_meta("overpay", over)
 		w.order_no = gs.selection.order_no(idx)
 		w.pressed.connect(func(_w): gs.selection.pick_option(idx))
 		w.right_pressed.connect(gs.inspect.inspect_widget)

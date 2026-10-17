@@ -37,7 +37,9 @@ func board_targeting() -> bool:
 ## Card options that are neither on the board nor in my Hand: shown in the pile tray (F02-10).
 func tray_options(pd: Dictionary) -> Array:
 	var items := gs.hand.items
-	return pd.get("options", []).filter(func(o): return o.has("card") and not o.has("ref") and not items.has(int(o["card"].get("uid", -1))))
+	# F08: an exact-total material choice offers no 0-cost material and none costing more than the total.
+	return pd.get("options", []).filter(func(o): return o.has("card") and not o.has("ref") and not items.has(int(o["card"].get("uid", -1))) \
+		and GamePromptBanner.payable_option(pd, o))
 
 
 ## My pending option for player p's zone slot, or -1.
@@ -181,6 +183,16 @@ func item_for_uid(uid: int) -> Dictionary:
 func pick_option(i: int) -> void:
 	var pd := gs.pending()
 	if pd["max"] > 1:
+		# F08: never silently overpay an exact total; an unofferable option cannot be picked either.
+		if not (i in gs.multi) and bool(pd.get("total_exact", false)):
+			var o: Dictionary = {}
+			for oo in pd.get("options", []):
+				if int(oo["i"]) == i:
+					o = oo
+			if o.is_empty() or not GamePromptBanner.payable_option(pd, o) or GamePromptBanner.would_overpay(pd, gs.multi, i):
+				Sfx.play("deny")
+				gs.prompt.show_toast("Cannot overpay", UIStyle.BAD, 2.0)
+				return
 		if i in gs.multi:
 			gs.multi.erase(i)
 			Sfx.play("cancel")
