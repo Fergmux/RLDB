@@ -1,8 +1,64 @@
 rules_version = '2';
-// Interim lockdown (17 Oct 2026): no game build uploads yet, so every client read and write is
-// denied. Replaced by the tested direct-write telemetry rules (see design/production-batch-2026-10-17/).
+// RLDB gameplay telemetry, schema v1 (docs/telemetry/schema-v1.md). Spark plan: no backend, so
+// game clients write directly, but ONLY immutable submissions into their own folder:
+//
+//   users/{uid}/submissions/{docId}   create-once by the signed-in owner `uid`; schema and size
+//                                     checked here; never updated or deleted by a client; the
+//                                     owner may get (not list) its own documents, which the
+//                                     uploader uses to tell a lost acknowledgement from a refusal.
+//
+// Everything else is denied to every client, including canonical_games, aggregates and admin
+// state. The owner's admin tool (firebase/tools/) uses Google IAM credentials through the Admin
+// SDK, which bypasses these rules; no client ever holds such credentials. Rules cannot verify
+// that a submitted game really happened; verified / provisional / conflicted is decided only by
+// the admin tool's reconciliation.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function kinds() {
+      return ['profile', 'session', 'draft', 'reward', 'game', 'gclient', 'series'];
+    }
+
+    function envs() {
+      return ['playtest', 'production', 'dev', 'test'];
+    }
+
+    function modes() {
+      return ['none', 'local', 'bot', 'lan', 'steam'];
+    }
+
+    function fieldNames() {
+      return ['schema_version', 'kind', 'env', 'build', 'content_hash', 'mode', 'uid',
+        'created_at', 'seq', 'received_at', 'body'];
+    }
+
+    function validSubmission(uid, docId) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(fieldNames())
+        && d.keys().hasAll(fieldNames())
+        && d.schema_version is int && d.schema_version == 1
+        && d.uid is string && d.uid == uid
+        && d.kind is string && d.kind in kinds()
+        && docId.matches(d.kind + '_[A-Za-z0-9_-]{1,120}')
+        && d.env is string && d.env in envs()
+        && d.build is string && d.build.size() > 0 && d.build.size() <= 48
+        && d.content_hash is string && d.content_hash.matches('[0-9a-f]{64}')
+        && d.mode is string && d.mode in modes()
+        && d.created_at is int && d.created_at > 1600000000000 && d.created_at < 4102444800000
+        && d.seq is int && d.seq >= 0 && d.seq < 1000000000000
+        && d.received_at == request.time
+        && d.body is string && d.body.size() >= 2 && d.body.size() <= 200000;
+    }
+
+    match /users/{uid}/submissions/{docId} {
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && validSubmission(uid, docId);
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list, update, delete: if false;
+    }
+
+    // Default: no client access to anything else (canonical games, aggregates, admin data).
     match /{document=**} {
       allow read, write: if false;
     }
