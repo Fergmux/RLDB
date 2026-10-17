@@ -2734,6 +2734,12 @@
 						"test_c161_neva_exhausts_for_ten_damage_per_eternal",
 						"test_c161_neva_gains_eternal_at_start_of_turn"
 					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
+					"tests": [
+						"test_c161_neva_destroyed_in_response_window_is_not_exhausted_from_spent"
+					]
 				}
 			]
 		},
