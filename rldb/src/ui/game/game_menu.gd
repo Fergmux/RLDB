@@ -158,7 +158,7 @@ func confirm_forfeit(quit: bool) -> void:
 			ConfirmDialog.choice("Keep playing")])
 	elif bool(gs.view.get("at_checkpoint", false)):
 		_choices("Leave the series?", save_text(), [
-			ConfirmDialog.choice("Save and %s" % verb, func(): _leave(quit, "suspend"), "primary"),
+			ConfirmDialog.choice("Save and %s" % verb, func(): _save_and_leave(quit), "primary"),
 			ConfirmDialog.choice("Forfeit and %s" % verb, func(): _leave(quit, "forfeit_series"), "danger"),
 			ConfirmDialog.choice("Keep playing")])
 	else:
@@ -177,14 +177,30 @@ func save_text() -> String:
 	return "The series is saved on the host's computer. When %s resumes it, join their game again to continue." % String(gs.view["names"][0]) + tail
 
 
+## Save and quit / leave. Online the other player can start the next duel while this dialog is
+## open; a series is only saved between duels, so if that happened the choice is asked again
+## (now forfeit-only) instead of leaving without a save.
+func _save_and_leave(quit: bool) -> void:
+	if bool(gs.view.get("at_checkpoint", false)):
+		_leave(quit, "suspend")
+	else:
+		confirm_forfeit(quit)
+
+
 ## Leaves the screen after sending `cmd` ("suspend": saved, "forfeit_series", or "" for nothing).
 func _leave(quit: bool, cmd: String) -> void:
 	if cmd != "":
 		gs.send({"t": cmd})
 	if quit or gs.is_network():
 		# A couple of frames so a network command is flushed before the connection closes.
-		await gs.get_tree().process_frame
-		await gs.get_tree().process_frame
+		var tree := gs.get_tree()
+		await tree.process_frame
+		await tree.process_frame
+		if not is_instance_valid(gs):
+			# The screen closed meanwhile (for example a dropped connection took it down).
+			if quit:
+				tree.quit()
+			return
 	if quit:
 		gs.get_tree().quit()
 	else:

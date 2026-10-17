@@ -163,7 +163,8 @@ func run_action(uid: int, a: Dictionary) -> void:
 	# Ignore a stale click: the action must still be legal for this card instance.
 	var still := false
 	for b in gs.mv.get("actions", []):
-		if b.get("uid", -1) == uid and b["t"] == a["t"] and b.get("idx", -1) == a.get("idx", -1) and b.get("stance", "") == a.get("stance", "") 				and b.get("mode", "") == a.get("mode", "") and b["ok"]:
+		if b.get("uid", -1) == uid and b["t"] == a["t"] and b.get("idx", -1) == a.get("idx", -1) \
+				and b.get("stance", "") == a.get("stance", "") and b.get("mode", "") == a.get("mode", "") and b["ok"]:
 			still = true
 	if not still or gs.locked():
 		Sfx.play("deny")

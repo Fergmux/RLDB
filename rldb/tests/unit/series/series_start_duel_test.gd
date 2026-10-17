@@ -135,3 +135,13 @@ func test_choice_saves_a_checkpoint() -> void:
 	s.checkpoint.connect(func(): hits[0] += 1)
 	s.submit(s.last_loser, {"t": "first_player", "who": 0})
 	assert_int(hits[0]).is_equal(1)
+
+
+func test_old_hot_seat_save_without_mode_resumes_as_hot_seat() -> void:
+	var s := Series.new()
+	s.setup({"seed": 5, "best_of": 3, "names": ["Ana", "Ben"]})
+	var d := s.to_save()
+	d["cfg"].erase("mode")
+	assert_str(String(Series.from_save(d.duplicate(true)).cfg["mode"])).is_equal("local")
+	d["names"] = ["Ana", "Bot"]
+	assert_str(String(Series.from_save(d.duplicate(true)).cfg["mode"])).is_equal("bot")

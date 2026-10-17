@@ -330,6 +330,10 @@ static func from_save(d: Dictionary) -> Series:
 	CardDB.ensure_loaded()
 	s.cfg = d["cfg"]
 	s.names = d["names"]
+	if not s.cfg.has("mode"):
+		# Saves from before cfg.mode: the same fallback as SeriesStore.list (a "Bot" seat name
+		# means vs bot), so a resumed hot-seat series keeps its one-press Start (G05).
+		s.cfg["mode"] = "bot" if String(s.names[1]) == "Bot" else "local"
 	s.stage = d["stage"]
 	s.decks = d["decks"].map(func(dk): return dk.map(func(i): return int(i)))
 	s.deck_names = d["deck_names"]
