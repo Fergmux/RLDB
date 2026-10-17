@@ -173,3 +173,134 @@ func test_offered_reward_card_click_takes_it_once() -> void:
 	assert_bool(gs.overlays.rewards.take_offer(0, sig)).is_false()   # another card of the same offer
 	assert_int(gs.debug_sent - before).is_equal(1)
 	assert_bool(gs.overlays.rewards.take_offer(0, sig + 1)).is_false()   # a stale offer
+
+
+# ---------------------------------------------------------------- F05 card context in the prompt
+
+func test_zone_prompt_shows_the_card_being_summoned() -> void:
+	var r := await _screen()
+	var gs: GameScreen = r[0]
+	var host: LocalHost = r[1]
+	var m: MatchEngine = r[2]
+	var a: int = r[3]
+	var hu := _summonable(m, a)
+	host.handle(a, {"t": "summon", "uid": hu})
+	await await_idle_frame()
+	assert_bool(gs.prompt.subject_box.visible).is_true()
+	assert_str(gs.prompt.subject_name.text).is_equal(String(m.d(hu)["name"]))
+	assert_int(int(gs.prompt.subject_card.view.get("uid", -1))).is_equal(hu)
+	host.handle(a, {"t": "cancel", "id": m.pending["id"]})
+
+
+func test_placement_prompt_names_the_fusion_unit_not_the_spell() -> void:
+	var r := await _screen()
+	var gs: GameScreen = r[0]
+	var host: LocalHost = r[1]
+	var m: MatchEngine = r[2]
+	var a: int = r[3]
+	var fu := TB.card(m, a, 93, "extra")
+	var spell := TB.card(m, a, 82, "hand")
+	host.broadcast()
+	await await_idle_frame()
+	var pd := {"id": 900, "mine": true, "player": a, "kind": "slot", "prompt": "Choose a zone for %s." % m.d(fu)["name"],
+		"options": [{"i": 0, "label": "Front row, column 1", "slot": 0, "zone": "unit"}], "min": 1, "max": 1, "cancellable": true, "source_uid": spell}
+	assert_int(int(gs.prompt.subject_for(pd).get("uid", -1))).is_equal(fu)
+
+
+func test_trap_response_and_hidden_cards_show_no_card() -> void:
+	var r := await _screen()
+	var gs: GameScreen = r[0]
+	var m: MatchEngine = r[2]
+	var a: int = r[3]
+	var hidden_opp := TB.card(m, 1 - a, 13, "hand")
+	r[1].broadcast()
+	await await_idle_frame()
+	var trap := {"id": 901, "mine": true, "kind": "trap_response", "prompt": "Respond?", "options": [], "source_uid": hidden_opp}
+	assert_dict(gs.prompt.subject_for(trap)).is_empty()
+	var other := {"id": 902, "mine": true, "kind": "select", "prompt": "Choose a zone for %s." % m.d(hidden_opp)["name"], "options": [], "source_uid": hidden_opp}
+	assert_dict(gs.prompt.subject_for(other)).is_empty()   # an opponent's Hand card is never shown
+
+
+# ---------------------------------------------------------------- F04 Extra Deck summon buttons
+
+func _extra_board() -> Array:
+	var r := await _screen()
+	var host: LocalHost = r[1]
+	var m: MatchEngine = r[2]
+	var a: int = r[3]
+	TB.unit(m, a, 27, 0, "atk")          # Hydra (Dragon)
+	TB.unit(m, a, 28, 1, "atk")          # Guardian of the Forest (Beast)
+	TB.unit(m, a, 40, 2, "atk")          # Aleister: Pay 1 AP: Fusion Summon (Field)
+	var poly := TB.card(m, a, 82, "hand")
+	var wyrm := TB.card(m, a, 93, "extra")        # Bastion Wyrm: Beast + Dragon
+	var kaya := TB.card(m, a, 170, "extra")       # Arcane, cost 1
+	var none := TB.card(m, a, 56, "extra")        # Razeon Storm: no materials on the field
+	TB.card(m, a, 34, "spent")                    # a cost-1 material
+	m.players[a]["ap"] = 2
+	host.broadcast()
+	await await_idle_frame()
+	r.append_array([poly, wyrm, kaya, none])
+	return r
+
+
+func _summon_buttons(gs: GameScreen, uid: int) -> Array:
+	var row := gs.details.pile_row(uid)
+	if row == null:
+		return []
+	return _all(row).filter(func(n): return n is Button and n.has_meta("summon_kind"))
+
+
+func test_extra_list_shows_summon_buttons_without_selection() -> void:
+	var r := await _extra_board()
+	var gs: GameScreen = r[0]
+	gs.details.show_pile("extra")
+	await await_idle_frame()
+	var wy := _summon_buttons(gs, r[5])
+	assert_array(wy.map(func(b): return String(b.get_meta("summon_kind")))).contains(["fusion"])
+	var ka := _summon_buttons(gs, r[6])
+	assert_bool(ka.any(func(b): return String(b.get_meta("summon_kind")) == "arcane")).is_true()
+	assert_array(_summon_buttons(gs, r[7])).is_empty()          # nothing can summon it
+	assert_bool(wy.all(func(b): return not b.disabled)).is_true()
+
+
+func test_fusion_with_two_methods_asks_which_then_continues() -> void:
+	var r := await _extra_board()
+	var gs: GameScreen = r[0]
+	var m: MatchEngine = r[2]
+	var poly: int = r[4]
+	var wyrm: int = r[5]
+	assert_int(gs.details.fusion_methods_for(wyrm).size()).is_equal(2)
+	gs.details.show_pile("extra")
+	await await_idle_frame()
+	var fb: Button = _summon_buttons(gs, wyrm).filter(func(b): return b.get_meta("summon_kind") == "fusion")[0]
+	fb.pressed.emit()
+	await await_idle_frame()
+	assert_bool(gs.details.method_picker_open()).is_true()
+	assert_bool(m.pending.is_empty()).is_true()                 # nothing sent, nothing chosen for them
+	var poly_m: Dictionary = gs.details.fusion_methods_for(wyrm).filter(func(x): return int(x["via"]) == poly)[0]
+	gs.details.run_fusion(wyrm, poly_m)
+	for i in 4:
+		await await_idle_frame()
+	assert_bool(gs.details.method_picker_open()).is_false()
+	assert_bool(m.pending.is_empty()).is_false()
+	assert_str(String(m.pending["prompt"])).not_contains("Choose a Fusion unit")   # answered with the Wyrm
+	assert_int(int(m.pending["player"])).is_equal(int(r[3]))
+
+
+func test_method_picker_closes_on_cancel_and_when_the_state_changes() -> void:
+	var r := await _extra_board()
+	var gs: GameScreen = r[0]
+	var host: LocalHost = r[1]
+	var m: MatchEngine = r[2]
+	var wyrm: int = r[5]
+	gs.details.open_method_picker(wyrm)
+	assert_bool(gs.selection.cancel()).is_true()
+	assert_bool(gs.details.method_picker_open()).is_false()
+	gs.details.show_pile("extra")
+	gs.details.open_method_picker(wyrm)
+	m.players[r[3]]["hand"].erase(r[4])       # Polymerization leaves the Hand: one method left
+	m.players[r[3]]["spent"].append(r[4])
+	m.cards[r[4]]["zone"] = "spent"
+	host.broadcast()
+	await await_idle_frame()
+	assert_bool(gs.details.method_picker_open()).is_false()
