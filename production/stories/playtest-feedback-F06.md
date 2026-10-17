@@ -7,6 +7,9 @@ Source: `design/playtest-feedback-06.md` (17 Oct 2026).
 | F06-01 Modals follow the input-panel design | In progress | ui-programmer / opus (worktree) | | |
 | F06-02 Menu and battle playlists | Implemented, needs a listen | lead | `Music` director: two players on the Music bus, playlist `menu` (menu_1, menu_2) and `battle` (battle_1..3); songs in turn, looping; 3 s crossfade between songs and on scene changes. `GameScreen._on_view` picks battle while stage = game, menu otherwise; `_show_menu` picks menu. Tracks converted WAV → Ogg Vorbis q7 (about 20 MB instead of 140 MB). Steady Pulse removed | `music_f06_test.gd` (3): tracks load, playlists cycle, switching crossfades. The mix still needs your ears |
 | F06-03 Structure decks replaced | Verified | lead | `data/starter_decks.json`: the 12 decks from the sheet, ids checked against `cards.json`, all fully implemented, Extra Deck cards in Extra | `series_flow_test.gd` (12-card mains, routing); full suite 596/596; f02 driver 74/74; deck select shows all 12 |
+| F06-04 Change basic units reward (all together) | Captured | (after F06-01 merges) | | |
+| F06-05 Choose the draft category order | Captured | (after F06-01 merges) | | |
+| F06-06 Choose basic unit in the draft; no basic count | Captured | (after F06-01 merges) | | |
 
 ## Open questions for the user
 
