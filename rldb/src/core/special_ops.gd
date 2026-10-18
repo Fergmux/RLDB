@@ -99,6 +99,50 @@ func _op_copy_all_buffs(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
+## Necro, the Loathsome: gains a copy of every Debuff stack on the other units on the Field.
+func _op_copy_all_debuffs(f: Dictionary, op: Dictionary) -> int:
+	var me: int = f["src"]
+	if not unit_on_field(me):
+		return R.CONT
+	var totals := {}
+	for u in all_field_units():
+		if u == me:
+			continue
+		for s in cards[u]["st"]:
+			if CardDB.is_debuff(s):
+				totals[s] = totals.get(s, 0) + cards[u]["st"][s]
+	for s in CardDB.STATUS_ORDER:
+		if totals.has(s):
+			apply_status(me, s, totals[s])
+	if totals.is_empty():
+		add_log("%s: no Debuffs on the Field to copy." % name_of(me))
+	return R.CONT
+
+
+## Necro, the Loathsome: doubles the Debuffs on itself, then applies those (doubled) stacks to the
+## target. The doubling is not a new application (Cleanse on itself does not intervene); the copy
+## to the target is, so the target's Cleanse can prevent it.
+func _op_spread_debuffs(f: Dictionary, op: Dictionary) -> int:
+	var me: int = f["src"]
+	if not unit_on_field(me):
+		add_log("%s is no longer on the Field, so its effect ends." % name_of(me))
+		return R.END
+	var have := {}
+	for s in CardDB.STATUS_ORDER:
+		if CardDB.is_debuff(s) and status_count(me, s) > 0:
+			cards[me]["st"][s] *= 2
+			have[s] = cards[me]["st"][s]
+	if have.is_empty():
+		add_log("%s has no Debuffs to spread." % name_of(me))
+		return R.CONT
+	add_log("%s doubles its Debuffs (%s)." % [name_of(me), ", ".join(have.keys().map(func(s): return "%d %s" % [have[s], String(s).capitalize()]))])
+	for u in refs(f, op["target"]):
+		if unit_on_field(u):
+			for s in have:
+				apply_status(u, s, have[s])
+	return R.CONT
+
+
 ## Dante: revive at the start of its controller's next turn.
 func _op_delay_revive(f: Dictionary, op: Dictionary) -> int:
 	players[f["ctl"]]["delayed"].append({"uid": f["src"]})
@@ -212,15 +256,16 @@ func _op_swap_all(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Sneaky Snunday: until end of turn, numerical gains/losses from card effects are reversed.
-## Applied per frame when a card is played, and to continuous auras while active.
+## Sneaky Snunday: until end of turn, numerical gains/losses from card effects (ATK/DEF, AP, costs)
+## are reversed. Applied per frame when a card is played, and to continuous auras while active.
+## Damage and Healing are not gains or losses (2026-10-18), so HP is never reversed.
 func _op_reversal(f: Dictionary, op: Dictionary) -> int:
 	if reversal_turn != turn:
 		reversal_turn = turn
 		reversal_count = 0
 	reversal_count += 1
 	if reversal_active():
-		add_log("Sneaky Snunday: gains and losses from card effects are reversed until end of turn.")
+		add_log("Sneaky Snunday: gains and losses from card effects are reversed until end of turn (Damage and Healing are not).")
 	else:
 		add_log("Sneaky Snunday: a second reversal cancels the first; gains and losses are normal again.")
 	return R.CONT
@@ -246,7 +291,7 @@ func _op_take_control(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Plan B: destroy any number of your cards, gain 10 HP for each destroyed.
+## Plan B: destroy any number of your cards, Heal 10 HP for each destroyed.
 ## Plan B: targets were chosen together, in order. Each destruction and its whole
 ## chain (own On Destruction effects, then listening Traps and their knock-ons)
 ## resolves before the next target; healing for cards actually destroyed comes last.
@@ -269,9 +314,7 @@ func _op_planb_destroy(f: Dictionary, op: Dictionary) -> int:
 
 func _op_planb_heal(f: Dictionary, op: Dictionary) -> int:
 	var count: int = f["vars"].get("planb_count", 0)
-	var gain := 10 * count
-	if f["reversed"]:
-		gain = -gain
+	var gain := 10 * count             # Healing: never reversed by Sneaky Snunday (2026-10-18)
 	if count > 0:
 		change_hp(f["ctl"], gain, " (Plan B, %d destroyed)" % count)
 	return R.CONT

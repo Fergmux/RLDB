@@ -173,7 +173,7 @@ func test_g03_hidden_mention_shows_a_back_and_no_name() -> void:
 	var r := await _screen()
 	var gs: GameScreen = r[0]
 	var a: int = r[3]
-	var pd := {"id": 880, "mine": true, "player": a, "kind": "trap_response", "prompt": "Respond to: a face-down card destroyed",
+	var pd := {"id": 880, "mine": true, "player": a, "kind": "trap_response", "prompt": "Respond to: a set Spell/Trap destroyed",
 		"options": [{"i": 0, "label": "Pass (no Trap can respond)"}], "min": 1, "max": 1, "cancellable": false,
 		"mentions": [{"role": "destroyed", "card": {"hidden": true, "zone": "backrow", "slot": 1, "ctl": 1 - a}}]}
 	await _render(gs, pd)
@@ -184,7 +184,7 @@ func test_g03_hidden_mention_shows_a_back_and_no_name() -> void:
 	for n in figs[0].get_children():
 		if n is Label:
 			names.append((n as Label).text)
-	assert_array(names).contains(["Face-down card"])
+	assert_array(names).contains(["Set Spell/Trap"])
 	assert_array(_list_texts(gs)).is_equal(["Pass (no Trap can respond)"])
 
 

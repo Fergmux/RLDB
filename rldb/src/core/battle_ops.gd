@@ -145,11 +145,10 @@ func _op_attack_window(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Type advantage bonus: 6 normally; each active Elemental Mastery makes it 12 per
-## copy (one = 12, two = 24) per the user's P-19 answer.
+## Type advantage bonus: 6, plus 6 for each active Elemental Mastery ("Your Type Advantage gains
+## +6 ATK / DEF", 2026-10-18): one copy = 12 as before, two = 18.
 func type_bonus(p: int) -> int:
-	var n := count_flag(p, "elemental_mastery")
-	return 6 if n == 0 else 12 * n
+	return 6 + 6 * count_flag(p, "elemental_mastery")
 
 
 ## P-13: Burn resolves after a completed (not cancelled/negated) attack, win or lose.
@@ -211,7 +210,7 @@ func _battle_survives(uid: int, vs: Dictionary) -> String:
 
 
 ## F02-12 preview of attacking `target` (-1 = direct) with `a`, from the current public
-## state only. Unknown face-down cards and triggered effects can still change the result,
+## state only. Unknown set Spells/Traps and triggered effects can still change the result,
 ## so `hidden_risk` flags opposing set cards. Never mutates state.
 func battle_preview(a: int, target: int) -> Dictionary:
 	var p: int = cards[a]["ctl"]
@@ -234,7 +233,7 @@ func battle_preview(a: int, target: int) -> Dictionary:
 		if no_dmg:
 			pv["notes"].append("%s's attacks do not inflict damage" % name_of(a))
 		if burn > 0:
-			pv["notes"].append("Burn: you lose %d HP after the attack" % burn)
+			pv["notes"].append("Burn: you take %d Damage after the attack" % burn)
 		return pv
 	var calc := battle_values(a, target)
 	var av: int = calc["av"]
@@ -292,7 +291,7 @@ func battle_preview(a: int, target: int) -> Dictionary:
 			pv["notes"].append(why2)
 	dmg_you += burn
 	if burn > 0:
-		pv["notes"].append("Burn: you lose %d HP after the attack" % burn)
+		pv["notes"].append("Burn: you take %d Damage after the attack" % burn)
 	var verdict := "neutral"
 	if (t_dies and not a_dies) or (not t_dies and not a_dies and dmg_opp > 0 and dmg_you == 0):
 		verdict = "good"

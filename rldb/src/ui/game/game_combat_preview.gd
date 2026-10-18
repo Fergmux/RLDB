@@ -83,7 +83,7 @@ static func preview_text(pv: Dictionary, a_name: String, t_name: String) -> Stri
 	var lead: String = {"good": "Favourable", "bad": "Unfavourable", "neutral": "Even"}.get(pv.get("verdict", "neutral"), "Even")
 	var parts := []
 	if pv.get("outcome", "") == "direct":
-		parts.append("%s: direct attack, %s loses %d HP" % [lead, t_name, int(pv.get("dmg_opp", 0))])
+		parts.append("%s: direct attack, %s takes %d Damage" % [lead, t_name, int(pv.get("dmg_opp", 0))])
 	else:
 		var adv := ""
 		if pv.get("adv", "") == "attacker":
@@ -104,13 +104,13 @@ static func preview_text(pv: Dictionary, a_name: String, t_name: String) -> Stri
 					res.append("%s destroyed" % (a_name if pv.get("a_dies", false) else t_name) if (pv.get("a_dies", false) or pv.get("t_dies", false)) else "neither destroyed")
 			"stalemate": res.append("no damage, nothing destroyed")
 		if int(pv.get("dmg_opp", 0)) > 0:
-			res.append("opponent loses %d HP" % int(pv["dmg_opp"]))
+			res.append("opponent takes %d Damage" % int(pv["dmg_opp"]))
 		if int(pv.get("dmg_you", 0)) > 0:
-			res.append("you lose %d HP" % int(pv["dmg_you"]))
+			res.append("you take %d Damage" % int(pv["dmg_you"]))
 		parts.append(", ".join(res))
 	for n in pv.get("notes", []):
 		if not String(n).begins_with("type advantage"):
 			parts.append(String(n))
 	if pv.get("hidden_risk", false):
-		parts[0] = parts[0].replace(lead + ":", lead + " (face-down cards may change this):")
+		parts[0] = parts[0].replace(lead + ":", lead + " (set Spells/Traps may change this):")
 	return " · ".join(parts)

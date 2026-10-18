@@ -158,7 +158,7 @@ func _page_kinds(p: Control) -> void:
 	_caption(p, "board / power / trap (85x128)", Vector2(10, 230))
 	var bu := _view(_unit("Lightning", "unit"), "unit")
 	_card(p, bu, "board", Vector2(10, 250))
-	_card(p, _view(_unit("Necrotic", "basic_unit"), "unit", {"atk": 12, "statuses": {"burn": 1}}), "board", Vector2(105, 250))
+	_card(p, _view(_unit("Dark", "basic_unit"), "unit", {"atk": 12, "statuses": {"burn": 1}}), "board", Vector2(105, 250))
 	_card(p, _view(_cat("power"), "power"), "power", Vector2(200, 250))
 	_card(p, _view(_cat("trap"), "backrow"), "trap", Vector2(295, 250))
 	_card(p, _view(_cat("trap"), "backrow", {"face_up": false}), "trap", Vector2(390, 250))

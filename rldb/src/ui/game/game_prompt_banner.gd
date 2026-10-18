@@ -435,7 +435,7 @@ func _mention_figure(e: Dictionary) -> Control:
 			w.set_meta("response", true)
 		w.right_pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
 		var hidden := bool(c.get("hidden", false)) or not c.has("name")
-		nm = ("Face-down card" if String(c.get("zone", "")) == "backrow" else "Hidden card") if hidden else String(c.get("name", ""))
+		nm = ("Set Spell/Trap" if String(c.get("zone", "")) == "backrow" else "Hidden card") if hidden else String(c.get("name", ""))
 		w.tooltip_text = "%s: %s" % [ROLE_CAPTIONS.get(role, role.capitalize()), nm] + ("" if hidden else "\nRight-click to inspect")
 		fig.add_child(w)
 	var cap := "TARGET" if role == "direct" else String(ROLE_CAPTIONS.get(role, role.capitalize())).to_upper()

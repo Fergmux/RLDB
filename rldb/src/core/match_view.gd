@@ -262,6 +262,17 @@ static func event_cards(m: MatchEngine, ev: Dictionary, viewer: int) -> Array:
 			out.append({"role": "direct", "p": m.opp(int(ev.get("player", 0)))})
 	elif what == "destroyed":
 		add.call(int(ev.get("self", -1)), "destroyed")
+	elif what == "st_destroyed":
+		# Counter Transmutation: the destroyed Spell/Trap is named only if it was public when it was
+		# destroyed (or is the viewer's own); a card destroyed face down shows as a set card back.
+		var u := int(ev.get("self", -1))
+		if m.cards.has(u):
+			var cv := card_view(m, u, viewer)
+			if cv.get("hidden", false) and ev.get("was_public", false):
+				cv = _forced_view(m, u, viewer)
+			elif cv.get("hidden", false):
+				cv = {"hidden": true, "zone": "backrow", "slot": int(ev.get("slot", -1)), "ctl": int(ev.get("ctl", -1))}
+			out.append({"role": "destroyed", "card": cv})
 	elif what in ["summon", "activate"]:
 		add.call(int(ev.get("card", -1)), "summoned" if what == "summon" else "activated")
 	return out

@@ -39,14 +39,14 @@ const BASIC_WARRIOR_FIRE := 112
 const BASIC_BEAST_FIRE := 113
 const BASIC_WARRIOR_EARTH := 122
 const BASIC_BEAST_EARTH := 123
-const BASIC_MONSTER_NECROTIC := 129
+const BASIC_MONSTER_DARK := 129
 const BASIC_MONSTER_FIRE := 114
 const BASIC_WARRIOR_LIGHTNING := 132
 const BASIC_MONSTER_LIGHTNING := 134
 const FROST_WYVERN := 32
 const STEADFAST_SOLDIER := 39
 const WINGS_OF_AURENTHOR := 80
-const POLYMERIZATION := 82
+const FUSION_CEREMONY := 82
 const SACRED_OFFERINGS := 83
 const MAGIC_CYLINDER := 45
 const BASTION_WYRM := 93
@@ -129,7 +129,7 @@ static func _turn_flow() -> Dictionary:
 		_c("p_next2", SACRED_OFFERINGS, PLAYER, "draw"),
 		_c("p_next3", BASIC_WARRIOR_LIGHTNING, PLAYER, "draw"),
 		_c("o_warrior", BASIC_WARRIOR_FIRE, OPPONENT, "draw"),
-	] + _fill("p_fill", BASIC_MAGE_WATER, PLAYER, 4) + _fill("o_fill", BASIC_MONSTER_NECROTIC, OPPONENT, 7)
+	] + _fill("p_fill", BASIC_MAGE_WATER, PLAYER, 4) + _fill("o_fill", BASIC_MONSTER_DARK, OPPONENT, 7)
 	return {
 		"id": "turn_flow",
 		"title": "Lesson 1 · A turn of play",
@@ -162,7 +162,7 @@ static func _summoning() -> Dictionary:
 		_c("p_warrior", BASIC_WARRIOR_EARTH, PLAYER, "hand"),
 		_c("p_wyvern", FROST_WYVERN, PLAYER, "hand"),
 		_c("p_wings", WINGS_OF_AURENTHOR, PLAYER, "hand"),
-	] + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) + _fill("o_fill", BASIC_MONSTER_NECROTIC, OPPONENT, 8)
+	] + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) + _fill("o_fill", BASIC_MONSTER_DARK, OPPONENT, 8)
 	return {
 		"id": "summoning",
 		"title": "Lesson 2 · Summoning and stances",
@@ -173,7 +173,7 @@ static func _summoning() -> Dictionary:
 			_read("Reading a unit", "Units show their [stat]AP[/stat] cost (top left), [stat]ATK[/stat] (red, bottom left) and [stat]DEF[/stat] (blue, bottom right).\n\nThis [card]Basic Mage[/card] costs [stat]1 AP[/stat] and has [stat]8 ATK[/stat] and [stat]8 DEF[/stat].", [{"card": "p_mage"}]),
 			_do("Summon in Attack stance", "Click the [card]Basic Mage[/card] in your [zone]Hand[/zone], then click [btn]Summon Attack[/btn].", [{"t": "summon", "card": "p_mage", "stance": "atk"}]),
 			_do("Choose a zone", "You have six unit zones: three in the [zone]front row[/zone], three [zone]behind[/zone].\n\nClick the highlighted front-row zone.", [{"t": "choose", "opt": {"slot": 1}}]),
-			_read("Attack stance", "Units in [kw]Attack stance[/kw] can attack.\n\nWhen an Attack-stance unit is attacked it compares [stat]ATK[/stat], and the losing side's controller loses the difference in [stat]HP[/stat].", [{"slot": ["me", "unit", 1]}]),
+			_read("Attack stance", "Units in [kw]Attack stance[/kw] can attack.\n\nWhen an Attack-stance unit is attacked it compares [stat]ATK[/stat], and the losing side's controller takes the difference as [stat]Damage[/stat].", [{"slot": ["me", "unit", 1]}]),
 			_do("Summon in Defense stance", "Now click the [card]Basic Warrior[/card] in your Hand and click [btn]Summon Defense[/btn].", [{"t": "summon", "card": "p_warrior", "stance": "def"}]),
 			_do("Behind the front line", "Put it in the [zone]back row[/zone], directly behind your Mage.", [{"t": "choose", "opt": {"slot": 4}}]),
 			_read("Protection", "A back-row unit is [kw]protected[/kw] while the front-row zone of its column is occupied, so the Rival must deal with your Mage first.\n\nA [kw]Defense stance[/kw] unit compares its [stat]DEF[/stat] and costs you no [stat]HP[/stat] when it is beaten.", [{"slot": ["me", "unit", 4]}, {"slot": ["me", "unit", 1]}]),
@@ -194,7 +194,7 @@ static func _battle() -> Dictionary:
 		_c("o_warrior", BASIC_WARRIOR_FIRE, OPPONENT, "unit", 1),
 		_c("o_beast", BASIC_BEAST_EARTH, OPPONENT, "unit", 4, "def"),
 	] + _fill("p_hand", BASIC_MAGE_FIRE, PLAYER, 4) + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 4) \
-		+ _fill("o_fill", BASIC_MONSTER_NECROTIC, OPPONENT, 8)
+		+ _fill("o_fill", BASIC_MONSTER_DARK, OPPONENT, 8)
 	for i in 4:
 		cards[5 + i]["zone"] = "hand"
 	return {
@@ -209,12 +209,12 @@ static func _battle() -> Dictionary:
 			_do("Enter the Battle Phase", "Click [btn]Go to Battle Phase[/btn].", [{"t": "next_phase"}]),
 			_do("Declare an attack", "Click your [card]Basic Mage[/card] and click [btn]Attack[/btn].", [{"t": "attack", "card": "p_mage"}]),
 			_do("Pick the target", "[type]Water[/type] is effective against [type]Fire[/type]: your Mage gets [stat]+6 ATK[/stat] for this battle (14 against 8).\n\nClick the Fire Warrior.", [{"t": "choose", "opt": {"card": "o_warrior"}}]),
-			_read("Result", "The Fire Warrior was destroyed and the Rival lost the difference: [stat]6 HP[/stat].\n\nWith the front zone empty, the Beast is no longer [kw]protected[/kw].", [{"plate": "opp"}, {"slot": ["opp", "unit", 4]}]),
+			_read("Result", "The Fire Warrior was destroyed and the Rival took the difference as Damage: [stat]6 Damage[/stat].\n\nWith the front zone empty, the Beast is no longer [kw]protected[/kw].", [{"plate": "opp"}, {"slot": ["opp", "unit", 4]}]),
 			_do("Attack the Beast", "Click [card]Steadfast Soldier[/card] ([stat]14 ATK[/stat]) and click [btn]Attack[/btn].", [{"t": "attack", "card": "p_soldier"}]),
 			_do("Attack a defender", "The Beast defends with its [stat]DEF[/stat] of 8.\n\nClick it.", [{"t": "choose", "opt": {"card": "o_beast"}}]),
-			_read("Defense results", "14 beats 8 [stat]DEF[/stat], so the Beast is destroyed.\n\nA unit in [kw]Defense stance[/kw] never costs its controller [stat]HP[/stat] when it loses.", [{"plate": "opp"}]),
+			_read("Defense results", "14 beats 8 [stat]DEF[/stat], so the Beast is destroyed.\n\nWhen a unit in [kw]Defense stance[/kw] loses, its controller takes no [stat]Damage[/stat].", [{"plate": "opp"}]),
 			_do("Direct attack", "The Rival has no units left, so your [type]Lightning[/type] Monster can attack the Rival directly.\n\nClick it and click [btn]Attack Direct[/btn].", [{"t": "attack", "card": "p_monster"}]),
-			_read("Lesson complete", "A [kw]direct attack[/kw] deals the attacker's [stat]ATK[/stat] as damage: 8.\n\nThe Rival is down to [stat]46 HP[/stat].", [{"plate": "opp"}]),
+			_read("Lesson complete", "A [kw]direct attack[/kw] deals the attacker's [stat]ATK[/stat] as [stat]Damage[/stat]: 8.\n\nThe Rival is down to [stat]46 HP[/stat].", [{"plate": "opp"}]),
 		],
 		"opponent": [],
 	}
@@ -230,7 +230,7 @@ static func _spells_traps() -> Dictionary:
 		_c("p_h0", BASIC_MAGE_FIRE, PLAYER, "hand"),
 		_c("p_h1", BASIC_BEAST_FIRE, PLAYER, "hand"),
 		_c("o_warrior", BASIC_WARRIOR_FIRE, OPPONENT, "unit", 1),
-	] + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) + _fill("o_fill", BASIC_MONSTER_NECROTIC, OPPONENT, 8)
+	] + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) + _fill("o_fill", BASIC_MONSTER_DARK, OPPONENT, 8)
 	return {
 		"id": "spells_traps",
 		"title": "Lesson 4 · Spells and Traps",
@@ -247,8 +247,8 @@ static func _spells_traps() -> Dictionary:
 			_do("End your turn", "Click the phase button until your turn ends:\n[btn]Go to Battle Phase[/btn], [btn]Go to Recovery[/btn], then [btn]End turn[/btn].", [{"t": "next_phase"}], THEIR_TURN),
 			_wait("The Rival attacks", "Watch: the Rival's [type]Fire[/type] Warrior attacks your Warrior.", {"pending_kind": "trap_response", "pending_player": PLAYER}),
 			_do("Spring the Trap", "Your Trap's condition is met.\n\nClick [btn]Activate Magic Cylinder[/btn].", [{"t": "choose", "opt": {"card": "p_cyl"}}]),
-			_wait("The battle goes on", "[card]Magic Cylinder[/card] makes the Rival lose [stat]HP[/stat] equal to the attacker's [stat]ATK[/stat] (8); then the attack continues.", MY_TURN),
-			_read("Lesson complete", "Your Warrior defended with [stat]8 DEF[/stat] +6 ([type]Water[/type] is effective against [type]Fire[/type]) = 14.\nThe attacker's controller lost the difference: [stat]6 more HP[/stat].\n\nThe used Trap went to [zone]Spent[/zone].", [{"plate": "opp"}, {"pile": ["me", "spent"]}]),
+			_wait("The battle goes on", "[card]Magic Cylinder[/card] makes the Rival take [stat]Damage[/stat] equal to the attacker's [stat]ATK[/stat] (8); then the attack continues.", MY_TURN),
+			_read("Lesson complete", "Your Warrior defended with [stat]8 DEF[/stat] +6 ([type]Water[/type] is effective against [type]Fire[/type]) = 14.\nThe attacker's controller took the difference as Damage: [stat]6 more Damage[/stat].\n\nThe used Trap went to [zone]Spent[/zone].", [{"plate": "opp"}, {"pile": ["me", "spent"]}]),
 		],
 		"opponent": [
 			{"t": "next_phase"},
@@ -265,7 +265,7 @@ static func _extra_deck() -> Dictionary:
 	var cards := [
 		_c("p_beast", BASIC_BEAST_EARTH, PLAYER, "unit", 0),
 		_c("p_dragon", BASIC_DRAGON_FIRE, PLAYER, "unit", 1),
-		_c("p_poly", POLYMERIZATION, PLAYER, "hand"),
+		_c("p_poly", FUSION_CEREMONY, PLAYER, "hand"),
 		_c("p_h0", BASIC_MAGE_FIRE, PLAYER, "hand"),
 		_c("p_h1", BASIC_WARRIOR_WATER, PLAYER, "hand"),
 		_c("p_h2", BASIC_BEAST_FIRE, PLAYER, "hand"),
@@ -273,17 +273,17 @@ static func _extra_deck() -> Dictionary:
 		_c("p_inferno", RAGING_INFERNO, PLAYER, "extra"),
 		_c("p_kaya", GRANDMOTHER_KAYA, PLAYER, "extra"),
 		_c("o_monster", BASIC_MONSTER_FIRE, OPPONENT, "unit", 1),
-	] + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) + _fill("o_fill", BASIC_MONSTER_NECROTIC, OPPONENT, 8)
+	] + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) + _fill("o_fill", BASIC_MONSTER_DARK, OPPONENT, 8)
 	return {
 		"id": "extra_deck",
 		"title": "Lesson 5 · Extra Deck: Fusion",
-		"summary": "[kw]Fusion[/kw] units are summoned by tributing the listed materials with a Fusion effect such as [card]Polymerization[/card].",
+		"summary": "[kw]Fusion[/kw] units are summoned by tributing the listed materials with a Fusion effect such as [card]Fusion Ceremony[/card].",
 		"learned": ["[kw]Fusion[/kw], [kw]Ritual[/kw] and [kw]Arcane[/kw] units wait in the [zone]Extra Deck[/zone]", "Fusion tributes its listed materials to [zone]Spent[/zone]", "Summoned units may attack at once"],
 		"setup": {"first": OPPONENT, "turn": 2, "hp": [START_HP, START_HP], "cards": cards},
 		"steps": [
 			_read("The Extra Deck", "[kw]Fusion[/kw], [kw]Ritual[/kw] and [kw]Arcane[/kw] units wait in your [zone]Extra Deck[/zone].\n\nThey are never drawn; each kind has its own way to be summoned.\nThis lesson is [kw]Fusion[/kw]; the next two cover Ritual and Arcane.", [{"pile": ["me", "extra"]}]),
 			_read("Fusion materials", "[card]Bastion Wyrm[/card] needs a [kw]Beast[/kw] unit and a [kw]Dragon[/kw] unit.\n\nYour [type]Earth[/type] Beast and [type]Fire[/type] Dragon on the field fit.", [{"slot": ["me", "unit", 0]}, {"slot": ["me", "unit", 1]}]),
-			_do("Cast Polymerization", "Click [card]Polymerization[/card] in your [zone]Hand[/zone] and click [btn]Cast[/btn].", [{"t": "cast", "card": "p_poly"}]),
+			_do("Cast Fusion Ceremony", "Click [card]Fusion Ceremony[/card] in your [zone]Hand[/zone] and click [btn]Cast[/btn].", [{"t": "cast", "card": "p_poly"}]),
 			_do("Choose the Fusion unit", "Click [card]Bastion Wyrm[/card].", [{"t": "choose", "opt": {"card": "p_wyrm"}}]),
 			_do("First material", "Pick the materials on the board.\n\nClick your [type]Earth[/type] Beast.", [{"t": "choose", "opt": {"card": "p_beast"}}]),
 			_do("Second material", "Click your [type]Fire[/type] Dragon.", [{"t": "choose", "opt": {"card": "p_dragon"}}]),
@@ -293,7 +293,7 @@ static func _extra_deck() -> Dictionary:
 			_do("Enter the Battle Phase", "Newly summoned units may attack at once.\n\nClick [btn]Go to Battle Phase[/btn].", [{"t": "next_phase"}]),
 			_do("Attack with the Wyrm", "Click [card]Bastion Wyrm[/card] and click [btn]Attack[/btn].", [{"t": "attack", "card": "p_wyrm"}]),
 			_do("Pick the target", "Click the Rival's [type]Fire[/type] Monster.\n\nNo Type advantage either way: 36 against 8.", [{"t": "choose", "opt": {"card": "o_monster"}}]),
-			_read("Lesson complete", "[stat]36 ATK[/stat] against 8: the Monster is destroyed and the Rival loses [stat]28 HP[/stat].\n\nNext: [kw]Ritual[/kw] summoning, which tributes a unit carrying [kw]Runes[/kw].", [{"plate": "opp"}]),
+			_read("Lesson complete", "[stat]36 ATK[/stat] against 8: the Monster is destroyed and the Rival takes [stat]28 Damage[/stat].\n\nNext: [kw]Ritual[/kw] summoning, which tributes a unit carrying [kw]Runes[/kw].", [{"plate": "opp"}]),
 		],
 		"opponent": [],
 	}
@@ -312,7 +312,7 @@ static func _ritual() -> Dictionary:
 		_c("p_null", THE_CREEPING_NULL, PLAYER, "extra"),
 		_c("o_warrior", BASIC_WARRIOR_PHYSICAL, OPPONENT, "unit", 1),
 	] + _fill("p_hand", BASIC_MAGE_FIRE, PLAYER, 3, "hand") + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) \
-		+ _fill("o_fill", BASIC_MONSTER_NECROTIC, OPPONENT, 8)
+		+ _fill("o_fill", BASIC_MONSTER_DARK, OPPONENT, 8)
 	cards[0]["runes"] = 1
 	return {
 		"id": "ritual",
@@ -333,7 +333,7 @@ static func _ritual() -> Dictionary:
 			_do("Enter the Battle Phase", "Click [btn]Go to Battle Phase[/btn].", [{"t": "next_phase"}]),
 			_do("Attack with the Null", "Click [card]The Creeping Null[/card] and click [btn]Attack[/btn].", [{"t": "attack", "card": "p_null"}]),
 			_do("Pick the target", "Click the Rival's [type]Physical[/type] Warrior.\n\nNo Type advantage either way: [stat]40 ATK[/stat] against 8.", [{"t": "choose", "opt": {"card": "o_warrior"}}]),
-			_read("Lesson complete", "The Warrior was in Attack stance, so the Rival lost the difference: [stat]32 HP[/stat].\n\nNext: [kw]Arcane[/kw] summoning, which pays with units from your [zone]Spent[/zone] pile.", [{"plate": "opp"}]),
+			_read("Lesson complete", "The Warrior was in Attack stance, so the Rival took the difference as Damage: [stat]32 Damage[/stat].\n\nNext: [kw]Arcane[/kw] summoning, which pays with units from your [zone]Spent[/zone] pile.", [{"plate": "opp"}]),
 		],
 		"opponent": [],
 	}
@@ -354,7 +354,7 @@ static func _arcane() -> Dictionary:
 		_c("p_boom", BOOM, PLAYER, "extra"),
 		_c("o_beast", BASIC_BEAST_LIGHTNING, OPPONENT, "unit", 1, "def"),
 	] + _fill("p_hand", BASIC_MAGE_FIRE, PLAYER, 4, "hand") + _fill("p_fill", BASIC_MAGE_FIRE, PLAYER, 8) \
-		+ _fill("o_fill", BASIC_MONSTER_NECROTIC, OPPONENT, 8)
+		+ _fill("o_fill", BASIC_MONSTER_DARK, OPPONENT, 8)
 	return {
 		"id": "arcane",
 		"title": "Lesson 7 · Extra Deck: Arcane",
@@ -373,8 +373,8 @@ Both Dragons would make 4, too much: once one is picked, the other is greyed out
 			_read("Exhausted", "The Mage and the Dragon were [kw]exhausted[/kw]: they are in your [zone]Exhaust[/zone] pile for the rest of this game, and their field effects did not trigger.\n\nOn Summon, Boom changed the stance of the Rival's units: the Beast is now in [kw]Attack stance[/kw].", [{"pile": ["me", "exhaust"]}, {"slot": ["me", "unit", 1]}]),
 			_do("Enter the Battle Phase", "Click [btn]Go to Battle Phase[/btn].", [{"t": "next_phase"}]),
 			_do("Attack with Boom", "Click [card]Boom, Councillor of The Order[/card] and click [btn]Attack[/btn].", [{"t": "attack", "card": "p_boom"}]),
-			_do("Pick the target", "[type]Earth[/type] is effective against [type]Lightning[/type]: Boom gets [stat]+6 ATK[/stat] (36 against 8).\n\nClick the Rival's Beast.", [{"t": "choose", "opt": {"card": "o_beast"}}]),
-			_read("Tutorial complete", "The Beast was in Attack stance, so the Rival lost the difference: [stat]28 HP[/stat].\n\nYou have finished the tutorial. Good luck in your first series!", [{"plate": "opp"}]),
+			_do("Pick the target", "[type]Earth[/type] is effective against [type]Lightning[/type]: Boom gets [stat]+6 ATK[/stat] (32 against 8).\n\nClick the Rival's Beast.", [{"t": "choose", "opt": {"card": "o_beast"}}]),
+			_read("Tutorial complete", "The Beast was in Attack stance, so the Rival took the difference as Damage: [stat]24 Damage[/stat].\n\nYou have finished the tutorial. Good luck in your first series!", [{"plate": "opp"}]),
 		],
 		"opponent": [],
 	}

@@ -304,7 +304,7 @@ func test_arcane_lesson_exact_total_exhausts_materials() -> void:
 	assert_str(m.cards[h.keys["s_drake"]]["zone"]).is_equal("spent")
 	assert_str(m.cards[h.keys["p_boom"]]["zone"]).is_equal("unit")
 	assert_int(m.players[ME]["ap"]).is_equal(2)                     # no AP paid for the Arcane summon
-	assert_int(m.players[RIVAL]["hp"]).is_equal(32)                 # flipped to Attack: 36 against 8
+	assert_int(m.players[RIVAL]["hp"]).is_equal(36)                 # flipped to Attack: 32 (26 ATK + 6) against 8
 
 
 func test_arcane_lesson_offers_no_zero_cost_unit_and_refuses_wrong_totals() -> void:

@@ -120,9 +120,9 @@ func render() -> void:
 			var head := t.trim_prefix("—").trim_suffix("—").strip_edges().replace(": ", " · ").to_upper()
 			label.append_text("\n[center][color=#8a7350]━━━  [/color][color=#f0cf7a][b]%s[/b][/color][color=#8a7350]  ━━━[/color][/center]\n" % head.replace("[", "("))
 			continue
-		elif t.contains("loses") and t.contains("HP"):
+		elif t.contains(" Damage") and t.contains("(HP "):
 			col = "#ff8a8a"
-		elif t.contains("gains") and t.contains("HP"):
+		elif t.contains(" heals ") and t.contains("(HP "):
 			col = "#8fe3a8"
 		elif t.contains("activates Trap"):
 			col = "#" + UIStyle.category_text_color("trap").to_html(false)

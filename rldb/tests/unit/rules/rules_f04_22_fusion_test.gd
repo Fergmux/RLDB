@@ -5,8 +5,8 @@ extends GdUnitTestSuite
 ## self-destruction resolves, then the summon. Choices are asked
 ## with the method's source still on the Field (pending `source`).
 ## Methods: Sepukku (68), Void Basilisk (67), Magentric (69), Aleister the Invoker (40),
-## Nether Portal (89), Polymerization cast (82) and set-activated, Tag Team - S (8, On Summon),
-## and Unstable Fusions (137, Hand materials through Polymerization).
+## Fusion Laboratory (89), Fusion Ceremony cast (82) and set-activated, Tag Team - S (8, On Summon),
+## and Unstable Fusions (137, Hand materials through Fusion Ceremony).
 
 const WYRM := 93            # Bastion Wyrm: Beast + Dragon
 const BEAST := 4            # Basic Beast (Water)
@@ -67,13 +67,13 @@ func _setup(method: String) -> Dictionary:
 			var b := TB.unit(m, 0, BEAST, 1)
 			var dr := TB.unit(m, 0, DRAGON, 2)
 			d.merge({"src": al, "mats": [b, dr], "cmd": {"t": "ability", "uid": al, "idx": 0},
-				"answers": [wyrm, b, dr, 1, 0], "cost": "pays 1 AP"})
+				"answers": [wyrm, b, dr, 1, 0], "cost": "loses 1 AP"})
 		"nether_portal":
 			var np := TB.power(m, 0, NETHER_PORTAL)
 			var b := TB.unit(m, 0, BEAST, 1)
 			var dr := TB.unit(m, 0, DRAGON, 2)
 			d.merge({"src": np, "mats": [b, dr], "cmd": {"t": "ability", "uid": np, "idx": 0},
-				"answers": [wyrm, b, dr, 1, 0], "cost": "pays 1 AP"})
+				"answers": [wyrm, b, dr, 1, 0], "cost": "loses 1 AP"})
 		"poly_cast":
 			var poly := TB.card(m, 0, POLY, "hand")
 			var b := TB.unit(m, 0, BEAST, 1)
@@ -85,7 +85,7 @@ func _setup(method: String) -> Dictionary:
 			var b := TB.unit(m, 0, BEAST, 1)
 			var dr := TB.unit(m, 0, DRAGON, 2)
 			d.merge({"src": poly, "mats": [b, dr], "cmd": {"t": "activate_set", "uid": poly},
-				"answers": [wyrm, b, dr, 1, 0], "cost": "activates set Spell Polymerization"})
+				"answers": [wyrm, b, dr, 1, 0], "cost": "activates set Spell Fusion Ceremony"})
 		"unstable":
 			TB.power(m, 0, UNSTABLE)
 			var poly := TB.card(m, 0, POLY, "hand")

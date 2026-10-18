@@ -309,7 +309,7 @@ func pname(p: int) -> String:
 func public_label(uid: int) -> String:
 	var inst: Dictionary = cards[uid]
 	if inst["zone"] == "backrow" and not is_face_up(uid):
-		return "a face-down card"
+		return "a set Spell/Trap"
 	if inst["zone"] in ["hand", "draw", "spent", "exhaust", "extra"]:
 		return "a hidden card"
 	return name_of(uid)
@@ -378,14 +378,6 @@ func count_flag(p: int, flag: String) -> int:
 ## Current type of unit uid.
 func unit_type(uid: int) -> String:
 	var inst: Dictionary = cards[uid]
-	# Chaos Witch aura (2026-10-17 text): every Mage unit on the Field has the Witch's own Type.
-	# While the Witch is still typeless it imposes nothing (its Type change excludes "?").
-	if inst["zone"] == "unit":
-		for src in all_field_units():
-			if src != uid and has_flag(src, "mage_type_aura") and unit_race(uid) == "Mage":
-				var wt = cards[src]["type_o"] if cards[src]["type_o"] != null else d(src)["type"]
-				if wt != "":
-					return wt
 	if inst["type_o"] != null:
 		return inst["type_o"]
 	return d(uid)["type"]
@@ -512,9 +504,10 @@ func current_cost(uid: int) -> int:
 		v -= 1
 	if cat == "trap" and player_has_flag(p, "traps_cost_less"):
 		v -= 1
+	# Reinforcements (2026-10-18): -2 AP while only the opponent controls a unit.
 	if CardDB.is_unit_category(cat) and player_has_flag(p, "units_cost_less_if_behind") \
 			and field_units(p).is_empty() and not field_units(opp(p)).is_empty():
-		v -= 1
+		v -= 2
 	return maxi(v, 0)
 
 
@@ -620,13 +613,28 @@ func _after_status_gain(uid: int, s: String) -> void:
 		card_log(uid, "Curse removes %s from § (Curse -1)." % ", ".join(removed))
 
 
+## True when player p's deck (every card they own, wherever it is) has a printed 0-cost card.
+func _deck_has_zero_cost(p: int) -> bool:
+	for u in cards:
+		var inst: Dictionary = cards[u]
+		if inst["owner"] == p and d(u)["cost_kind"] == "ap" and d(u)["cost"] == 0:
+			return true
+	return false
+
+
 ## Persistent (this game) cost change; floored so the card's cost never goes below zero.
-func change_cost_perm(uid: int, n: int) -> void:
+## `private_log`: the card is hidden from the opponent (a set card destroyed face down), so only
+## its owner reads which card it was.
+func change_cost_perm(uid: int, n: int, private_log: bool = false) -> void:
 	var df := d(uid)
 	var printed: int = df["cost"] if df["cost"] != null else 0
 	var before: int = cards[uid]["cost_p"]
 	cards[uid]["cost_p"] = maxi(before + n, -printed)
-	add_log("%s's cost changes by %+d for the rest of this game (now %d)." % [name_of(uid), cards[uid]["cost_p"] - before, maxi(printed + cards[uid]["cost_p"], 0)])
+	var text := "%s's cost changes by %+d for the rest of this game (now %d)." % [name_of(uid), cards[uid]["cost_p"] - before, maxi(printed + cards[uid]["cost_p"], 0)]
+	if private_log:
+		add_log("", {cards[uid]["owner"]: text})
+	else:
+		add_log(text)
 
 
 ## Removes n stacks of status s from uid.
@@ -636,15 +644,16 @@ func decrement_status(uid: int, s: String, n: int = 1) -> void:
 
 # ---------------------------------------------------------------- HP and AP
 
-## Changes HP. Returns true if the game ended. Immediate defeat at zero.
+## Changes HP: a negative amount is Damage taken, a positive one is Healing (2026-10-18 wording).
+## Returns true if the game ended. Immediate defeat at zero.
 func change_hp(p: int, amount: int, reason: String) -> bool:
 	if amount == 0 or winner != -1:
 		return winner != -1
 	players[p]["hp"] += amount
 	if amount < 0:
-		add_log("%s loses %d HP%s (HP %d)." % [pname(p), -amount, reason, players[p]["hp"]])
+		add_log("%s takes %d Damage%s (HP %d)." % [pname(p), -amount, reason, players[p]["hp"]])
 	else:
-		add_log("%s gains %d HP%s (HP %d)." % [pname(p), amount, reason, players[p]["hp"]])
+		add_log("%s heals %d HP%s (HP %d)." % [pname(p), amount, reason, players[p]["hp"]])
 	add_fx({"k": "hp", "p": p, "d": amount})
 	note("hp", {"p": p, "d": amount})
 	if players[p]["hp"] <= 0:
@@ -727,6 +736,10 @@ func move_to_pile(uid: int, dest: String) -> void:
 	var from_zone: String = inst["zone"]
 	if inst["zone"] == "hand" and dest != "hand":
 		inst["st"] = {}
+	# Energy Dispel (2026-10-18): "If this Trap is sent from Field to Spent, this Trap Permanently
+	# costs +1AP" (used or destroyed alike).
+	if was_field and dest == "spent" and CardScripts.get_entry(inst["id"]).get("flags", []).has("cost_up_on_spent"):
+		change_cost_perm(uid, 1, inst["zone"] == "backrow" and not is_face_up(uid))
 	if was_field and inst["zone"] == "unit":
 		inst["orig_slot"] = inst["slot"]
 	_remove_from_zone(uid)

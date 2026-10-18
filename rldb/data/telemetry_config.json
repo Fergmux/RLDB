@@ -3,7 +3,7 @@
 	"schema_version": 1,
 	"enabled": true,
 	"environment": "auto",
-	"build": "0.9.0",
+	"build": "0.9.1",
 	"firebase": {
 		"project_id": "rldb-b5593",
 		"api_key": "AIzaSyAAP2b-X1agiZYWFY_dlyMptFrAFzox_Mg",

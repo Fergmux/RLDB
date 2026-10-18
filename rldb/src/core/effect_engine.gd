@@ -328,6 +328,9 @@ func _matches(f: Dictionary, uid: int, sel: Dictionary) -> bool:
 				if not (category(uid) in ["basic_unit", "unit"]): return false
 			"name_prefix":
 				if not name_of(uid).begins_with(want): return false
+			"playable":
+				# A Power put into play by an effect still obeys its own activation limit.
+				if want and has_flag_raw(uid, "abyss_ap") and _deck_has_zero_cost(f["ctl"]): return false
 			"in":
 				if not (uid in refs(f, want)): return false
 			"not_in":
@@ -393,6 +396,9 @@ func eval_num(f: Dictionary, x) -> int:
 		elif x.has("sum_atk"):
 			for u in select(f, x["sum_atk"]):
 				base += atk_of(u)
+		elif x.has("sum_def"):
+			for u in select(f, x["sum_def"]):
+				base += def_of(u)
 		elif x.has("value"):
 			base = eval_num(f, x["value"])
 		elif x.has("cost_of"):
@@ -439,6 +445,18 @@ func eval_cond(f: Dictionary, cond: Dictionary) -> bool:
 				if (players[f["ctl"]]["hp"] < players[opp(f["ctl"])]["hp"]) != v: return false
 			"self_has_buff":
 				if has_any_buff(f["src"]) != v: return false
+			"self_has_debuff":
+				if not cards.has(f["src"]) or has_any_debuff(f["src"]) != v: return false
+			"var_owned":
+				# The card chosen into var `v` belongs to the frame's controller (checked after it moved).
+				var vo := refs(f, "$" + String(v))
+				if vo.is_empty() or cards[vo[0]]["owner"] != f["ctl"]: return false
+			"free_power_zone":
+				if free_power_slots(f["ctl"]).is_empty() == v: return false
+			"event_card_destroyable":
+				# The activated card is still on the Field, or is a Spell resolving in limbo.
+				var ec2: int = f["event"].get("card", -1)
+				if (cards.has(ec2) and (on_field(ec2) or cards[ec2]["zone"] == "limbo")) != v: return false
 			"self_front":
 				if not unit_on_field(f["src"]) or (slot_row(cards[f["src"]]["slot"]) == 0) != v: return false
 			"my_turn":
@@ -535,6 +553,25 @@ func _flush_triggers() -> void:
 		push_frame(make_frame(-1, p, [{"op": "trigger_group", "items": by_player[p]}], "triggers"))
 
 
+## True when every queued trigger is the same card's same effect on the same event and that effect
+## neither refers to its own card nor asks anything (two copies of Options drawing), so asking the
+## player to order them would be a choice without a difference. Effects on "self" (two Soul
+## Devourers gaining Runes) still ask: a response may remove one copy between them.
+func _identical_triggers(items: Array) -> bool:
+	var first: Dictionary = items[0]
+	var text := JSON.stringify(first["ops"])
+	for word in ["\"self\"", "\"choose\"", "\"confirm\"", "\"mode\"", "\"declare_type\""]:
+		if text.contains(word):
+			return false
+	for t in items:
+		if not cards.has(t["uid"]) or cards[t["uid"]]["id"] != cards[first["uid"]]["id"]:
+			return false
+		if t["ops"] != first["ops"] or t["event"].get("name", "") != first["event"].get("name", "") \
+				or t["event"].get("self", -1) != -1:
+			return false
+	return true
+
+
 ## Resolves a controller's simultaneous triggers in the order they choose.
 func _op_trigger_group(f: Dictionary, op: Dictionary) -> int:
 	var items: Array = f["vars"].get("items", op["items"].duplicate())
@@ -549,6 +586,8 @@ func _op_trigger_group(f: Dictionary, op: Dictionary) -> int:
 			break
 	if self_first != -1:
 		pick = self_first
+	elif items.size() > 1 and _identical_triggers(items):
+		pick = 0                          # e.g. two copies of Options: the order cannot matter
 	elif items.size() > 1:
 		var ans: Variant = take_answer(f)
 		if ans == null:
@@ -646,6 +685,8 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 			if ev["ctl"] != p: return false
 			if tr.get("by_effect", false) and ev["cause"] != "effect": return false
 			if tr.get("by_opponent", false) and ev.get("by_player", -1) != opp(p): return false
+		"st_destroyed":
+			pass                          # any Spell/Trap, either side (Counter Transmutation)
 	if tr.has("cond") and not eval_cond(f, tr["cond"]):
 		return false
 	if column_summon_blocked(f, tr["ops"]):
@@ -727,12 +768,12 @@ func snapshot(uid: int) -> Dictionary:
 	return s
 
 
-## Destroys a field card. Handles replacement (Mans Best Friend), protection flags and
-## Eternal. Returns true if the card was destroyed.
+## Destroys a field card (or a Spell resolving in limbo, for Energy Dispel). Handles replacement
+## (Mans Best Friend), protection flags and Eternal. Returns true if the card was destroyed.
 ## battle_vs: the other combatant's state captured before either unit was destroyed
 ## ({"atk", "type", "debilitated"}), so simultaneous destruction reads consistent values.
 func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Dictionary = {}) -> bool:
-	if not on_field(uid):
+	if not on_field(uid) and not (cards.has(uid) and cards[uid]["zone"] == "limbo"):
 		return false
 	var inst: Dictionary = cards[uid]
 	if inst["zone"] == "unit":
@@ -751,6 +792,7 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Di
 	var p: int = inst["ctl"]
 	var label := public_label(uid)
 	var was_unit: bool = inst["zone"] == "unit"
+	var was_spell_trap: bool = category(uid) in ["spell", "trap"]
 	var snap := snapshot(uid)
 	var debil := is_debilitated(uid)
 	var dpos := fx_pos(uid)
@@ -758,8 +800,10 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Di
 	if (has_flag_raw(uid, "exhaust_on_destroy") and not debil) or has_flag_raw(uid, "exhaust_on_spent"):
 		dest = "exhaust"
 	move_to_pile(uid, dest)
-	add_log("%s is destroyed%s." % [label, " by battle" if cause == "battle" else ""])
-	add_fx({"k": "destroy", "at": dpos, "cause": cause, "dest": dest})
+	# A hidden card's label ("a set Spell/Trap") starts the sentence, so it is capitalised.
+	add_log("%s is destroyed%s." % [label.substr(0, 1).to_upper() + label.substr(1), " by battle" if cause == "battle" else ""])
+	if not dpos.is_empty():               # a resolving Spell (limbo) has no board position
+		add_fx({"k": "destroy", "at": dpos, "cause": cause, "dest": dest})
 	var ev := {"self": uid, "ctl": p, "cause": cause, "by": by_uid, "by_player": by_player,
 		"snapshot": snap, "debilitated": debil, "was_unit": was_unit, "player": active,
 		"text": "%s destroyed" % label, "type": snap.get("type_now", ""), "orig_slot": snap["slot"]}
@@ -768,12 +812,15 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Di
 		if by_player != -1 and by_player != p:
 			emit("destroyed_opp_unit", {"self": by_uid, "victim": uid, "ctl": by_player, "cause": cause, "player": active,
 				"debilitated": battle_vs.get("debilitated", false)})
-		if cause == "battle" and by_uid != -1:
-			emit("battle_destroyed", {"self": by_uid, "victim": uid, "ctl": by_player, "player": active,
-				"debilitated": battle_vs.get("debilitated", false)})
 		emit("unit_destroyed", {"victim": uid, "ctl": p, "type": snap.get("type_now", ""), "cause": cause, "player": active, "by": by_uid})
 		window_queue.append({"name": "destroyed", "self": uid, "ctl": p, "cause": cause, "by_player": by_player,
 			"by": by_uid, "player": active, "text": "%s destroyed" % label})
+	elif was_spell_trap:
+		# Counter Transmutation (2026-10-18) responds to any destroyed Spell/Trap. Named only when it
+		# was public: a set card that was destroyed face down stays unnamed.
+		window_queue.append({"name": "st_destroyed", "self": uid, "ctl": p, "cause": cause, "by_player": by_player,
+			"by": by_uid, "player": active, "text": "%s destroyed" % label, "slot": snap["slot"],
+			"was_public": label != "a set Spell/Trap"})
 	return true
 
 

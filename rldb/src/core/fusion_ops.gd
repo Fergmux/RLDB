@@ -84,6 +84,12 @@ func fusion_candidates(p: int, sources: Array, exclude: int = -1) -> Array:
 	return out
 
 
+## Ends the effect quietly when no Fusion Summon from `sources` is possible right now, so an
+## optional "You can Fusion Summon" (Tag Team - S, Bronze Salaman) is never offered for nothing.
+func _op_fusion_possible(f: Dictionary, op: Dictionary) -> int:
+	return R.CONT if not fusion_candidates(f["ctl"], op["sources"]).is_empty() else R.END
+
+
 ## F04-22 / F07 (2026-10-17): every Fusion method makes all of its choices first, while its
 ## source is still where it was: the Fusion unit, each material (picked on the board for Field
 ## materials), the zone and the stance. The Attack/Defense stance choice is the final, committing

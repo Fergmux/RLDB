@@ -1,4 +1,4 @@
-"""Import regressions for the 2026-10-17 card database migration.
+"""Import regressions for the card database migrations (2026-10-17, 2026-10-18).
 
 Run from the repo root:  python -I -m unittest discover -s tools/tests -v
 """
@@ -11,7 +11,7 @@ TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, TOOLS)
 import import_cards as ic  # noqa: E402
 
-# The twenty IDs whose `condition` cell is the editorial literal `temp` in the 2026-10-17 export.
+# The twenty IDs whose `condition` cell is the editorial literal `temp` (2026-10-17 and 2026-10-18).
 TEMP_IDS = {6, 9, 15, 25, 30, 32, 34, 35, 36, 37, 39, 69, 72, 76, 78, 100, 162, 156, 62, 63}
 
 
@@ -24,7 +24,9 @@ class ImportRegressionTest(unittest.TestCase):
     def test_reads_the_dated_source_with_the_pinned_hash(self):
         path = os.path.join(ic.SRC, ic.CARD_SOURCE)
         self.assertEqual(ic.sha256(path), ic.CARD_SOURCE_SHA256)
-        self.assertNotEqual(ic.CARD_SOURCE, ic.BASELINE_SOURCE)
+        self.assertNotIn(ic.CARD_SOURCE, ic.PREVIOUS_SOURCES)
+        for old in ic.PREVIOUS_SOURCES:
+            self.assertTrue(os.path.exists(os.path.join(ic.SRC, old)), old)
         for c in self.data["cards"]:
             self.assertEqual(c["source"]["file"], ic.CARD_SOURCE)
 
@@ -39,7 +41,7 @@ class ImportRegressionTest(unittest.TestCase):
         self.assertEqual(stripped, TEMP_IDS)
 
     def test_populated_summon_fields_are_not_duplicated(self):
-        self.assertEqual(self.by_id[63]["on_summon"], "Apply Reveal to all Spells and Traps.")
+        self.assertEqual(self.by_id[63]["on_summon"], "Apply Reveal to all Spells/Traps.")
         self.assertEqual(self.by_id[63]["condition"], "")
         self.assertEqual(self.by_id[97]["on_summon"], "Apply 3 Cleanse to this Unit.")
         self.assertEqual(self.by_id[97]["condition"], "")
@@ -69,9 +71,35 @@ class ImportRegressionTest(unittest.TestCase):
 
     def test_unique_stable_ids(self):
         ids = [c["id"] for c in self.data["cards"]]
-        self.assertEqual(len(ids), 183)
-        self.assertEqual(len(set(ids)), 183)
-        self.assertEqual(set(ids), set(range(1, 184)))
+        self.assertEqual(len(ids), 188)
+        self.assertEqual(len(set(ids)), 188)
+        self.assertEqual(set(ids), set(range(1, 189)))
+
+    def test_new_cards_of_2026_10_18(self):
+        expect = {184: ("Counter Transmutation", "trap"), 185: ("Drako, Councillor of The Order", "arcane"),
+                  186: ("Bronze Salaman", "ritual"), 187: ("Fence of the Marked Claw", "arcane"),
+                  188: ("Necro, the Loathsome", "fusion")}
+        for cid, (name, cat) in expect.items():
+            self.assertEqual((self.by_id[cid]["name"], self.by_id[cid]["category"]), (name, cat), cid)
+        self.assertEqual(self.by_id[184]["condition"], "If a Spell/Trap is Destroyed:")   # "Sell/Trap" typo
+        self.assertEqual(self.by_id[184]["source"]["raw"]["condition"], "If a Sell/Trap is Destroyed:")
+        self.assertEqual((self.by_id[186]["cost_kind"], self.by_id[186]["cost"]), ("ritual", 1))
+        self.assertEqual((self.by_id[185]["cost"], self.by_id[187]["cost"]), (3, 1))
+        self.assertIsNone(self.by_id[188]["cost"])
+
+    def test_light_and_dark_replace_heavenly_and_necrotic(self):
+        types = {c["type"] for c in self.data["cards"]}
+        self.assertNotIn("Heavenly", types)
+        self.assertNotIn("Necrotic", types)
+        self.assertEqual(self.by_id[13]["type"], "Dark")          # Chaos Witch is no longer typeless
+        self.assertEqual(self.by_id[13]["art"]["type_icon"], "Card/types/dark.png")
+        self.assertEqual(self.by_id[105]["type"], "Light")
+        self.assertEqual(self.by_id[61]["condition"], "Warrior Unit + Light Unit")
+
+    def test_extra_deck_descriptions_leave_out_the_summon_requirement(self):
+        for c in self.data["cards"]:
+            if c["category"] in ("fusion", "ritual", "arcane") and c["condition"]:
+                self.assertNotIn(c["condition"], c["description"], c["id"])
 
     def test_renamed_ids_follow_the_new_source_by_id(self):
         expect = {6: "Tag Team - L", 7: "Tag Team - B", 8: "Tag Team - S", 9: "Tag Team - F", 10: "Tag Team - W",
@@ -86,6 +114,8 @@ class ImportRegressionTest(unittest.TestCase):
     def test_typed_special_values(self):
         self.assertEqual((self.by_id[95]["cost_kind"], self.by_id[95]["cost"]), ("ritual", 2))   # Mimic 2R
         self.assertEqual((self.by_id[183]["cost"], self.by_id[183]["atk"], self.by_id[183]["def"]), (3, 12, 20))
+        self.assertEqual((self.by_id[175]["atk"], self.by_id[174]["atk"], self.by_id[174]["def"]), (26, 8, 18))
+        self.assertIsNone(self.by_id[176]["def"])          # Tritu ?/? since 2026-10-18
         self.assertEqual((self.by_id[65]["atk"], self.by_id[65]["def"]), (40, 28))
         self.assertIsNone(self.by_id[96]["cost"])          # Roma ?R
         self.assertIsNone(self.by_id[95]["atk"])           # Mimic ?/?
@@ -95,16 +125,24 @@ class ImportRegressionTest(unittest.TestCase):
         self.assertEqual((self.by_id[9]["cost"], self.by_id[9]["def"]), (2, 22))
 
     def test_confirmed_corrections_survive(self):
-        self.assertIn("Choose an opponent's Unit", self.by_id[48]["on_summon"])
+        self.assertIn("Choose one of your opponent's Units", self.by_id[48]["on_summon"])
         self.assertNotIn("highest", self.by_id[48]["description"])
-        self.assertIn("one of your units in this Column", self.by_id[45]["condition"])
-        self.assertIn("additional", self.by_id[169]["on_field"])
+        self.assertIn("one of your Units in this Column", self.by_id[45]["condition"])
         self.assertEqual(self.by_id[1]["name"].find("("), -1)
-        for cid in range(170, 178):
+        for cid in list(range(170, 178)) + [185, 187]:
             self.assertEqual(self.by_id[cid]["condition"], ic.ARCANE_REQUIREMENT)
         # Obsolete overrides dropped: the export now carries the confirmed wording.
-        self.assertEqual(self.by_id[90]["on_field"], "Once per turn: you can Apply 1 Paralyse to a Unit.")
-        self.assertEqual(self.by_id[183]["on_field"], "At the start of your turn: your opponent loses -6 HP.")
+        self.assertEqual(self.by_id[169]["on_field"], "At the start of your turn: draw a card.")
+        self.assertNotIn("raw", self.by_id[169]["source"])
+        self.assertEqual(self.by_id[90]["on_field"], "Once per turn: you can apply 1 Paralyse to a Unit.")
+        self.assertEqual(self.by_id[183]["on_field"], "At the start of your turn: your opponent takes -6 HP Damage.")
+
+    def test_broken_possessives_and_typos_are_corrected_with_provenance(self):
+        for cid, raw_bit in ((12, "this Units Column"), (73, "this Units Column"), (102, "this Units Type"),
+                             (162, "this Units cost"), (40, "using you Control")):
+            self.assertNotIn(raw_bit, self.by_id[cid]["on_field"], cid)
+            self.assertIn(raw_bit, self.by_id[cid]["source"]["raw"]["On Field"], cid)
+        self.assertIn("Unit's", self.by_id[162]["on_field"])
 
     def test_no_orphan_card_or_note(self):
         self.assertEqual(self.data["unassigned_source_notes"], [])

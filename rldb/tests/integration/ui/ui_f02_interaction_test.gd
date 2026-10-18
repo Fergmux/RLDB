@@ -123,7 +123,7 @@ func test_f02_12_preview_text_names_values_and_hidden_risk() -> void:
 	var pv := {"outcome": "win", "verdict": "good", "av": 14, "dv": 10, "adv": "attacker", "bonus": 6, "defending_atk": true,
 		"t_dies": true, "a_dies": false, "dmg_opp": 4, "dmg_you": 0, "notes": [], "hidden_risk": true}
 	var t := GameCombatPreview.preview_text(pv, "Water", "Fire")
-	assert_str(t).contains("Favourable").contains("14").contains("10").contains("Fire destroyed").contains("face-down")
+	assert_str(t).contains("Favourable").contains("14").contains("10").contains("Fire destroyed").contains("set Spells/Traps")
 
 
 # Regression: two Hand cards leaving in one update while one is hovered used to abort the

@@ -29,7 +29,7 @@ func _builder() -> DeckBuilder:
 	return db
 
 
-## Two catalogue cards with the same name stem (e.g. Basic Mage Water / Heavenly) but different Types.
+## Two catalogue cards with the same name stem (e.g. Basic Mage Water / Light) but different Types.
 func _variants() -> Array:
 	var seen := {}
 	for d in CardDB.all():

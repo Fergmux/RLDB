@@ -65,9 +65,8 @@ func _start_turn(p: int) -> void:
 	players[p]["ap_start"] = players[p]["ap"]
 	players[p]["ap_peak"] = players[p]["ap"]
 	add_log("%s's AP is set to %d%s." % [pname(p), players[p]["ap"], (" (" + ", ".join(notes) + ")") if notes else ""])
-	# P-19 (reworded Options): each active copy draws one additional card.
-	var draw_n := BASE_DRAW + count_flag(p, "draw_extra")
-	draw_cards(p, draw_n)
+	# Options (2026-10-18) draws with the start-of-turn effects below, not as part of this draw.
+	draw_cards(p, BASE_DRAW)
 	# Medic heals at the start of its controller's turn, then decrements.
 	for u in field_units(p):
 		var m := status_count(u, "medic")
@@ -345,14 +344,6 @@ func validate(p: int, cmd: Dictionary) -> String:
 	return "Unknown command."
 
 
-func _deck_has_zero_cost(p: int) -> bool:
-	for u in cards:
-		var inst: Dictionary = cards[u]
-		if inst["owner"] == p and d(u)["cost_kind"] == "ap" and d(u)["cost"] == 0:
-			return true
-	return false
-
-
 func _summon_blocked_by_type(p: int, t: String) -> bool:
 	for u in field_units(opp(p)):
 		if has_flag(u, "type_summon_lock") and unit_type(u) == t and t != "":
@@ -366,6 +357,8 @@ func _spell_target_check(p: int, uid: int) -> String:
 		return "This card's effect is not implemented yet."
 	var f := make_frame(uid, p, [], "")
 	for op in entry["spell"]:
+		if op["op"] == "draw":
+			break                             # a later choice may pick the drawn card
 		if op["op"] == "near_self":
 			_op_near_self(f, op)              # its list feeds the choice that follows
 		if op["op"] == "choose" and not op.get("optional", false):
@@ -380,7 +373,7 @@ func _spell_target_check(p: int, uid: int) -> String:
 	for op in entry["spell"]:
 		if op["op"] == "take_control" and free_unit_slots(p).is_empty():
 			return "No free zone on your side."
-	# A Fusion Spell (Polymerization) needs a Fusion unit it could actually summon.
+	# A Fusion Spell (Fusion Ceremony) needs a Fusion unit it could actually summon.
 	for op in entry["spell"]:
 		if op["op"] == "fusion" and fusion_candidates(p, op["sources"]).is_empty():
 			return "No Fusion unit can be summoned."
@@ -436,6 +429,8 @@ func _ability_check(p: int, uid: int, idx: int, ab: Dictionary) -> String:
 	if ab.has("cond") and not eval_cond(f, ab["cond"]):
 		return "Condition not met."
 	for op in ab["ops"]:
+		if op["op"] == "draw":
+			break                             # "draw a card, discard a card": the draw comes first
 		if op["op"] == "near_self":
 			_op_near_self(f, op)              # its list feeds the choice that follows
 		if op["op"] == "choose" and not op.get("optional", false):
@@ -585,6 +580,7 @@ func _op_flip_set_spell(f: Dictionary, op: Dictionary) -> int:
 	cards[f["src"]]["face_up"] = true
 	add_log("%s activates set Spell %s." % [pname(f["ctl"]), name_of(f["src"])])
 	add_fx({"k": "spotlight", "p": f["ctl"], "id": d(f["src"])["id"], "how": "activate", "at": fx_pos(f["src"])})
+	emit("spell_activated", {"player": f["ctl"], "card": f["src"]})
 	return R.CONT
 
 
@@ -622,8 +618,7 @@ func _op_to_limbo(f: Dictionary, op: Dictionary) -> int:
 		cards[uid]["zone"] = "limbo"
 		add_log("%s casts %s." % [pname(f["ctl"]), name_of(uid)])
 		add_fx({"k": "spotlight", "p": f["ctl"], "id": d(uid)["id"], "how": "cast"})   # the Spell is public now
-	if script_of(uid).get("flags", []).has("cost_up_on_activate"):
-		change_cost_perm(uid, -1 if f["reversed"] else 1)
+		emit("spell_activated", {"player": f["ctl"], "card": uid})
 	return R.CONT
 
 
@@ -650,7 +645,7 @@ func _op_ability_cost(f: Dictionary, op: Dictionary) -> int:
 	var cost: Dictionary = ab.get("cost", {})
 	if cost.get("ap", 0) > 0:
 		players[f["ctl"]]["ap"] -= cost["ap"]
-		add_log("%s pays %d AP (AP %d)." % [pname(f["ctl"]), cost["ap"], players[f["ctl"]]["ap"]])
+		add_log("%s loses %d AP (AP %d)." % [pname(f["ctl"]), cost["ap"], players[f["ctl"]]["ap"]])
 	if cost.get("hp", 0) > 0:
 		if change_hp(f["ctl"], -cost["hp"], " (cost of %s)" % name_of(uid)):
 			return R.END

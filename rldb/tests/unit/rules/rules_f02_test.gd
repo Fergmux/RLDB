@@ -184,8 +184,8 @@ func test_f02_12_preview_uses_stacked_elemental_mastery() -> void:
 	var t := TB.unit(m, 0, TB.FIRE, 0, "def", 10, 30)
 	m.submit(1, {"t": "attack", "uid": a})
 	var pv := _opt_preview(m, t)
-	assert_int(pv["bonus"]).is_equal(24)
-	assert_int(pv["av"]).is_equal(32)
+	assert_int(pv["bonus"]).is_equal(18)                   # 6 + 6 per Elemental Mastery (2026-10-18)
+	assert_int(pv["av"]).is_equal(26)
 	assert_bool(pv["defending_atk"]).is_false()
 	assert_int(pv["dv"]).is_equal(30)
 

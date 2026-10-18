@@ -26,7 +26,7 @@ func test_fusion_on_full_board_with_hand_materials_consumes_nothing() -> void:
 	var wyrm := TB.card(m, 0, 93, "extra")
 	var poly := TB.card(m, 0, 82)
 	m.players[0]["ap"] = 20
-	# F03-08: Hand materials free no zone, so Polymerization cannot be cast at all.
+	# F03-08: Hand materials free no zone, so Fusion Ceremony cannot be cast at all.
 	assert_str(m.submit(0, {"t": "cast", "uid": poly})).contains("No Fusion unit")
 	assert_str(m.cards[poly]["zone"]).is_equal("hand")
 	assert_str(m.cards[beast]["zone"]).is_equal("hand")
@@ -169,7 +169,7 @@ func test_fusion_zone_and_stance_prompts_name_the_fusion_unit() -> void:
 	assert_str(m.cards[wyrm]["stance"]).is_equal("def")
 
 
-## Feedback 06: Polymerization cannot be cast without a Fusion unit it could summon.
+## Feedback 06: Fusion Ceremony cannot be cast without a Fusion unit it could summon.
 func test_polymerization_needs_a_summonable_fusion() -> void:
 	var m := TB.make()
 	var poly := TB.card(m, 0, 82)
@@ -230,17 +230,20 @@ func test_mirror_force_leaves_the_attackers_traps_and_powers() -> void:
 # ---------------------------------------------------------------- core rules review (2026-10-16)
 
 ## A lead MODE choice is made first, but its ops apply after the cost and the response
-## window, so Energy Dispel negates Shaman's Snunday Brew before the opponent loses HP.
-func test_lead_mode_applies_after_response_window_so_it_can_be_negated() -> void:
+## window: Energy Dispel (2026-10-18: destroys, no longer negates) destroys Shaman's Snunday Brew
+## before the opponent takes the Damage, which still follows.
+func test_lead_mode_applies_after_response_window() -> void:
 	var m := TB.make()
 	var brew := TB.power(m, 0, 167)
 	TB.set_card(m, 1, 140, 0)                                 # Energy Dispel
 	TB.ability(m, brew)
-	assert_str(TB.choose(m, ["Opponent loses 4 HP"])).is_empty()
+	assert_str(TB.choose(m, ["Opponent takes 4 Damage"])).is_empty()
 	assert_int(m.players[1]["hp"]).is_equal(60)               # nothing applied before the window
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
 	TB.choose(m, ["Activate Energy Dispel"])
-	assert_int(m.players[1]["hp"]).is_equal(60)
+	assert_str(m.cards[brew]["zone"]).is_equal("spent")
+	assert_int(m.players[1]["hp"]).is_equal(56)
+	assert_bool(TB.log_index(m, "Shaman's Snunday Brew is destroyed") < TB.log_index(m, "Player 2 takes 4 Damage")).is_true()
 
 
 ## Auric: the HP cost is paid before the chosen mode's +10 ATK applies.

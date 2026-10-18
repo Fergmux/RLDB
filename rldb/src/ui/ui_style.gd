@@ -36,7 +36,7 @@ const ZONE_TINT := {"unit": Color("3b2a1a"), "trap": Color("3a1c1c"), "power": C
 
 const TYPE_COLORS := {
 	"Water": Color("3f86d6"), "Fire": Color("d4533a"), "Earth": Color("8f7340"),
-	"Lightning": Color("e0bd32"), "Heavenly": Color("f0e4b0"), "Necrotic": Color("7e4fb5"),
+	"Lightning": Color("e0bd32"), "Light": Color("f0e4b0"), "Dark": Color("7e4fb5"),
 	"Physical": Color("98979a"), "": Color("5b5a58"),
 }
 ## Card-kind colours (user decision 2026-10-16): Trap red, Power light blue, Unit brown, Fusion dark blue,

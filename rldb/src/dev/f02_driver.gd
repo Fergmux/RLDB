@@ -255,7 +255,7 @@ func _steps() -> void:
 	await _wait(0.5)
 	_check("F02-12 Water 8 vs Fire 10 previews 14 vs 10", _w_slot(a, "unit", 0).has_preview() and gs.preview.text.contains("14") and gs.preview.text.contains("10"), gs.preview.text)
 	_check("F02-12 favourable = green arrow", gs.preview.verdict == "good" and gs.arrow.col == GameScreen.VERDICT_COLORS["good"])
-	_check("F02-12 hidden trap caveat", gs.preview.text.contains("face-down"))
+	_check("F02-12 hidden trap caveat", gs.preview.text.contains("set Spells/Traps may change this"))
 	await _shot("13_preview_favourable")
 	await _move(_slot_rect(o, "unit", 1).get_center())
 	await _wait(0.5)

@@ -4,8 +4,8 @@ extends RefCounted
 ## dark card body, panels and pips — user feedback 2026-10-16), type-colour fill, a light gloss
 ## accent, drawn in a unit box of `radius` around `center`. Silhouettes differ so the type reads by
 ## shape and not by colour alone:
-##   Water = drop, Fire = flame, Earth = mountain, Lightning = bolt, Heavenly = radiant sun,
-##   Necrotic = skull, Physical = crossed blades, typeless = hollow neutral ring.
+##   Water = drop, Fire = flame, Earth = mountain, Lightning = bolt, Light = radiant sun,
+##   Dark = skull, Physical = crossed blades, typeless = hollow neutral ring.
 ## Colours come from UIStyle.TYPE_COLORS; nothing here is baked into a texture.
 
 ## Light ivory outline around every silhouette.
@@ -30,8 +30,8 @@ static func draw_icon(ci: CanvasItem, type: String, center: Vector2, radius: flo
 		"Fire": _fire(ci, center, radius, col, ow)
 		"Earth": _earth(ci, center, radius, col, ow)
 		"Lightning": _bolt(ci, center, radius, col, ow)
-		"Heavenly": _sun(ci, center, radius, col, ow)
-		"Necrotic": _skull(ci, center, radius, col, ow)
+		"Light": _sun(ci, center, radius, col, ow)
+		"Dark": _skull(ci, center, radius, col, ow)
 		"Physical": _blades(ci, center, radius, col, ow)
 		_: _typeless(ci, center, radius, ow)
 
@@ -39,7 +39,7 @@ static func draw_icon(ci: CanvasItem, type: String, center: Vector2, radius: flo
 ## Icon on a dark disc with a type-colour rim: used where the icon sits on busy art.
 ## `rim` overrides the type-colour rim (Type buttons pass OUTLINE: their fill is the type colour).
 static func draw_pip(ci: CanvasItem, type: String, center: Vector2, radius: float, rim: Color = Color(0, 0, 0, 0)) -> void:
-	# Near-opaque dark backing + light rim so every type (dark Earth, pale Heavenly, yellow Lightning)
+	# Near-opaque dark backing + light rim so every type (dark Earth, pale Light, yellow Lightning)
 	# keeps contrast on any art.
 	ci.draw_circle(center, radius * PIP_K, PIP_BACKING)
 	var rc := rim if rim.a > 0.0 else UIStyle.type_color(type).lightened(0.25)
@@ -56,7 +56,7 @@ class TypeBadge extends Control:
 			queue_redraw()
 
 	## True: drawn as a pip (dark disc + type-colour rim filling the box) so the icon keeps its contrast
-	## and footprint on any fill, including a fill in its own colour (the pale Heavenly Type button).
+	## and footprint on any fill, including a fill in its own colour (the pale Light Type button).
 	var pip := false:
 		set(v):
 			pip = v

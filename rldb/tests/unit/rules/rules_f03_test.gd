@@ -13,7 +13,7 @@ const ARCANE1 := 170            # Grandmother Kaya, 1 Arcane
 const ARCANE2 := 174            # Cliff the Flying Bison, 2 Arcane
 const ARCANE3 := 175            # Boom, Councillor of The Order, 3 Arcane
 const FUSION_ARCANE_SPENT := 93 # Bastion Wyrm (Fusion) used as an ineligible Spent card
-const POLY := 82                # Polymerization (Fusion Spell, cost 1)
+const POLY := 82                # Fusion Ceremony (Fusion Spell, cost 1)
 const BASTION := 93             # Bastion Wyrm: Beast + Dragon
 const BEAST_W := 4              # Basic Beast (Water)
 const DRAGON_W := 2             # Basic Dragon (Water)
@@ -284,7 +284,7 @@ func test_f03_08_unaffordable_method_gives_no_signal() -> void:
 	_no_hand_spells(m)
 	m.players[0]["ap"] = 1
 	assert_int(_fusion_avail(m).size()).is_equal(1)
-	m.players[0]["ap"] = 0                                 # Nether Portal costs 1 AP
+	m.players[0]["ap"] = 0                                 # Fusion Laboratory costs 1 AP
 	assert_array(_fusion_avail(m)).is_empty()
 
 
@@ -404,7 +404,7 @@ func test_f03_19_overextend_reduction_floors_at_zero_and_lasts_on_field() -> voi
 
 func test_f03_19_overextend_text_names_the_choice() -> void:
 	var df := CardDB.get_def(OVEREXTEND)
-	assert_str(String(df["on_summon"])).is_equal("Choose an opponent's Unit; it loses 20 ATK.")
+	assert_str(String(df["on_summon"])).is_equal("Choose one of your opponent's Units, it Permanently loses -20 ATK.")
 	assert_str(String(df["condition"])).contains("3 or more Units")
 
 

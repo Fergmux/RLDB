@@ -81,14 +81,14 @@ func test_c009_tag_team_f_adds_same_cost_unit_with_discount_and_new_stats() -> v
 	assert_int(m.current_cost(same)).is_equal(0)
 
 
-func test_c010_tag_team_w_search_is_mandatory_same_race_with_discount() -> void:
+func test_c010_tag_team_w_search_is_same_race_with_discount() -> void:
 	var m := TB.make(7, 0)
 	TB.unit(m, 0, MAGE_WATER, 3)                                 # Mage partner
 	var mage := TB.card(m, 0, MAGE_FIRE, "draw")
 	TB.card(m, 0, BEAST_WATER, "draw")
 	TB.card(m, 0, MAGIC_CYLINDER, "draw")                        # the old Trap search is gone
 	TB.summon(m, 0, 10, 0)
-	assert_array(_opts(m)).contains_exactly([mage])             # no Skip: "add", not "you can"
+	assert_array(_opts(m)).contains_exactly_in_any_order([-1, mage])   # optional since 2026-10-18
 	TB.choose_uids(m, [mage])
 	assert_str(m.cards[mage]["zone"]).is_equal("hand")
 	assert_int(m.current_cost(mage)).is_equal(0)
@@ -108,7 +108,7 @@ func test_c011_tag_team_j_adds_same_type_unit_with_discount() -> void:
 
 func test_c011_tag_team_j_typeless_partner_matches_nothing() -> void:
 	var m := TB.make(7, 0)
-	TB.unit(m, 0, 13, 3)                                         # Chaos Witch: typeless Mage
+	TB.unit(m, 0, 177, 3)                                        # The Illusionist: typeless
 	TB.card(m, 0, BEAST_WATER, "draw")
 	TB.summon(m, 0, 11, 0)
 	assert_bool(m.pending.is_empty()).is_true()
@@ -126,24 +126,21 @@ func test_c010_c011_discount_expires_after_this_turn() -> void:
 
 # ---------------------------------------------------------------- Chaos Witch, Da Mage, divine units
 
+# 2026-10-18: the change is one-shot (see cards_db_update_2026_10_18_test for after the Witch leaves).
 func test_c013_chaos_witch_changes_its_own_type_and_every_mage_follows() -> void:
 	var m := TB.make()
 	var witch := TB.unit(m, 0, 13, 0)
 	var own_mage := TB.unit(m, 0, MAGE_FIRE, 1)
 	var foe_mage := TB.unit(m, 1, MAGE_WATER, 0)
 	var beast := TB.unit(m, 1, BEAST_WATER, 1)
-	assert_str(m.unit_type(own_mage)).is_equal("Fire")            # a typeless Witch imposes nothing
+	assert_str(m.unit_type(own_mage)).is_equal("Fire")            # nothing happens until it acts
 	assert_str(TB.ability(m, witch)).is_empty()
-	assert_bool(_labels(m).has("No type")).is_false()             # "except for ?"
+	assert_bool(_labels(m).has("No type")).is_false()             # Types only, never typeless
 	TB.choose(m, ["Earth"])
 	assert_str(m.unit_type(witch)).is_equal("Earth")
 	assert_str(m.unit_type(own_mage)).is_equal("Earth")
 	assert_str(m.unit_type(foe_mage)).is_equal("Earth")
 	assert_str(m.unit_type(beast)).is_equal("Water")
-	TB.kill(m, witch)
-	assert_str(m.unit_type(own_mage)).is_equal("Fire")
-	if not m.pending.is_empty():
-		TB.choose(m, ["No"])
 
 
 func test_c015_da_mage_destroyed_can_give_eternal_to_a_mage_in_its_column() -> void:

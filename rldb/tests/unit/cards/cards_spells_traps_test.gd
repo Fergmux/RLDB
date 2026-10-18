@@ -58,15 +58,15 @@ func test_c043_freaky_funday_also_switches_atk_and_def_in_card_effects() -> void
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10, 20)
 	TB.cast(m, 0, 43)
-	TB.cast(m, 0, 182)                                      # Shimmer Serum: +16 ATK this turn
+	TB.cast(m, 0, 182)                                      # Shimmer Serum: +20 ATK this turn
 	TB.choose_uids(m, [u])
 	assert_int(m.atk_of(u)).is_equal(20)
-	assert_int(m.def_of(u)).is_equal(26)
+	assert_int(m.def_of(u)).is_equal(30)
 	var late := TB.unit(m, 0, TB.WATER, 1, "atk", 10, 20)   # arrives after Funday: not switched
 	TB.cast(m, 0, 182)
 	TB.choose_uids(m, [late])
 	assert_int(m.atk_of(late)).is_equal(10)
-	assert_int(m.def_of(late)).is_equal(36)
+	assert_int(m.def_of(late)).is_equal(40)
 	TB.to_turn2(m)
 	assert_int(m.atk_of(u)).is_equal(10)
 	assert_int(m.def_of(u)).is_equal(20)
@@ -81,7 +81,7 @@ func test_c043_two_freaky_fundays_cancel_out() -> void:
 	assert_int(m.def_of(u)).is_equal(20)
 	TB.cast(m, 0, 182)
 	TB.choose_uids(m, [u])
-	assert_int(m.atk_of(u)).is_equal(26)                    # effects are back to normal too
+	assert_int(m.atk_of(u)).is_equal(30)                    # effects are back to normal too
 	assert_int(m.def_of(u)).is_equal(20)
 
 
@@ -160,12 +160,13 @@ func test_c138_no_hubris_cannot_be_cast_without_buffed_target() -> void:
 	assert_str(m.validate(0, {"t": "cast", "uid": spell})).is_equal("No legal target.")
 
 
-func test_c182_shimmer_serum_cost_rises_each_activation() -> void:
+func test_c182_shimmer_serum_raises_its_targets_cost_not_its_own() -> void:
 	var m := TB.make()
 	var own := TB.unit(m, 0, TB.WATER, 0)
 	var s := TB.cast(m, 0, 182)
 	TB.choose_uids(m, [own])
-	assert_int(m.current_cost(s)).is_equal(1)
+	assert_int(m.current_cost(s)).is_equal(0)
+	assert_int(m.current_cost(own)).is_equal(2)
 
 
 func test_c152_ruler_no_more_destroys_a_power() -> void:
@@ -252,11 +253,11 @@ func test_c049_trap_hole_paralyses_two_cost_summon() -> void:
 	assert_int(m.status_count(u, "paralyse")).is_equal(3)
 
 
-func test_c049_trap_hole_ignores_one_cost_summon() -> void:
+func test_c049_trap_hole_answers_a_one_cost_summon_too() -> void:
 	var m := _p1_turn()
 	TB.set_card(m, 0, 49, 0)
 	TB.summon(m, 1, TB.FIRE, 0)
-	assert_str(TB.pend_kind(m)).is_not_equal("trap_response")
+	assert_str(TB.pend_kind(m)).is_equal("trap_response")     # the 2-cost minimum is gone (2026-10-18)
 
 
 func test_c050_wabuku_gives_eternal_to_unit_in_its_column() -> void:
@@ -280,16 +281,17 @@ func test_c103_alexanders_arrow_drains_summoned_unit() -> void:
 	assert_int(m.atk_of(u)).is_equal(20)
 
 
-func test_c140_energy_dispel_negates_spell_and_exhausts_itself() -> void:
+func test_c140_energy_dispel_destroys_the_spell_without_negating_and_raises_its_own_cost() -> void:
 	var m := _p1_turn()
 	var dispel := TB.set_card(m, 0, 140, 0)
 	var u := TB.unit(m, 1, TB.WATER, 0)
 	var spell := TB.cast(m, 1, 83)
 	TB.choose_uids(m, [u])                                  # target first, then cost, then the trap window
 	TB.choose(m, ["Activate Energy Dispel"])
-	assert_int(m.status_count(u, "rune")).is_equal(0)
+	assert_int(m.status_count(u, "rune")).is_equal(1)       # 2026-10-18: no negation
 	assert_str(m.cards[spell]["zone"]).is_equal("spent")
-	assert_str(m.cards[dispel]["zone"]).is_equal("exhaust")
+	assert_str(m.cards[dispel]["zone"]).is_equal("spent")
+	assert_int(m.current_cost(dispel)).is_equal(2)
 
 
 func test_c153_hot_stove_destroys_power_and_burns_owner() -> void:

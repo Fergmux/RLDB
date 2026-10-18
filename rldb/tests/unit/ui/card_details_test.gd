@@ -57,7 +57,7 @@ func test_unit_with_statuses_modifiers_and_abilities() -> void:
 	assert_bool(p.all_text().contains("Attack stance")).is_true()
 	assert_int(p.count_text("Cannot attack")).is_equal(0)
 	# The burn explanation appears once, without repeating the status name prefix.
-	assert_int(p.count_text("its controller loses HP equal to Burn")).is_equal(1)
+	assert_int(p.count_text("its controller takes Damage equal to Burn")).is_equal(1)
 
 
 func test_unit_modifiers_listed_once() -> void:

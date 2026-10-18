@@ -425,7 +425,7 @@ func extra_summons(uid: int) -> Array:
 
 
 ## F04: the Fusion methods that can summon Fusion unit `fu` right now (from `extra_avail`). Two
-## copies of the same card used the same way (two Polymerizations in Hand) are one choice.
+## copies of the same card used the same way (two Fusion Ceremonies in Hand) are one choice.
 func fusion_methods_for(fu: int) -> Array:
 	var out := []
 	var seen := {}

@@ -12,9 +12,9 @@ const STATUS_ORDER := ["retain", "eternal", "pierce", "cleanse", "medic", "infil
 
 const TYPE_ADVANTAGE := {
 	"Water": "Fire", "Fire": "Earth", "Earth": "Lightning", "Lightning": "Water",
-	"Heavenly": "Necrotic", "Necrotic": "Physical", "Physical": "Heavenly",
+	"Light": "Dark", "Dark": "Physical", "Physical": "Light",
 }
-const ELEMENTS := ["Water", "Fire", "Earth", "Lightning", "Heavenly", "Necrotic", "Physical"]
+const ELEMENTS := ["Water", "Fire", "Earth", "Lightning", "Light", "Dark", "Physical"]
 const RACES := ["Mage", "Dragon", "Warrior", "Beast", "Monster", "God"]
 
 const STATUS_HELP := {
@@ -22,13 +22,13 @@ const STATUS_HELP := {
 	"retain": "Retain (buff): not discarded at end of turn. One stack is consumed each time it prevents a discard.",
 	"reveal": "Reveal (debuff): this card is face up. No duration.",
 	"eternal": "Eternal (buff): prevents the next destruction of this unit (one stack consumed). Battle HP damage still applies.",
-	"burn": "Burn (debuff): when this unit attacks, its controller loses HP equal to Burn, then all Burn is removed.",
+	"burn": "Burn (debuff): when this unit attacks, its controller takes Damage equal to Burn, then all Burn is removed.",
 	"pierce": "Pierce (buff): attacking a Defense-stance unit, excess ATK damages the opponent. One stack consumed.",
 	"cleanse": "Cleanse (buff): removes all existing debuffs or prevents an incoming debuff. One stack consumed per use.",
 	"paralyse": "Paralyse (debuff): cannot declare an attack or move zones. -1 at the end of its controller's turn.",
-	"medic": "Medic (buff): at the start of its controller's turn they gain HP equal to Medic, then -1.",
+	"medic": "Medic (buff): at the start of its controller's turn they Heal HP equal to Medic, then -1.",
 	"curse": "Curse (debuff): removes all buffs or prevents an incoming buff (not Runes). One stack consumed per use.",
-	"poison": "Poison (debuff): at the end of its controller's turn they lose HP equal to Poison, then -1.",
+	"poison": "Poison (debuff): at the end of its controller's turn they take Damage equal to Poison, then -1.",
 	"infiltrate": "Infiltrate (buff): may attack protected units. One stack consumed when it does.",
 	"blind": "Blind (debuff): attack target is chosen at random among legal targets. One stack consumed when it attacks.",
 	"nimble": "Nimble (buff): once per turn move to an adjacent empty zone (diagonals count). One stack consumed per move.",
@@ -68,11 +68,12 @@ static func has(id: int) -> bool:
 	return _defs.has(id)
 
 
-## All definitions in source order.
+## All definitions in source order (the 2026-10-18 export repeats some indices; ties go by id).
 static func all() -> Array:
 	ensure_loaded()
 	var out := _defs.values()
-	out.sort_custom(func(a, b): return a["source"]["index"] < b["source"]["index"])
+	out.sort_custom(func(a, b): return a["source"]["index"] < b["source"]["index"] \
+		or (a["source"]["index"] == b["source"]["index"] and a["id"] < b["id"]))
 	return out
 
 

@@ -7,7 +7,7 @@ extends GdUnitTestSuite
 
 const BLADE := 61
 const MAGE_WATER := 1
-const HEAVENLY_MAGE := 105         # Basic Mage (Heavenly), cost 1
+const LIGHT_MAGE := 105         # Basic Mage (Light), cost 1
 const WARRIOR_FIRE := 112
 const HEAVENLY_SPELL_TARGET := 83  # Sacred Offerings
 
@@ -94,9 +94,9 @@ func test_f09_no_adjacent_unit_means_the_ability_is_not_offered() -> void:
 	assert_str(m.validate(0, {"t": "ability", "uid": blade, "idx": 0})).is_equal("No legal target.")
 
 
-func test_f09_on_summon_heavenly_revival_is_kept_and_optional() -> void:
+func test_f09_on_summon_light_revival_is_kept_and_optional() -> void:
 	var m := TB.make()
-	var dead := TB.card(m, 0, HEAVENLY_MAGE, "spent")
+	var dead := TB.card(m, 0, LIGHT_MAGE, "spent")
 	TB.special(m, 0, BLADE, 0)
 	assert_str(TB.pend_kind(m)).is_equal("select")
 	assert_array(m.pending["options"].map(func(o): return int(o["v"]))).contains_exactly_in_any_order([-1, dead])

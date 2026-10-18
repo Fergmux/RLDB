@@ -92,14 +92,15 @@ func test_p26_nimble_cannot_move_during_battle() -> void:
 	assert_str(m.validate(1, {"t": "move", "uid": u})).contains("Setup or Recovery Phase")
 
 
-# P-19: Elemental Mastery and Options stack.
-func test_p19_two_elemental_masteries_give_24_advantage() -> void:
+# P-19: Elemental Mastery and Options stack. 2026-10-18: Elemental Mastery reads "gains +6", so
+# each copy adds 6 to the base 6 (one copy = 12 as before, two = 18 instead of 24).
+func test_p19_two_elemental_masteries_give_18_advantage() -> void:
 	var m := _battle()
 	TB.power(m, 1, 88, 0)
 	TB.power(m, 1, 88, 1)
 	var water := TB.unit(m, 1, TB.WATER, 0, "atk", 8)
 	TB.attack(m, water, TB.unit(m, 0, TB.FIRE, 0, "atk", 10))
-	assert_int(m.players[0]["hp"]).is_equal(60 - 22)
+	assert_int(m.players[0]["hp"]).is_equal(60 - 16)
 
 
 func test_p19_two_options_draw_six() -> void:
@@ -116,18 +117,20 @@ func test_s01_two_snundays_cancel() -> void:
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
 	TB.cast(m, 0, 154)
 	TB.cast(m, 0, 154)
-	TB.cast(m, 0, 182)                                    # Shimmer Serum +16
+	TB.cast(m, 0, 182)                                    # Shimmer Serum +20
 	TB.choose_uids(m, [u])                                # target is always the player's choice
-	assert_int(m.atk_of(u)).is_equal(26)
+	assert_int(m.atk_of(u)).is_equal(30)
 
 
+# 2026-10-18: Shimmer Serum's cost change is on its target unit; it reverses, floored at zero.
 func test_s04_shimmer_cost_change_reverses_but_never_below_zero() -> void:
 	var m := TB.make()
 	var own := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
 	TB.cast(m, 0, 154)
 	var s := TB.cast(m, 0, 182)
 	TB.choose_uids(m, [own])
-	assert_int(m.current_cost(s)).is_equal(0)
+	assert_int(m.current_cost(own)).is_equal(0)
+	assert_int(m.cards[own]["cost_p"]).is_equal(-1)
 	assert_int(m.cards[s]["cost_p"]).is_equal(0)
 
 

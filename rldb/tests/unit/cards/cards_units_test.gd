@@ -49,16 +49,14 @@ func test_c010_tag_team_w_destroy_still_clears_face_down_cards_in_column() -> vo
 	assert_str(m.cards[other_col]["zone"]).is_equal("backrow")
 
 
-func test_c011_tag_team_j_destroy_still_hits_revealed_cards_in_column() -> void:
+# 2026-10-18: Tag Team - J's On Destroy destroys a Power instead of every revealed card in its column.
+func test_c011_tag_team_j_destroy_no_longer_hits_revealed_cards() -> void:
 	var m := TB.make()
 	var b := TB.unit(m, 0, 11, 0)
 	var foe := TB.unit(m, 1, TB.WATER, 0)
 	m.apply_status(foe, "reveal", 1)
-	var safe := TB.unit(m, 1, TB.WATER, 1)
-	m.apply_status(safe, "reveal", 1)
 	TB.kill(m, b)
-	assert_str(m.cards[foe]["zone"]).is_equal("spent")
-	assert_str(m.cards[safe]["zone"]).is_equal("unit")
+	assert_str(m.cards[foe]["zone"]).is_equal("unit")
 
 
 func test_c012_tag_team_x_draws_gains_ap_and_revives_into_column() -> void:

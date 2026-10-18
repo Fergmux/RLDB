@@ -171,7 +171,7 @@ func render_turnbar() -> void:
 	phase_btn.tooltip_text = tip
 	var note := ""
 	if mv["reversal"]:
-		note = "SNEAKY SNUNDAY: card-effect gains/losses reversed"
+		note = "SNEAKY SNUNDAY: card-effect gains/losses reversed (not Damage or Healing)"
 	turn_note.text = note
 	turn_note.visible = note != ""
 

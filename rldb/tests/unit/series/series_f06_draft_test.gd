@@ -102,7 +102,7 @@ func test_f06_06_chosen_basic_unit_gives_basic_copies_copies() -> void:
 	var s := _draft_series({"unit": 1, "spell": 1})
 	var copies := int(s.cfg["draft"]["basic_copies"])
 	assert_int(copies).is_equal(3)
-	assert_str(s.submit(0, {"t": "draft_setup", "order": ["unit", "spell"], "basic_type": "Heavenly", "basic_race": "Warrior"})).is_empty()
+	assert_str(s.submit(0, {"t": "draft_setup", "order": ["unit", "spell"], "basic_type": "Light", "basic_race": "Warrior"})).is_empty()
 	assert_int(s.draft[0]["picked"].count(HEAVENLY_WARRIOR)).is_equal(copies)
 	assert_int(int(s.view_for(0)["draft"]["basic"]["id"])).is_equal(HEAVENLY_WARRIOR)
 	s.submit(0, {"t": "draft_pick", "index": 0})

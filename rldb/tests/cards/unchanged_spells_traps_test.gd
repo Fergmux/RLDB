@@ -4,7 +4,7 @@ extends GdUnitTestSuite
 ## and duration cases. Trap tests: player 1 acts on turn 2, player 0 owns the set Trap.
 
 
-# ---------------------------------------------------------------- 82 Polymerization
+# ---------------------------------------------------------------- 82 Fusion Ceremony
 
 func test_c082_polymerization_fusion_summons_from_field_materials() -> void:
 	var m := CF.make()
@@ -44,16 +44,22 @@ func test_c041_delayed_gratification_never_retains_itself() -> void:
 
 # ---------------------------------------------------------------- 154 Sneaky Snunday
 
-func test_c154_sneaky_snunday_reverses_loss_this_turn_only() -> void:
+# 2026-10-18: Damage and Healing are not gains or losses, so Snunday leaves HP alone; an AP gain
+# still flips, and only this turn.
+func test_c154_sneaky_snunday_reverses_gains_this_turn_only_but_never_damage() -> void:
 	var m := CF.make()
 	var brew := TB.power(m, 0, 167)
 	TB.cast(m, 0, 154)
 	TB.ability(m, brew)
-	TB.choose(m, ["Opponent loses 4 HP"])
-	assert_int(CF.hp(m, 1)).is_equal(GameCore.START_HP + 4)
+	TB.choose(m, ["Opponent takes 4 Damage"])
+	assert_int(CF.hp(m, 1)).is_equal(GameCore.START_HP - 4)
+	var ap := CF.ap(m, 0)
+	var f := m.make_frame(-1, 0, [{"op": "ap", "n": 1}], "test")
+	m.push_frame(f)
+	m.run()
+	assert_int(CF.ap(m, 0)).is_equal(maxi(ap - 1, 0))           # an AP gain is reversed
 	CF.end_turn(m)                                               # player 1's turn: reversal over
-	m.change_hp(1, -4, "test")
-	assert_int(CF.hp(m, 1)).is_equal(GameCore.START_HP)
+	assert_bool(m.reversal_active()).is_false()
 
 
 # ---------------------------------------------------------------- 83 Sacred Offerings
@@ -97,18 +103,20 @@ func test_c138_no_hubris_offers_only_buffed_units() -> void:
 
 # ---------------------------------------------------------------- 182 Shimmer Serum
 
-func test_c182_shimmer_serum_atk_lasts_until_end_of_turn_and_blinds() -> void:
+func test_c182_shimmer_serum_atk_lasts_until_end_of_turn_and_blinds_and_infiltrates() -> void:
 	var m := CF.make()
 	var own := TB.unit(m, 0, TB.WATER, 0)
 	TB.cast(m, 0, 182)
 	TB.choose_uids(m, [own])
-	assert_int(m.atk_of(own)).is_equal(24)
+	assert_int(m.atk_of(own)).is_equal(28)                       # +20 since 2026-10-18
 	assert_int(m.status_count(own, "blind")).is_equal(1)
+	assert_int(m.status_count(own, "infiltrate")).is_equal(1)
 	CF.end_turn(m)
 	assert_int(m.atk_of(own)).is_equal(8)
 
 
-func test_c182_shimmer_serum_cost_keeps_rising_and_persists_in_spent() -> void:
+# 2026-10-18: each use raises the target unit's cost, for the rest of the game; the Spell stays free.
+func test_c182_shimmer_serum_target_cost_keeps_rising_and_persists_in_spent() -> void:
 	var m := CF.make()
 	var own := TB.unit(m, 0, TB.WATER, 0)
 	var s := TB.cast(m, 0, 182)
@@ -117,7 +125,10 @@ func test_c182_shimmer_serum_cost_keeps_rising_and_persists_in_spent() -> void:
 	m.move_to_pile(s, "hand")
 	m.submit(0, {"t": "cast", "uid": s})
 	TB.choose_uids(m, [own])
-	assert_int(m.current_cost(s)).is_equal(2)
+	assert_int(m.current_cost(s)).is_equal(0)
+	assert_int(m.current_cost(own)).is_equal(3)
+	m.move_to_pile(own, "spent")
+	assert_int(m.current_cost(own)).is_equal(3)
 
 
 # ---------------------------------------------------------------- 152 Ruler No More
@@ -203,7 +214,8 @@ func test_c103_alexanders_arrow_uses_lowest_own_atk() -> void:
 
 # ---------------------------------------------------------------- 140 Energy Dispel
 
-func test_c140_energy_dispel_negates_a_unit_ability() -> void:
+# 2026-10-18: Energy Dispel destroys the activating card but no longer negates its effect.
+func test_c140_energy_dispel_destroys_a_unit_using_its_ability_but_the_burn_still_lands() -> void:
 	var m := CF.p1_main()
 	var dispel := TB.set_card(m, 0, 140, 0)
 	var av := TB.unit(m, 1, 14, 0)
@@ -212,9 +224,10 @@ func test_c140_energy_dispel_negates_a_unit_ability() -> void:
 	if TB.pend_kind(m) == "select":
 		TB.choose_uids(m, [foe])
 	TB.choose(m, ["Activate Energy Dispel"])
-	assert_int(m.status_count(foe, "burn")).is_equal(0)
+	assert_int(m.status_count(foe, "burn")).is_equal(6)
 	assert_str(CF.zone(m, av)).is_equal("spent")
-	assert_str(CF.zone(m, dispel)).is_equal("exhaust")
+	assert_str(CF.zone(m, dispel)).is_equal("spent")
+	assert_int(m.current_cost(dispel)).is_equal(2)
 
 
 # ---------------------------------------------------------------- 153 Hot Stove

@@ -66,7 +66,7 @@ func _target_label(uid: int, viewer: int) -> String:
 		return "%s %s (%d/%d, %s row col %d)" % [owner_tag, name_of(uid), atk_of(uid), def_of(uid),
 			"front" if slot_row(inst["slot"]) == 0 else "back", slot_col(inst["slot"]) + 1]
 	if inst["zone"] == "backrow" and not is_face_up(uid) and inst["ctl"] != viewer:
-		return "%s face-down card (col %d)" % [owner_tag, inst["slot"] + 1]
+		return "%s set Spell/Trap (col %d)" % [owner_tag, inst["slot"] + 1]
 	return "%s %s" % [owner_tag, name_of(uid)]
 
 
@@ -114,8 +114,8 @@ func _op_mode(f: Dictionary, op: Dictionary) -> int:
 		else:
 			_splice(f, op["options"][ans[0]]["ops"])
 		return R.CONT
-	# Only options that can actually do something are offered (e.g. Auric's "Destroy a face-down
-	# card" while no face-down card exists), so a cost is never paid for an impossible effect.
+	# Only options that can actually do something are offered (e.g. Auric's "Destroy a Spell/Trap"
+	# while no Spell/Trap is set), so a cost is never paid for an impossible effect.
 	var opts := []
 	for i in op["options"].size():
 		if _option_possible(f, op["options"][i]["ops"]):
@@ -206,11 +206,10 @@ func _op_set_base(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## HP change for a player from a card effect. Negative = loss. Reversible.
+## HP change for a player from a card effect: negative = Damage, positive = Heal. Not reversed by
+## Sneaky Snunday since 2026-10-18 (Damage and Healing are not "gains and losses").
 func _op_hp(f: Dictionary, op: Dictionary) -> int:
 	var n := eval_num(f, op["n"])
-	if f["reversed"]:
-		n = -n
 	var p := who(f, op.get("who", "self"))
 	change_hp(p, n, " (%s)" % f["label"])
 	return R.CONT

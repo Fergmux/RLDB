@@ -125,7 +125,7 @@ func run(main_node: Node, dir: String) -> void:
 	# Fake prompt kinds for a deterministic look at long text and many buttons.
 	var base := {"id": 999, "mine": true, "player": a, "cancellable": true, "min": 1, "max": 1, "options": [], "kind": "mode"}
 	await _fake(gs, "prompt_02_type", base.merged({"kind": "mode", "prompt": "Choose a Type for Waang until end of turn.", "options": [
-		{"i": 0, "label": "Water"}, {"i": 1, "label": "Fire"}, {"i": 2, "label": "Earth"}, {"i": 3, "label": "Lightning"}, {"i": 4, "label": "Heavenly"}, {"i": 5, "label": "Necrotic"}, {"i": 6, "label": "Physical"}]}, true))
+		{"i": 0, "label": "Water"}, {"i": 1, "label": "Fire"}, {"i": 2, "label": "Earth"}, {"i": 3, "label": "Lightning"}, {"i": 4, "label": "Light"}, {"i": 5, "label": "Dark"}, {"i": 6, "label": "Physical"}]}, true))
 	await _fake(gs, "prompt_03_trap", base.merged({"kind": "trap_response", "prompt": "Rushed Recklessly can be activated in response to the attack on Dante.", "options": [
 		{"i": 0, "label": "Activate Rushed Recklessly (Trap)"}, {"i": 1, "label": "Pass"}]}, true))
 	await _fake(gs, "prompt_04_multi", base.merged({"kind": "select", "prompt": "Choose up to 3 cards in your Spent pile to return to your Draw pile in the order you want", "max": 3, "min": 2, "options": [
@@ -255,14 +255,14 @@ func _draft_phase() -> void:
 	var picker := _find_picker(gs)
 	_check("F06-06 picker opens with the current basic", picker != null and picker.type == "Water" and picker.race == "Mage")
 	if picker != null:
-		picker.choose("Necrotic", "Dragon")
+		picker.choose("Dark", "Dragon")
 		await _frames(6)
 		await _shot("draft_05_picker_chosen")
 		var use := _find_button(dv._picker_dim, "Use ")
 		if use != null:
 			use.pressed.emit()
 	await _frames(10)
-	_check("F06-06 picker choice shown in the setup", dv._btype == "Necrotic" and dv._brace == "Dragon" and dv._picker_dim == null)
+	_check("F06-06 picker choice shown in the setup", dv._btype == "Dark" and dv._brace == "Dragon" and dv._picker_dim == null)
 	await _shot("draft_06_setup_chosen")
 	var go := _find_button(ov.overlay_box, "Start drafting")
 	_check("F06-05 Start drafting button", go != null and not go.disabled)
@@ -271,7 +271,7 @@ func _draft_phase() -> void:
 	await _frames(10)
 	var st: Dictionary = host.series.draft[0]
 	_check("F06-05 seat 0 locked in its order", st["setup_done"] and st["cat_order"] == ["power", "unit", "spell", "extra", "trap"])
-	_check("F06-06 three chosen basics", st["picked"].count(Series.basic_for("Necrotic", "Dragon")) == 3)
+	_check("F06-06 three chosen basics", st["picked"].count(Series.basic_for("Dark", "Dragon")) == 3)
 	_check("F06-05 first pick is Power", String(host.series.view_for(0)["draft"]["category"]) == "power")
 	await _shot("draft_07_picking_power")
 	# Seat 1: its own setup screen, independent of seat 0.

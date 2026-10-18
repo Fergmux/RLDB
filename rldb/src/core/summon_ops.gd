@@ -118,8 +118,18 @@ func _op_set_card(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
+## Counter Transmutation: put the chosen Power (from a pile) into a free Power zone, no cost paid.
+func _op_put_power(f: Dictionary, op: Dictionary) -> int:
+	var t := refs(f, op["target"])
+	if t.is_empty() or on_field(t[0]):
+		return R.CONT
+	_splice(f, [{"op": "pick_slot", "zone": "power", "as": "pslot", "for": t[0]},
+		{"op": "place_power", "slot": "$pslot", "target": t[0]}])
+	return R.CONT
+
+
 func _op_place_power(f: Dictionary, op: Dictionary) -> int:
-	var uid: int = f["src"]
+	var uid: int = int(op["target"]) if op.has("target") else f["src"]
 	var slot: int = eval_num(f, op["slot"])
 	_remove_from_zone(uid)
 	var inst: Dictionary = cards[uid]

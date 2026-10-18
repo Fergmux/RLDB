@@ -91,7 +91,7 @@ func test_type_icon_is_centred_in_a_fixed_square_box() -> void:
 				remove_child(b)
 
 
-## UI review F03 (2026-10-17): the Heavenly icon drew as a tiny dot because its pale rays sat on a
+## UI review F03 (2026-10-17): the Light icon drew as a tiny dot because its pale rays sat on a
 ## button filled in the same pale colour. Every Type icon is a pip on a dark disc that contrasts with
 ## its own button fill (disc or rim), and the Type buttons of one choice share one width.
 func test_type_icons_are_pips_that_contrast_with_their_button_and_widths_are_even() -> void:

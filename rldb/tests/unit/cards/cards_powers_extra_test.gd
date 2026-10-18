@@ -140,7 +140,7 @@ func test_c167_shamans_brew_drains_opponent() -> void:
 	var m := TB.make()
 	var b := TB.power(m, 0, 167)
 	TB.ability(m, b)
-	TB.choose(m, ["Opponent loses 4 HP"])
+	TB.choose(m, ["Opponent takes 4 Damage"])
 	assert_int(m.players[1]["hp"]).is_equal(56)
 
 
@@ -168,7 +168,7 @@ func test_c178_reinforcements_discounts_units_when_only_opponent_has_units() -> 
 	var u := TB.card(m, 0, 28)
 	assert_int(m.current_cost(u)).is_equal(2)
 	TB.unit(m, 1, TB.WATER, 0)
-	assert_int(m.current_cost(u)).is_equal(1)
+	assert_int(m.current_cost(u)).is_equal(0)                  # -2 AP since 2026-10-18
 
 
 func test_c179_tyrants_lantern_boosts_fire_and_punishes_both_on_fire_death() -> void:

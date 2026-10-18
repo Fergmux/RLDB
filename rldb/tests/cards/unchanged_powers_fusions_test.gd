@@ -98,7 +98,7 @@ func test_c167_shamans_brew_heals_and_is_once_per_turn() -> void:
 	var m := CF.make()
 	var brew := TB.power(m, 0, 167)
 	TB.ability(m, brew)
-	TB.choose(m, ["Gain 4 HP"])
+	TB.choose(m, ["Heal 4 HP"])
 	assert_int(CF.hp(m, 0)).is_equal(GameCore.START_HP + 4)
 	assert_int(CF.hp(m, 1)).is_equal(GameCore.START_HP)
 	assert_str(TB.ability(m, brew)).is_equal("Already used this turn.")
@@ -106,12 +106,16 @@ func test_c167_shamans_brew_heals_and_is_once_per_turn() -> void:
 
 # ---------------------------------------------------------------- 168 Tactical Arrangements
 
-func test_c168_tactical_arrangements_needs_a_hand_card() -> void:
+# 2026-10-18: Tactical Arrangements draws first, then discards, so an empty Hand is no obstacle.
+func test_c168_tactical_arrangements_works_from_an_empty_hand() -> void:
 	var m := CF.make()
 	var ta := TB.power(m, 0, 168)
 	for h in m.players[0]["hand"].duplicate():
 		m.move_to_pile(h, "spent")
-	assert_str(TB.ability(m, ta)).is_equal("No legal target.")
+	assert_str(TB.ability(m, ta)).is_empty()
+	assert_int(m.players[0]["hand"].size()).is_equal(1)
+	TB.choose_uids(m, [m.players[0]["hand"][0]])
+	assert_int(m.players[0]["hand"].size()).is_equal(0)
 
 
 func test_c168_tactical_arrangements_keeps_hand_size() -> void:
@@ -177,19 +181,19 @@ func test_c060_rotmaw_poison_is_once_per_turn() -> void:
 
 # ---------------------------------------------------------------- 61 Sanctified Blade (F09)
 
-func test_c061_sanctified_blade_materials_are_warrior_plus_heavenly() -> void:
+func test_c061_sanctified_blade_materials_are_warrior_plus_light() -> void:
 	var m := CF.make()
 	var warrior := TB.unit(m, 0, 3, 0)                          # Basic Warrior (Water)
-	var heavenly := TB.unit(m, 0, 105, 1)                       # Basic Mage (Heavenly)
+	var light := TB.unit(m, 0, 105, 1)                       # Basic Mage (Light)
 	var mage := TB.unit(m, 0, TB.WATER, 2)
-	assert_bool(CF.fusion_mats_ok(m, 61, [warrior, heavenly])).is_true()
+	assert_bool(CF.fusion_mats_ok(m, 61, [warrior, light])).is_true()
 	assert_bool(CF.fusion_mats_ok(m, 61, [warrior, mage])).is_false()
 
 
-func test_c061_sanctified_blade_summon_revives_small_heavenly_into_column() -> void:
+func test_c061_sanctified_blade_summon_revives_small_light_into_column() -> void:
 	var m := CF.make()
-	var small := TB.card(m, 0, 105, "spent")                    # Heavenly, cost 1
-	var big := TB.card(m, 0, 28, "spent")                       # Heavenly, cost 2
+	var small := TB.card(m, 0, 105, "spent")                    # Light, cost 1
+	var big := TB.card(m, 0, 28, "spent")                       # Light, cost 2
 	TB.special(m, 0, 61, 0)
 	assert_bool(small in CF.offered(m)).is_true()
 	assert_bool(big in CF.offered(m)).is_false()

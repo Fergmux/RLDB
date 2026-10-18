@@ -252,7 +252,8 @@ func test_snunday_reverses_shimmer_serum_atk_but_not_blind() -> void:
 	assert_int(m.status_count(u, "blind")).is_equal(1)
 
 
-func test_snunday_turns_divine_serpent_damage_into_opponent_healing() -> void:
+# 2026-10-18: Damage is not a "loss", so Sneaky Snunday no longer turns it into healing.
+func test_snunday_no_longer_turns_divine_serpent_damage_into_healing() -> void:
 	var m := TB.make()
 	TB.unit(m, 0, 159, 1)
 	TB.unit(m, 0, 160, 3)
@@ -261,7 +262,7 @@ func test_snunday_turns_divine_serpent_damage_into_opponent_healing() -> void:
 	m.submit(0, {"t": "summon", "uid": head})
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
-	assert_int(m.players[1]["hp"]).is_equal(90)
+	assert_int(m.players[1]["hp"]).is_equal(30)
 
 
 func test_divine_serpent_damages_opponent_without_reversal() -> void:
@@ -303,10 +304,10 @@ func test_snunday_flips_continuous_aura_while_active_and_restores_after() -> voi
 func test_snunday_does_not_flip_already_resolved_instant_bonus() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
-	_cast(m, 0, 182, u)                         # +16 before reversal
-	assert_int(m.atk_of(u)).is_equal(26)
+	_cast(m, 0, 182, u)                         # +20 before reversal
+	assert_int(m.atk_of(u)).is_equal(30)
 	_cast(m, 0, 154)
-	assert_int(m.atk_of(u)).is_equal(26)
+	assert_int(m.atk_of(u)).is_equal(30)
 
 
 func test_snunday_does_not_reverse_battle_damage_or_ap_payment() -> void:
