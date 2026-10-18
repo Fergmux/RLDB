@@ -6,8 +6,10 @@ extends SceneTree
 ## panel's own colour, which keeps the palette and adds only the texture.
 ##
 ##   godot --headless --path rldb -s ../tools/godot/bake_ui_materials.gd -- <folder with the unzipped
-##       1K-JPG scans> <name>=<AssetId>[:<detail>:<relief>] ...
-## e.g. leather=Leather030 wood=Wood066:1.0:0.6 metal=Metal009:1.4:0.2
+##       1K-JPG scans> <name>=<AssetId>[:<detail>:<relief>[:<smooth>]] ...
+## e.g. leather=Leather030 wood=Wood066:1.0:0.6 metal=Metal009:1.0:0.25:3
+## <smooth> (px, default 0) softens the relief into a satin finish: a wrap-around blur of that
+## radius across the grain and four times it along the (horizontal) brush strokes.
 
 ## Output edge length (px).
 const OUT_PX := 512
@@ -30,11 +32,12 @@ func _initialize() -> void:
 		var parts := kv[1].split(":")
 		var detail := float(parts[1]) if parts.size() > 1 else 1.0
 		var relief := float(parts[2]) if parts.size() > 2 else 1.0
-		_bake(src, parts[0], kv[0], detail, relief)
+		var smooth := int(parts[3]) if parts.size() > 3 else 0
+		_bake(src, parts[0], kv[0], detail, relief, smooth)
 	quit()
 
 
-func _bake(src: String, asset: String, name: String, detail: float, relief: float) -> void:
+func _bake(src: String, asset: String, name: String, detail: float, relief: float, smooth: int) -> void:
 	var col := Image.load_from_file(src.path_join("%s_1K-JPG_Color.jpg" % asset))
 	var nrm := Image.load_from_file(src.path_join("%s_1K-JPG_NormalGL.jpg" % asset))
 	col.convert(Image.FORMAT_RGB8)
@@ -70,6 +73,10 @@ func _bake(src: String, asset: String, name: String, detail: float, relief: floa
 			var hv: float = vals[y * w + x] - low.get_pixel(x, y).r
 			vals[y * w + x] = hv
 			sum += hv
+	if smooth > 0:
+		for i in 2:
+			vals = _box_blur(vals, w, h, smooth * 4, true)
+			vals = _box_blur(vals, w, h, smooth, false)
 	var mean := sum / float(w * h)
 	var sq := 0.0
 	for v in vals:
@@ -87,10 +94,35 @@ func _bake(src: String, asset: String, name: String, detail: float, relief: floa
 
 
 ## Blurs `img` in place to its features larger than 1/HIGH_PASS_PX of the scan: halved step by step
-## (each bilinear halving averages 2x2 texels, a true box filter) and scaled back up.
+## (each bilinear halving averages 2x2 texels, a true box filter) and scaled back up. Done on a 3x3
+## tiling and cropped to the middle, so the blur wraps and the edges stay seamless.
 func _low_pass(img: Image, w: int, h: int) -> void:
+	var big := Image.create(w * 3, h * 3, false, img.get_format())
+	for ty in 3:
+		for tx in 3:
+			big.blit_rect(img, Rect2i(0, 0, w, h), Vector2i(tx * w, ty * h))
 	var sz := w
 	while sz > HIGH_PASS_PX:
 		sz /= 2
-		img.resize(sz, sz, Image.INTERPOLATE_BILINEAR)
-	img.resize(w, h, Image.INTERPOLATE_CUBIC)
+		big.resize(sz * 3, sz * 3, Image.INTERPOLATE_BILINEAR)
+	big.resize(w * 3, h * 3, Image.INTERPOLATE_CUBIC)
+	img.blit_rect(big, Rect2i(w, h, w, h), Vector2i.ZERO)
+
+
+## Wrap-around box blur of radius `r` along x (`horizontal`) or y, by running sums.
+func _box_blur(src: PackedFloat32Array, w: int, h: int, r: int, horizontal: bool) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(w * h)
+	var n := w if horizontal else h
+	var lines := h if horizontal else w
+	var step := 1 if horizontal else w
+	var k := 1.0 / float(2 * r + 1)
+	for line in lines:
+		var base := line * w if horizontal else line
+		var acc := 0.0
+		for i in range(-r, r + 1):
+			acc += src[base + posmod(i, n) * step]
+		for i in n:
+			out[base + i * step] = acc * k
+			acc += src[base + posmod(i + r + 1, n) * step] - src[base + posmod(i - r, n) * step]
+	return out

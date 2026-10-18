@@ -94,7 +94,8 @@ static func restyled(sb: StyleBox, edit: Callable) -> StyleBox:
 	var d := f.duplicate() as StyleBoxFlat
 	edit.call(d)
 	if sb is SurfaceBox:
-		return box(d, (sb as SurfaceBox).material_name, (sb as SurfaceBox).strength)
+		var o := sb as SurfaceBox
+		return box(d, o.material_name, o.strength, o.sheen)
 	return d
 
 
@@ -122,13 +123,25 @@ class Fill extends Control:
 		UiSurface.draw_round(self, r, 0.0, material_name, base, strength, tile)
 
 
-## A SurfaceBox around `flat` with material `name` at `strength`.
-static func box(flat: StyleBoxFlat, name: String, strength: float) -> SurfaceBox:
+## A SurfaceBox around `flat` with material `name` at `strength`, and a top-lit `sheen` (0 = none).
+static func box(flat: StyleBoxFlat, name: String, strength: float, sheen: float = 0.0) -> SurfaceBox:
 	var b := SurfaceBox.new()
 	b.flat = flat
 	b.material_name = name
 	b.strength = strength
+	b.sheen = sheen
 	return b
+
+
+## Per-point colours of a soft top light over `pts` (inside `rect`): white at alpha `sheen` along the
+## top edge, fading linearly to nothing at the bottom (polished metal).
+static func sheen_colors(pts: PackedVector2Array, rect: Rect2, sheen: float) -> PackedColorArray:
+	var cols := PackedColorArray()
+	cols.resize(pts.size())
+	for i in pts.size():
+		var t := clampf((pts[i].y - rect.position.y) / maxf(1.0, rect.size.y), 0.0, 1.0)
+		cols[i] = Color(1, 1, 1, sheen * (1.0 - t))
+	return cols
 
 
 ## StyleBox drawing a StyleBoxFlat (shadow, fill, border, as configured) with the grain of a
@@ -148,6 +161,8 @@ class SurfaceBox extends StyleBox:
 	var strength: float = 0.3
 	## Px one tile spans.
 	var tile: float = UiSurface.TILE_PX
+	## Alpha of the soft top light over the fill (0 = none): reads as polished rather than raw metal.
+	var sheen: float = 0.0
 
 	func _draw(to_canvas_item: RID, rect: Rect2) -> void:
 		if flat == null:
@@ -165,6 +180,8 @@ class SurfaceBox extends StyleBox:
 		RenderingServer.canvas_item_set_default_texture_repeat(to_canvas_item, RenderingServer.CANVAS_ITEM_TEXTURE_REPEAT_ENABLED)
 		RenderingServer.canvas_item_add_polygon(to_canvas_item, pts, PackedColorArray([UiSurface.tint(flat.bg_color, strength * flat.bg_color.a)]),
 			UiSurface.uvs_for(pts, tile, Vector2(rect.position.x * 0.37 + 91.0, rect.position.y * 0.61 + 53.0)), tex.get_rid())
+		if sheen > 0.0:
+			RenderingServer.canvas_item_add_polygon(to_canvas_item, pts, UiSurface.sheen_colors(pts, inner, sheen * flat.bg_color.a))
 
 	func _get_draw_rect(rect: Rect2) -> Rect2:
 		if flat == null:

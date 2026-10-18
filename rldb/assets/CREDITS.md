@@ -43,4 +43,4 @@ Used unmodified (white glyphs), drawn on coloured tokens by `CardStatusIcons`.
 | metal.png | Metal009 (brushed metal: buttons, card name plates) |
 
 Rebake: download the 1K-JPG zips, unzip their `_Color.jpg` and `_NormalGL.jpg` into one folder, then
-`godot --headless --path rldb -s ../tools/godot/bake_ui_materials.gd -- <folder> leather=Leather032 pebble=Leather030 wood=Wood051 metal=Metal009:1.4:0.3`.
+`godot --headless --path rldb -s ../tools/godot/bake_ui_materials.gd -- <folder> leather=Leather032 pebble=Leather030 wood=Wood051 metal=Metal009:1.0:0.25:1`.

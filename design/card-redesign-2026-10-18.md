@@ -90,7 +90,9 @@ normal maps are baked by `tools/godot/bake_ui_materials.gd` into 512 px seamless
 
 - fine colour variation plus normal-map lighting from the upper left;
 - large-scale blotches removed (true box low-pass), so tiling never shows patches;
-- normalised to a mean of 0.5.
+- normalised to a mean of 0.5;
+- the blur wraps, so tiles meet without a seam;
+- metal only: smoothed (`:1`, a short blur along and across the strokes) so it reads as polished, not raw brushed steel (user feedback 2026-10-18).
 
 `UiSurface` draws a relief map tinted with twice the surface's own colour, which leaves the colour on
 average unchanged and adds only grain. Nothing in the palette moves:
@@ -98,7 +100,7 @@ average unchanged and adds only grain. Nothing in the palette moves:
 | Where | Material | Strength |
 |---|---|---|
 | Sidebar panels, player plates, deck builder / catalogue plates, modals (HousePanel), OrnatePanel | leather | `UIStyle.PANEL_GRAIN` 0.55 (0.44 under gradients) |
-| Every themed button and `primary_button` | brushed metal | `BUTTON_GRAIN` 0.6, gold faces `GOLD_GRAIN` 0.32 |
+| Every themed button and `primary_button` | polished metal | `BUTTON_GRAIN` 0.38, gold faces `GOLD_GRAIN` 0.15, plus a soft top light `BUTTON_SHEEN` 0.1 (halved when pressed) |
 | Catalogue / deck builder backdrop | wood | `BACKDROP_GRAIN` 0.85 |
 | Card bodies / card name plates | pebbled leather / brushed metal | `CardFaceParts.BODY_GRAIN` 0.55 / `PLATE_GRAIN` 0.7 |
 
