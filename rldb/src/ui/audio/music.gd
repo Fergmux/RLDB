@@ -17,7 +17,7 @@ const PLAYLISTS := {
 }
 const BUS := "Music"
 const SETTINGS_PATH := "user://music_settings.cfg"
-const DEFAULT_VOLUME := 0.45
+const DEFAULT_VOLUME := 0.5
 ## Seconds a crossfade takes, between songs and between playlists.
 const CROSSFADE := 3.0
 ## Silence level a fading player starts from / ends at.

@@ -33,7 +33,7 @@ const POOL_SIZE := 8
 const MIN_INTERVAL_MS := 70
 const BURST_MAX := 4
 const BURST_WINDOW_MS := 120
-const DEFAULT_VOLUME := 0.7
+const DEFAULT_VOLUME := 0.5
 
 static var _instance: Sfx = null
 static var _voices: Array[AudioStreamPlayer] = []
@@ -252,7 +252,7 @@ static func is_muted() -> bool:
 	return _muted
 
 
-## Loads persisted settings (defaults: volume 0.7, unmuted) and applies them to the bus.
+## Loads persisted settings (defaults: volume 0.5, unmuted) and applies them to the bus.
 static func load_settings() -> void:
 	_loaded = true
 	_volume = DEFAULT_VOLUME
