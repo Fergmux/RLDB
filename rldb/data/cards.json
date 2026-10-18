@@ -23,7 +23,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 0
    }
@@ -51,7 +51,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 1
    }
@@ -79,7 +79,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 2
    }
@@ -107,7 +107,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 3
    }
@@ -135,7 +135,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 4
    }
@@ -163,7 +163,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 5
    }
@@ -191,7 +191,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 6
    }
@@ -219,7 +219,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 7
    }
@@ -247,7 +247,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 8
    }
@@ -275,7 +275,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 9
    }
@@ -303,7 +303,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 10
    }
@@ -331,7 +331,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 11
    }
@@ -359,7 +359,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 12
    }
@@ -387,7 +387,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 13
    }
@@ -415,7 +415,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 14
    }
@@ -443,7 +443,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 15
    }
@@ -471,7 +471,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 16
    }
@@ -499,7 +499,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 17
    }
@@ -527,7 +527,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 18
    }
@@ -555,7 +555,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 19
    }
@@ -583,7 +583,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 20
    }
@@ -611,7 +611,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 21
    }
@@ -639,7 +639,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 22
    }
@@ -667,7 +667,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 23
    }
@@ -695,7 +695,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 24
    }
@@ -723,7 +723,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 25
    }
@@ -751,7 +751,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 26
    }
@@ -779,7 +779,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 27
    }
@@ -807,7 +807,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 28
    }
@@ -835,7 +835,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 29
    }
@@ -863,7 +863,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 30
    }
@@ -891,7 +891,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 31
    }
@@ -919,7 +919,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 32
    }
@@ -947,7 +947,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 33
    }
@@ -975,7 +975,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 34
    }
@@ -1003,7 +1003,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 35
    }
@@ -1031,7 +1031,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 36
    }
@@ -1059,7 +1059,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 37
    }
@@ -1087,7 +1087,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 38
    }
@@ -1115,7 +1115,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 39
    }
@@ -1143,7 +1143,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 40
    }
@@ -1171,7 +1171,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 41
    }
@@ -1199,7 +1199,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 42
    }
@@ -1230,7 +1230,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 43
    }
@@ -1261,7 +1261,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 44
    }
@@ -1291,7 +1291,7 @@
     "type_icon": "Card/types/unknown.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 45
    }
@@ -1321,7 +1321,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 46
    }
@@ -1349,7 +1349,7 @@
     "type_icon": "Card/types/unknown.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 47
    }
@@ -1377,7 +1377,7 @@
     "type_icon": "Card/types/unknown.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 48
    }
@@ -1405,7 +1405,7 @@
     "type_icon": "Card/types/unknown.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 49
    }
@@ -1433,7 +1433,7 @@
     "type_icon": "Card/types/unknown.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 50
    }
@@ -1463,7 +1463,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 51
    }
@@ -1491,7 +1491,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 52
    }
@@ -1519,7 +1519,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 53
    }
@@ -1547,7 +1547,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 54
    }
@@ -1575,7 +1575,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 55
    }
@@ -1605,7 +1605,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 56
    }
@@ -1635,7 +1635,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 57
    }
@@ -1666,7 +1666,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 58
    }
@@ -1697,7 +1697,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 59
    }
@@ -1727,7 +1727,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 60
    }
@@ -1755,7 +1755,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 61
    }
@@ -1785,7 +1785,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 62
    }
@@ -1816,7 +1816,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 63
    }
@@ -1846,7 +1846,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 64
    }
@@ -1876,7 +1876,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 65
    }
@@ -1904,7 +1904,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 66
    }
@@ -1934,7 +1934,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 67
    }
@@ -1962,7 +1962,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 68
    }
@@ -1992,7 +1992,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 69
    }
@@ -2020,7 +2020,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 70
    }
@@ -2050,7 +2050,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 71
    }
@@ -2081,7 +2081,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 72
    }
@@ -2111,7 +2111,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 73
    }
@@ -2141,7 +2141,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 74
    }
@@ -2171,7 +2171,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 75
    }
@@ -2201,7 +2201,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 76
    }
@@ -2231,7 +2231,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 77
    }
@@ -2262,7 +2262,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 78
    }
@@ -2292,7 +2292,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 79
    }
@@ -2322,7 +2322,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 80
    }
@@ -2352,7 +2352,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 81
    }
@@ -2383,7 +2383,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 82
    }
@@ -2414,7 +2414,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 83
    }
@@ -2442,7 +2442,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 84
    }
@@ -2472,7 +2472,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 85
    }
@@ -2502,7 +2502,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 86
    }
@@ -2530,7 +2530,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 87
    }
@@ -2558,7 +2558,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 88
    }
@@ -2586,7 +2586,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 89
    }
@@ -2614,7 +2614,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 90
    }
@@ -2642,7 +2642,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 91
    }
@@ -2670,7 +2670,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 92
    }
@@ -2698,7 +2698,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 93
    }
@@ -2726,7 +2726,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 94
    }
@@ -2754,7 +2754,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "unit",
     "index": 95
    }
@@ -2784,7 +2784,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 96
    }
@@ -2814,7 +2814,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 97
    }
@@ -2842,7 +2842,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 98
    }
@@ -2872,7 +2872,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 99
    }
@@ -2900,7 +2900,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 100
    }
@@ -2928,7 +2928,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 101
    }
@@ -2956,7 +2956,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 102
    }
@@ -2986,7 +2986,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 103
    }
@@ -3014,7 +3014,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 104
    }
@@ -3042,7 +3042,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 105
    }
@@ -3070,7 +3070,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 106
    }
@@ -3098,7 +3098,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 107
    }
@@ -3126,7 +3126,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 108
    }
@@ -3154,7 +3154,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 109
    }
@@ -3185,7 +3185,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 110
    }
@@ -3213,7 +3213,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "spell",
     "index": 111
    }
@@ -3243,7 +3243,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 112
    }
@@ -3273,7 +3273,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 113
    }
@@ -3301,7 +3301,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 114
    }
@@ -3329,7 +3329,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 115,
     "raw": {
@@ -3361,7 +3361,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 116
    }
@@ -3389,7 +3389,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 117,
     "raw": {
@@ -3421,7 +3421,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 118,
     "raw": {
@@ -3455,7 +3455,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 119
    }
@@ -3485,7 +3485,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 120
    }
@@ -3513,7 +3513,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 121
    }
@@ -3541,7 +3541,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 122
    }
@@ -3569,7 +3569,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 123
    }
@@ -3597,7 +3597,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 124
    }
@@ -3625,7 +3625,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 125
    }
@@ -3653,7 +3653,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 126
    }
@@ -3681,7 +3681,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 127
    }
@@ -3709,7 +3709,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 128
    }
@@ -3737,7 +3737,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "trap",
     "index": 129
    }
@@ -3765,7 +3765,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 130
    }
@@ -3793,7 +3793,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 131
    }
@@ -3821,7 +3821,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 132
    }
@@ -3849,7 +3849,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 133
    }
@@ -3879,7 +3879,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 134
    }
@@ -3909,7 +3909,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 135
    }
@@ -3939,7 +3939,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 136
    }
@@ -3969,7 +3969,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 137
    }
@@ -3997,7 +3997,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 138
    }
@@ -4025,7 +4025,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 139
    }
@@ -4053,7 +4053,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 140
    }
@@ -4081,7 +4081,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 141
    }
@@ -4109,7 +4109,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 142
    }
@@ -4137,7 +4137,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 143
    }
@@ -4165,7 +4165,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 144
    }
@@ -4193,7 +4193,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 145
    }
@@ -4221,7 +4221,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 146
    }
@@ -4249,7 +4249,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 147
    }
@@ -4277,7 +4277,7 @@
     "type_icon": ""
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "power",
     "index": 148
    }
@@ -4308,7 +4308,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 149
    }
@@ -4339,7 +4339,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 150
    }
@@ -4369,7 +4369,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 151
    }
@@ -4400,7 +4400,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 152
    }
@@ -4431,7 +4431,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 153
    }
@@ -4461,7 +4461,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 154
    }
@@ -4491,7 +4491,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 155
    }
@@ -4519,7 +4519,7 @@
     "type_icon": "Card/types/unknown.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 156
    }
@@ -4547,7 +4547,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 157
    }
@@ -4577,7 +4577,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 158
    }
@@ -4608,7 +4608,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 159
    }
@@ -4638,7 +4638,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 160
    }
@@ -4668,7 +4668,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 161
    }
@@ -4698,7 +4698,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 162
    }
@@ -4728,11 +4728,11 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 163,
     "raw": {
-     "On Field": "At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and this Unit is Unprotected: that Unit must attack this Unit.",
+     "On Field": "At the start of your turn: your opponent's Units lose -8 DEF. At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and can attack this Unit: that Unit must attack this Unit.",
      "description": "On Summon: Apply 2 Paralyse to your opponent's Unprotected Units. At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and this Unit is Unprotected: that Unit must attack this Unit. On Destroy: Change the Stance of all Units."
     }
    }
@@ -4763,7 +4763,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 164
    }
@@ -4793,7 +4793,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 165
    }
@@ -4825,7 +4825,7 @@
     "type_icon": "Card/types/unknown.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "fusion",
     "index": 166
    }
@@ -4856,7 +4856,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 167
    }
@@ -4886,7 +4886,7 @@
     "type_icon": "Card/types/light.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 168
    }
@@ -4917,7 +4917,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 169
    }
@@ -4948,7 +4948,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 170
    }
@@ -4976,7 +4976,7 @@
     "type_icon": "Card/types/dark.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 171
    }
@@ -5006,7 +5006,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 172
    }
@@ -5036,7 +5036,7 @@
     "type_icon": "Card/types/unknown.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 173
    }
@@ -5067,7 +5067,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 174
    }
@@ -5099,7 +5099,7 @@
     "type_icon": "Card/types/unknown.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 175
    }
@@ -5129,7 +5129,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 176
    }
@@ -5159,7 +5159,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "ritual",
     "index": 177
    }
@@ -5187,7 +5187,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "arcane",
     "index": 178
    }
@@ -5215,7 +5215,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "arcane",
     "index": 179
    }
@@ -5245,7 +5245,7 @@
     "type_icon": "Card/types/fire.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "arcane",
     "index": 180
    }
@@ -5275,7 +5275,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "arcane",
     "index": 181
    }
@@ -5305,7 +5305,7 @@
     "type_icon": "Card/types/lightning.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "arcane",
     "index": 182
    }
@@ -5333,7 +5333,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "arcane",
     "index": 183
    }
@@ -5361,7 +5361,7 @@
     "type_icon": "Card/types/physical.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "arcane",
     "index": 184
    }
@@ -5391,7 +5391,7 @@
     "type_icon": "Card/types/earth.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "arcane",
     "index": 185
    }
@@ -5421,7 +5421,7 @@
     "type_icon": "Card/types/water.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "arcane",
     "index": 186
    }
@@ -5449,7 +5449,7 @@
     "type_icon": "Card/types/unknown.png"
    },
    "source": {
-    "file": "RLDB Master - Card Database (2026-10-18b).csv",
+    "file": "RLDB Master - Card Database (2026-10-18c).csv",
     "sheet": "arcane",
     "index": 187
    }

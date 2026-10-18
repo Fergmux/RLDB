@@ -136,6 +136,20 @@ no intended effect changes. It is now the imported source.
   Unit". Kept as implemented (you decide when it is destroyed, the AP is lost next turn and it
   returns at the start of that turn), per "no effect changes".
 
+## Third export and the --adopt workflow
+
+- The owner's next "Updated" export changes one cell: Demented Apparition's On Field carries the new
+  ruling (its first sentence is pasted twice). Adopted as
+  `rules/sources/RLDB Master - Card Database (2026-10-18c).csv`; the importer's 147 correction shows
+  the sentence once.
+- Dante (owner ruling): you choose when it is destroyed; the 1 AP is paid at the start of your next
+  turn, when it returns. That is the implemented behaviour.
+- The active source is now pinned in `rules/sources/active-card-source.json`. To take a new export:
+  `python -I tools/import_cards.py --adopt "<path to the exported csv>"`. It validates the export
+  (no ID may disappear), keeps a dated copy, pins it, regenerates `rldb/data/cards.json` and lists
+  stat changes, effect-text changes (behaviour is scripted per ID and is not changed by the CSV) and
+  new IDs (which need scripting). Then run the test suite and commit.
+
 ## Per-card ledger
 
 Every ID whose 18 October row differs from 17 October (index/art moves included). "Wording" means the

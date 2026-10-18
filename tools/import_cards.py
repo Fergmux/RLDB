@@ -1,17 +1,24 @@
 """Import the RLDB source CSVs into rldb/data/*.json.
 
-Active card source (standardised wording, 18 October 2026, design/card-database-update-2026-10-18.md):
-    rules/sources/RLDB Master - Card Database (2026-10-18b).csv   (SHA-256 f9c75837...4890f8ca)
-Earlier snapshots (2026-10-18, 2026-10-17 and the undated baseline) are comparison history only and
-are never read here. No CSV is modified.
+The active card source is pinned (file name and SHA-256) in rules/sources/active-card-source.json;
+earlier snapshots listed there are comparison history only and are never read. No CSV is modified.
+Change log: design/card-database-update-2026-10-18.md.
 
 Applies only confirmed corrections (rules/06, design/decision-register-answers.md, playtest
-feedback 03-06) and records every raw cell the importer changed under `source.raw`, so the
-export stays auditable.
+feedback 03-06, the 2026-10-18 owner rulings) and records every raw cell the importer changed under
+`source.raw`, so the export stays auditable.
 
-Run from the repo root:  python -I tools/import_cards.py          (regenerate)
-                         python -I tools/import_cards.py --check  (exit 1 if the JSON is stale)
+Run from the repo root:
+  python -I tools/import_cards.py                    regenerate rldb/data/cards.json
+  python -I tools/import_cards.py --check            exit 1 if the JSON is stale
+  python -I tools/import_cards.py --adopt <csv>      take a new export from the sheet: validate it,
+                                                     keep a dated copy in rules/sources, pin it,
+                                                     regenerate, and report what changed
 The output is deterministic so it can be committed and re-generated.
+
+What the CSV drives: names, stats, costs, Types, Races, categories, keywords and every card text the
+player reads. What it does not: card behaviour, which is scripted per card ID in
+rldb/src/core/card_scripts.gd. --adopt flags effect-text changes and new IDs for that reason.
 """
 import csv
 import hashlib
@@ -23,13 +30,20 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "rules", "sources")
 OUT = os.path.join(ROOT, "rldb", "data")
 
-CARD_SOURCE = "RLDB Master - Card Database (2026-10-18b).csv"
-CARD_SOURCE_SHA256 = "f9c7583762e8710812a350694bb9c08f5eb2cc8c24aa768b390cc0734890f8ca"
-PREVIOUS_SOURCES = ["RLDB Master - Card Database (2026-10-18).csv",   # audit history only; never imported
-                    "RLDB Master - Card Database (2026-10-17).csv",
-                    "RLDB Master - Card Database.csv"]
+ACTIVE = os.path.join(SRC, "active-card-source.json")
+
+
+def _active():
+    with open(ACTIVE, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+CARD_SOURCE = _active()["file"]
+CARD_SOURCE_SHA256 = _active()["sha256"]
+PREVIOUS_SOURCES = _active()["previous"]     # audit history only; never imported
 STATUS_SOURCE = "RLDB Master - status.csv"
-EXPECTED_CARDS = 188
+# Card behaviour is keyed by stable ID, so no ID may disappear (saved decks and series refer to them).
+MIN_CARDS = 188
 
 CATEGORY_KEYS = {
     "Basic Unit": "basic_unit",
@@ -194,7 +208,7 @@ def build(card_csv=None):
             c["source"]["raw"] = dict(sorted(raw.items()))
         cards.append(c)
     ids = [c["id"] for c in cards]
-    assert len(cards) == EXPECTED_CARDS, len(cards)
+    assert len(cards) >= MIN_CARDS, len(cards)
     assert len(set(ids)) == len(ids), "duplicate ids"
     for c in cards:
         assert "temp" not in (c["condition"] + c["on_summon"]).lower().split(), c["id"]
@@ -214,7 +228,75 @@ def serialise(data):
     return json.dumps(data, ensure_ascii=False, indent=1)
 
 
+NL = "\n"
+STAT_FIELDS = ("name", "category", "race", "type", "cost_kind", "cost", "atk", "def", "keywords")
+TEXT_FIELDS = ("condition", "on_summon", "on_field", "on_destruction", "material")
+
+
+def report(old_cards, new_cards):
+    """Lines describing what an adopted export changes, for the person running --adopt."""
+    old = {c["id"]: c for c in old_cards}
+    new = {c["id"]: c for c in new_cards}
+    lines = []
+    gone = sorted(set(old) - set(new))
+    if gone:
+        lines.append("REMOVED IDs (not allowed): %s" % gone)
+    for i in sorted(set(new) - set(old)):
+        lines.append("NEW card %d %s: needs its behaviour scripted in card_scripts.gd" % (i, new[i]["name"]))
+    for i in sorted(set(new) & set(old)):
+        a, b = old[i], new[i]
+        for k in STAT_FIELDS:
+            if a[k] != b[k]:
+                lines.append("stat  %d %s: %s %s -> %s" % (i, b["name"], k, a[k], b[k]))
+        for k in TEXT_FIELDS:
+            if a[k] != b[k]:
+                lines.append("TEXT  %d %s: %s changed -- check whether the behaviour changed too" % (i, b["name"], k))
+    return lines
+
+
+def adopt(path):
+    """Validates a new export, keeps a dated copy in rules/sources, pins it and regenerates."""
+    import datetime
+    import shutil
+    digest = sha256(path)
+    if digest == CARD_SOURCE_SHA256:
+        print("This export is already the active source; nothing to do.")
+        return 0
+    try:
+        data = build(path)
+    except Exception as e:      # malformed export: nothing is copied or pinned
+        print("export rejected: %r" % (e,))
+        return 2
+    lines = report(build()["cards"], data["cards"])
+    if any(l.startswith("REMOVED") for l in lines):
+        print(NL.join(lines))
+        return 2
+    stem = "RLDB Master - Card Database (%s" % datetime.date.today().isoformat()
+    name, n = stem + ").csv", 0
+    while os.path.exists(os.path.join(SRC, name)):
+        n += 1
+        name = "%s%s).csv" % (stem, chr(ord("a") + n))
+    shutil.copyfile(path, os.path.join(SRC, name))
+    data = build(os.path.join(SRC, name))     # provenance names the kept copy, not the download
+    act = _active()
+    pinned = {"file": name, "sha256": digest, "previous": [act["file"]] + act["previous"]}
+    with open(ACTIVE, "w", encoding="utf-8", newline=NL) as fh:
+        fh.write(json.dumps(pinned, indent=1) + NL)
+    with open(os.path.join(OUT, "cards.json"), "w", encoding="utf-8", newline=NL) as f:
+        f.write(serialise(data))
+    print("adopted %s as rules/sources/%s (%s); cards: %d" % (os.path.basename(path), name, digest[:12], len(data["cards"])))
+    print(NL.join(lines) if lines else "No card data changed.")
+    print("Next: run the test suite (tests that pin a changed stat will say so) and commit.")
+    return 0
+
+
 def main(argv):
+    if "--adopt" in argv:
+        i = argv.index("--adopt")
+        if i + 1 >= len(argv):
+            print("usage: python -I tools/import_cards.py --adopt <exported csv>")
+            return 2
+        return adopt(argv[i + 1])
     path = os.path.join(SRC, CARD_SOURCE)
     digest = sha256(path)
     if digest != CARD_SOURCE_SHA256:

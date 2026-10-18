@@ -12,6 +12,8 @@ sys.path.insert(0, TOOLS)
 import import_cards as ic  # noqa: E402
 
 # The twenty IDs whose `condition` cell is the editorial literal `temp` (2026-10-17 and 2026-10-18).
+# The first 18 October export: still the old layout (temp cells, ambiguous Arcane wording).
+FIRST_18 = "RLDB Master - Card Database (2026-10-18).csv"
 TEMP_IDS = {6, 9, 15, 25, 30, 32, 34, 35, 36, 37, 39, 69, 72, 76, 78, 100, 162, 156, 62, 63}
 
 
@@ -35,7 +37,7 @@ class ImportRegressionTest(unittest.TestCase):
         # them (the 2026-10-17 / first 2026-10-18 layout) is stripped with provenance kept.
         for c in self.data["cards"]:
             self.assertNotEqual(c["condition"].strip().lower(), "temp", c["id"])
-        old = {c["id"]: c for c in ic.build(os.path.join(ic.SRC, ic.PREVIOUS_SOURCES[0]))["cards"]}
+        old = {c["id"]: c for c in ic.build(os.path.join(ic.SRC, FIRST_18))["cards"]}
         for cid in TEMP_IDS:
             self.assertEqual(old[cid]["condition"], "", cid)
             self.assertEqual(old[cid]["source"]["raw"]["condition"], "temp", cid)
@@ -133,7 +135,7 @@ class ImportRegressionTest(unittest.TestCase):
         self.assertEqual(self.by_id[1]["name"].find("("), -1)
         for cid in list(range(170, 178)) + [185, 187]:
             self.assertEqual(self.by_id[cid]["condition"], "Exhaust Units from Spent whose combined Cost equals this Unit's Cost.")
-        old = {c["id"]: c for c in ic.build(os.path.join(ic.SRC, ic.PREVIOUS_SOURCES[0]))["cards"]}
+        old = {c["id"]: c for c in ic.build(os.path.join(ic.SRC, FIRST_18))["cards"]}
         self.assertEqual(old[170]["condition"], ic.ARCANE_REQUIREMENT)   # the ambiguous wording is still replaced
         # Obsolete overrides dropped: the export now carries the confirmed wording.
         self.assertEqual(self.by_id[169]["on_field"], "At the start of your turn: draw a card.")
@@ -160,6 +162,41 @@ class ImportRegressionTest(unittest.TestCase):
         with open(os.path.join(ic.OUT, "cards.json"), encoding="utf-8", newline="") as f:
             self.assertEqual(f.read(), a, "rldb/data/cards.json is stale; run tools/import_cards.py")
         json.loads(a)
+
+
+class AdoptTest(unittest.TestCase):
+    """--adopt: what it reports and what it refuses. The success path writes to the repository,
+    so it is exercised by hand (design/card-database-update-2026-10-18.md), not here."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.cards = ic.build()["cards"]
+
+    def _changed(self, cid, **kw):
+        out = [dict(c) for c in self.cards]
+        for c in out:
+            if c["id"] == cid:
+                c.update(kw)
+        return out
+
+    def test_identical_data_reports_nothing(self):
+        self.assertEqual(ic.report(self.cards, self.cards), [])
+
+    def test_stat_change_is_listed_and_text_change_is_flagged(self):
+        lines = ic.report(self.cards, self._changed(175, atk=30, on_field="Something new."))
+        self.assertTrue(any(l.startswith("stat  175") and "atk 26 -> 30" in l for l in lines), lines)
+        self.assertTrue(any(l.startswith("TEXT  175") and "check whether the behaviour changed" in l for l in lines), lines)
+
+    def test_new_and_removed_ids_are_reported(self):
+        extra = self.cards + [dict(self.cards[0], id=999, name="New Card")]
+        self.assertTrue(any("NEW card 999" in l for l in ic.report(self.cards, extra)))
+        fewer = [c for c in self.cards if c["id"] != 1]
+        self.assertTrue(any(l.startswith("REMOVED") for l in ic.report(self.cards, fewer)))
+
+    def test_adopting_the_active_source_does_nothing(self):
+        before = open(ic.ACTIVE, encoding="utf-8").read()
+        self.assertEqual(ic.adopt(os.path.join(ic.SRC, ic.CARD_SOURCE)), 0)
+        self.assertEqual(open(ic.ACTIVE, encoding="utf-8").read(), before)
 
 
 if __name__ == "__main__":
