@@ -10,9 +10,11 @@ const DISSOLVE_SHADER := "res://assets/shaders/dissolve.gdshader"
 const NO_GLOW := Color(1, 1, 1, 0)
 ## Dust puff at a card's foot when it lands.
 const DUST_COLOR := Color("c8b896")
-## Effect-target arrow (F03-18): seconds shown, then seconds fading out.
-const EFFECT_ARROW_HOLD := 0.55
-const EFFECT_ARROW_FADE := 0.3
+## Effect-target arrow (F03-18): seconds fading in, shown, then fading out. Owner feedback
+## 2026-10-18: longer, so it is noticed (was 0.55 s + 0.3 s).
+const EFFECT_ARROW_IN := 0.12
+const EFFECT_ARROW_HOLD := 1.4
+const EFFECT_ARROW_FADE := 0.45
 
 
 ## A card arrives in its slot from the owner's hand anchor (summon / play).
@@ -149,9 +151,11 @@ func effect_arrow(from: Dictionary, at: Dictionary) -> void:
 	arrow.a = _fx.fx_pos(ra.get_center())
 	arrow.b = _fx.fx_pos(rb.get_center())
 	arrow.on = true
+	arrow.modulate.a = 0.0
 	_fx.add_node(arrow)
 	arrow.queue_redraw()
 	var tw := _fx.new_tween()
+	tw.tween_property(arrow, "modulate:a", 1.0, UIStyle.dur(EFFECT_ARROW_IN))
 	tw.tween_interval(UIStyle.dur(EFFECT_ARROW_HOLD))
 	tw.tween_property(arrow, "modulate:a", 0.0, UIStyle.dur(EFFECT_ARROW_FADE))
 	tw.tween_callback(_fx.free_node.bind(arrow))
