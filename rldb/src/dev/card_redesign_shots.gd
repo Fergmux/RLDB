@@ -199,12 +199,17 @@ func run() -> void:
 	CardInspector.close_topmost()
 	await _frames(4)
 
-	# Hand: hover lifts a card.
-	var hand: Array = root.find_children("*", "CardWidget", true, false).filter(func(n): return (n as CardWidget).size_kind == "hand" and (n as CardWidget).is_visible_in_tree())
-	if not hand.is_empty():
-		await _move((hand[1] as CardWidget).get_global_rect().get_center())
-		await create_timer(0.4).timeout
-		await _shot("08_hand_hover")
+	# Hand (2026-10-18): a hovered card grows to 1.75x, entirely on screen, with no tooltip.
+	gs.hover.debug_hover_hand(4)                                # Shimmer Serum: a long rules text
+	await create_timer(0.5).timeout
+	var hv: Dictionary = gs.hover.hv
+	var hw: CardWidget = hv.get("w")
+	_check("the hovered hand card has no tooltip", hw != null and hw.tooltip_text == "")
+	var tr: Rect2 = gs.hover.target_rect(hv)
+	_check("the hovered hand card is 1.75x and on screen (%s)" % tr, absf(tr.size.x / (hv["holder"] as Control).get_global_rect().size.x - 1.75) < 0.01 and root.get_visible_rect().encloses(tr))
+	await _shot("08_hand_hover")
+	gs.hover.debug_clear()
+	await _frames(4)
 	await _move(Vector2(40, 470))
 
 	# Catalogue and deck builder.
