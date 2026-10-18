@@ -100,9 +100,9 @@ average unchanged and adds only grain. Nothing in the palette moves:
 | Where | Material | Strength |
 |---|---|---|
 | Sidebar panels, player plates, deck builder / catalogue plates, modals (HousePanel), OrnatePanel | leather | `UIStyle.PANEL_GRAIN` 0.55 (0.44 under gradients) |
-| Every themed button and `primary_button` | polished metal | `BUTTON_GRAIN` 0.38, gold faces `GOLD_GRAIN` 0.15, plus a soft top light `BUTTON_SHEEN` 0.1 (halved when pressed) |
+| Every themed button and `primary_button` | polished metal | `BUTTON_GRAIN` 0.24, gold faces `GOLD_GRAIN` 0.07, plus a soft top light `BUTTON_SHEEN` 0.1 (halved when pressed) |
 | Catalogue / deck builder backdrop | wood | `BACKDROP_GRAIN` 0.85 |
-| Card bodies / card name plates | pebbled leather / brushed metal | `CardFaceParts.BODY_GRAIN` 0.55 / `PLATE_GRAIN` 0.7 |
+| Card bodies / card name plates | pebbled leather / brushed metal | `CardFaceParts.BODY_GRAIN` 0.55 / `PLATE_GRAIN` 0.45 |
 
 The play field and menu already use photographic table and forest art, so they are unchanged. Gems
 (cost gem, AP gems, deck crest) stay vector: their faceted highlights read better at 10-30 px than a

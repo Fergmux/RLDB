@@ -13,7 +13,7 @@ const BODY_GRAIN := 0.55
 const BODY_TILE := 210.0
 ## Name plate fill and its brushed-metal grain.
 const PLATE := Color(0.102, 0.086, 0.075, 0.94)
-const PLATE_GRAIN := 0.7
+const PLATE_GRAIN := 0.45
 const PLATE_TILE := 150.0
 
 

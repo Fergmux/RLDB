@@ -35,9 +35,9 @@ const PREVIEW := Color("7fe6ff")
 ## Material grain strengths (UiSurface): panels and plates (leather), buttons (brushed metal),
 ## screen backdrops (wood) and the px one backdrop tile spans.
 const PANEL_GRAIN := 0.55
-const BUTTON_GRAIN := 0.38
+const BUTTON_GRAIN := 0.24
 ## Bright gold faces show the grain more strongly: a lighter touch there.
-const GOLD_GRAIN := 0.15
+const GOLD_GRAIN := 0.07
 ## Soft top light on buttons (polished metal, user feedback 2026-10-18); halved while pressed.
 const BUTTON_SHEEN := 0.1
 const BACKDROP_GRAIN := 0.85

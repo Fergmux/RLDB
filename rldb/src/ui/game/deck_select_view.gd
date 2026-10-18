@@ -299,6 +299,7 @@ func _tab_button(key: String, text: String, count: int, glyph: String) -> Button
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	h.add_child(l)
 	var cp := GameUi.pill(str(count), UIStyle.GOLD if on else UIStyle.BRONZE, 13)
+	cp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cp.get_child(0).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	h.add_child(cp)

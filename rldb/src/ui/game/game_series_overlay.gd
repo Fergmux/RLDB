@@ -302,17 +302,42 @@ func _stage_header(stage: String) -> Control:
 	t.add_theme_constant_override("outline_size", 4)
 	v.add_child(t)
 	v.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.8), true, 16.0))
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 14)
-	v.add_child(row)
-	for i in 2:
-		if i == 1:
-			var sc := UIStyle.label("%d – %d" % [view["scores"][0], view["scores"][1]], 26, UIStyle.GOLD_HI, false, true)
-			sc.add_theme_font_override("font", UIStyle.font_display(700))
-			row.add_child(sc)
-		row.add_child(_seat_plate(String(view["names"][i]), i == gs.me()))
+	var score := func(t: String) -> Label:
+		var sc := UIStyle.label(t, 26, UIStyle.GOLD_HI, false, true)
+		sc.add_theme_font_override("font", UIStyle.font_display(700))
+		return sc
+	v.add_child(score_row(_seat_plate(String(view["names"][0]), gs.me() == 0), _seat_plate(String(view["names"][1]), gs.me() == 1),
+		view["scores"], score, 14))
 	return v
+
+
+## "<left> 2 – 1 <right>" with the dash on the row's centre line, whatever the names' or scores'
+## widths: each half (seat and its score) fills half the row and hugs the dash. `make_label` builds
+## each piece of score text (Callable(String) -> Label).
+static func score_row(left: Control, right: Control, scores: Array, make_label: Callable, sep: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", sep)
+	var halves := []
+	for i in 2:
+		var h := HBoxContainer.new()
+		h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.alignment = BoxContainer.ALIGNMENT_END if i == 0 else BoxContainer.ALIGNMENT_BEGIN
+		h.add_theme_constant_override("separation", sep)
+		halves.append(h)
+	var n0: Control = make_label.call(str(scores[0]))
+	var n1: Control = make_label.call(str(scores[1]))
+	for c in [left, n0, n1, right]:
+		c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	halves[0].add_child(left)
+	halves[0].add_child(n0)
+	halves[1].add_child(n1)
+	halves[1].add_child(right)
+	var dash: Control = make_label.call("–")
+	dash.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(halves[0])
+	row.add_child(dash)
+	row.add_child(halves[1])
+	return row
 
 
 func _seat_plate(nm: String, mine: bool) -> Control:
@@ -525,13 +550,8 @@ func _render_over() -> void:
 		var ff := UIStyle.label("%s left and forfeited the series." % view["names"][forfeit], 16, UIStyle.BAD, true)
 		ff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		overlay_box.add_child(ff)
-	var score := HBoxContainer.new()
-	score.alignment = BoxContainer.ALIGNMENT_CENTER
-	score.add_theme_constant_override("separation", 18)
-	overlay_box.add_child(score)
-	score.add_child(UIStyle.label(view["names"][0], 20, UIStyle.TEXT, false, true))
-	score.add_child(UIStyle.label("%d – %d" % [view["scores"][0], view["scores"][1]], 40, UIStyle.GOLD, false, true))
-	score.add_child(UIStyle.label(view["names"][1], 20, UIStyle.TEXT, false, true))
+	overlay_box.add_child(score_row(UIStyle.label(view["names"][0], 20, UIStyle.TEXT, false, true), UIStyle.label(view["names"][1], 20, UIStyle.TEXT, false, true),
+		view["scores"], func(t: String) -> Label: return UIStyle.label(t, 40, UIStyle.GOLD, false, true), 18))
 	overlay_box.add_child(UIStyle.label("Game history", 16, UIStyle.GOLD, false, true))
 	for h in view["history"]:
 		var hw: bool = h["winner"] == gs.me()
