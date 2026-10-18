@@ -23,3 +23,18 @@ Decisions made here, for review:
 - **Item 7:** the draft opens on the first category with picks left. When a category is finished, the next one opens in display order.
 - **Item 9:** with mixed basics (possible after old saves), the most common one is copied.
 - **Item 10:** status words are matched only when capitalised, as the card wording writes them, so ordinary words are never caught.
+
+## Later the same day
+
+| # | Request | What changed | Tests |
+|---|---|---|---|
+| 11 | Draw the opening hands after the coin flip | The hands stay hidden while the game-1 coin flips; then mine is dealt in from the draw pile and the opponent's fades in | `card_redesign_shots` (2 checks) |
+| 12 | No waiting plate while the opponent picks rewards | "Waiting for your opponent" with its three dots filling in (`WaitingDots`; static under reduced motion) | `f04_series_driver` |
+| 13 | No effect tooltip on hand cards; hover makes them big enough to read | Hand cards have no tooltip; the hover lift is 1.75x (was 1.25x), growing upwards, and kept under reduced motion | `card_lift_reflow_f05_test`, `card_redesign_shots` |
+| 14 | Default music and sound volume 50% | Both defaults are 0.5 (were 0.45 and 0.7); saved settings keep their values | — |
+| 15 | Hot Stove only when a Power's effect is activated | Playing a Power no longer triggers it; abilities and triggered Power effects still do | `cards_spells_traps_test` |
+| 16 | Summon-answering Traps resolve after On Summon effects | A unit's own On Summon triggers resolve before the effect-activation window (Energy Dispel, Plan B); Trap Hole already came after | `rules_summon_trap_order_test` |
+
+The targeting arrow seen on the opponent's turn is deliberate (F03-18): when either player's effect picks a target, an arrow flashes from the source to the target for both seats. Attacks show their own arrow.
+
+Evidence: `production/qa/evidence/2026-10-18-feedback-batch/` (cards, series, tutorial, F02 and bot runs; badge before / after; hand hover close-up).
