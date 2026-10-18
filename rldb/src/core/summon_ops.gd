@@ -216,6 +216,11 @@ func _op_ritual_material(f: Dictionary, op: Dictionary) -> int:
 	if ans != null:
 		f["vars"][op["as"]] = ans
 		return R.CONT
+	# Ritual Tribute (2026-10-18): the material was chosen by starting from it.
+	var preset: int = int(op.get("preset", -1))
+	if preset != -1 and preset in _ritual_materials(f["ctl"], f["src"]):
+		f["vars"][op["as"]] = [preset]
+		return R.CONT
 	var opts := []
 	for u in _ritual_materials(f["ctl"], f["src"]):
 		opts.append(card_option(u, "%s (%d Runes)" % [name_of(u), status_count(u, "rune")]))

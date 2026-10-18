@@ -3582,7 +3582,7 @@
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
 					"tests": [
-						"test_c186_bronze_salaman_is_a_1_rune_light_dragon_in_the_lone_warrior_deck",
+						"test_c186_bronze_salaman_is_a_1_rune_light_dragon_in_the_trial_of_the_warrior_deck",
 						"test_c186_bronze_salaman_offers_a_fusion_summon_as_it_lands",
 						"test_c186_bronze_salaman_sacrificed_can_retain_a_card_in_hand",
 						"test_c186_bronze_salaman_tributed_for_a_ritual_can_retain_a_card",

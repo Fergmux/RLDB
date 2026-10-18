@@ -342,6 +342,16 @@ func validate(p: int, cmd: Dictionary) -> String:
 			# F03-04: some Spent units' current costs must total exactly the requirement.
 			if t == "arcane" and not arcane_payable(p, int(df["cost"])): return "No Spent units' current costs total exactly %d." % int(df["cost"])
 			return ""
+		"ritual_tribute":
+			# Owner feedback 2026-10-18: the Ritual summon started from the unit with the Runes;
+			# "target" is the Ritual unit in the Extra Deck it is tributed for.
+			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
+			var r: int = int(cmd.get("target", -1))
+			if not cards.has(r) or not (r in players[p]["extra"]) or category(r) != "ritual": return "Not a Ritual unit in your Extra Deck."
+			var why := validate(p, {"t": "ritual", "uid": r})
+			if why != "": return why
+			if not (uid in _ritual_materials(p, r)): return "This unit does not have enough Runes."
+			return ""
 	return "Unknown command."
 
 
@@ -521,12 +531,9 @@ func _execute(p: int, cmd: Dictionary) -> void:
 			push_frame(make_frame(uid, p, [{"op": "pick_slot", "zone": "adjacent", "as": "slot", "cancellable": true},
 				{"op": "move_slot", "slot": "$slot", "nimble": true}], "move " + name_of(uid)))
 		"ritual":
-			push_frame(make_frame(uid, p, [{"op": "ritual_material", "as": "mat", "cancellable": true},
-				{"op": "pick_slot", "zone": "unit", "as": "slot", "cancellable": true, "freeing": "$mat"},
-				_stance_op(cmd),
-				{"op": "tribute", "target": "$mat", "ritual": true},
-				{"op": "place", "target": "self", "slot": "$slot", "stance": "$stance"},
-				{"op": "tribute_bonus", "target": "self"}] + summon_tail(uid, p), "Ritual summon " + name_of(uid)))
+			_push_ritual(p, uid, cmd, -1)
+		"ritual_tribute":
+			_push_ritual(p, int(cmd["target"]), cmd, uid)
 		"arcane":
 			push_frame(make_frame(uid, p, [{"op": "arcane_materials", "as": "mats", "cancellable": true},
 				{"op": "pick_slot", "zone": "unit", "as": "slot", "cancellable": true},
@@ -553,6 +560,16 @@ func _fusion_lead(ops: Array, lead: Array, ability: bool) -> Array:
 
 
 ## Stance step of a summon: fixed when the command chose it (F02-02), otherwise a prompt.
+## The Ritual summon of Extra Deck unit `uid`; `mat` (or -1 to choose) is the tributed unit.
+func _push_ritual(p: int, uid: int, cmd: Dictionary, mat: int) -> void:
+	push_frame(make_frame(uid, p, [{"op": "ritual_material", "as": "mat", "cancellable": true, "preset": mat},
+		{"op": "pick_slot", "zone": "unit", "as": "slot", "cancellable": true, "freeing": "$mat"},
+		_stance_op(cmd),
+		{"op": "tribute", "target": "$mat", "ritual": true},
+		{"op": "place", "target": "self", "slot": "$slot", "stance": "$stance"},
+		{"op": "tribute_bonus", "target": "self"}] + summon_tail(uid, p), "Ritual summon " + name_of(uid)))
+
+
 func _stance_op(cmd: Dictionary) -> Dictionary:
 	if cmd.get("stance", "") in ["atk", "def"]:
 		return {"op": "pick_stance", "as": "stance", "fixed": cmd["stance"]}

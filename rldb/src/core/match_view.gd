@@ -461,6 +461,15 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 	for u in m.backrow_cards(viewer):
 		if m.category(u) == "spell":
 			cands.append({"t": "activate_set", "uid": u, "label": "Activate", "full": "Activate this set Spell"})
+	# Owner feedback 2026-10-18: a unit with enough Runes for a Ritual unit it could summon now
+	# offers "Ritual Tribute" itself (only while legal; one button per Ritual unit).
+	var rituals: Array = pl["extra"].filter(func(r): return m.category(r) == "ritual")
+	for u in m.field_units(viewer):
+		var ok_r := rituals.filter(func(r): return m.validate(viewer, {"t": "ritual_tribute", "uid": u, "target": r}) == "")
+		for r in ok_r:
+			cands.append({"t": "ritual_tribute", "uid": u, "target": r,
+				"label": "Ritual Tribute" if ok_r.size() == 1 else "Ritual: %s" % m.name_of(r),
+				"full": "Tribute this unit to Ritual Summon %s" % m.name_of(r)})
 	for u in pl["extra"]:
 		match m.category(u):
 			"ritual":

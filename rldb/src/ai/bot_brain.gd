@@ -92,7 +92,8 @@ func _debug_text(cmd: Dictionary, sim: MatchEngine, margin: float) -> String:
 func candidates(m: MatchEngine) -> Array:
 	var out := []
 	for a in MatchView.actions_for(m, me):
-		if not a.get("ok", false) or a["t"] == "next_phase":
+		# Ritual Tribute is the Extra Deck Ritual summon started from its material: already covered.
+		if not a.get("ok", false) or a["t"] in ["next_phase", "ritual_tribute"]:
 			continue
 		var cmd := {"t": a["t"], "uid": a["uid"]}
 		if a.has("idx"):

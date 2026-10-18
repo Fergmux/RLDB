@@ -498,7 +498,7 @@ func _c2s_command(seq: int, cmd: Dictionary) -> void:
 	_apply(CLIENT_SEAT, seq, cmd)
 
 
-const _INT_FIELDS := ["uid", "idx", "id", "index", "who", "card_id", "from_id"]
+const _INT_FIELDS := ["uid", "idx", "id", "index", "who", "card_id", "from_id", "target"]
 const _STR_FIELDS := ["t", "to_type", "to_race", "category", "name", "stance", "basic_type", "basic_race", "mode"]
 ## Longest list of names a command may carry (a draft setup's category order, F06-05).
 const _MAX_NAME_LIST := 16

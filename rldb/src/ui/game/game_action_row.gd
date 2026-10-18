@@ -48,7 +48,7 @@ func actions_for_card(uid: int) -> Array:
 static func _act_sig(acts: Array) -> String:
 	var parts := []
 	for a in acts:
-		parts.append("%s/%s/%s/%s/%s/%s" % [a["t"], a.get("idx", ""), a.get("stance", ""), a.get("mode", ""), a["ok"], a.get("reason", "")])
+		parts.append("%s/%s/%s/%s/%s/%s/%s" % [a["t"], a.get("idx", ""), a.get("stance", ""), a.get("mode", ""), a.get("target", ""), a["ok"], a.get("reason", "")])
 	return "|".join(parts)
 
 
@@ -164,7 +164,7 @@ func run_action(uid: int, a: Dictionary) -> void:
 	var still := false
 	for b in gs.mv.get("actions", []):
 		if b.get("uid", -1) == uid and b["t"] == a["t"] and b.get("idx", -1) == a.get("idx", -1) \
-				and b.get("stance", "") == a.get("stance", "") and b.get("mode", "") == a.get("mode", "") and b["ok"]:
+				and b.get("stance", "") == a.get("stance", "") and b.get("mode", "") == a.get("mode", "") 				and b.get("target", -1) == a.get("target", -1) and b["ok"]:
 			still = true
 	if not still or gs.locked():
 		Sfx.play("deny")
@@ -176,6 +176,8 @@ func run_action(uid: int, a: Dictionary) -> void:
 		cmd["stance"] = a["stance"]
 	if a.has("mode"):
 		cmd["mode"] = a["mode"]          # G07: Attack / Attack Direct
+	if a.has("target"):
+		cmd["target"] = a["target"]      # Ritual Tribute: the Ritual unit
 	gs.selected_uid = uid
 	gs.acting_uid = uid
 	gs.row_open = false
