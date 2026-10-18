@@ -693,7 +693,9 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 		return false
 	# A Trap whose effect opens with a target choice is only offered when that choice has a legal
 	# target (feedback 07: Wabuku on a direct attack with nothing in its column). needs_target
-	# extends the check to a later or optional choice.
+	# extends the check to a later or optional choice; "any_target" skips it (Wabuku).
+	if tr.get("any_target", false):
+		return true
 	for op in tr["ops"]:
 		if op["op"] == "choose":
 			if tr.get("needs_target", false) or not op.get("optional", false):

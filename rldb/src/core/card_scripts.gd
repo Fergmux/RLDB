@@ -367,7 +367,9 @@ static func _build() -> Dictionary:
 	t[48] = {"trap": {"when": "summon", "cond": {"count": {"kind": "unit", "side": "opp"}, "min": 3}, "ops": [ch({"kind": "unit", "side": "opp"}, "u", false, "Choose one of your opponent's units; it permanently loses 20 ATK."), {"op": "stat", "target": "$u", "atk": -20}]}}
 	# 2026-10-18: any summon (the 2-cost minimum is gone).
 	t[49] = {"trap": {"when": "summon", "ops": [st("event.card", "paralyse", 3)]}}
-	t[50] = {"trap": {"when": "attack", "ops": [ch({"kind": "unit", "side": "self", "column": true}, "u", false, "Apply 1 Eternal to a unit in this column."), st("$u", "eternal")]}}
+	# Owner feedback 2026-10-18: offered on every attack, direct ones included, even with no unit
+	# in its column (it then has no target).
+	t[50] = {"trap": {"when": "attack", "any_target": true, "ops": [ch({"kind": "unit", "side": "self", "column": true}, "u", false, "Apply 1 Eternal to a unit in this column."), st("$u", "eternal")]}}
 	t[51] = {"trap": {"when": "attack", "ops": [all_({"kind": "unit", "side": "self", "column": true}), {"op": "stat", "target": "$all", "def": 8, "until": "turn"}]}}
 	t[103] = {"trap": {"when": "summon", "ops": [{"op": "let", "as": "low", "n": {"min_atk": {"kind": "unit", "side": "self"}}}, {"op": "stat", "target": "event.card", "atk": {"value": "$low", "mul": -1}}]}}
 	# 2026-10-18: no longer negates. It destroys the card whose effect was activated (a resolving
