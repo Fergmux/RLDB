@@ -585,7 +585,8 @@ func _lead_choices(ops: Array) -> Array:
 	var lead := []
 	var applies := []
 	var i := 0
-	while i < ops.size() and ops[i]["op"] in ["choose", "mode", "near_self"] and not ops[i].get("random", false):
+	# A Type declaration leads too (owner feedback 2026-10-18: Chaos Witch / Waang can cancel it).
+	while i < ops.size() and ops[i]["op"] in ["choose", "mode", "near_self", "declare_type"] and not ops[i].get("random", false):
 		var c: Dictionary = ops[i].duplicate()
 		if c["op"] != "near_self":       # near_self only lists the units a following choice may pick
 			c["cancellable"] = true

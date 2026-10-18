@@ -49,7 +49,7 @@ func _op_declare_type(f: Dictionary, op: Dictionary) -> int:
 	for i in op["types"].size():
 		var ty: String = op["types"][i]
 		opts.append({"v": i, "label": ty if ty != "" else "No type"})
-	return ask(f, f["ctl"], "mode", "Choose a Type.", opts)
+	return ask(f, f["ctl"], "mode", "Choose a Type.", opts, 1, 1, op.get("cancellable", false))
 
 
 func _type_name(t: String) -> String:
