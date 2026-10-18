@@ -200,7 +200,7 @@ func _op_tribute_bonus(f: Dictionary, op: Dictionary) -> int:
 
 
 func _ritual_materials(p: int, uid: int) -> Array:
-	var need = d(uid)["cost"]
+	var need = extra_cost(uid)
 	var out := []
 	for u in field_units(p):
 		if is_debilitated(u):
@@ -282,7 +282,7 @@ func _op_arcane_materials(f: Dictionary, op: Dictionary) -> int:
 	if ans != null:
 		f["vars"][op["as"]] = ans
 		return R.CONT
-	var need: int = d(f["src"])["cost"]
+	var need: int = extra_cost(f["src"])
 	var opts := []
 	for u in arcane_materials(f["ctl"]):
 		var o := card_option(u, "%s (cost %d)" % [name_of(u), current_cost(u)])

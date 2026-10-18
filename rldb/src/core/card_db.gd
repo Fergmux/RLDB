@@ -104,7 +104,8 @@ static func cost_label(d: Dictionary, current = null) -> String:
 		"fusion":
 			return "Fusion"
 		"ritual":
-			return ("?" if d["cost"] == null else str(d["cost"])) + " Rune"
+			var r = current if current != null else d["cost"]
+			return ("?" if r == null else str(r)) + " Rune"
 		"arcane":
-			return str(d["cost"]) + " Arcane"
+			return str(current if current != null else d["cost"]) + " Arcane"
 	return str(current if current != null else d["cost"]) + " AP"

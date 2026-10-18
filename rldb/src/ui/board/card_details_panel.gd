@@ -170,6 +170,12 @@ func _cost_chip(c: Dictionary) -> Control:
 			col = UIStyle.BAD if cost > printed else UIStyle.GOOD
 			return _chip(txt, col, "up" if cost > printed else "down")
 		return _chip(txt, col, shape)
+	# Ritual / Arcane costs change too (Shimmer Serum, 2026-10-18): same base marker.
+	if kind in ["ritual", "arcane"] and int(c.get("uid", -1)) >= 0:
+		var rc = c.get("cost")
+		var rp = c.get("printed_cost")
+		if rc != null and rp != null and rc != rp:
+			return _chip("%s (base %s)" % [String(c.get("cost_text", "")), str(rp)], UIStyle.BAD if rc > rp else UIStyle.GOOD, "up" if rc > rp else "down")
 	return _chip(String(c.get("cost_text", "")), col, shape)
 
 

@@ -340,7 +340,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 			if _summon_blocked_by_type(p, unit_type(uid)): return "Your opponent's Bahatia prevents summoning %s units." % unit_type(uid)
 			if t == "ritual" and _ritual_materials(p, uid).is_empty(): return "No unit with enough Runes."
 			# F03-04: some Spent units' current costs must total exactly the requirement.
-			if t == "arcane" and not arcane_payable(p, int(df["cost"])): return "No Spent units' current costs total exactly %d." % int(df["cost"])
+			if t == "arcane" and not arcane_payable(p, int(extra_cost(uid))): return "No Spent units' current costs total exactly %d." % int(extra_cost(uid))
 			return ""
 		"ritual_tribute":
 			# Owner feedback 2026-10-18: the Ritual summon started from the unit with the Runes;

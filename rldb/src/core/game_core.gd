@@ -511,9 +511,28 @@ func current_cost(uid: int) -> int:
 	return maxi(v, 0)
 
 
+## Current Ritual (Runes needed) or Arcane (exact Spent total) cost: the printed cost plus the
+## card's permanent and this-turn cost changes, floored at zero. Owner rule 2026-10-18: cards that
+## raise another card's cost (Shimmer Serum) raise these costs too. null for a "?" Ritual cost
+## (any number of Runes); -1 for every other kind of card.
+func extra_cost(uid: int) -> Variant:
+	var df := d(uid)
+	if not (df["cost_kind"] in ["ritual", "arcane"]):
+		return -1
+	if df["cost"] == null:
+		return null
+	var inst: Dictionary = cards[uid]
+	var v: int = int(df["cost"]) + inst["cost_p"]
+	for m in inst["cost_t"]:
+		if m["turn"] == turn:
+			v += m["n"]
+	return maxi(v, 0)
+
+
 ## Printed cost label using the current cost where it applies.
 func cost_text(uid: int) -> String:
-	return CardDB.cost_label(d(uid), current_cost(uid))
+	var kind: String = d(uid)["cost_kind"]
+	return CardDB.cost_label(d(uid), extra_cost(uid) if kind in ["ritual", "arcane"] else current_cost(uid))
 
 
 # ---------------------------------------------------------------- statuses

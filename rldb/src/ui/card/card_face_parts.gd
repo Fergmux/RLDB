@@ -101,19 +101,30 @@ static func gem(pt: CardPainter, c: Vector2, r: float, fs: int) -> void:
 	pt.upright_end()
 
 
-## Text on the cost gem: "F" (Fusion), the printed cost (Ritual / Arcane) or the current AP cost.
+## Text on the cost gem: "F" (Fusion), else the current cost (Ritual Runes / Arcane total / AP);
+## a Ritual / Arcane view without a current cost (summaries) shows the printed cost.
 static func cost_text(view: Dictionary) -> String:
 	match String(view.get("cost_kind", "ap")):
 		"fusion": return "F"
 		"ritual", "arcane":
+			var cur = view.get("cost")
 			var pc = view.get("printed_cost")
+			if cur != null and view.has("uid") and int(view["uid"]) >= 0:
+				return str(cur)
 			return "?" if pc == null else str(pc)
 	var c = view.get("cost")
 	return "?" if c == null else str(c)
 
 
-## Gem text colour: green / red when an AP cost is below / above the printed cost.
+## Gem text colour: green / red when a cost is below / above the printed cost (Ritual / Arcane
+## gems are white at their printed cost).
 static func cost_color(view: Dictionary) -> Color:
+	if String(view.get("cost_kind", "ap")) in ["ritual", "arcane"] and view.has("uid") and int(view["uid"]) >= 0:
+		var rc = view.get("cost")
+		var rp = view.get("printed_cost")
+		if rc != null and rp != null and rc != rp:
+			return COST_CHEAP if rc < rp else COST_DEAR
+		return Color.WHITE
 	if String(view.get("cost_kind", "ap")) == "ap":
 		var c = view.get("cost")
 		var pc = view.get("printed_cost")
