@@ -186,6 +186,9 @@ func _reward(data: Dictionary) -> void:
 			r["actions"].append({"kind": "remove", "card": int(cmd.get("card_id", -1))})
 		"reward_basic":
 			r["actions"].append({"kind": "basic", "to_type": String(cmd.get("to_type", "")), "to_race": String(cmd.get("to_race", ""))})
+		"reward_extra_basic":
+			var dk: Array = data["deck"]
+			r["actions"].append({"kind": "extra_basic", "card": int(dk[-1]) if not dk.is_empty() else -1})
 		"reward_finish":
 			r["actions"].append({"kind": "finish"})
 	if data["done"]:

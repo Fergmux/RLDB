@@ -610,7 +610,7 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 	var t: String = cmd.get("t", "")
 	if r.get("pending", false) and t != "reward_add":
 		return "Pick one of the offered cards first."
-	var spends := t in ["reward_type", "reward_remove", "reward_basic"]
+	var spends := t in ["reward_type", "reward_remove", "reward_basic", "reward_extra_basic"]
 	match t:
 		"reward_type":
 			# Choosing the type spends the reward at once; one of the offered cards must be taken.
@@ -644,6 +644,13 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 			var eb := _change_basics(p, cmd)
 			if eb != "":
 				return eb
+		"reward_extra_basic":
+			# Owner feedback 2026-10-18: one more copy of the deck's basic unit (same Type and Race).
+			var bid := deck_basic(decks[p])
+			if bid == -1:
+				return "You have no basic units to add another of."
+			decks[p].append(bid)
+			r["taken"].append("Added another %s" % basic_label(bid))
 		"reward_finish":
 			r["left"] = 0
 		_:
@@ -660,6 +667,20 @@ func _reward_command(p: int, cmd: Dictionary) -> String:
 		duel_ready = [false, false]
 	checkpoint.emit()
 	return ""
+
+
+## The basic unit an "Add a basic unit" reward copies: the deck's most common basic unit (the
+## first of them in the deck on a tie), or -1 when the deck has none.
+static func deck_basic(deck: Array) -> int:
+	var counts := {}
+	var best := -1
+	for id in deck:
+		if CardDB.get_def(int(id))["category"] != "basic_unit":
+			continue
+		counts[int(id)] = int(counts.get(int(id), 0)) + 1
+		if best == -1 or counts[int(id)] > counts[best]:
+			best = int(id)
+	return best
 
 
 ## F06-04 "Change basic units": EVERY basic unit in p's deck becomes the chosen variant in one

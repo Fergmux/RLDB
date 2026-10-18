@@ -232,3 +232,30 @@ func test_f06_net_sanitizes_draft_and_reward_commands() -> void:
 	assert_str(NetSession.sanitize_command({"t": "draft_category", "category": 3})).is_not_empty()
 	assert_str(NetSession.sanitize_command({"t": "draft_basic", "basic_type": 7})).is_not_empty()
 	assert_str(NetSession.sanitize_command({"t": "draft_basic", "basic_colour": "red"})).is_not_empty()
+
+
+# ---------------------------------------------------------------- Add a basic unit (2026-10-18)
+
+func test_add_a_basic_unit_reward_copies_the_decks_basic_and_spends_a_pick() -> void:
+	var s := _rewards_series()
+	var basic := Series.deck_basic(s.decks[0])
+	assert_int(basic).is_not_equal(-1)
+	var n: int = s.decks[0].count(basic)
+	var size_before: int = s.decks[0].size()
+	assert_str(s.submit(0, {"t": "reward_extra_basic"})).is_empty()
+	assert_int(s.decks[0].size()).is_equal(size_before + 1)
+	assert_int(s.decks[0].count(basic)).is_equal(n + 1)
+	assert_int(s.rewards[0]["left"]).is_equal(3)
+	assert_str(String(s.rewards[0]["taken"][-1])).is_equal("Added another %s" % Series.basic_label(basic))
+
+
+func test_add_a_basic_unit_matches_the_most_common_basic() -> void:
+	assert_int(Series.deck_basic([WATER_BEAST, FIRE_DRAGON, FIRE_DRAGON, 13])).is_equal(FIRE_DRAGON)
+	assert_int(Series.deck_basic([13, 20])).is_equal(-1)
+
+
+func test_add_a_basic_unit_without_basics_is_refused_and_keeps_the_pick() -> void:
+	var s := _rewards_series()
+	s.decks[0] = s.decks[0].filter(func(id): return CardDB.get_def(id)["category"] != "basic_unit")
+	assert_str(s.submit(0, {"t": "reward_extra_basic"})).contains("no basic units")
+	assert_int(s.rewards[0]["left"]).is_equal(4)

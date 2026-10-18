@@ -1,7 +1,7 @@
 class_name GameRewardPanels
 extends RefCounted
-## Rewards stage of the series modal (F04-03): picks remaining as gems, the three reward kinds as
-## illustrated tiles (add / remove / change basic units), the sub-panel of the open reward and the
+## Rewards stage of the series modal (F04-03): picks remaining as gems, the reward kinds as
+## illustrated tiles (add / remove / change basic units / add a basic unit), the sub-panel of the open reward and the
 ## offer of new cards. Local choices that are not sent yet (which reward is open, the card to
 ## remove, the basic-unit Type and Race) live here.
 
@@ -11,7 +11,7 @@ const PREVIEW_CARD := Vector2(150, 225)
 ## The host screen this component works on.
 var gs: GameScreen
 
-## Reward being set up ("", "add", "remove", "basic").
+## Reward being set up ("", "add", "remove", "basic", "extra_basic").
 var mode: String = ""
 ## F10: signature of the offer whose card was clicked (a second click on the same offer is
 ## ignored until the authority answers), and when, so a rejected take can be retried.
@@ -53,10 +53,11 @@ func render() -> void:
 	if r.get("pending", false):
 		_render_offer(r)
 		return
-	# Three reward kinds as illustrated tiles; the open one shows its panel below.
+	# The reward kinds as illustrated tiles; the open one shows its panel below.
 	var modes := [["add", "Add a card", "Pick a card type, then take one of three.", "add", UIStyle.GOOD.darkened(0.15)],
 		["remove", "Remove a card", "Take one card out of your deck.", "remove", UIStyle.BAD],
-		["basic", "Change basic units", "Every basic unit becomes a new Type and Race.", "swap", UIStyle.RUNE_BLUE]]
+		["basic", "Change basic units", "Every basic unit becomes a new Type and Race.", "swap", UIStyle.RUNE_BLUE],
+		["extra_basic", "Add a basic unit", "One more copy of your basic unit, same Type and Race.", "add", UIStyle.GOLD.darkened(0.25)]]
 	var mrow := HBoxContainer.new()
 	mrow.add_theme_constant_override("separation", 10)
 	box.add_child(mrow)
@@ -83,6 +84,7 @@ func render() -> void:
 		"add": box.add_child(_reward_add_panel(r))
 		"remove": box.add_child(_reward_remove_panel(order, counts))
 		"basic": box.add_child(_basic_change_panel(r, order, counts))
+		"extra_basic": box.add_child(_extra_basic_panel(order, counts))
 	box.add_child(_footer(true, r))
 
 
@@ -375,6 +377,41 @@ func _find_area(n: Node) -> ScrollArea:
 ## F06-04 "Change basic units": the basic units now in the deck, then one Type and one Race in the
 ## shared picker with the resulting card; Confirm turns EVERY basic unit into it for one pick.
 ## A change that would alter nothing cannot be confirmed (the authority refuses it too).
+## "Add a basic unit" (owner feedback 2026-10-18): the deck's basic unit as a card and a confirm
+## button; it copies the most common basic unit, so it always matches the deck's Type and Race.
+func _extra_basic_panel(order: Array, counts: Dictionary) -> Control:
+	var pv: Array = _reward_panel("Add a basic unit", "Adds one more copy of your basic unit to your deck, for one pick.")
+	var col: VBoxContainer = pv[1]
+	var ids: Array = []
+	for c in gs.view["deck"]:
+		ids.append(int(c["id"]))
+	var bid := Series.deck_basic(ids)
+	if bid == -1:
+		col.add_child(_info_chip("No basic units in your deck", false))
+		return pv[0]
+	var c: Dictionary = {}
+	for o in order:
+		if int(o["id"]) == bid:
+			c = o
+	var holder := CenterContainer.new()
+	holder.custom_minimum_size = PREVIEW_CARD + Vector2(10, 10)
+	col.add_child(holder)
+	var cw := CardWidget.new().setup(MatchView.summary_view(c), "big")
+	GameUi.resize_card(cw, PREVIEW_CARD)
+	cw.tooltip_text = "Right-click to inspect"
+	cw.right_pressed.connect(gs.inspect.inspect_widget)
+	holder.add_child(cw)
+	var have := int(counts.get(bid, 0))
+	var ok := UIStyle.primary_button("Add another %s (%s): %d → %d" % [c["name"], c["type"], have, have + 1], 15)
+	ok.custom_minimum_size = Vector2(0, 40)
+	ok.clip_text = true
+	ok.pressed.connect(func():
+		mode = ""
+		gs.send({"t": "reward_extra_basic"}))
+	col.add_child(ok)
+	return pv[0]
+
+
 func _basic_change_panel(r: Dictionary, order: Array, counts: Dictionary) -> Control:
 	var pv: Array = _reward_panel("Change basic units", "Choose a Type and a Race. Every basic unit in your deck becomes that unit, for one pick.")
 	var col: VBoxContainer = pv[1]
