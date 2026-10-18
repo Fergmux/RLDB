@@ -192,6 +192,10 @@ func run(main_node: Node, dir: String) -> void:
 	await _shot("rewards_07_after_pick")
 	host.handle(0, {"t": "reward_finish"})
 	await _frames(8)
+	_view_seat(0)        # hot-seat follows the seat still choosing; look at seat 0's wait
+	await _frames(8)
+	var dots := ov.overlay_box.find_children("*", "WaitingDots", true, false)
+	_check("2026-10-18 rewards wait is the animated line, no plate", dots.size() == 1 and ov.overlay_box.find_children("*", "WaitPlate", true, false).is_empty())
 	await _shot("rewards_08_done_waiting")
 	host.handle(1, {"t": "reward_finish"})
 	var loser: int = host.series.last_loser

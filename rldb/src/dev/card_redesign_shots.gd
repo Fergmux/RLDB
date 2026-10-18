@@ -138,7 +138,12 @@ func run() -> void:
 		TB.card(m, me, id, "hand")
 	m.players[me]["ap"] = 4
 	host.broadcast()
-	await create_timer(4.0).timeout                            # coin flip
+	await create_timer(1.0).timeout
+	# 2026-10-18: the opening hands are dealt after the coin flip, not under it.
+	_check("the hands are hidden while the coin flips", gs.hand.layer.modulate.a == 0.0 and gs.board.opp_hand_box.modulate.a == 0.0)
+	await _shot("00d_coin_flip")
+	await create_timer(3.0).timeout                            # rest of the coin flip
+	_check("the hands are dealt once the coin flip is done", gs.hand.layer.modulate.a == 1.0)
 	await _shot("01_board")
 
 	# Art on every visible card.
