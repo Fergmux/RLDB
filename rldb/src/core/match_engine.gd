@@ -335,6 +335,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 		"ritual", "arcane":
 			if inst["owner"] != p or inst["zone"] != "extra": return "Card is not in your Extra Deck."
 			if df["category"] != t: return "Not a %s unit." % t.capitalize()
+			if extra_summons_locked(): return NO_EXTRA_IN_BATTLE
 			if not main: return "Special summons from the Extra Deck follow normal summon timing (Setup or Recovery Phase)."
 			if _summon_blocked_by_type(p, unit_type(uid)): return "Your opponent's Bahatia prevents summoning %s units." % unit_type(uid)
 			if t == "ritual" and _ritual_materials(p, uid).is_empty(): return "No unit with enough Runes."
@@ -375,6 +376,8 @@ func _spell_target_check(p: int, uid: int) -> String:
 			return "No free zone on your side."
 	# A Fusion Spell (Fusion Ceremony) needs a Fusion unit it could actually summon.
 	for op in entry["spell"]:
+		if op["op"] == "fusion" and extra_summons_locked():
+			return NO_EXTRA_IN_BATTLE
 		if op["op"] == "fusion" and fusion_candidates(p, op["sources"]).is_empty():
 			return "No Fusion unit can be summoned."
 	return ""
@@ -445,6 +448,8 @@ func _ability_check(p: int, uid: int, idx: int, ab: Dictionary) -> String:
 	for op in ab["ops"]:
 		if op["op"] in ["move", "destroy"] and op.get("target", "") == "self":
 			leaves = true
+		if op["op"] == "fusion" and extra_summons_locked():
+			return NO_EXTRA_IN_BATTLE
 		if op["op"] == "fusion" and fusion_candidates(p, op["sources"], uid if leaves else -1).is_empty():
 			return "No Fusion unit can be summoned."
 	return ""

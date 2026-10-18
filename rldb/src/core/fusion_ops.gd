@@ -69,7 +69,20 @@ func _fusion_needs_field_mat(p: int, exclude: int = -1) -> bool:
 
 
 ## Fusion materials player p could use among `sources`, optionally excluding one uid.
+## Owner rule 2026-10-18: no Fusion, Ritual or Arcane summon happens in the Battle Phase (either
+## player's), whatever card offers it.
+const NO_EXTRA_IN_BATTLE := "Fusion, Ritual and Arcane summons cannot be made in the Battle Phase."
+
+
+## True while Extra Deck summons are not allowed (the Battle Phase).
+func extra_summons_locked() -> bool:
+	return phase == PHASE_BATTLE
+
+
+## Fusion units player p could summon now from `sources`; none in the Battle Phase.
 func fusion_candidates(p: int, sources: Array, exclude: int = -1) -> Array:
+	if extra_summons_locked():
+		return []
 	var pool := _fusion_pool(p, sources).filter(func(u): return u != exclude)
 	var need_field := _fusion_needs_field_mat(p, exclude)
 	var out := []
@@ -109,7 +122,7 @@ func _op_fusion_pick(f: Dictionary, op: Dictionary) -> int:
 		f["vars"]["fusion_exclude"] = f["src"]     # the paying unit is never its own material
 	var cands := fusion_candidates(f["ctl"], op["sources"], f["vars"].get("fusion_exclude", -1))
 	if cands.is_empty():
-		add_log("No Fusion Summon is possible.")
+		add_log(NO_EXTRA_IN_BATTLE if extra_summons_locked() else "No Fusion Summon is possible.")
 		return R.END
 	var opts := []
 	for u in cands:
