@@ -4,7 +4,7 @@ extends RefCounted
 ## dark card body, panels and pips — user feedback 2026-10-16), type-colour fill, a light gloss
 ## accent, drawn in a unit box of `radius` around `center`. Silhouettes differ so the type reads by
 ## shape and not by colour alone:
-##   Water = drop, Fire = flame, Earth = mountain, Lightning = bolt, Light = radiant sun,
+##   Water = drop, Fire = flame, Earth = leaf (nature, 2026-10-18), Lightning = bolt, Light = radiant sun,
 ##   Dark = skull, Physical = crossed blades, typeless = hollow neutral ring.
 ## Colours come from UIStyle.TYPE_COLORS; nothing here is baked into a texture.
 
@@ -17,8 +17,12 @@ const PIP_BACKING := Color(0.04, 0.03, 0.03, 0.94)
 const PIP_ICON_K := 0.86
 ## Dark inner detail colour of the skull (eyes, nose, teeth).
 const SKULL_DARK := Color(0.06, 0.03, 0.1, 0.95)
-## Mountain silhouette (unit coordinates), filled and then outlined over its shading.
-const EARTH_PTS := [-1.0, 0.8, -0.58, -0.2, -0.36, 0.12, 0.08, -0.88, 1.0, 0.8]
+## Earth leaf (owner, 2026-10-18: Earth means nature): the blade runs from LEAF_BASE to LEAF_TIP (unit
+## coordinates), LEAF_WIDTH is its half-width at the widest point, LEAF_STEPS the outline resolution.
+const LEAF_BASE := Vector2(-0.52, 0.52)
+const LEAF_TIP := Vector2(0.74, -0.74)
+const LEAF_WIDTH := 0.46
+const LEAF_STEPS := 14
 
 
 ## Draws the icon for `type` ("" or an unknown name = typeless ring) onto any CanvasItem.
@@ -114,13 +118,37 @@ static func _fire(ci: CanvasItem, c: Vector2, r: float, col: Color, ow: float) -
 	_fill(ci, _pts(c, r, [0.0, -0.12, 0.24, 0.26, 0.30, 0.56, 0.0, 0.82, -0.30, 0.56, -0.24, 0.26]), col.lerp(Color("ffe27a"), 0.7), 0.0)
 
 
+## A point on the leaf: `t` 0..1 along the blade from base to tip, `side` -1..1 across it.
+static func _leaf_at(c: Vector2, r: float, t: float, side: float) -> Vector2:
+	var axis := LEAF_TIP - LEAF_BASE
+	var normal := Vector2(-axis.y, axis.x).normalized()
+	var w := LEAF_WIDTH * pow(sin(PI * t), 0.85) * (1.0 - 0.18 * t)
+	return c + (LEAF_BASE + axis * t + normal * w * side) * r
+
+
+## Earth: a leaf with a darker lower half, a midrib, three pairs of veins and a short stem.
 static func _earth(ci: CanvasItem, c: Vector2, r: float, col: Color, ow: float) -> void:
-	_fill(ci, _pts(c, r, EARTH_PTS), col, ow)
-	ci.draw_colored_polygon(_pts(c, r, [0.08, -0.88, 1.0, 0.8, 0.1, 0.8, 0.0, -0.2]), col.darkened(0.32))
-	ci.draw_colored_polygon(_pts(c, r, [0.08, -0.88, 0.34, -0.40, 0.18, -0.48, 0.06, -0.38, -0.06, -0.52]), col.lightened(0.6))
-	var o := _pts(c, r, EARTH_PTS)
-	o.append(o[0])
-	ci.draw_polyline(o, OUTLINE, ow, true)
+	var outline := PackedVector2Array()
+	var lower := PackedVector2Array()
+	for i in LEAF_STEPS + 1:
+		var t := float(i) / LEAF_STEPS
+		outline.append(_leaf_at(c, r, t, 1.0))
+		lower.append(_leaf_at(c, r, t, 0.0))
+	for i in range(LEAF_STEPS, -1, -1):
+		var t := float(i) / LEAF_STEPS
+		outline.append(_leaf_at(c, r, t, -1.0))
+		lower.append(_leaf_at(c, r, t, -1.0))
+	# Stem first, so the blade's outline sits over its join.
+	ci.draw_line(_leaf_at(c, r, 0.0, 0.0), c + Vector2(-0.86, 0.86) * r, OUTLINE, maxf(1.0, r * 0.15), true)
+	ci.draw_line(_leaf_at(c, r, 0.0, 0.0), c + Vector2(-0.84, 0.84) * r, col.darkened(0.35), maxf(1.0, r * 0.08), true)
+	_fill(ci, outline, col, ow)
+	ci.draw_colored_polygon(lower, col.darkened(0.22))
+	var rib := maxf(1.0, r * 0.07)
+	var vein_col := col.lightened(0.55)
+	ci.draw_line(_leaf_at(c, r, 0.04, 0.0), _leaf_at(c, r, 0.9, 0.0), vein_col, rib, true)
+	for t in [0.3, 0.5, 0.7]:
+		for side in [-1.0, 1.0]:
+			ci.draw_line(_leaf_at(c, r, t, 0.0), _leaf_at(c, r, t + 0.14, side * 0.62), vein_col, rib * 0.7, true)
 
 
 static func _bolt(ci: CanvasItem, c: Vector2, r: float, col: Color, ow: float) -> void:

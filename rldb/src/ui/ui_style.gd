@@ -35,7 +35,7 @@ const PREVIEW := Color("7fe6ff")
 const ZONE_TINT := {"unit": Color("3b2a1a"), "trap": Color("3a1c1c"), "power": Color("1c2a3d")}
 
 const TYPE_COLORS := {
-	"Water": Color("3f86d6"), "Fire": Color("d4533a"), "Earth": Color("8f7340"),
+	"Water": Color("3f86d6"), "Fire": Color("d4533a"), "Earth": Color("5fae3c"),
 	"Lightning": Color("e0bd32"), "Light": Color("f0e4b0"), "Dark": Color("7e4fb5"),
 	"Physical": Color("98979a"), "": Color("5b5a58"),
 }
