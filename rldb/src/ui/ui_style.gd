@@ -32,6 +32,14 @@ const READY := Color("f5c542")
 ## Provisional combat-preview stat styling (F02-12): cyan, distinct from committed buff green / debuff red.
 const HOVER_GLOW := Color("fff6e4")
 const PREVIEW := Color("7fe6ff")
+## Material grain strengths (UiSurface): panels and plates (leather), buttons (brushed metal),
+## screen backdrops (wood) and the px one backdrop tile spans.
+const PANEL_GRAIN := 0.55
+const BUTTON_GRAIN := 0.6
+## Bright gold faces show the grain more strongly: a lighter touch there.
+const GOLD_GRAIN := 0.32
+const BACKDROP_GRAIN := 0.85
+const BACKDROP_TILE := 640.0
 const ZONE_TINT := {"unit": Color("3b2a1a"), "trap": Color("3a1c1c"), "power": Color("1c2a3d")}
 
 const TYPE_COLORS := {
@@ -338,9 +346,9 @@ static func primary_button(text: String, size: int = 15) -> Button:
 	lift_style(n, Color(0, 0, 0, 0.5), 4, 2)
 	lift_style(h, Color(GOLD_HI, 0.45), 9, 0)          # warm glow on hover
 	lift_style(p, Color(0, 0, 0, 0.45), 2, 1)
-	b.add_theme_stylebox_override("normal", n)
-	b.add_theme_stylebox_override("hover", h)
-	b.add_theme_stylebox_override("pressed", p)
+	b.add_theme_stylebox_override("normal", UiSurface.box(n, UiSurface.METAL, GOLD_GRAIN))
+	b.add_theme_stylebox_override("hover", UiSurface.box(h, UiSurface.METAL, GOLD_GRAIN))
+	b.add_theme_stylebox_override("pressed", UiSurface.box(p, UiSurface.METAL, GOLD_GRAIN))
 	b.add_theme_stylebox_override("disabled", d)
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		b.add_theme_color_override(c, ON_GOLD)
@@ -413,10 +421,10 @@ static func panel_style(color: Color = PANEL, border: Color = BRONZE, radius: in
 	return sb
 
 
-## PanelContainer with `panel_style(color)`.
+## PanelContainer with `panel_style(color)` and a leather grain.
 static func panel(color: Color = PANEL) -> PanelContainer:
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", panel_style(color))
+	p.add_theme_stylebox_override("panel", UiSurface.box(panel_style(color), UiSurface.LEATHER, PANEL_GRAIN))
 	return p
 
 
@@ -485,9 +493,10 @@ static func make_theme() -> Theme:
 	lift_style(normal, Color(0, 0, 0, 0.5), 4, 2)
 	lift_style(hover, Color(GOLD, 0.32), 8, 0)
 	lift_style(pressed, Color(0, 0, 0, 0.45), 2, 1)
-	th.set_stylebox("normal", "Button", normal)
-	th.set_stylebox("hover", "Button", hover)
-	th.set_stylebox("pressed", "Button", pressed)
+	# Brushed-metal grain on every themed button face (UiSurface).
+	th.set_stylebox("normal", "Button", UiSurface.box(normal, UiSurface.METAL, BUTTON_GRAIN))
+	th.set_stylebox("hover", "Button", UiSurface.box(hover, UiSurface.METAL, BUTTON_GRAIN))
+	th.set_stylebox("pressed", "Button", UiSurface.box(pressed, UiSurface.METAL, BUTTON_GRAIN))
 	th.set_stylebox("disabled", "Button", disabled)
 	# Wider, higher-contrast scrollbars so scrollable panels read as scrollable.
 	var track := flat(Color(0, 0, 0, 0.35), Color.TRANSPARENT, 0, 5)

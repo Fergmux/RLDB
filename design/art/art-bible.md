@@ -79,6 +79,10 @@ Sizes are at 1600x1000 base; stretch scales them. Floor at 1280x800 (x0.8): stat
 
 ## 4. Card frame anatomy
 
+> **Superseded in part by §10 (2026-10-18):** the art window is square on every card, statuses are
+> icons over the art (no chips), the ATK / DEF badges sit on the art's lower corners on tall cards, and
+> card bodies / name plates carry material grain. Items below not named there still apply.
+
 All layers are Controls/`StyleBoxFlat`/`draw_*` in `card_widget.gd`; no textures required. Layer order bottom to top:
 
 1. **Drop shadow**: `StyleBoxFlat.shadow_size` 8, offset (0,4), `#000` 50%. Grows to 16 on hover.
@@ -146,7 +150,7 @@ Easing: `TRANS_BACK`/`EASE_OUT` for arrivals and lifts (springy), `TRANS_QUART`/
 | 6 | Soft particle + ember sprites | VFX (dust, embers, sparkle) | 64x64 | yes, white soft | round, additive-friendly | VFX |
 | 7 | Panel 9-slice + rivets | sidebar and plates | 128x128, margins 20 | yes | worn bronze trim on dark slate | UI panels |
 
-Card art itself: user-supplied, dropped at `rldb/art/cards/<source image filename>` (e.g. `170.png`); art window ratio is ~ 1.9:1 hand/board crop (centre-cropped via `Control.clip_contents` + `TextureRect.STRETCH_KEEP_ASPECT_COVERED`), full frame preview 5:7 on inspection.
+Card art itself: supplied (all 188 cards, 2026-10-18) and imported to `rldb/assets/art/cards/<id>.webp`; see §10. Items 2 (table texture) and 7 (panel surfaces) are now covered by the photographic table and the UiSurface material grain (§10).
 
 ## 8. Naming (per project convention)
 
@@ -159,3 +163,16 @@ Card art itself: user-supplied, dropped at `rldb/art/cards/<source image filenam
 - **Highlights:** hover = warm gold ring; selected = thick blue ring with corner brackets; can-act-now = steady emerald ring with a double-chevron badge (`UIStyle.READY`); legal target = pulsing yellow. Shapes differ so none relies on colour alone.
 - **Damage-type icons** (`src/ui/type_icons.gd`): Water drop, Fire flame, Earth leaf (nature; a mountain until 2026-10-18), Lightning bolt, Light radiant sun, Dark skull, Physical crossed blades; typeless = hollow ring. Race is always written as text, separate from Type.
 - **Audio:** 20 original sounds synthesised by `tools/gen_sfx.py` (stdlib only, deterministic) into `assets/audio/sfx/`: card draw/play/set, summon, select, confirm, cancel, deny, attack, impact, damage, heal, destroy, buff, debuff, turn, phase, notice, victory, defeat. Tone: muted tabletop foley with short dark tails, peak -6 dBFS. Played only from public events and local UI actions (no hidden-information cues), rate-limited (same sound ≥70 ms apart, ≤4 starts per 120 ms). Volume slider and mute are in Settings. Optional asset request: a recorded/produced replacement set with the same names (44.1 kHz mono WAV/OGG, under 1 s except the victory/defeat stingers, licence allowing redistribution).
+
+## 10. Card art, card redesign and material surfaces (2026-10-18)
+
+Full review and rationale: `design/card-redesign-2026-10-18.md`.
+
+- **Card art:** square 768 px WebP per card at `rldb/assets/art/cards/<id>.webp`, found by card id alone (`CardArt.path_for`). Imported from the accepted `<id> - <name>.png` files by `tools/godot/import_card_art.gd` (Lanczos to 768, WebP q0.9); Godot imports them VRAM-compressed (S3TC) with mipmaps. A card without art keeps the radial placeholder.
+- **Square art window on every card**, as wide as the card allows: field 79x79 of 85x128, tall 112x112 of 120x180 (big = the tall layout at 224/120 scale).
+- **Field card** (85x128): art; name banner over the art's lower edge; ATK / DEF in the bottom strip. Field Power / Trap: art, banner, short rules text below.
+- **Tall card** (hand, mini, big / inspector): art with the ATK diamond and DEF shield on its lower corners, banner under them, race · Type line, then a full-width rules well (an empty well shows a faint kind emblem).
+- **Everywhere:** cost gem top-left and Type pip top-right on the art; statuses and Runes as icons in rows over the art's lower edge, above the banner.
+- **Status icons** (`CardStatusIcons`, glyphs from game-icons.net, CC BY 3.0): a white glyph on a dark token whose shape and rim say what it is: buff = round, green rim; debuff = rounded square, red rim; Rune = hexagon, blue rim. Stacks above 1 (and every Rune count) show as a number badge. Too many for the rows collapse into a "+N" token. Hovering an icon shows its name at once ("Poison ×2", `StatusTip`); the card details panel uses the same tokens.
+- **Material surfaces** (`UiSurface`, CC0 ambientCG scans baked to grayscale relief): leather on panels, plates and modals; pebbled leather on card bodies; brushed metal on buttons and card name plates; dark wood grain on the catalogue / deck builder backdrop. The relief averages 0.5 and is drawn tinted with twice the surface colour, so the palette is unchanged and only grain is added. Strengths: `UIStyle.PANEL_GRAIN`, `BUTTON_GRAIN`, `GOLD_GRAIN`, `BACKDROP_GRAIN`.
+- **Credits:** main menu > Credits (from `rldb/data/credits.json`); file-level detail in `rldb/assets/CREDITS.md`.

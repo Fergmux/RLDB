@@ -31,7 +31,7 @@ signal tutorial_requested(lesson: int)
 ## Menu tree: level -> items [label, target]. A target starting with "@" opens a sub-level;
 ## anything else is a leaf shown in the centre (or an action).
 const MENU := {
-	"root": [["Resume", "resume"], ["Play", "@play"], ["Decks", "@decks"], ["Settings", "settings"], ["Quit", "quit"]],
+	"root": [["Resume", "resume"], ["Play", "@play"], ["Decks", "@decks"], ["Settings", "settings"], ["Credits", "credits"], ["Quit", "quit"]],
 	"play": [["Tutorial", "tutorial"], ["Play online", "@online"], ["Play local", "@local"]],
 	"online": [["Host game", "host_online"], ["Join game", "join_online"]],
 	"local": [["Play vs Bot", "bot"], ["Hot-seat", "hotseat"], ["Host LAN", "host_lan"], ["Join LAN", "join_lan"]],
@@ -39,6 +39,9 @@ const MENU := {
 }
 ## Top item of the root level for a profile that has not played yet (F04-09); opens lesson 1.
 const PLAY_TUTORIAL_ITEM := ["Play tutorial", "play_tutorial"]
+## Third-party asset credits shown under Credits, and the height of their scroll area.
+const CREDITS_PATH := "res://data/credits.json"
+const CREDITS_H := 430.0
 const BAND_W := 520.0
 const BAND_FADE_W := 160.0
 const BAND_COLOR := Color(0.02, 0.018, 0.025)
@@ -263,6 +266,23 @@ static func _center_panel(title: String, note: String = "", section: String = ""
 	return [p, v]
 
 
+## Third-party asset credits and licences from data/credits.json, in a scroll area.
+static func credits_view() -> Control:
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.custom_minimum_size = Vector2(0, CREDITS_H)
+	var v := VBoxContainer.new()
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.add_theme_constant_override("separation", 6)
+	sc.add_child(v)
+	var data = JSON.parse_string(FileAccess.get_file_as_string(CREDITS_PATH))
+	for sec in (data.get("sections", []) if data is Dictionary else []):
+		v.add_child(UIStyle.label(String(sec.get("title", "")), 17, UIStyle.GOLD, false, true))
+		for line in sec.get("lines", []):
+			v.add_child(UIStyle.label(String(line), 14, UIStyle.TEXT_DIM, true))
+	return sc
+
+
 static func _labelled(v: VBoxContainer, text: String, ctl: Control) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
@@ -453,6 +473,9 @@ func _leaf_panel(target: String) -> Control:
 			pv[1].add_child(_check_box("Fast animations (half duration)", UIStyle.fast_anim,
 					func(on): UIStyle.set_fast_anim(on)))
 			pv[1].add_child(_privacy_box("Privacy screen between turns (hot-seat)"))
+		"credits":
+			pv = _center_panel("Credits", "", "Main menu")
+			pv[1].add_child(credits_view())
 		_:
 			return null
 	return pv[0]

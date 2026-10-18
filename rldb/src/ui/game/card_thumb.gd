@@ -1,7 +1,7 @@
 class_name CardThumb
 extends Control
-## Signature-card art strip for deck tiles: the card's art window (or the kind-coloured radial
-## placeholder with its glyph), a Type pip, a kind-coloured top bar and the name on a dark band.
+## Signature-card art strip for deck tiles: the card's art (cover-cropped; or the kind-coloured
+## radial placeholder with its glyph), a Type pip, a kind-coloured top bar and the name on a dark band.
 ## Hover lifts the rim to gold. Draws from the same card summary dictionaries as the card widget.
 
 const BAND_H := 17.0
@@ -17,6 +17,7 @@ func _init(c: Dictionary = {}) -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	mouse_default_cursor_shape = Control.CURSOR_HELP
 	tooltip_text = "%s (%s)\n%s" % [c.get("name", ""), UIStyle.CATEGORY_NAMES.get(c.get("category", ""), ""), c.get("text", "")]
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	mouse_entered.connect(func(): set_process(true))
 	set_process(false)
 
@@ -36,8 +37,21 @@ func _draw() -> void:
 	var base: Color = UIStyle.type_color(card.get("type", "")) if is_unit else kind_col
 	var r := Rect2(Vector2.ZERO, size)
 	var art := Rect2(r.position + Vector2(1, 1), r.size - Vector2(2, 2))
-	draw_texture_rect(CardArt._radial_tex(base), art, false)
-	CardArt.draw_glyph(self, CardArt._glyph_kind(card), art.get_center() + Vector2(0, -BAND_H / 2.0 + 1.0), minf(art.size.x, art.size.y - BAND_H) * 0.32, Color(1, 1, 1, 0.22 + 0.12 * _hover))
+	var tex := CardArt.texture_for(card)
+	if tex != null:
+		# Cover-crop the square art, biased a little upward (faces sit in the upper half).
+		var ts := tex.get_size()
+		var src := Rect2(Vector2.ZERO, ts)
+		if art.size.x / art.size.y > ts.x / ts.y:
+			src.size.y = ts.x * art.size.y / art.size.x
+			src.position.y = (ts.y - src.size.y) * 0.4
+		else:
+			src.size.x = ts.y * art.size.x / art.size.y
+			src.position.x = (ts.x - src.size.x) * 0.5
+		draw_texture_rect_region(tex, art, src, Color(1, 1, 1).lerp(Color(1.12, 1.12, 1.12), _hover))
+	else:
+		draw_texture_rect(CardArt._radial_tex(base), art, false)
+		CardArt.draw_glyph(self, CardArt._glyph_kind(card), art.get_center() + Vector2(0, -BAND_H / 2.0 + 1.0), minf(art.size.x, art.size.y - BAND_H) * 0.32, Color(1, 1, 1, 0.22 + 0.12 * _hover))
 	# Kind-coloured crown and name band.
 	draw_rect(Rect2(art.position, Vector2(art.size.x, 3)), kind_col.lightened(0.15))
 	var band := Rect2(art.position.x, art.end.y - BAND_H, art.size.x, BAND_H)

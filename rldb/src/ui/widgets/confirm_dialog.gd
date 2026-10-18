@@ -115,11 +115,8 @@ func _button(c: Dictionary, stacked: bool) -> Button:
 ## Plain button restyled with a red rim and text: a choice that cannot be undone (forfeiting).
 static func _danger(b: Button) -> void:
 	for st in ["normal", "hover", "pressed"]:
-		var sb = b.get_theme_stylebox(st)
-		if sb is StyleBoxFlat:
-			var d := (sb as StyleBoxFlat).duplicate() as StyleBoxFlat
-			d.border_color = UIStyle.BAD if st != "normal" else Color(UIStyle.BAD, 0.75)
-			b.add_theme_stylebox_override(st, d)
+		var rim := UIStyle.BAD if st != "normal" else Color(UIStyle.BAD, 0.75)
+		b.add_theme_stylebox_override(st, UiSurface.restyled(b.get_theme_stylebox(st), func(d: StyleBoxFlat): d.border_color = rim))
 	b.add_theme_color_override("font_color", UIStyle.BAD.lightened(0.35))
 	b.add_theme_color_override("font_hover_color", UIStyle.BAD.lightened(0.5))
 

@@ -455,7 +455,7 @@ static func plate(color: Color = UIStyle.PANEL) -> PanelContainer:
 	sb.content_margin_right = 12
 	sb.content_margin_top = 10
 	sb.content_margin_bottom = 10
-	p.add_theme_stylebox_override("panel", sb)
+	p.add_theme_stylebox_override("panel", UiSurface.box(sb, UiSurface.LEATHER, UIStyle.PANEL_GRAIN))
 	# Vertical sheen: lighter at the top, gone by the middle.
 	var g := Gradient.new()
 	g.colors = PackedColorArray([Color(1, 0.92, 0.75, 0.07), Color(1, 0.92, 0.75, 0.0)])
@@ -483,13 +483,10 @@ static func heading(text: String, size: int = 18) -> VBoxContainer:
 	return v
 
 
-## Wood table background with a soft radial vignette (shared with the catalogue screen).
+## Wood table background (dark wood grain, UiSurface) with a soft radial vignette (shared with the
+## catalogue screen).
 static func table_backdrop(host: Control) -> void:
-	var bg := ColorRect.new()
-	bg.color = UIStyle.TABLE_WOOD
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	host.add_child(bg)
+	host.add_child(UiSurface.Fill.new(UIStyle.TABLE_WOOD, UiSurface.WOOD, UIStyle.BACKDROP_GRAIN, UIStyle.BACKDROP_TILE))
 	var vignette := TextureRect.new()
 	var vg := Gradient.new()
 	vg.colors = PackedColorArray([Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.45)])

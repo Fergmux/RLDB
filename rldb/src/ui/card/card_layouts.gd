@@ -1,105 +1,117 @@
 class_name CardLayouts
 extends RefCounted
-## Per-kind card-face layouts in card-face space (base units, scaled by the painter): the compact
-## 85x128 field unit, the 85x128 power / trap card, the tall hand / mini / big card, the name-only
-## own face-down set card, and the empty zone background.
+## Per-kind card-face layouts in card-face space (base units, scaled by the painter). Redesigned
+## 2026-10-18 around the square card art, which is the largest thing on every card:
+##
+## - FIELD (85x128 "board" unit): square art across the top, the name banner over the art's
+##   lower edge, big ATK / DEF badges in the bottom strip. Rules live in the sidebar and inspector.
+## - FIELD Power / Trap (85x128): the same art and banner, a short rules text in the bottom strip.
+## - TALL (hand 120x180, mini, big 224x336 = the hand layout scaled): square art; the ATK / DEF badges
+##   sit on the art's lower corners so the rules text below the banner gets the whole width.
+##
+## Everywhere: cost gem on the art's top left, Type pip on its top right, statuses and Runes as
+## icons over the art's lower edge (CardStatusIcons), the banner right under them.
 
 ## Corner radius (base units) of the 85x128 board kinds and of the tall kinds.
 const RADIUS_SMALL := 6.0
 const RADIUS_TALL := 8.0
-## Cost gem / type pip radius (base units) and gem text size on the 85x128 kinds.
-const SMALL_GEM_R := 9.0
-const SMALL_GEM_FS := 12
-## Name plate largest / smallest font size on the 85x128 kinds.
-const SMALL_NAME_FS := 10.5
-const SMALL_NAME_FS_MIN := 8.0
 ## Rules-text well fill on the tall kinds.
-const TEXT_WELL := Color(0.847, 0.8, 0.69, 0.08)
+const TEXT_WELL := Color(0.847, 0.8, 0.69, 0.07)
 
-## Tall-card geometry (base units): rects are [x, y, w, h], "gem" is [cx, cy, r], "pip" is [cx, cy].
-## The rules-text well is shorter on units (stat badges below it).
-const TALL_BIG := {"art": [10, 10, 204, 110], "plate": [10, 100, 204, 32], "line": 136.0, "text_unit": [12, 156, 200, 98], "text_other": [12, 156, 200, 134],
-	"chip_y": 258.0, "chip_x": [12.0, 212.0], "chip_rows": 1, "atk": [6, 279, 56, 53], "def": [162, 281, 52, 50], "gem": [27, 27, 17],
-	"f_name": 19.0, "f_line": 13.0, "f_text": 13.0, "f_chip": 11.0, "f_stat": 30.0, "f_gem": 21.0, "chip_h": 15.0, "chip_y_nu": 298.0, "chip_rows_nu": 2, "pip": [197, 27]}
-const TALL_HAND := {"art": [6, 6, 108, 58], "plate": [6, 52, 108, 22], "line": 76.0, "text_unit": [6, 90, 108, 44], "text_other": [6, 90, 108, 72],
-	"chip_y": 136.0, "chip_x": [6.0, 114.0], "chip_rows": 1, "atk": [3, 146, 34, 32], "def": [84, 147, 32, 31], "gem": [17, 17, 11.5],
-	"f_name": 12.5, "f_line": 11.0, "f_text": 10.5, "f_chip": 8.5, "f_stat": 17.0, "f_gem": 14.0, "chip_h": 9.5, "chip_y_nu": 164.0, "chip_rows_nu": 1, "pip": [103, 17]}
+## Geometry (base units): rects are [x, y, w, h], points [x, y]; "gem_r" is the cost gem radius.
+## "icons" is [x0, x1, bottom y, icon size, rows].
+const FIELD := {"art": [3, 3, 79, 79], "banner": [2, 73, 81, 19], "gem": [12, 12], "gem_r": 9.0, "pip": [73, 12],
+	"icons": [4, 81, 72, 14.0, 2], "atk": [1, 93, 36, 34], "def": [48, 93, 36, 34], "text": [5, 94, 75, 31],
+	"f_name": 10.5, "f_name_min": 7.5, "f_gem": 12.0, "f_stat": 17.0, "f_text": 8.5}
+const TALL := {"art": [4, 4, 112, 112], "banner": [2, 100, 116, 19], "gem": [16, 16], "gem_r": 11.5, "pip": [104, 16],
+	"icons": [6, 114, 98, 13.0, 2], "icons_unit": [35, 85, 98, 13.0, 3], "atk": [0, 66, 36, 34], "def": [84, 67, 36, 33],
+	"line": [6, 120, 108, 10], "text": [4, 131, 112, 45],
+	"f_name": 12.5, "f_name_min": 8.0, "f_gem": 14.0, "f_stat": 18.0, "f_line": 9.5, "f_text": 10.0}
+## Smallest rules-text size, as a fraction of the layout's text size.
+const TEXT_MIN_K := 0.5
 
 
 static func _is_unit(pt: CardPainter) -> bool:
 	return String(pt.view.get("category", "")) in CardWidget.UNIT_CATS
 
 
-## Compact 85x128 field unit card (no rules-text well).
+static func _r(pt: CardPainter, a: Array) -> Rect2:
+	return pt.r(a[0], a[1], a[2], a[3])
+
+
+## Compact 85x128 field unit: art, banner, ATK / DEF.
 static func draw_square(pt: CardPainter) -> void:
-	var is_unit := _is_unit(pt)
+	var g := FIELD
 	CardFaceParts.frame(pt, RADIUS_SMALL)
-	CardArt.draw(pt, pt.r(4, 4, 77, 60))
-	# Cost gem and type icon share one size (user feedback).
-	CardFaceParts.type_pip(pt, pt.p(72, 13), SMALL_GEM_R / TypeIcons.PIP_K * pt.s)
-	CardFaceParts.name_plate(pt, pt.r(4, 52, 77, 20), SMALL_NAME_FS, 0.0, 0.0, pt.accent(), SMALL_NAME_FS_MIN)
-	CardChips.draw(pt, 4, 81, 73.0, 9.5, 7.5, 2)
-	if is_unit:
-		CardStatBadge.draw(pt, pt.r(2, 93, 36, 33), true, 16.0)
-		CardStatBadge.draw(pt, pt.r(47, 94, 33, 32), false, 16.0)
-	CardFaceParts.gem(pt, pt.p(13, 13), SMALL_GEM_R * pt.s, pt.fs(SMALL_GEM_FS))
+	CardArt.draw(pt, _r(pt, g["art"]))
+	_art_corners(pt, g)
+	_icons(pt, g["icons"], 0.0)
+	CardFaceParts.name_plate(pt, _r(pt, g["banner"]), g["f_name"], 0.0, 0.0, pt.accent(), g["f_name_min"])
+	if _is_unit(pt):
+		CardStatBadge.draw(pt, _r(pt, g["atk"]), true, g["f_stat"])
+		CardStatBadge.draw(pt, _r(pt, g["def"]), false, g["f_stat"])
+	CardFaceParts.gem(pt, pt.p(g["gem"][0], g["gem"][1]), float(g["gem_r"]) * pt.s, pt.fs(g["f_gem"]))
 
 
-## Power / trap card: art, name, short rules text, chips. Same 85x128 portrait.
+## Field Power / Trap (85x128): art, banner, short rules text.
 static func draw_power(pt: CardPainter) -> void:
+	var g := FIELD
 	CardFaceParts.frame(pt, RADIUS_SMALL)
-	CardArt.draw(pt, pt.r(4, 4, 77, 56))
-	CardFaceParts.name_plate(pt, pt.r(4, 48, 77, 20), SMALL_NAME_FS, 0.0, 0.0, pt.accent(), SMALL_NAME_FS_MIN)
-	CardFaceParts.gem(pt, pt.p(13, 13), SMALL_GEM_R * pt.s, pt.fs(SMALL_GEM_FS))
+	CardArt.draw(pt, _r(pt, g["art"]))
+	_icons(pt, g["icons"], 0.0)
+	CardFaceParts.name_plate(pt, _r(pt, g["banner"]), g["f_name"], 0.0, 0.0, pt.accent(), g["f_name_min"])
 	var txt := CardText.card_text(pt.view)
 	if txt != "":
-		var tp := CardTextLayout.para(txt, UIStyle.font_body(), "b", pt.fs(9.0), 77.0 * pt.s, 4)
-		pt.para(tp, pt.p(4, 70), Color(UIStyle.TEXT, 0.9))
-	CardChips.draw(pt, 4, 81, 115.0, 10.0, 7.5, 1)
+		var t: Array = g["text"]
+		var tp := CardTextLayout.fit_para(txt, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(CardPainter.MIN_FS - 1, pt.fs(g["f_text"] * 0.7)), float(t[2]) * pt.s, float(t[3]) * pt.s)
+		pt.para(tp, pt.p(t[0], t[1]), Color(UIStyle.TEXT, 0.9))
+	CardFaceParts.gem(pt, pt.p(g["gem"][0], g["gem"][1]), float(g["gem_r"]) * pt.s, pt.fs(g["f_gem"]))
 
 
-## Tall card with a rules-text well: hand / mini (`big` false, 120x180 base) or big (224x336).
-static func draw_tall(pt: CardPainter, big: bool) -> void:
-	var is_unit := _is_unit(pt)
-	var g: Dictionary = TALL_BIG if big else TALL_HAND
+## Tall card (hand / mini 120x180 base, big 224x336 drawn from the same layout at a larger scale):
+## art with the ATK / DEF badges on its lower corners, banner, race / Type line, rules text well.
+static func draw_tall(pt: CardPainter, _big: bool = false) -> void:
+	var g := TALL
 	var s := pt.s
+	var is_unit := _is_unit(pt)
 	CardFaceParts.frame(pt, RADIUS_TALL)
-	var a: Array = g["art"]
-	CardArt.draw(pt, pt.r(a[0], a[1], a[2], a[3]))
-	var gm: Array = g["gem"]
-	CardFaceParts.type_pip(pt, pt.p(g["pip"][0], g["pip"][1]), float(gm[2]) / TypeIcons.PIP_K * s)   # same size as the cost gem
-	var pl: Array = g["plate"]
-	CardFaceParts.name_plate(pt, pt.r(pl[0], pl[1], pl[2], pl[3]), g["f_name"], 0.0, 0.0, pt.accent())
-	# Type / race line.
+	CardArt.draw(pt, _r(pt, g["art"]))
+	_art_corners(pt, g)
+	_icons(pt, g["icons_unit"] if is_unit else g["icons"], 0.5)
+	# Race / Type line (units) or the card kind (Spells, Traps, Powers).
+	var ln: Array = g["line"]
 	var line_fs := pt.fs(g["f_line"])
-	var ly: float = g["line"]
-	var lx: float = float(pl[0]) + 4.0
-	var lh := float(g["f_line"] + 3) * s
-	var t: Array = g["text_unit"] if is_unit else g["text_other"]
 	if is_unit:
-		CardFaceParts.race_type_line(pt, Vector2(lx * s, ly * s), (float(t[0]) + float(t[2]) - 4.0 - lx) * s, lh, line_fs)
+		CardFaceParts.race_type_line(pt, pt.p(ln[0], ln[1]), float(ln[2]) * s, float(ln[3]) * s, line_fs)
 	else:
-		# F04-06: the kind is the text only; no colour square (the frame and art already carry the colour).
-		pt.text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(pt.view.get("category", ""), ""), pt.p(lx, ly), line_fs, UIStyle.MUTED, -1.0, HORIZONTAL_ALIGNMENT_LEFT, lh)
-	# Rules text well.
+		pt.text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(pt.view.get("category", ""), ""), pt.p(ln[0], ln[1]), line_fs, UIStyle.MUTED, float(ln[2]) * s, HORIZONTAL_ALIGNMENT_CENTER, float(ln[3]) * s)
+	# Rules text well: the whole text always fits, the size steps down until it does (user feedback).
+	var t: Array = g["text"]
 	var rules := CardText.card_text(pt.view)
 	if pt.view.get("support", "full") == "unimplemented":
 		rules = "[Effect not implemented] " + rules
-	pt.round_rect(pt.r(t[0], t[1], t[2], t[3]), TEXT_WELL, 3.0 * s)
+	pt.round_rect(_r(pt, t), TEXT_WELL, 3.0 * s)
 	if rules != "":
-		# The whole rules text always fits: the size steps down until it does (user feedback).
-		var tp := CardTextLayout.fit_para(rules, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(5, pt.fs(g["f_text"] * 0.55)), (float(t[2]) - 8.0) * s, (float(t[3]) - 3.0) * s)
-		pt.para(tp, pt.p(t[0] + 4, t[1] + 2), UIStyle.TEXT)
-	# Chips + stat badges + gem.
-	if is_unit:
-		var at: Array = g["atk"]
-		var df: Array = g["def"]
-		CardChips.draw(pt, g["chip_x"][0], g["chip_x"][1], g["chip_y"], g["chip_h"], g["f_chip"], g["chip_rows"])
-		CardStatBadge.draw(pt, pt.r(at[0], at[1], at[2], at[3]), true, g["f_stat"])
-		CardStatBadge.draw(pt, pt.r(df[0], df[1], df[2], df[3]), false, g["f_stat"])
+		var tp := CardTextLayout.fit_para(rules, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(5, pt.fs(g["f_text"] * TEXT_MIN_K)), (float(t[2]) - 6.0) * s, (float(t[3]) - 3.0) * s)
+		pt.para(tp, pt.p(float(t[0]) + 3.0, float(t[1]) + 1.5), UIStyle.TEXT)
 	else:
-		CardChips.draw(pt, g["chip_x"][0], g["chip_x"][1], g["chip_y_nu"], g["chip_h"], g["f_chip"], g["chip_rows_nu"])
-	CardFaceParts.gem(pt, pt.p(gm[0], gm[1]), float(gm[2]) * s, pt.fs(g["f_gem"]))
+		# No rules (Basic Units): a faint kind emblem instead of an empty well.
+		var wr := _r(pt, t)
+		CardArt.draw_glyph(pt.ci, CardArt._glyph_kind(pt.view), wr.get_center(), wr.size.y * 0.3, Color(UIStyle.GOLD, 0.16))
+	CardFaceParts.name_plate(pt, _r(pt, g["banner"]), g["f_name"], 0.0, 0.0, pt.accent(), g["f_name_min"])
+	if is_unit:
+		CardStatBadge.draw(pt, _r(pt, g["atk"]), true, g["f_stat"])
+		CardStatBadge.draw(pt, _r(pt, g["def"]), false, g["f_stat"])
+	CardFaceParts.gem(pt, pt.p(g["gem"][0], g["gem"][1]), float(g["gem_r"]) * s, pt.fs(g["f_gem"]))
+
+
+## The Type pip on the art's top right (same size as the cost gem, user feedback).
+static func _art_corners(pt: CardPainter, g: Dictionary) -> void:
+	CardFaceParts.type_pip(pt, pt.p(g["pip"][0], g["pip"][1]), float(g["gem_r"]) / TypeIcons.PIP_K * pt.s)
+
+
+static func _icons(pt: CardPainter, a: Array, align: float) -> void:
+	CardStatusIcons.draw_rows(pt, a[0], a[1], a[2], a[3], a[4], align)
 
 
 ## Name plate across the middle of an own face-down set card, in screen orientation (widget space).
@@ -108,7 +120,7 @@ static func draw_set_name(pt: CardPainter) -> void:
 	var s := pt.s
 	var h := 22.0 * s
 	CardFaceParts.name_plate(pt, Rect2(pt.cr.position.x + 5.0 * s, pt.cr.get_center().y - h / 2.0, pt.cr.size.x - 10.0 * s, h),
-		SMALL_NAME_FS, 0.0, 0.0, UIStyle.CATEGORY_COLORS.get("", UIStyle.BRONZE), SMALL_NAME_FS_MIN)
+		FIELD["f_name"], 0.0, 0.0, UIStyle.CATEGORY_COLORS.get("", UIStyle.BRONZE), FIELD["f_name_min"])
 
 
 ## Empty zone background filling `size` (unit / trap / power tint by `size_kind`), brighter while a target.

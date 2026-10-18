@@ -3,7 +3,7 @@ extends RefCounted
 ## Per-widget drawing context for a CardWidget: the canvas to draw on, a snapshot of the card state
 ## taken at the start of each _draw (view, kind, rotation, scale, card rect) and the scaled drawing
 ## primitives every card part uses. The part painters (CardArt, CardFaceParts, CardStatBadge,
-## CardChips, CardBack, CardLayouts, CardOverlays) are static functions that take one of these.
+## CardStatusIcons, CardBack, CardLayouts, CardOverlays) are static functions that take one of these.
 ##
 ## Geometry is authored in base units: r()/p()/fs() scale them by `s` (card width / base width).
 ## Card-face parts draw in portrait face space; set_face_transform() maps it onto the widget.
@@ -47,6 +47,9 @@ var k: float = 1.0
 ## viewport oversampling times the card's on-screen scale (lift and any `scale` above it), so the
 ## glyphs drawn under `k` are rasterised at their final pixel size and stay sharp.
 var text_os: float = 0.0
+## Status / Rune icons drawn by the last draw: {"rect": widget-space Rect2, "label": tooltip text}
+## (CardStatusIcons fills it; the widget shows StatusTip over them).
+var hits: Array = []
 ## Tests: when true every text draw appends a record of its layout (text, size, face-space position).
 var tracing := false
 ## The records of the last draw while `tracing`.

@@ -2,7 +2,7 @@ class_name CardWidget
 extends Control
 ## Procedurally drawn card (art bible section 4): layered frame, art window (card art or
 ## a placeholder), name plate, cost gem (shape per cost kind), ATK diamond / DEF shield,
-## status chips and a face-down back. Everything is drawn from the redacted card view, so
+## status icons over the art and a face-down back. Everything is drawn from the redacted card view, so
 ## hidden cards can only ever show the back. Runtime stats are never baked into art.
 ##
 ## Every card face is exactly 2:3 (portrait) or 3:2 (when `rotated`, i.e. the same portrait
@@ -15,8 +15,9 @@ extends Control
 ## Geometry is authored in base units and scaled by card width / base width.
 ##
 ## This node owns state, sizing and input; drawing is delegated to the painters in src/ui/card/
-## (CardPainter context + CardArt, CardFaceParts, CardStatBadge, CardChips, CardBack, CardLayouts,
-## CardOverlays), text helpers to CardText / CardTextLayout.
+## (CardPainter context + CardArt, CardFaceParts, CardStatBadge, CardStatusIcons, CardBack, CardLayouts,
+## CardOverlays), text helpers to CardText / CardTextLayout. Hovering a status icon names it at once
+## (StatusTip); the card's own tooltip is held back while the pointer is on an icon.
 
 signal pressed(widget: CardWidget)
 signal right_pressed(widget: CardWidget)
@@ -91,6 +92,9 @@ func _init() -> void:
 	item_rect_changed.connect(_on_rect_changed)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	# Card art is mipmapped (smooth at board size) and the surface grain tiles (UiSurface).
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	# A `scale` on the card or above it (FX pulses, the deck builder click, a scaled sidebar) changes the
 	# on-screen text size: redraw so the glyphs are rasterised for it (see _screen_text_k).
 	set_notify_transform(true)
@@ -98,7 +102,7 @@ func _init() -> void:
 
 func _ready() -> void:
 	mouse_entered.connect(func(): _self_hover = auto_hover; queue_redraw())
-	mouse_exited.connect(func(): _self_hover = false; queue_redraw())
+	mouse_exited.connect(func(): _self_hover = false; StatusTip.hide_for(self); queue_redraw())
 	# Godot turns processing on at ready because _process exists: only redraw per frame while animating.
 	_update_process()
 
@@ -343,6 +347,8 @@ func _notification(what: int) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_update_status_tip(event.position)
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit(self)
@@ -350,6 +356,38 @@ func _gui_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			right_pressed.emit(self)
 			accept_event()
+
+
+## The status icon under widget point `at` ({"rect", "label"}), or {} when there is none.
+func status_hit_at(at: Vector2) -> Dictionary:
+	for h in _paint.hits:
+		if (h["rect"] as Rect2).has_point(at):
+			return h
+	return {}
+
+
+## Status icons drawn by the last redraw: [{"rect": widget-space Rect2, "label": String}].
+func status_hits() -> Array:
+	return _paint.hits.duplicate()
+
+
+func _update_status_tip(at: Vector2) -> void:
+	var h := status_hit_at(at)
+	if h.is_empty():
+		StatusTip.hide_for(self)
+	else:
+		StatusTip.show_for(self, h["label"], get_global_transform_with_canvas() * (h["rect"] as Rect2))
+
+
+## No card tooltip while the pointer is on a status icon (that icon's own tip shows instead).
+func _get_tooltip(at_position: Vector2) -> String:
+	if not status_hit_at(at_position).is_empty():
+		return ""
+	return tooltip_text
+
+
+func _exit_tree() -> void:
+	StatusTip.hide_for(self)
 
 
 # ---------------------------------------------------------------- main draw
@@ -369,6 +407,7 @@ func _draw() -> void:
 	var ls := custom_minimum_size if _lifting else size
 	_text_k = _screen_text_k()
 	pt.text_os = text_oversampling()
+	pt.hits.clear()
 	if pt.tracing:
 		pt.trace.clear()
 	if view.is_empty():
@@ -393,8 +432,7 @@ func _draw() -> void:
 		match size_kind:
 			"power", "trap": CardLayouts.draw_power(pt)
 			"back": _draw_back()
-			"hand", "mini": CardLayouts.draw_tall(pt, false)
-			"big": CardLayouts.draw_tall(pt, true)
+			"hand", "mini", "big": CardLayouts.draw_tall(pt)
 			_: CardLayouts.draw_square(pt)
 	pt.reset_transform()
 	CardOverlays.draw(pt, self)
@@ -417,9 +455,10 @@ func last_draw_scale() -> Array:
 	return [_paint.k, _paint.text_os]
 
 
-## Base (unscaled) portrait size the layout of this kind is authored in.
+## Base (unscaled) portrait size the layout of this kind is authored in: mini and big are the hand
+## layout drawn smaller / larger.
 func _base() -> Vector2:
-	return SIZES["hand"] if size_kind == "mini" else SIZES[size_kind]
+	return SIZES["hand"] if size_kind in ["mini", "big"] else SIZES[size_kind]
 
 
 ## True for a backrow card the viewer can see but that is still face down: it is drawn as a card

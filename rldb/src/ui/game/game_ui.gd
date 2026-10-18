@@ -24,7 +24,7 @@ static func glow_room(inner: Control, px: int) -> MarginContainer:
 ## A sidebar panel with the standard panel style.
 static func side_panel(color: Color = Color(UIStyle.PANEL, 0.96)) -> PanelContainer:
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UIStyle.panel_style(color))
+	p.add_theme_stylebox_override("panel", UiSurface.box(UIStyle.panel_style(color), UiSurface.LEATHER, UIStyle.PANEL_GRAIN))
 	return p
 
 

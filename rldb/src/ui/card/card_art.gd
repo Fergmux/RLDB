@@ -1,10 +1,13 @@
 class_name CardArt
 extends RefCounted
-## The card's art window: the card art image (cover-cropped) or, when there is none, a radial
-## placeholder in the type / kind colour with a kind glyph; then the inner shadow and bronze border.
-## Also draws the kind glyphs used by empty zone backgrounds.
+## The card's art window: the card art image (cover-cropped; the art is square, like the windows) or,
+## when there is none, a radial placeholder in the type / kind colour with a kind glyph; then the
+## inner shadow and bronze border. Also draws the kind glyphs used by empty zone backgrounds.
+##
+## Art is found by card id alone: assets/art/cards/<id>.webp (imported by
+## tools/godot/import_card_art.gd from the accepted "<id> - <name>.png" files).
 
-const ART_DIR := "res://art/cards/"
+const ART_DIR := "res://assets/art/cards/"
 ## Size (px) of the cached radial placeholder gradient texture.
 const RADIAL_TEX_PX := 64
 
@@ -72,11 +75,25 @@ static func draw_glyph(ci: CanvasItem, kind: String, c: Vector2, r: float, col: 
 			ci.draw_circle(c, r * 0.3, Color(0, 0, 0, col.a * 1.2), true, -1.0, true)
 
 
+## Resource path of card `id`'s art (whether or not it exists).
+static func path_for(id: int) -> String:
+	return ART_DIR + "%d.webp" % id
+
+
+## True when card `id` has art.
+static func has_art(id: int) -> bool:
+	return ResourceLoader.exists(path_for(id))
+
+
+## The art of the card in `view` (by its "id"), or null when it has none. Cached.
+static func texture_for(view: Dictionary) -> Texture2D:
+	return _art_texture(view)
+
+
 static func _art_texture(view: Dictionary) -> Texture2D:
-	var img: String = String(view.get("art", {}).get("image", ""))
-	if img == "":
+	if not view.has("id") or view.get("id") == null:
 		return null
-	var path := ART_DIR + img
+	var path := path_for(int(view["id"]))
 	if _tex_cache.has(path):
 		return _tex_cache[path]
 	var tex: Texture2D = null

@@ -361,14 +361,14 @@ func _rules_mention(c: Dictionary, label: String) -> bool:
 
 
 func _build_statuses(c: Dictionary) -> void:
-	var rows: Array = []   # [name, count, kind, help]
+	var rows: Array = []   # [name, count, kind, help, key]
 	if int(c.get("runes", 0)) > 0:
-		rows.append(["Rune", int(c["runes"]), "counter", CardDB.STATUS_HELP["rune"]])
+		rows.append(["Rune", int(c["runes"]), "counter", CardDB.STATUS_HELP["rune"], "rune"])
 	var st: Dictionary = c.get("statuses", {})
 	for s in CardDB.STATUS_ORDER:
 		var n: int = int(st.get(s, 0))
 		if n > 0:
-			rows.append([String(s).capitalize(), n, "buff" if CardDB.is_buff(s) else "debuff", CardDB.STATUS_HELP.get(s, "")])
+			rows.append([String(s).capitalize(), n, "buff" if CardDB.is_buff(s) else "debuff", CardDB.STATUS_HELP.get(s, ""), s])
 	if rows.is_empty():
 		return
 	sections.append("statuses")
@@ -381,7 +381,10 @@ func _build_statuses(c: Dictionary) -> void:
 		var hb := HBoxContainer.new()
 		hb.add_theme_constant_override("separation", 5)
 		vb.add_child(hb)
-		hb.add_child(Mark.new("up" if kind == "buff" else ("down" if kind == "debuff" else "diamond"), col, 11))
+		# The same icon the card shows over its art (token shape: buff round, debuff square, Rune hexagon).
+		var tk := CardStatusIcons.Token.new(String(r[4]), CardStatusIcons.KIND_BUFF if kind == "buff" else (CardStatusIcons.KIND_DEBUFF if kind == "debuff" else CardStatusIcons.KIND_RUNE), roundf(20.0 * text_scale))
+		tk.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hb.add_child(tk)
 		var tag := "Buff" if kind == "buff" else ("Debuff" if kind == "debuff" else "Counter")
 		hb.add_child(_lbl("%s ×%d" % [r[0], r[1]], 15, col, true, false, false))
 		if kind != "counter":   # runes need no "Counter" tag (user feedback)

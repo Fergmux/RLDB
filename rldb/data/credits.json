@@ -1,0 +1,40 @@
+{
+  "_comment": "Shown in the main menu (Credits). Third-party assets and their licences; keep in step with rldb/assets/CREDITS.md.",
+  "sections": [
+    {
+      "title": "RLDB",
+      "lines": [
+        "Card art, table and menu backgrounds and the soundtrack: supplied by the RLDB team.",
+        "Sound effects: synthesised for RLDB (tools/gen_sfx.py)."
+      ]
+    },
+    {
+      "title": "Status icons",
+      "lines": [
+        "From game-icons.net, licensed under Creative Commons Attribution 3.0 (CC BY 3.0, creativecommons.org/licenses/by/3.0/).",
+        "Lorc: rune stone, anchor, ankh, broadhead arrow, hood, sprint, semi-closed eye, crossed chains, cracked shield.",
+        "Delapouite: sparkles. Zeromancer: heart plus. Carl Olsen: flame. Skoll: pentacle, sight disabled. Darkzaitzev: death juice.",
+        "Used unmodified as white glyphs, drawn on coloured tokens."
+      ]
+    },
+    {
+      "title": "Surface textures",
+      "lines": [
+        "Leather032, Leather030, Wood051 and Metal009 from ambientCG.com, licensed under CC0 1.0.",
+        "Converted to grayscale relief maps for the UI (tools/godot/bake_ui_materials.gd)."
+      ]
+    },
+    {
+      "title": "Fonts",
+      "lines": [
+        "Cinzel (The Cinzel Project Authors) and Alegreya Sans (The Alegreya Sans Project Authors), under the SIL Open Font License 1.1."
+      ]
+    },
+    {
+      "title": "Engine",
+      "lines": [
+        "Made with the Godot Engine (godotengine.org/license), MIT licence."
+      ]
+    }
+  ]
+}

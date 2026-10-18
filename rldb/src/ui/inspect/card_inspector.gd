@@ -176,7 +176,9 @@ func _build() -> void:
 	_card_widget = CardWidget.new()
 	_card_widget.auto_hover = false
 	_card_widget.show_tooltip = false
-	_card_widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The card takes hover (its status icons name themselves) but is not a button.
+	_card_widget.mouse_filter = Control.MOUSE_FILTER_PASS
+	_card_widget.mouse_default_cursor_shape = Control.CURSOR_ARROW
 	_card_box.add_child(_card_widget)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 10)

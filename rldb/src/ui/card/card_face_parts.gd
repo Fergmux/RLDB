@@ -7,6 +7,14 @@ extends RefCounted
 ## Text colour for a reduced / increased AP cost on the gem.
 const COST_CHEAP := Color("0d5a24")
 const COST_DEAR := Color("8a1a14")
+## Card body fill and its pebbled-leather grain (strength 0..1, tile span in base units).
+const BODY := Color("1d1a18")
+const BODY_GRAIN := 0.55
+const BODY_TILE := 210.0
+## Name plate fill and its brushed-metal grain.
+const PLATE := Color(0.102, 0.086, 0.075, 0.94)
+const PLATE_GRAIN := 0.7
+const PLATE_TILE := 150.0
 
 
 ## Card body: kind-coloured border with a drop shadow (larger while hovered), inner gradient and a
@@ -14,12 +22,13 @@ const COST_DEAR := Color("8a1a14")
 static func frame(pt: CardPainter, radius: float) -> void:
 	var ci := pt.ci
 	var s := pt.s
-	var sb := pt.sbox(Color("1d1a18"), pt.accent(), maxi(2, roundi(2.8 * s)), roundi(radius * s))
+	var sb := pt.sbox(BODY, pt.accent(), maxi(2, roundi(2.8 * s)), roundi(radius * s))
 	sb.shadow_color = Color(0, 0, 0, 0.5)
 	sb.shadow_size = roundi((14.0 if pt.hover else 7.0) * s)
 	sb.shadow_offset = pt.shadow_off(3.0 * s)
 	ci.draw_style_box(sb, Rect2(Vector2.ZERO, pt.ps))
 	var inset := 3.0 * s
+	UiSurface.draw_round(ci, Rect2(inset, inset, pt.ps.x - 2 * inset, pt.ps.y - 2 * inset), maxf(0.0, (radius - 3.0) * s), UiSurface.PEBBLE, BODY, BODY_GRAIN, BODY_TILE * s)
 	pt.vgrad(Rect2(inset, inset, pt.ps.x - 2 * inset, pt.ps.y - 2 * inset), Color(pt.accent().darkened(0.7), 0.45), Color(0, 0, 0, 0.45))
 	ci.draw_line(Vector2(radius * s, 3.5 * s), Vector2(pt.ps.x - radius * s, 3.5 * s), Color(UIStyle.GOLD_HI, 0.4), maxf(1.0, s), true)
 
@@ -30,7 +39,8 @@ static func frame(pt: CardPainter, radius: float) -> void:
 static func name_plate(pt: CardPainter, rect: Rect2, fs_max: float, reserve_l: float, reserve_r: float, stripe: Color, fs_min: float = 9.0) -> void:
 	var ci := pt.ci
 	var s := pt.s
-	pt.round_rect(rect, Color(0.102, 0.086, 0.075, 0.94), 4.0 * s, Color(UIStyle.GOLD, 0.65), maxf(1.0, s))
+	pt.round_rect(rect, PLATE, 4.0 * s, Color(UIStyle.GOLD, 0.65), maxf(1.0, s))
+	UiSurface.draw_round(ci, rect.grow(-maxf(1.0, s)), 3.0 * s, UiSurface.METAL, PLATE, PLATE_GRAIN, PLATE_TILE * s, rect.position)
 	ci.draw_rect(Rect2(rect.position.x + 3 * s, rect.end.y - 3.0 * s, rect.size.x - 6 * s, 2.0 * s), stripe)
 	var font := UIStyle.font_display(600)
 	var avail := rect.size.x - (reserve_l + reserve_r) * s - 6.0 * s

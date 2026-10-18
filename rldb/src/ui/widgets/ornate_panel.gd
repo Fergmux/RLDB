@@ -29,6 +29,7 @@ func _init(radius: int = 12, margin: int = 16) -> void:
 	_box.shadow_size = 18
 	_box.shadow_offset = Vector2(0, 6)
 	add_theme_stylebox_override("panel", _box)
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # the leather grain tiles (UiSurface)
 
 
 ## The underlying rim style (to tweak border, shadow or margins).
@@ -45,6 +46,7 @@ func _draw() -> void:
 	Ornate.vgradient(self, Rect2(inset.position + Vector2(0, rad), inset.size - Vector2(0, rad * 2.0)), top_col.lerp(bottom_col, rad / maxf(size.y, 1.0)), bottom_col.lerp(top_col, rad / maxf(size.y, 1.0)))
 	draw_rect(Rect2(inset.position + Vector2(rad, 0), Vector2(inset.size.x - rad * 2.0, rad)), top_col)
 	draw_rect(Rect2(inset.position + Vector2(rad, inset.size.y - rad), Vector2(inset.size.x - rad * 2.0, rad)), bottom_col)
+	UiSurface.draw_round(self, inset, maxf(0.0, rad - 2.0), UiSurface.LEATHER, top_col.lerp(bottom_col, 0.5), UIStyle.PANEL_GRAIN * 0.8)
 	# Soft sheen under the top rim.
 	Ornate.vgradient(self, Rect2(inset.position + Vector2(rad, 1), Vector2(inset.size.x - rad * 2.0, minf(34.0, size.y * 0.2))), Color(accent, 0.13), Color(accent, 0.0))
 	if frame_inset > 0.0:

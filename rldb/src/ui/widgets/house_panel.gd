@@ -77,6 +77,7 @@ func _init(title: String = "", tag: String = "", pad: Vector2 = Vector2(22, 18),
 	_box.shadow_size = GLOW_REST_SIZE
 	_box.shadow_offset = Vector2(0, 2)
 	add_theme_stylebox_override("panel", _box)
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # the leather grain tiles (UiSurface)
 	_col = VBoxContainer.new()
 	_col.add_theme_constant_override("separation", gap)
 	add_child(_col)
@@ -166,6 +167,7 @@ func _draw() -> void:
 	if inset.size.x <= 2.0 or inset.size.y <= 2.0:
 		return
 	Ornate.rounded_gradient(self, inset, ir, ir, BODY_TOP, BODY_BOTTOM)
+	UiSurface.draw_round(self, inset, ir, UiSurface.LEATHER, BODY_TOP.lerp(BODY_BOTTOM, 0.5), UIStyle.PANEL_GRAIN * 0.8)
 	var y0 := inset.position.y + (HEAD_H if _header else 0.0)
 	if weave:
 		_draw_weave(inset, y0)

@@ -312,7 +312,7 @@ var _game_key: String = ""
 func _init() -> void:
 	custom_minimum_size = Vector2(PLATE_W, 0)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	add_theme_stylebox_override("panel", UIStyle.panel_style(Color(UIStyle.PANEL, 0.94), UIStyle.BRONZE, 10))
+	add_theme_stylebox_override("panel", UiSurface.box(UIStyle.panel_style(Color(UIStyle.PANEL, 0.94), UIStyle.BRONZE, 10), UiSurface.LEATHER, UIStyle.PANEL_GRAIN))
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 1)
 	add_child(v)
