@@ -1027,18 +1027,24 @@ static func _contrast(a: Color, b: Color) -> float:
 	return (maxf(la, lb) + 0.05) / (minf(la, lb) + 0.05)
 
 
-## A Type declaration button: filled in the Type's colour (hover lighter with a glow, pressed
-## darker), the Type icon on the left and the Type name as text, so the Type is never told by
-## colour alone.
+## Fill of a Type button: the Type colour at `v` of its brightness and 80% of its saturation.
+static func type_fill(col: Color, v: float) -> Color:
+	return Color.from_hsv(col.h, col.s * 0.8, col.v * v)
+
+
+## A Type declaration button: a deep tint of the Type's colour with a rim in the full colour
+## (hover brighter with a glow, pressed darker), the Type icon on the left and the Type name as
+## text, so the Type is never told by colour alone. Owner feedback 2026-10-18: the full-colour
+## fills were too bright; the fill is now the Type's hue, softened and darkened.
 static func type_button(type_name: String, size: int = 15) -> Button:
 	var ty := "" if type_name == "No type" else type_name
 	var col := UIStyle.type_color(ty)
 	var b := UIStyle.button(type_name, size)
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	var fills := {"normal": col, "hover": col.lightened(0.18), "pressed": col.darkened(0.2)}
+	var fills := {"normal": type_fill(col, 0.5), "hover": type_fill(col, 0.66), "pressed": type_fill(col, 0.4)}
 	for k in fills:
 		var fill: Color = fills[k]
-		var sb := UIStyle.flat(fill, col.lightened(0.45) if k != "pressed" else col.lightened(0.2), 2, 8)
+		var sb := UIStyle.flat(fill, col.lightened(0.1) if k != "pressed" else col.darkened(0.1), 2, 8)
 		sb.content_margin_left = 42
 		sb.content_margin_right = 14
 		sb.content_margin_top = 6

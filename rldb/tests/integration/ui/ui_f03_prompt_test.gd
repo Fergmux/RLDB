@@ -38,7 +38,9 @@ func test_waang_offers_only_its_four_types_in_type_colours() -> void:
 	for b in btns:
 		var t: String = b.get_meta("type_choice")
 		var sb := (b as Button).get_theme_stylebox("normal") as StyleBoxFlat
-		assert_that(sb.bg_color).is_equal(UIStyle.type_color(t))
+		# 2026-10-18: a softened tint of the Type colour, rimmed in the Type colour.
+		assert_that(sb.bg_color).is_equal(GamePromptBanner.type_fill(UIStyle.type_color(t), 0.5))
+		assert_that(sb.border_color).is_equal(UIStyle.type_color(t).lightened(0.1))
 		assert_bool(b.get_child_count() > 0 and b.get_child(0) is TypeIcons.TypeBadge).is_true()
 		assert_str((b.get_child(0) as TypeIcons.TypeBadge).type_name).is_equal(t)
 
