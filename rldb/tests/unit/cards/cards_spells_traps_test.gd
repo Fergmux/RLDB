@@ -294,16 +294,30 @@ func test_c140_energy_dispel_destroys_the_spell_without_negating_and_raises_its_
 	assert_int(m.current_cost(dispel)).is_equal(2)
 
 
-func test_c153_hot_stove_destroys_power_and_burns_owner() -> void:
+## Owner feedback 2026-10-18: Hot Stove answers a Power's effect being activated, not the Power
+## being played.
+func test_c153_hot_stove_destroys_power_and_burns_owner_when_its_effect_is_activated() -> void:
 	var m := _p1_turn()
 	TB.set_card(m, 0, 153, 0)
+	var pw := TB.power(m, 1, 92, 0)                         # Preservation Jar: Retain a card in Hand
+	var h := TB.card(m, 1, TB.WATER)
+	assert_str(TB.ability(m, pw)).is_empty()
+	TB.choose_uids(m, [h])
+	TB.choose(m, ["Activate Hot Stove"])
+	assert_str(m.cards[pw]["zone"]).is_equal("spent")
+	assert_int(m.players[1]["hp"]).is_equal(56)
+
+
+func test_c153_hot_stove_ignores_a_power_being_played() -> void:
+	var m := _p1_turn()
+	var stove := TB.set_card(m, 0, 153, 0)
 	var pw := TB.card(m, 1, 88)
 	m.players[1]["ap"] = 5
 	m.submit(1, {"t": "power", "uid": pw})
 	TB.choose(m, ["Power zone 1"])
-	TB.choose(m, ["Activate Hot Stove"])
-	assert_str(m.cards[pw]["zone"]).is_equal("spent")
-	assert_int(m.players[1]["hp"]).is_equal(56)
+	assert_str(TB.pend_kind(m)).is_not_equal("trap_response")
+	assert_str(m.cards[pw]["zone"]).is_equal("power")
+	assert_str(m.cards[stove]["zone"]).is_equal("backrow")
 
 
 func test_c163_plan_b_trades_own_cards_for_hp() -> void:

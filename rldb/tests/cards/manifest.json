@@ -2857,7 +2857,8 @@
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
 					"tests": [
-						"test_c153_hot_stove_destroys_power_and_burns_owner"
+						"test_c153_hot_stove_destroys_power_and_burns_owner_when_its_effect_is_activated",
+						"test_c153_hot_stove_ignores_a_power_being_played"
 					]
 				}
 			]

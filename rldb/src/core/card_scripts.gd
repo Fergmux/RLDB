@@ -376,7 +376,8 @@ static func _build() -> Dictionary:
 	# Spell counts) and the effect still resolves; going from Field to Spent raises its own cost.
 	t[140] = {"flags": ["cost_up_on_spent"], "trap": {"when": "activate", "cond": {"event_card_destroyable": true},
 		"ops": [{"op": "destroy", "target": "event.card"}]}}
-	t[153] = {"trap": {"when": "activate", "power_only": true, "ops": [{"op": "destroy", "target": "event.card"}, hp("opp", -4)]}}
+	# Owner feedback 2026-10-18: only when a Power's effect is activated, not when it is played.
+	t[153] = {"trap": {"when": "activate", "power_only": true, "effect_only": true, "ops": [{"op": "destroy", "target": "event.card"}, hp("opp", -4)]}}
 	t[163] = {"trap": {"when": ["activate", "attack"], "ops": [ch({"kind": "field_card", "side": "self", "not_self": true}, "u", false, "Destroy any number of your cards (+10 HP each)."),
 		{"op": "plan_b"}]}}
 	t[163]["trap"]["ops"][0]["n"] = "any"

@@ -681,6 +681,7 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 		"activate":
 			if ev["player"] == p: return false
 			if tr.get("power_only", false) and category(ev["card"]) != "power": return false
+			if tr.get("effect_only", false) and ev.get("play", false): return false
 		"destroyed":
 			if ev["ctl"] != p: return false
 			if tr.get("by_effect", false) and ev["cause"] != "effect": return false

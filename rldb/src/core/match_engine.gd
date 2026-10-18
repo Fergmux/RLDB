@@ -497,7 +497,8 @@ func _execute(p: int, cmd: Dictionary) -> void:
 				{"op": "pick_slot", "zone": "power", "as": "slot", "cancellable": true},
 				{"op": "pay", "target": "self"},
 				{"op": "place_power", "slot": "$slot"},
-				{"op": "window", "event": {"name": "activate", "player": p, "card": uid, "text": "%s plays Power %s" % [pname(p), name_of(uid)]}},
+				# "play": the Power is being played, not its effect activated (Hot Stove, 2026-10-18).
+				{"op": "window", "event": {"name": "activate", "player": p, "card": uid, "play": true, "text": "%s plays Power %s" % [pname(p), name_of(uid)]}},
 				{"op": "check_negated"},
 			], name_of(uid)))
 		"ability":
