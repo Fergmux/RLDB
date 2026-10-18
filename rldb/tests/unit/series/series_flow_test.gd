@@ -129,16 +129,10 @@ func test_series_ends_when_a_player_reaches_required_wins() -> void:
 	assert_int(s.scores[0]).is_equal(2)
 
 
-## F06-05 / F06-06: the default draft setup (default order, the first Type and Race basic unit).
-func _setup_default(s: Series, p: int) -> String:
-	return s.submit(p, BotBrain.draft_setup_command(s))
-
-
 func test_draft_builds_deck_from_category_quotas() -> void:
 	var s := Series.new()
 	s.setup({"seed": 5, "deck_mode": "draft"})
 	for p in 2:
-		assert_str(_setup_default(s, p)).is_empty()
 		var guard := 0
 		while not s.deck_ready[p] and guard < 50:
 			assert_str(s.submit(p, {"t": "draft_pick", "index": 0})).is_empty()
@@ -149,7 +143,6 @@ func test_draft_builds_deck_from_category_quotas() -> void:
 
 func _draft_all(s: Series) -> void:
 	for p in 2:
-		assert_str(_setup_default(s, p)).is_empty()
 		var guard := 0
 		while not s.deck_ready[p] and guard < 100:
 			assert_str(s.submit(p, {"t": "draft_pick", "index": 0})).is_empty()
@@ -162,7 +155,6 @@ func test_f03_10_configured_draft_counts_are_used_and_shown() -> void:
 	var dv: Dictionary = s.view_for(1)["draft"]
 	assert_int(int(dv["total"])).is_equal(5)
 	assert_str(String(dv["composition"])).is_equal("2 Unit, 1 Spell, 2 Extra Deck")
-	assert_str(_setup_default(s, 1)).is_empty()
 	assert_str(String(s.view_for(1)["draft"]["category_label"])).is_equal("Unit")
 	s.draft[1] = s._new_draft()
 	_draft_all(s)

@@ -58,13 +58,16 @@ func _decide(p: int) -> Dictionary:
 				return {}
 			if v.has("draft"):
 				var dv: Dictionary = v["draft"]
-				if not dv["setup_done"]:
-					# F06-05 / F06-06: a shuffled order and a random basic unit, through the network.
-					var order: Array = dv["cat_order"].duplicate()
-					order.shuffle()
+				# 2026-10-18 draft: sometimes switch category or change the basic unit, through the network.
+				var roll := rng.randi_range(0, 4)
+				if roll == 0:
 					var bt: Array = dv["basic_types"]
 					var br: Array = dv["basic_races"]
-					return {"t": "draft_setup", "order": order, "basic_type": bt[rng.randi_range(0, bt.size() - 1)], "basic_race": br[rng.randi_range(0, br.size() - 1)]}
+					return {"t": "draft_basic", "basic_type": bt[rng.randi_range(0, bt.size() - 1)], "basic_race": br[rng.randi_range(0, br.size() - 1)]}
+				if roll == 1:
+					var open: Array = dv["categories"].filter(func(c): return int(dv["left"].get(c, 0)) > 0 and c != dv["category"])
+					if not open.is_empty():
+						return {"t": "draft_category", "category": open[rng.randi_range(0, open.size() - 1)]}
 				return {"t": "draft_pick", "index": rng.randi_range(0, dv["offer"].size() - 1)}
 			return {"t": "pick_starter", "index": rng.randi_range(0, v["starters"].size() - 1)}
 		"rewards":

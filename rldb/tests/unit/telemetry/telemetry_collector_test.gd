@@ -280,13 +280,13 @@ func test_open_record_recovered_after_restart_becomes_abandoned() -> void:
 func test_draft_picks_record_offers_with_counts_and_completion() -> void:
 	var c := _collector()
 	var s := _series(c, "bot", {"deck_mode": "draft", "draft_quota": {"unit": 2, "spell": 1, "trap": 0, "power": 0, "extra": 0}})
-	for p in 2:
-		assert_str(s.submit(p, BotBrain.draft_setup_command(s))).is_equal("")
 	var sid := String(s.telemetry_ids["series"])
-	assert_str(String(items["draft_%s_d0" % sid]["state"])).is_equal("open")
 	for i in 3:
 		for p in 2:
 			s.submit(p, {"t": "draft_pick", "index": 0})
+		if i == 0:
+			# 2026-10-18: no draft setup; the record opens with the first pick.
+			assert_str(String(items["draft_%s_d0" % sid]["state"])).is_equal("open")
 	var d: Dictionary = items["draft_%s_d0" % sid]["body"]["draft"]
 	assert_str(String(items["draft_%s_d0" % sid]["state"])).is_equal("ready")
 	assert_str(String(d["status"])).is_equal("complete")
@@ -301,7 +301,6 @@ func test_draft_picks_record_offers_with_counts_and_completion() -> void:
 func test_abandoned_draft_is_reported_as_abandoned() -> void:
 	var c := _collector()
 	var s := _series(c, "bot", {"deck_mode": "draft", "draft_quota": {"unit": 3, "spell": 0, "trap": 0, "power": 0, "extra": 0}})
-	s.submit(0, BotBrain.draft_setup_command(s))
 	s.submit(0, {"t": "draft_pick", "index": 1})
 	c.detach()
 	var it: Dictionary = items["draft_%s_d0" % String(s.telemetry_ids["series"])]

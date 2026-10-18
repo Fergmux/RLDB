@@ -222,8 +222,7 @@ func series_command(s: Series) -> Dictionary:
 			if s.deck_ready[me]:
 				return {}
 			if s.cfg["deck_mode"] == "draft":
-				if not s.draft[me]["setup_done"]:
-					return draft_setup_command(s)
+				# The bot keeps the default basic unit and drafts the open category each time.
 				s._ensure_offer(me)
 				return {"t": "draft_pick", "index": rng.randi_range(0, maxi(0, s.draft[me]["offer"].size() - 1))}
 			return {"t": "pick_starter", "index": rng.randi_range(0, s.starters.size() - 1)}   # random deck
@@ -243,14 +242,6 @@ func series_command(s: Series) -> Dictionary:
 			if not s.duel_ready[me]:
 				return {"t": "start_duel"}
 	return {}
-
-
-## F06-05 / F06-06 draft setup, chosen deterministically (no random draws): the default category
-## order and the default basic unit (the first Type and Race), the same every series.
-static func draft_setup_command(s: Series) -> Dictionary:
-	var d := CardDB.get_def(Series.default_basic())
-	return {"t": "draft_setup", "order": Series.draft_order_default(s.cfg["draft"]["quota"]),
-		"basic_type": d["type"], "basic_race": d["race"]}
 
 
 ## Strongest offered card (units by ATK+DEF, others at random).

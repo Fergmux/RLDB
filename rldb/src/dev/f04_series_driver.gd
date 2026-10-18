@@ -211,9 +211,9 @@ func run(main_node: Node, dir: String) -> void:
 	get_tree().quit()
 
 
-## F06-04..06: the Change basic units reward picker was shot above (rewards_05_basic); here a
-## draft series: the setup (default, reordered by keyboard and by a real mouse drag, the Choose
-## basic unit picker), the picks in the chosen order and the waiting state.
+## F06-04 / F06-06 and the 2026-10-18 draft: the Change basic units reward picker was shot above
+## (rewards_05_basic); here a draft series: it opens straight on the picks, a category tab is
+## chosen out of order, the basic unit is changed mid-draft, then the waiting state.
 func _draft_phase() -> void:
 	main._start_local({"seed": 777, "best_of": 3, "deck_mode": "draft", "names": ["Ana", "Ben"]})
 	await _frames(10)
@@ -223,33 +223,23 @@ func _draft_phase() -> void:
 	_view_seat(0)
 	await _frames(10)
 	var dv: DeckSelectView = ov.decks
-	_check("F06-05 setup shown before the picks", not host.series.draft[0]["setup_done"] and dv._order == ["unit", "spell", "trap", "power", "extra"], str(dv._order))
-	_check("F06-05 setup modal inside the window", get_viewport().get_visible_rect().grow(1).encloses(ov.overlay.get_global_rect()), str(ov.overlay.get_global_rect()))
-	await _shot("draft_01_setup_default")
-	# Keyboard / button reorder: Extra Deck up twice.
-	dv._move("extra", -1)
-	await _frames(4)
-	dv._move("extra", -1)
-	await _frames(8)
-	_check("F06-05 arrows move a category", dv._order == ["unit", "spell", "extra", "trap", "power"], str(dv._order))
-	var fo := gs.get_viewport().gui_get_focus_owner()
-	_check("F06-05 focus stays on the moved row's arrow", fo is Button and fo.tooltip_text == "Move Extra Deck up", str(fo))
-	# Owner answer 2026-10-17 §8: no drag-and-drop. The rows take no drag; Power goes to the top
-	# with its Up arrow (pressed four times, as a player would, the list rebuilding each time).
-	var rows := _find_rows(ov.overlay_box)
-	_check("§8 draft rows are not draggable", not rows.is_empty() and rows.all(func(r): return not r.has_method("_get_drag_data")))
-	for i in 4:
-		var upb := _find_button(ov.overlay_box, "", "Move Power up")
-		if upb != null and not upb.disabled:
-			upb.pressed.emit()
-		await _frames(4)
-	await _frames(6)
-	_check("F06-05 Up arrow moves Power to the top", dv._order == ["power", "unit", "spell", "extra", "trap"], str(dv._order))
-	var upb2 := _find_button(ov.overlay_box, "", "Move Power up")
-	_check("F06-05 top row's Up arrow is disabled", upb2 != null and upb2.disabled)
-	await _shot("draft_03_reordered")
-	# Choose basic unit.
-	dv._open_picker(host.series.view_for(0)["draft"])
+	var d0: Dictionary = host.series.view_for(0)["draft"]
+	_check("draft opens on the picks (no setup step)", String(d0["category"]) == "unit" and not d0["offer"].is_empty())
+	_check("draft modal inside the window", get_viewport().get_visible_rect().grow(1).encloses(ov.overlay.get_global_rect()), str(ov.overlay.get_global_rect()))
+	await _shot("draft_01_open")
+	# Any order: open the Power tab first.
+	var pw := _find_button(ov.overlay_box, "", "Draft Power cards")
+	_check("a tab per category with picks left", pw != null and not pw.disabled)
+	if pw != null:
+		pw.pressed.emit()
+	await _frames(10)
+	_check("the Power tab opens the Power offer", String(host.series.view_for(0)["draft"]["category"]) == "power")
+	await _shot("draft_02_power_tab")
+	# Change the basic unit mid-draft.
+	var chg := _find_button(ov.overlay_box, "Change")
+	_check("Change basic unit button", chg != null)
+	if chg != null:
+		chg.pressed.emit()
 	await _frames(12)
 	await _shot("draft_04_picker_open")
 	var picker := _find_picker(gs)
@@ -262,23 +252,15 @@ func _draft_phase() -> void:
 		if use != null:
 			use.pressed.emit()
 	await _frames(10)
-	_check("F06-06 picker choice shown in the setup", dv._btype == "Dark" and dv._brace == "Dragon" and dv._picker_dim == null)
-	await _shot("draft_06_setup_chosen")
-	var go := _find_button(ov.overlay_box, "Start drafting")
-	_check("F06-05 Start drafting button", go != null and not go.disabled)
-	if go != null:
-		go.pressed.emit()
+	_check("the basic unit changes mid-draft", int(host.series.draft[0]["basic"]) == Series.basic_for("Dark", "Dragon") and dv._picker_dim == null)
+	await _shot("draft_06_basic_changed")
+	host.handle(0, {"t": "draft_pick", "index": 0})
 	await _frames(10)
-	var st: Dictionary = host.series.draft[0]
-	_check("F06-05 seat 0 locked in its order", st["setup_done"] and st["cat_order"] == ["power", "unit", "spell", "extra", "trap"])
-	_check("F06-06 three chosen basics", st["picked"].count(Series.basic_for("Dark", "Dragon")) == 3)
-	_check("F06-05 first pick is Power", String(host.series.view_for(0)["draft"]["category"]) == "power")
-	await _shot("draft_07_picking_power")
-	# Seat 1: its own setup screen, independent of seat 0.
+	await _shot("draft_07_after_power_pick")
+	# Seat 1: its own draft, independent of seat 0.
 	_view_seat(1)
 	await _frames(10)
-	await _shot("draft_08_seat1_setup")
-	host.handle(1, BotBrain.draft_setup_command(host.series))
+	await _shot("draft_08_seat1")
 	# Seat 0 finishes drafting; it then waits for seat 1.
 	_view_seat(0)
 	var guard := 0
@@ -287,6 +269,7 @@ func _draft_phase() -> void:
 		guard += 1
 	await _frames(10)
 	_check("F06 seat 0 deck drafted", host.series.deck_ready[0] and host.series.decks[0].size() == 23, str(host.series.decks[0].size()))
+	_check("F06-06 three chosen basics", host.series.decks[0].count(Series.basic_for("Dark", "Dragon")) == 3)
 	_view_seat(0)        # hot-seat follows the seat that still has to act; look at seat 0's wait
 	await _frames(6)
 	await _shot("draft_09_waiting")
@@ -321,15 +304,6 @@ func _draft_phase() -> void:
 	await _shot("draft_12_reward_taken")
 
 
-func _find_rows(n: Node) -> Array:
-	var out := []
-	if n is DeckSelectView.OrderRow:
-		out.append(n)
-	for c in n.get_children():
-		out.append_array(_find_rows(c))
-	return out
-
-
 func _find_picker(n: Node) -> BasicUnitPicker:
 	if n is BasicUnitPicker:
 		return n
@@ -343,7 +317,7 @@ func _find_picker(n: Node) -> BasicUnitPicker:
 func _find_button(n: Node, prefix: String, tip: String = "") -> Button:
 	if n == null:
 		return null
-	if n is Button and (n as Button).text.begins_with(prefix) and (tip == "" or (n as Button).tooltip_text == tip):
+	if n is Button and (n as Button).text.begins_with(prefix) and (tip == "" or (n as Button).tooltip_text.begins_with(tip)):
 		return n
 	for c in n.get_children():
 		var f := _find_button(c, prefix, tip)

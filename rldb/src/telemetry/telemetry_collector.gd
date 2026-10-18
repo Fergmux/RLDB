@@ -115,6 +115,10 @@ func on_series_event(s: Series, kind: String, data: Dictionary) -> void:
 			var p := int(data["p"])
 			deck_src[p] = {"source": "draft", "name": ""}
 			if not drafts[p].is_empty():
+				# 2026-10-18: no draft setup; the basic unit is final and the order is as drafted.
+				var st: Dictionary = series.draft[p]
+				drafts[p]["basic_unit"] = int(st["basic"])
+				drafts[p]["category_order"] = st.get("drafted_order", []).duplicate()
 				drafts[p]["status"] = "complete"
 				drafts[p]["finished_at"] = now_ms.call()
 				_emit_draft(p, "ready")
@@ -137,7 +141,7 @@ func on_series_event(s: Series, kind: String, data: Dictionary) -> void:
 func _draft_setup(p: int) -> void:
 	var st: Dictionary = series.draft[p]
 	drafts[p] = {"draft_id": "%s_d%d" % [_sid(), p], "series_id": _sid(), "seat": p, "participant": participant(p),
-		"category_order": st["cat_order"].duplicate(), "quota": series.cfg["draft"]["quota"].duplicate(),
+		"category_order": st.get("drafted_order", []).duplicate(), "quota": series.cfg["draft"]["quota"].duplicate(),
 		"offer_size": int(series.cfg["draft"]["offer"]), "basic_unit": int(st["basic"]),
 		"basic_copies": int(series.cfg["draft"]["basic_copies"]), "picks": [], "status": "in_progress",
 		"started_at": now_ms.call(), "finished_at": 0, "rerolls_supported": false}

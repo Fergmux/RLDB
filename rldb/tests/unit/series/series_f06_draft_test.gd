@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
-## F06-04 "Change basic units" (every basic unit at once, one pick, no-op refused), F06-05 the
-## per-seat draft setup (category order followed, invalid orders refused) and F06-06 (no basic
-## category; the chosen basic unit arrives as `basic_copies` copies). Design:
-## design/playtest-feedback-06.md.
+## F06-04 "Change basic units" (every basic unit at once, one pick, no-op refused), F06-06 (no
+## basic category; the chosen basic unit arrives as `basic_copies` copies) and the owner's
+## 2026-10-18 draft: no setup step, categories drafted in any order (an offer is kept when you
+## switch away), the basic unit changeable at any time. Design: design/playtest-feedback-06.md.
 
 const FIRE_DRAGON := 111
 const WATER_BEAST := 4
@@ -102,8 +102,7 @@ func test_f06_06_chosen_basic_unit_gives_basic_copies_copies() -> void:
 	var s := _draft_series({"unit": 1, "spell": 1})
 	var copies := int(s.cfg["draft"]["basic_copies"])
 	assert_int(copies).is_equal(3)
-	assert_str(s.submit(0, {"t": "draft_setup", "order": ["unit", "spell"], "basic_type": "Light", "basic_race": "Warrior"})).is_empty()
-	assert_int(s.draft[0]["picked"].count(HEAVENLY_WARRIOR)).is_equal(copies)
+	assert_str(s.submit(0, {"t": "draft_basic", "basic_type": "Light", "basic_race": "Warrior"})).is_empty()
 	assert_int(int(s.view_for(0)["draft"]["basic"]["id"])).is_equal(HEAVENLY_WARRIOR)
 	s.submit(0, {"t": "draft_pick", "index": 0})
 	s.submit(0, {"t": "draft_pick", "index": 0})
@@ -113,11 +112,22 @@ func test_f06_06_chosen_basic_unit_gives_basic_copies_copies() -> void:
 	assert_int(s.decks[0].size()).is_equal(copies + 2)
 
 
+func test_basic_unit_can_change_at_any_point_of_the_draft() -> void:
+	var s := _draft_series({"unit": 2})
+	assert_str(s.submit(0, {"t": "draft_pick", "index": 0})).is_empty()
+	assert_str(s.submit(0, {"t": "draft_basic", "basic_type": "Fire", "basic_race": "Dragon"})).is_empty()
+	assert_str(s.submit(0, {"t": "draft_basic", "basic_type": "Light", "basic_race": "Warrior"})).is_empty()
+	assert_str(s.submit(0, {"t": "draft_pick", "index": 0})).is_empty()
+	assert_bool(s.deck_ready[0]).is_true()
+	assert_array(_basics(s.decks[0])).is_equal([HEAVENLY_WARRIOR, HEAVENLY_WARRIOR, HEAVENLY_WARRIOR])
+
+
 func test_f06_06_illegal_basic_choice_is_refused() -> void:
 	var s := _draft_series({"unit": 1})
-	assert_str(s.submit(0, {"t": "draft_setup", "order": ["unit"], "basic_type": "Fire", "basic_race": "Elf"})).contains("Type and a Race")
-	assert_str(s.submit(0, {"t": "draft_setup", "order": ["unit"]})).contains("Type and a Race")
-	assert_bool(s.draft[0]["setup_done"]).is_false()
+	var before: int = s.draft[0]["basic"]
+	assert_str(s.submit(0, {"t": "draft_basic", "basic_type": "Fire", "basic_race": "Elf"})).contains("Type and a Race")
+	assert_str(s.submit(0, {"t": "draft_basic"})).contains("Type and a Race")
+	assert_int(s.draft[0]["basic"]).is_equal(before)
 
 
 func test_f06_06_default_basic_is_first_type_and_race() -> void:
@@ -128,60 +138,55 @@ func test_f06_06_default_basic_is_first_type_and_race() -> void:
 	assert_int(int(s.view_for(0)["draft"]["basic"]["id"])).is_equal(Series.default_basic())
 
 
-# ---------------------------------------------------------------- F06-05
+# ---------------------------------------------------------------- any-order draft (2026-10-18)
 
-func test_f06_05_no_picks_before_setup() -> void:
+func test_draft_starts_at_once_with_the_first_category_open() -> void:
 	var s := _draft_series()
 	var dv: Dictionary = s.view_for(0)["draft"]
-	assert_bool(dv["setup_done"]).is_false()
-	assert_array(dv["offer"]).is_empty()
-	assert_array(dv["cat_order"]).is_equal(["unit", "spell", "trap", "power", "extra"])
-	assert_str(s.submit(0, {"t": "draft_pick", "index": 0})).contains("start drafting")
+	assert_array(dv["offer"]).is_not_empty()
+	assert_str(String(dv["category"])).is_equal("unit")
+	assert_array(dv["categories"]).is_equal(["unit", "spell", "trap", "power", "extra"])
+	assert_str(s.submit(0, {"t": "draft_pick", "index": 0})).is_empty()
 
 
-func test_f06_05_draft_follows_the_seat_order() -> void:
+func test_categories_are_drafted_in_any_order() -> void:
 	var s := _draft_series({"unit": 2, "spell": 1, "trap": 0, "power": 1, "extra": 1})
-	var order := ["extra", "power", "spell", "unit"]
-	assert_str(s.submit(0, {"t": "draft_setup", "order": order, "basic_type": "Fire", "basic_race": "Dragon"})).is_empty()
-	assert_str(s.submit(1, BotBrain.draft_setup_command(s))).is_empty()
 	var seen := []
-	while not s.deck_ready[0]:
+	for cat in ["extra", "unit", "power", "spell", "unit"]:
+		assert_str(s.submit(0, {"t": "draft_category", "category": cat})).is_empty()
 		var dv: Dictionary = s.view_for(0)["draft"]
-		seen.append(String(dv["category"]))
+		assert_str(String(dv["category"])).is_equal(cat)
 		var picked := int(dv["offer"][0]["id"])
 		assert_str(s.submit(0, {"t": "draft_pick", "index": 0})).is_empty()
-		var cat: String = CardDB.get_def(picked)["category"]
-		var want: String = seen[-1]
-		assert_bool(cat in Series.EXTRA_CATEGORIES if want == "extra" else cat == want).is_true()
-	assert_array(seen).is_equal(["extra", "power", "spell", "unit", "unit"])
-	# The other seat keeps the default order.
-	assert_str(String(s.view_for(1)["draft"]["category"])).is_equal("unit")
-	assert_str(String(s.view_for(0)["draft"]["composition"])).is_equal("1 Extra Deck, 1 Power, 1 Spell, 2 Unit")
+		var c: String = CardDB.get_def(picked)["category"]
+		assert_bool(c in Series.EXTRA_CATEGORIES if cat == "extra" else c == cat).override_failure_message("%s from %s" % [c, cat]).is_true()
+		seen.append(cat)
+	assert_bool(s.deck_ready[0]).is_true()
 
 
-func test_f06_05_invalid_orders_are_refused() -> void:
-	var s := _draft_series({"unit": 2, "spell": 1, "trap": 0, "power": 1, "extra": 1})
-	var ok := {"basic_type": "Fire", "basic_race": "Dragon"}
-	for bad in [["unit", "spell", "power"], ["unit", "spell", "power", "extra", "trap"],
-			["unit", "unit", "power", "extra"], ["unit", "spell", "power", "basic"], ["unit", "spell", "power", 4], "unit", null]:
-		var cmd := ok.duplicate()
-		cmd["t"] = "draft_setup"
-		if bad != null:
-			cmd["order"] = bad
-		assert_str(s.submit(0, cmd)).override_failure_message("order %s accepted" % [bad]).is_not_empty()
-	assert_bool(s.draft[0]["setup_done"]).is_false()
-	var good := ok.duplicate()
-	good["t"] = "draft_setup"
-	good["order"] = ["spell", "unit", "extra", "power"]
-	assert_str(s.submit(0, good)).is_empty()
-	assert_str(s.submit(0, good)).contains("already")
+func test_switching_category_keeps_its_offer() -> void:
+	var s := _draft_series({"unit": 2, "spell": 2})
+	s.submit(0, {"t": "draft_category", "category": "spell"})
+	var first: Array = s.draft[0]["offer"].duplicate()
+	s.submit(0, {"t": "draft_category", "category": "unit"})
+	s.submit(0, {"t": "draft_category", "category": "spell"})
+	assert_array(s.draft[0]["offer"]).is_equal(first)
+
+
+func test_a_finished_category_cannot_be_opened_and_the_next_one_opens() -> void:
+	var s := _draft_series({"unit": 1, "spell": 1, "trap": 0, "power": 0, "extra": 0})
+	s.submit(0, {"t": "draft_category", "category": "spell"})
+	assert_str(s.submit(0, {"t": "draft_pick", "index": 0})).is_empty()
+	assert_str(s.submit(0, {"t": "draft_category", "category": "spell"})).contains("No picks left")
+	assert_str(s.submit(0, {"t": "draft_category", "category": "trap"})).contains("No picks left")
+	assert_str(String(s.view_for(0)["draft"]["category"])).is_equal("unit")
+	assert_int(int(s.view_for(0)["draft"]["left"]["spell"])).is_equal(0)
 
 
 func test_f06_05_other_seat_offers_are_not_in_the_view() -> void:
 	var s := _draft_series()
-	s.submit(0, BotBrain.draft_setup_command(s))
-	s.submit(1, BotBrain.draft_setup_command(s))
 	var v0: Dictionary = s.view_for(0)
+	s.view_for(1)
 	var dv: Dictionary = v0["draft"]
 	assert_array(dv["offer"]).is_not_empty()
 	assert_array(dv["opponent"].keys()).contains_exactly_in_any_order(["setup_done", "step", "total"])
@@ -217,24 +222,13 @@ func test_f06_05_bot_completes_a_draft_series() -> void:
 	assert_int(s.history.size()).is_equal(1)
 
 
-func test_f06_05_bot_setup_is_deterministic() -> void:
-	var s := _draft_series()
-	assert_dict(BotBrain.draft_setup_command(s)).is_equal(BotBrain.draft_setup_command(s))
-	assert_str(s.submit(1, BotBrain.draft_setup_command(s))).is_empty()
-
-
 # ---------------------------------------------------------------- network
 
-func test_f06_net_sanitizes_draft_setup_and_reward_commands() -> void:
-	var ok := {"t": "draft_setup", "order": ["unit", "spell"], "basic_type": "Fire", "basic_race": "Dragon"}
-	assert_str(NetSession.sanitize_command(ok)).is_empty()
+func test_f06_net_sanitizes_draft_and_reward_commands() -> void:
+	assert_str(NetSession.sanitize_command({"t": "draft_category", "category": "spell"})).is_empty()
+	assert_str(NetSession.sanitize_command({"t": "draft_basic", "basic_type": "Fire", "basic_race": "Dragon"})).is_empty()
 	assert_str(NetSession.sanitize_command({"t": "reward_basic", "to_type": "Fire", "to_race": "Dragon"})).is_empty()
 	assert_str(NetSession.sanitize_command({"t": "reward_basic", "from_id": 4.0, "to_type": "Fire"})).is_empty()
-	assert_str(NetSession.sanitize_command({"t": "draft_setup", "order": "unit"})).is_not_empty()
-	assert_str(NetSession.sanitize_command({"t": "draft_setup", "order": [1, 2]})).is_not_empty()
-	var long := []
-	for i in 40:
-		long.append("unit")
-	assert_str(NetSession.sanitize_command({"t": "draft_setup", "order": long})).is_not_empty()
-	assert_str(NetSession.sanitize_command({"t": "draft_setup", "basic_type": 7})).is_not_empty()
-	assert_str(NetSession.sanitize_command({"t": "draft_setup", "basic_colour": "red"})).is_not_empty()
+	assert_str(NetSession.sanitize_command({"t": "draft_category", "category": 3})).is_not_empty()
+	assert_str(NetSession.sanitize_command({"t": "draft_basic", "basic_type": 7})).is_not_empty()
+	assert_str(NetSession.sanitize_command({"t": "draft_basic", "basic_colour": "red"})).is_not_empty()
