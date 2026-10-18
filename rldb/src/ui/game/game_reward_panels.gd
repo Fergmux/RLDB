@@ -35,10 +35,11 @@ func render() -> void:
 		box.add_child(_result_plate(line))
 	var r: Dictionary = gs.view["rewards"]
 	if r["done"]:
-		var p := gs.me()
-		var chips := [{"text": "You: rewards chosen", "done": true},
-			{"text": "%s: %s" % [String(gs.view["names"][1 - p]), "rewards chosen" if r["opponent_done"] else "choosing rewards…"], "done": r["opponent_done"]}]
-		box.add_child(WaitPlate.new("Rewards chosen", "Starting soon…" if r["opponent_done"] else "Waiting for your opponent…", chips, not r["opponent_done"]))
+		# Owner feedback 2026-10-18: no waiting plate, just the line with its dots filling in.
+		var wait := WaitingDots.new("Starting soon" if r["opponent_done"] else "Waiting for your opponent", 20)
+		wait.custom_minimum_size = Vector2(0, 56)
+		wait.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		box.add_child(wait)
 		if not r["taken"].is_empty():
 			box.add_child(_taken_flow(r["taken"]))
 		box.add_child(_footer(false))
