@@ -1,8 +1,10 @@
 class_name CardStatBadge
 extends RefCounted
-## ATK diamond (gold rim, red gradient) and DEF shield (gold rim, blue gradient) with the live value,
-## raised / lowered markers, and the combat-preview decoration (F02-12): glow, dashed ring and a
-## "+N" / "-N" tag. Drawn upright even on a rotated (Defense) card.
+## ATK diamond (red) and DEF shield (blue) with the live value, raised / lowered markers, and the
+## combat-preview decoration (F02-12): glow, dashed ring and a "+N" / "-N" tag. Drawn upright even
+## on a rotated (Defense) card. Owner feedback 2026-10-18 ("a bit chunky"): slimmer shapes, a gold
+## hairline rim with a dark outline and a soft shadow instead of the thick faceted rim; the numbers
+## keep their size.
 
 const ATK_TOP := Color("c9453a")
 const ATK_BOTTOM := Color("4d1713")
@@ -11,17 +13,23 @@ const DEF_BOTTOM := Color("1b3a5a")
 ## Value colour while previewing, and the "lowered" colour of values, markers and tags.
 const PREVIEW_TEXT := Color("eafcff")
 const LOWERED := Color("ff8a84")
-## Gold rim width (base units) inside the badge outline.
-const RIM := 2.4
+## Gold hairline rim width (base units) inside the badge outline.
+const RIM := 1.3
+## Dark outline (base units) around the rim, so the badge reads on light art.
+const OUTLINE := 0.9
 ## F03-20: the badge is drawn at this fraction of the layout rect (about its centre), which leaves a
 ## margin to the card edge and the art; the font size scales with it.
 const SHRINK := 0.86
+## Width of each shape as a fraction of its (shrunk) rect: a slightly upright diamond, a narrower
+## shield (the old full-width ones read as chunky).
+const ATK_W := 0.84
+const DEF_W := 0.8
 
 
 ## Draws the ATK (`is_atk`) or DEF badge filling `rect`. Shows the live value, or the preview value
 ## in a provisional cyan style while the painter's pv_stat targets this stat.
 static func draw(pt: CardPainter, slot_rect: Rect2, is_atk: bool, fs_max: float) -> void:
-	var rect := Rect2(slot_rect.get_center() - slot_rect.size * SHRINK / 2.0, slot_rect.size * SHRINK)
+	var rect := shape_rect(slot_rect, is_atk)
 	var ci := pt.ci
 	var s := pt.s
 	var view := pt.view
@@ -32,40 +40,23 @@ static func draw(pt: CardPainter, slot_rect: Rect2, is_atk: bool, fs_max: float)
 	pt.upright_begin(c)   # a Defense (rotated) card still shows its numbers the right way up
 	var top := ATK_TOP if is_atk else DEF_TOP
 	var bot := ATK_BOTTOM if is_atk else DEF_BOTTOM
-	if is_atk:
-		var pts := CardGeometry.diamond_pts(rect)
-		# Perpendicular half-distance from centre to an edge, for an even rim.
-		var hw := rect.size.x / 2.0
-		var hh := rect.size.y / 2.0
-		var edge_d := hw * hh / sqrt(hw * hw + hh * hh)
-		var k := 1.0 - (RIM * s) / edge_d
-		var inner := PackedVector2Array()
-		for p in pts:
-			inner.append(c + (p - c) * k)
-		ci.draw_colored_polygon(pts, Color(UIStyle.GOLD, 0.98))
-		ci.draw_polygon(inner, PackedColorArray([top.lightened(0.15), top.lerp(bot, 0.45), bot, top.lerp(bot, 0.45)]))
-		# Upper facet highlight + rim glint (reads as cut metal).
-		ci.draw_colored_polygon(PackedVector2Array([inner[0], inner[1], c + Vector2(0, hh * 0.02), inner[3]]), Color(1, 1, 1, 0.09))
-		ci.draw_polyline(PackedVector2Array([pts[3], pts[0], pts[1]]), Color(UIStyle.GOLD_HI, 0.9), maxf(1.0, 0.9 * s), true)
-		ci.draw_polyline(CardGeometry.closed(inner), Color(0, 0, 0, 0.35), maxf(1.0, 0.8 * s), true)
-	else:
-		# Same cut-metal treatment as the ATK diamond: gold rim, light falling from the upper left,
-		# a bright upper facet, a glint along the top edges and a dark inner line.
-		var outer := CardGeometry.shield_pts(rect)
-		ci.draw_colored_polygon(outer, Color(UIStyle.GOLD, 0.98))
-		var ins := Rect2(rect.position + Vector2(RIM, RIM) * s, rect.size - Vector2(RIM * 2.0, RIM * 2.0) * s)
-		var spts := CardGeometry.shield_pts(ins)
-		var cols := PackedColorArray()
-		for p in spts:
-			var ty := clampf((p.y - ins.position.y) / ins.size.y, 0.0, 1.0)
-			var tx := clampf((p.x - ins.position.x) / ins.size.x, 0.0, 1.0)
-			cols.append(top.lightened(0.15).lerp(bot, clampf(ty * 0.8 + tx * 0.35, 0.0, 1.0)))
-		ci.draw_polygon(spts, cols)
-		# Upper facet: the band above the shield's waist, slightly brighter.
-		var waist := ins.position.y + ins.size.y * 0.5
-		ci.draw_colored_polygon(PackedVector2Array([spts[0], spts[1], spts[2], Vector2(spts[3].x, waist), c + Vector2(0, ins.size.y * 0.02 + waist - c.y), Vector2(spts[5].x, waist), spts[6]]), Color(1, 1, 1, 0.09))
-		ci.draw_polyline(PackedVector2Array([outer[5], outer[6], outer[0], outer[1], outer[2], outer[3]]), Color(UIStyle.GOLD_HI, 0.9), maxf(1.0, 0.9 * s), true)
-		ci.draw_polyline(CardGeometry.closed(spts), Color(0, 0, 0, 0.35), maxf(1.0, 0.8 * s), true)
+	var outer := CardGeometry.diamond_pts(rect) if is_atk else CardGeometry.shield_pts(rect)
+	# Soft shadow below, a dark outline, the gold hairline, then the fill.
+	var sh := PackedVector2Array()
+	for p in outer:
+		sh.append(p + Vector2(0, 1.4 * s))
+	ci.draw_colored_polygon(CardGeometry.grow_pts(sh, c + Vector2(0, 1.4 * s), OUTLINE * s), Color(0, 0, 0, 0.42))
+	ci.draw_colored_polygon(CardGeometry.grow_pts(outer, c, OUTLINE * s), Color(0.04, 0.03, 0.02, 0.9))
+	ci.draw_colored_polygon(outer, Color(UIStyle.GOLD, 0.95))
+	var inner := _inset(outer, rect, is_atk, RIM * s)
+	var cols := PackedColorArray()
+	for p in inner:
+		var ty := clampf((p.y - rect.position.y) / rect.size.y, 0.0, 1.0)
+		cols.append(top.lerp(bot, ty))
+	ci.draw_polygon(inner, cols)
+	# A fine highlight along the upper edges (light from above), no facets.
+	var hi := PackedVector2Array([inner[3], inner[0], inner[1]]) if is_atk else PackedVector2Array([inner[5], inner[6], inner[0], inner[1], inner[2]])
+	ci.draw_polyline(hi, Color(1, 1, 1, 0.28), maxf(1.0, 0.7 * s), true)
 	var tcol := Color.WHITE
 	var mod := 0
 	var shown_v = value
@@ -81,7 +72,9 @@ static func draw(pt: CardPainter, slot_rect: Rect2, is_atk: bool, fs_max: float)
 			mod = -1
 	var txt := "?" if shown_v == null else str(shown_v)
 	var font := UIStyle.font_display(700)
-	var fs := CardTextLayout.fit_stat_fs(font, txt, fs_max, rect, is_atk, s)
+	# The numbers keep their earlier size: fitted to the slot before the shapes were narrowed.
+	var fit_rect := Rect2(slot_rect.get_center() - slot_rect.size * SHRINK / 2.0, slot_rect.size * SHRINK)
+	var fs := CardTextLayout.fit_stat_fs(font, txt, fs_max, fit_rect, is_atk, s)
 	pt.text_c(font, txt, c + Vector2(0, -rect.size.y * (0.0 if is_atk else 0.04)), fs, tcol, maxf(1.5, 1.8 * s))
 	if mod != 0:
 		var ac := Vector2(c.x, rect.position.y + rect.size.y * (0.15 if is_atk else 0.1))
@@ -94,6 +87,28 @@ static func draw(pt: CardPainter, slot_rect: Rect2, is_atk: bool, fs_max: float)
 	if previewing:
 		_preview_decor(pt, rect, is_atk)
 	pt.upright_end()
+
+
+## The badge's shape rect inside its layout slot: shrunk about the centre, then narrowed.
+static func shape_rect(slot_rect: Rect2, is_atk: bool) -> Rect2:
+	var sz := slot_rect.size * SHRINK
+	sz.x *= ATK_W if is_atk else DEF_W
+	return Rect2(slot_rect.get_center() - sz / 2.0, sz)
+
+
+## The outline `pts` of the shape in `rect` moved inwards by `d` px: the same shape on a smaller rect.
+static func _inset(pts: PackedVector2Array, rect: Rect2, is_atk: bool, d: float) -> PackedVector2Array:
+	if is_atk:
+		var c := rect.get_center()
+		var hw := rect.size.x / 2.0
+		var hh := rect.size.y / 2.0
+		var edge_d := hw * hh / sqrt(hw * hw + hh * hh)
+		var k := 1.0 - d / edge_d
+		var out := PackedVector2Array()
+		for p in pts:
+			out.append(c + (p - c) * k)
+		return out
+	return CardGeometry.shield_pts(rect.grow(-d))
 
 
 ## Preview glow + dashed white ring around the badge and, when pv_bonus != 0, a "+N"/"-N" tag above it.
