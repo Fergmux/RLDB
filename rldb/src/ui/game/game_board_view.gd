@@ -303,6 +303,7 @@ func _update_piles(side: int, pidx: int, pv: Dictionary) -> void:
 		var ps: PileStack = piles[side][zt[0]]
 		ps.visible = not gs.mv.is_empty()
 		ps.set_pile(int(pv["counts"][zt[0]]), mine, mine and zt[0] == "extra" and extra_ready)
+		ps.set_selected(mine and gs.details.pile_zone == zt[0])
 
 
 ## F02-11: cards of yours that can act right now (play/summon/set from Hand, manual

@@ -32,6 +32,8 @@ var count: int = 0
 var clickable: bool = false
 ## Steady "summon ready" glow around the top card (same look as a ready CardWidget).
 var ready_mark: bool = false
+## Its list is open in the side panel: drawn with the selected-card corner brackets (2026-10-18).
+var selected: bool = false
 var _hover: bool = false
 ## 1 -> 0 after the count changes: the count badge pops a little (presentation only).
 var _pop: float = 0.0: set = _set_pop
@@ -58,10 +60,24 @@ func set_pile(n: int, can_open: bool, is_ready: bool = false) -> void:
 	count = n
 	clickable = can_open
 	ready_mark = is_ready
-	set_process(ready_mark and not UIStyle.reduce_motion)
+	_update_process()
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if clickable else Control.CURSOR_ARROW
 	tooltip_text = "%s: %d card%s%s" % [title, n, "" if n == 1 else "s", " — click to look through it" if clickable else ""]
 	queue_redraw()
+
+
+## Shows (or drops) the selected brackets while this pile's list is open in the side panel.
+func set_selected(on: bool) -> void:
+	if on == selected:
+		return
+	selected = on
+	_update_process()
+	queue_redraw()
+
+
+## Redraw every frame only while something animates (the ready glow, the breathing brackets).
+func _update_process() -> void:
+	set_process((ready_mark or selected) and not UIStyle.reduce_motion)
 
 
 func _process(_d: float) -> void:
@@ -125,6 +141,12 @@ func _draw() -> void:
 		h.set_border_width_all(2)
 		h.set_corner_radius_all(7)
 		draw_style_box(h, top.grow(2))
+	if selected:
+		# The same breathing corner brackets as a selected card (CardOverlays).
+		var ph := 0.0
+		if not UIStyle.reduce_motion:
+			ph = sin(float(Time.get_ticks_msec()) / CardOverlays.SELECT_PERIOD_MS * TAU)
+		CardOverlays._corner_brackets(self, top.grow(6.0 + 2.2 * ph), 9.0, UIStyle.SELECT.lightened(0.3), 2.4)
 	if ready_mark:
 		# Same animated glow and bouncing chevrons as a ready CardWidget (F03-21).
 		CardOverlays.ready_glow(self, top, 9.0, 1.0, CardOverlays.ready_pulse())

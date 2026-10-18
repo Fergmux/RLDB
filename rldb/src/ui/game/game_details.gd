@@ -23,12 +23,10 @@ var scroll_cue: ScrollCue
 var pile_scroll: ScrollContainer
 ## Rows of the pile list.
 var pile_list: VBoxContainer
-## Hint + Close: stays put while the list scrolls.
+## Hint row: stays put while the list scrolls.
 var pile_head: HBoxContainer
 ## Hint text above the pile list.
 var pile_hint: Label
-## Close button of the pile list (hidden for the draft list, which stays while drafting).
-var pile_close: Button
 
 ## Signature of the details last rendered ("" forces a re-render).
 var details_sig: String = ""
@@ -69,14 +67,10 @@ func build(col: VBoxContainer) -> PanelContainer:
 	pile_head = HBoxContainer.new()
 	pile_head.add_theme_constant_override("separation", 6)
 	pile_head.visible = false
-	pile_head.alignment = BoxContainer.ALIGNMENT_END   # Close stays right when there is no hint
 	dv.add_child(pile_head)
 	pile_hint = UIStyle.label("", 13, UIStyle.MUTED, true)
 	pile_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pile_head.add_child(pile_hint)
-	pile_close = UIStyle.button("Close", 13)
-	pile_close.pressed.connect(close_pile)
-	pile_head.add_child(pile_close)
 	pile_scroll = ScrollContainer.new()
 	pile_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	pile_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -155,10 +149,21 @@ func details_uid() -> int:
 	return gs.peek_uid if gs.peek_uid != -1 else gs.selected_uid
 
 
-## Shows the current card's details (with the reasons its actions are unavailable).
+## Shows the current card's details (with the reasons its actions are unavailable). An open pile
+## list holds the panel like a selected card (2026-10-18): hovering a card shows that card's
+## details over it, and the list comes back when the hover ends.
 func render() -> void:
 	if pile_zone != "":
-		return   # the pile list occupies the panel until it is closed
+		if gs.peek_uid == -1 or pile_zone == DRAFT_ZONE:
+			if not pile_scroll.visible:
+				render_pile_list()
+			return
+		if pile_scroll.visible:
+			pile_scroll.visible = false
+			pile_head.visible = false
+			details_scroll.visible = true
+			details_title.text = "Card details"
+			details_sig = ""
 	var duid := details_uid()
 	var c := find_card(duid)
 	if c.is_empty() and gs.peek_uid == -1 and not log_card.is_empty():
@@ -186,8 +191,9 @@ func render() -> void:
 
 ## Own pile inspection in the details panel (user feedback 2026-10-16: a scrollable list, not a
 ## board overlay). Draw is listed in a random display order. Clicking a row selects it; its legal
-## actions (Ritual / Arcane Summon from the Extra Deck) appear in that row. Clicking the same pile
-## again, Close, Esc or right-click returns the panel to card details.
+## actions (Ritual / Arcane Summon from the Extra Deck) appear in that row. The pile shows the
+## selected brackets while open (2026-10-18: no Close button); clicking the same pile again, empty
+## space, Esc or right-click returns the panel to card details.
 func show_pile(zone: String, sel_uid: int = -1) -> void:
 	if zone == pile_zone and sel_uid == -1 and _pile_sel == -1:
 		close_pile()
@@ -197,6 +203,7 @@ func show_pile(zone: String, sel_uid: int = -1) -> void:
 	_pile_sig = 0
 	gs.hover.clear()
 	render_pile_list()
+	gs.board.render()            # the pile's selected brackets
 	Sfx.play("select")
 
 
@@ -258,6 +265,7 @@ func close_pile() -> void:
 	details_title.text = "Card details"
 	details_sig = ""
 	render()
+	gs.board.render()            # drop the pile's selected brackets
 
 
 ## Lists the open pile's cards (rebuilt only when the pile, selection or actions changed).
@@ -277,7 +285,6 @@ func render_pile_list() -> void:
 	details_scroll.visible = false
 	pile_scroll.visible = true
 	pile_head.visible = true
-	pile_close.visible = not drafting
 	if drafting:
 		pile_hint.text = "The cards you have drafted so far."
 		details_title.text = "Your draft (%d)" % cards.size()

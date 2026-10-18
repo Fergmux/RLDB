@@ -279,3 +279,31 @@ func test_best_layout_scrolls_a_large_pile_at_readable_size() -> void:
 func test_inspector_refuses_empty_and_hidden_views() -> void:
 	assert_object(CardInspector.open(gs, {})).is_null()
 	assert_object(CardInspector.open(gs, {"hidden": true, "zone": "backrow"})).is_null()
+
+
+## Owner feedback 2026-10-18: the pile list is held like a selected card. No Close button; the
+## pile shows the selected brackets; hovering a card shows its details over the list, which comes
+## back when the hover ends; an empty-space click closes it and drops the brackets.
+func test_open_pile_is_selected_hover_overrides_it_and_empty_space_closes_it() -> void:
+	TB.card(m, me, TB.WATER, "spent")
+	var u := _unit_on_field()
+	await await_idle_frame()
+	gs.details.show_pile("spent")
+	var ps: PileStack = gs.board.piles[1]["spent"]
+	assert_bool(ps.selected).is_true()
+	assert_bool(gs.details.pile_scroll.visible).is_true()
+	var buttons := gs.details.pile_head.find_children("*", "Button", true, false)
+	assert_array(buttons).is_empty()
+	gs.hover.debug_hover_slot(me, "unit", 0)
+	assert_bool(gs.details.pile_scroll.visible).is_false()
+	assert_bool(gs.details.details_scroll.visible).is_true()
+	assert_int(gs.details.details_uid()).is_equal(u)
+	gs.hover.debug_clear()
+	assert_bool(gs.details.pile_scroll.visible).is_true()
+	assert_str(gs.details.pile_zone).is_equal("spent")
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	gs._gui_input(ev)
+	assert_str(gs.details.pile_zone).is_equal("")
+	assert_bool(ps.selected).is_false()
