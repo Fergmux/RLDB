@@ -600,8 +600,13 @@ func _op_trigger_group(f: Dictionary, op: Dictionary) -> int:
 	var tops: Array = t["ops"]
 	if t["ctl"] == active:
 		# P-24: triggered effects are effect activations; the opponent may respond (Energy Dispel etc.).
-		tops = [{"op": "window", "event": {"name": "activate", "player": t["ctl"], "card": t["uid"], "text": "%s's effect" % name_of(t["uid"])}},
-			{"op": "check_negated"}] + tops
+		var win := {"op": "window", "event": {"name": "activate", "player": t["ctl"], "card": t["uid"], "text": "%s's effect" % name_of(t["uid"])}}
+		if String(t["event"].get("name", "")) == "summoned":
+			# Owner feedback 2026-10-18: a unit's On Summon effects resolve before any Trap answers
+			# them (nothing negates an effect since 2026-10-18), so the window follows them.
+			tops = tops + [win]
+		else:
+			tops = [win, {"op": "check_negated"}] + tops
 	var tf := make_frame(t["uid"], t["ctl"], tops, t["label"], t["event"])
 	add_log("Trigger: %s." % t["label"])
 	if not fx_pos(t["uid"]).is_empty():
