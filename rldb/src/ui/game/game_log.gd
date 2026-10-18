@@ -54,6 +54,7 @@ func build(col: VBoxContainer) -> PanelContainer:
 	# Card names in the log are links: the pointer shows it and a click opens the card's details.
 	label.meta_hover_started.connect(func(m): if str(m).begins_with("card:"): label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND)
 	label.meta_hover_ended.connect(func(_m): label.mouse_default_cursor_shape = Control.CURSOR_ARROW)
+	StatusHelp.watch_rich(label)
 	var lsb := UIStyle.flat(Color(0.045, 0.04, 0.035, 0.92), Color(UIStyle.BRONZE, 0.45), 1, 8)
 	lsb.content_margin_left = 10
 	lsb.content_margin_right = 6
@@ -135,7 +136,8 @@ func render() -> void:
 		elif t.begins_with("GAME OVER"):
 			col = "#ff9ff3"
 			bold = true
-		var body := _tint_names(t.replace("[", "(").replace("]", ")"), col)
+		# Card names link to the card; status names show their effect on hover (2026-10-18).
+		var body := StatusHelp.linkify(_tint_names(t.replace("[", "(").replace("]", ")"), col))
 		if bold:
 			body = "[b]%s[/b]" % body
 		label.append_text("[color=%s]%s[/color]\n" % [col, body])

@@ -371,19 +371,45 @@ func status_hits() -> Array:
 	return _paint.hits.duplicate()
 
 
+## The status whose name in the card's rules text is under widget point `at`, or "".
+func text_status_at(at: Vector2) -> String:
+	for th in _paint.text_hits:
+		var tp: TextParagraph = th["para"]
+		var local: Vector2 = (th["inv"] as Transform2D) * at - (th["pos"] as Vector2)
+		if not Rect2(Vector2.ZERO, tp.get_size()).has_point(local):
+			continue
+		# hit_test gives the caret nearest the point: the character under it is that one or the
+		# one before (the right half of a character).
+		var idx := tp.hit_test(local)
+		var k := StatusHelp.key_at(String(th["text"]), idx)
+		if k == "":
+			k = StatusHelp.key_at(String(th["text"]), idx - 1)
+		return k
+	return ""
+
+
 func _update_status_tip(at: Vector2) -> void:
 	var h := status_hit_at(at)
-	if h.is_empty():
-		StatusTip.hide_for(self)
-	else:
-		StatusTip.show_for(self, h["label"], get_global_transform_with_canvas() * (h["rect"] as Rect2))
+	if not h.is_empty():
+		StatusTip.show_for(self, h["label"], get_global_transform_with_canvas() * (h["rect"] as Rect2), String(h.get("detail", "")))
+		return
+	var k := text_status_at(at)
+	if k != "":
+		StatusTip.show_for(self, "", get_global_transform_with_canvas() * Rect2(at - Vector2(6, 9), Vector2(12, 18)), StatusHelp.describe(k))
+		return
+	StatusTip.hide_for(self)
 
 
-## No card tooltip while the pointer is on a status icon (that icon's own tip shows instead).
+## No card tooltip while the pointer is on a status icon or a status name (its own tip shows).
 func _get_tooltip(at_position: Vector2) -> String:
-	if not status_hit_at(at_position).is_empty():
+	if not status_hit_at(at_position).is_empty() or text_status_at(at_position) != "":
 		return ""
 	return tooltip_text
+
+
+## The card's tooltip, with a section describing each status it names (2026-10-18).
+func _make_custom_tooltip(for_text: String) -> Object:
+	return StatusHelp.tooltip(for_text)
 
 
 func _exit_tree() -> void:
@@ -408,6 +434,7 @@ func _draw() -> void:
 	_text_k = _screen_text_k()
 	pt.text_os = text_oversampling()
 	pt.hits.clear()
+	pt.text_hits.clear()
 	if pt.tracing:
 		pt.trace.clear()
 	if view.is_empty():

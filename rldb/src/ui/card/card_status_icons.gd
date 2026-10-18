@@ -107,7 +107,7 @@ static func draw_icon(pt: CardPainter, c: Vector2, r: float, e: Dictionary) -> v
 	pt.upright_begin(c)
 	draw_token(pt.ci, c, r, String(e["key"]), int(e["n"]), int(e["k"]), true, pt.text_os)
 	pt.upright_end()
-	_hit(pt, c, r, String(e["label"]))
+	_hit(pt, c, r, String(e["label"]), StatusHelp.describe(String(e["key"])))
 
 
 ## The token for `n` stacks of status `key` (kind `k`) on any CanvasItem, centred on `c`, half-size
@@ -147,7 +147,7 @@ static func _more_token(pt: CardPainter, c: Vector2, r: float, more: int, rest: 
 	pt.ci.draw_circle(c, r - maxf(1.0, r * 0.13), TOKEN, true, -1.0, true)
 	pt.text_c(UIStyle.font_bold(), "+%d" % more, c, maxi(CardPainter.MIN_FS, roundi(r * 1.05)), UIStyle.TEXT)
 	pt.upright_end()
-	_hit(pt, c, r, "\n".join(rest.map(func(e): return e["label"])))
+	_hit(pt, c, r, "\n".join(rest.map(func(e): return e["label"])), "\n".join(rest.map(func(e): return StatusHelp.describe(String(e["key"])))))
 
 
 static func _count_badge(ci: CanvasItem, c: Vector2, r: float, txt: String, rim: Color, text_os: float) -> void:
@@ -166,10 +166,11 @@ static func _count_badge(ci: CanvasItem, c: Vector2, r: float, txt: String, rim:
 	ci.draw_string(font, pos, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE, TextServer.JUSTIFICATION_KASHIDA | TextServer.JUSTIFICATION_WORD_BOUND, TextServer.DIRECTION_AUTO, TextServer.ORIENTATION_HORIZONTAL, text_os)
 
 
-## Records the widget-space rect of an icon centred on face point `c` (plus a small margin).
-static func _hit(pt: CardPainter, c: Vector2, r: float, label: String) -> void:
+## Records the widget-space rect of an icon centred on face point `c` (plus a small margin), its
+## name and its effect (the tip's second section).
+static func _hit(pt: CardPainter, c: Vector2, r: float, label: String, detail: String = "") -> void:
 	var face := Rect2(c - Vector2(r, r) * 1.1, Vector2(r, r) * 2.2)
-	pt.hits.append({"rect": pt.face_xform() * face, "label": label})
+	pt.hits.append({"rect": pt.face_xform() * face, "label": label, "detail": detail})
 
 
 ## A status token as a Control (the card details panel's status rows): `key`, `k` as in entries().

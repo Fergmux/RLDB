@@ -98,4 +98,10 @@ static func rich_label(size: int = 16, color: Color = UIStyle.TEXT) -> RichTextL
 
 ## Sets `label`'s text from lesson markup `src`.
 static func set_text(label: RichTextLabel, src: String) -> void:
-	label.text = to_bbcode(src)
+	# Status names show their effect on hover (owner feedback 2026-10-18).
+	label.text = StatusHelp.linkify(to_bbcode(src))
+	if not StatusHelp.spans(src).is_empty():
+		if label.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+			label.mouse_filter = Control.MOUSE_FILTER_PASS
+		label.meta_underlined = false
+		StatusHelp.watch_rich(label)

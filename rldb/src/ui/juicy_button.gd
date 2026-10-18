@@ -49,3 +49,8 @@ func _draw() -> void:
 	draw_style_box(gloss, Rect2(2, 2, size.x - 4, size.y * 0.45))
 	draw_line(Vector2(6, 2.5), Vector2(size.x - 6, 2.5), Color(1, 1, 1, 0.32 if _hover else 0.2), 1.0)
 	draw_line(Vector2(6, size.y - 2.5), Vector2(size.x - 6, size.y - 2.5), Color(0, 0, 0, 0.28), 1.0)
+
+
+## A tooltip naming a status gets a section describing it (owner feedback 2026-10-18).
+func _make_custom_tooltip(for_text: String) -> Object:
+	return StatusHelp.tooltip(for_text)

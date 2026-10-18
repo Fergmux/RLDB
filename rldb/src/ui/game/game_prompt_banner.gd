@@ -168,6 +168,7 @@ func build() -> void:
 	var bcol := plate.body
 	banner_tag = plate.title_label
 	banner_title = plate.add_headline("", 21)
+	StatusHelp.watch_label(banner_title)
 	_build_subject(bcol)
 	_build_mentions(bcol)
 	banner_sub = RichTextLabel.new()
@@ -177,6 +178,7 @@ func build() -> void:
 	banner_sub.scroll_active = false
 	banner_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	banner_sub.mouse_filter = Control.MOUSE_FILTER_PASS
+	StatusHelp.watch_rich(banner_sub)
 	banner_sub.add_theme_font_size_override("normal_font_size", 16)
 	banner_sub.add_theme_font_size_override("bold_font_size", 17)
 	banner_sub.add_theme_font_override("normal_font", UIStyle.font_body())
@@ -256,6 +258,7 @@ func _build_subject(col: VBoxContainer) -> void:
 	subject_text.max_lines_visible = SUBJECT_LINES
 	subject_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	subject_text.mouse_filter = Control.MOUSE_FILTER_PASS
+	StatusHelp.watch_label(subject_text)
 	v.add_child(subject_text)
 
 
@@ -1136,6 +1139,7 @@ func update_banner_sub() -> void:
 		banner_sub.visible = shown
 		if ctx_banner != null and ctx_banner.visible:
 			place_banner()
+	t = StatusHelp.linkify(t)
 	if banner_sub.text != t:
 		banner_sub.text = t
 		banner_sub.tooltip_text = pv.text if pv.text != "" else _banner_how

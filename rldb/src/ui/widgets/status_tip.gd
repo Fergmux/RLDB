@@ -2,10 +2,11 @@ class_name StatusTip
 extends CanvasLayer
 ## Instant hover tooltip for the small status / Rune icons on cards: it appears the moment the
 ## pointer is over an icon (the native tooltip waits for its delay, too long for something this
-## small) and names it, e.g. "Poison ×2". One shared tip per scene tree, drawn above everything;
-## it never takes the mouse.
+## small) and names it, e.g. "Poison ×2", with its effect in a separate section below (2026-10-18;
+## StatusHelp shows the same tip for a status name in text). One shared tip per scene tree, drawn
+## above everything; it never takes the mouse.
 ##
-##   StatusTip.show_for(owner, "Poison ×2", owner.get_global_transform_with_canvas() * icon_rect)
+##   StatusTip.show_for(owner, "Poison ×2", owner.get_global_transform_with_canvas() * icon_rect, effect)
 ##   StatusTip.hide_for(owner)     # only hides it while `owner` is the one showing it
 
 ## Canvas layer of the tip: above the card inspector and every modal.
@@ -13,23 +14,29 @@ const LAYER := 120
 ## Gap (px) between the icon and the tip.
 const GAP := 6.0
 const FONT_SIZE := 15
+const DETAIL_FONT_SIZE := 14
+## Width the effect section wraps at.
+const DETAIL_W := 320.0
 
 static var _tip: StatusTip
 
 var _panel: PanelContainer
 var _label: Label
+var _detail_box: PanelContainer
+var _detail: Label
 var _owner_id: int = 0
 
 
 ## Shows `text` next to `anchor` (a screen-space rect, normally the icon: a rect in the owner's local
-## space times owner.get_global_transform_with_canvas()) for `owner`.
-static func show_for(owner: Control, text: String, anchor: Rect2) -> void:
+## space times owner.get_global_transform_with_canvas()) for `owner`; `detail` (the effect) goes
+## in its own section below, when given. An empty `text` shows only the effect.
+static func show_for(owner: Control, text: String, anchor: Rect2, detail: String = "") -> void:
 	if owner == null or not owner.is_inside_tree():
 		return
 	if _tip == null or not is_instance_valid(_tip) or not _tip.is_inside_tree():
 		_tip = StatusTip.new()
 		owner.get_tree().root.add_child(_tip)
-	_tip._show(owner, text, anchor)
+	_tip._show(owner, text, anchor, detail)
 
 
 ## Hides the tip if `owner` is showing it.
@@ -46,6 +53,13 @@ static func shown_text() -> String:
 	return _tip._label.text
 
 
+## The effect section shown, or "" (tests).
+static func shown_detail() -> String:
+	if _tip == null or not is_instance_valid(_tip) or not _tip._panel.visible or not _tip._detail_box.visible:
+		return ""
+	return _tip._detail.text
+
+
 func _init() -> void:
 	layer = LAYER
 	_panel = PanelContainer.new()
@@ -58,17 +72,28 @@ func _init() -> void:
 	sb.shadow_color = Color(0, 0, 0, 0.6)
 	sb.shadow_size = 6
 	_panel.add_theme_stylebox_override("panel", sb)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 5)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel.add_child(v)
 	_label = UIStyle.label("", FONT_SIZE, UIStyle.TEXT)
 	_label.add_theme_font_override("font", UIStyle.font_bold())
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.add_child(_label)
+	v.add_child(_label)
+	_detail_box = StatusHelp.section_box()
+	_detail = StatusHelp.section_label("")
+	_detail_box.add_child(_detail)
+	v.add_child(_detail_box)
 	_panel.visible = false
 	add_child(_panel)
 
 
-func _show(owner: Control, text: String, anchor: Rect2) -> void:
+func _show(owner: Control, text: String, anchor: Rect2, detail: String) -> void:
 	_owner_id = owner.get_instance_id()
 	_label.text = text
+	_label.visible = text != ""
+	_detail.text = detail
+	_detail_box.visible = detail != ""
 	_panel.visible = true
 	_panel.reset_size()
 	var sz := _panel.get_combined_minimum_size()

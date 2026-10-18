@@ -50,6 +50,9 @@ var text_os: float = 0.0
 ## Status / Rune icons drawn by the last draw: {"rect": widget-space Rect2, "label": tooltip text}
 ## (CardStatusIcons fills it; the widget shows StatusTip over them).
 var hits: Array = []
+## Rules paragraphs drawn by the last redraw, so a status word in them can be hovered (2026-10-18):
+## [{"para": TextParagraph, "pos": face-space origin, "text": String, "inv": widget -> face}].
+var text_hits: Array = []
 ## Tests: when true every text draw appends a record of its layout (text, size, face-space position).
 var tracing := false
 ## The records of the last draw while `tracing`.
@@ -141,6 +144,13 @@ func text_c(font: Font, text: String, centre: Vector2, fsz: int, col: Color, out
 
 
 ## A shaped paragraph (CardTextLayout) with its top-left at `pos`, rasterised at `text_os`.
+## Draws `tp` and records it for status-word hovering when `text` (its string) names a status.
+func para_text(tp: TextParagraph, pos: Vector2, col: Color, text: String) -> void:
+	para(tp, pos, col)
+	if not StatusHelp.spans(text).is_empty():
+		text_hits.append({"para": tp, "pos": pos, "text": text, "inv": face_xform().affine_inverse()})
+
+
 func para(tp: TextParagraph, pos: Vector2, col: Color) -> void:
 	if tracing:
 		var lines := []

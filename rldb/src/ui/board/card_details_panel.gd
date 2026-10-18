@@ -314,7 +314,9 @@ func _rule_block(caption: String, body: String, col: Color) -> PanelContainer:
 	var vb: VBoxContainer = pc.get_child(0)
 	if caption != "":
 		vb.add_child(_lbl(caption.to_upper(), SMALL, col, true))
-	vb.add_child(_lbl(body, BODY, UIStyle.TEXT))
+	var bl := _lbl(body, BODY, UIStyle.TEXT)
+	StatusHelp.watch_label(bl)      # hover a status name: its effect (2026-10-18)
+	vb.add_child(bl)
 	return pc
 
 
