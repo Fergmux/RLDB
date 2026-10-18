@@ -103,7 +103,7 @@ func run() -> void:
 	main._sessions.start_local({"seed": 9, "best_of": 3, "deck_mode": "starter", "names": ["Ana", "Ben"]})
 	await _frames(8)
 	host = main.local_host
-	host.handle(0, {"t": "pick_starter", "index": 9})          # Lone Warrior / Revealed
+	host.handle(0, {"t": "pick_starter", "index": 9})          # Trial of the Warrior
 	host.handle(1, {"t": "pick_starter", "index": 2})
 	await _frames(4)
 	m = host.series.game
