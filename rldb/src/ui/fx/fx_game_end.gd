@@ -34,6 +34,15 @@ static func veil_rect(screen: Control) -> Rect2:
 	return screen.get_global_rect()
 
 
+## Global rect the presentation centres on: the play field, or the whole screen without one.
+static func field_rect(screen: Control) -> Rect2:
+	if screen.has_method("board_global_rect"):
+		var r: Rect2 = screen.board_global_rect()
+		if r.size.x > 1.0 and r.size.y > 1.0:
+			return r
+	return veil_rect(screen)
+
+
 ## The seconds the look for this outcome lasts.
 static func length_for(won: bool, series: bool) -> float:
 	if won:
@@ -69,7 +78,10 @@ func start(winner: int) -> void:
 	dim.color = Color(0.09, 0.06, 0.0, 0.5) if won else Color(0.07, 0.0, 0.0, 0.66)
 	dim.modulate.a = 0.0
 	root.add_child(dim)
-	var centre := area.size / 2.0
+	# Owner feedback 2026-10-18: the veil covers the screen, but the title, rays and bursts centre
+	# on the play field (not the screen with the sidebar).
+	var field: Rect2 = field_rect(screen)
+	var centre: Vector2 = field.get_center() - area.position
 	var reduced := UIStyle.reduce_motion
 	var fx_node := FxSigil.new()
 	fx_node.kind = "rays" if won else "ash"
@@ -77,7 +89,7 @@ func start(winner: int) -> void:
 	fx_node.radius = (area.size.length() * (0.75 if series else 0.55)) if won else area.size.x * 0.45
 	fx_node.position = centre if won else Vector2(centre.x, centre.y)
 	root.add_child(fx_node)
-	var band := _band(area.size, won, col)
+	var band := _band(Vector2(field.size.x, area.size.y), won, col)
 	root.add_child(band)
 	var title := _title(won, series, col)
 	root.add_child(title)
@@ -90,7 +102,7 @@ func start(winner: int) -> void:
 	title.pivot_offset = title.size / 2.0
 	title.modulate.a = 0.0
 	sub.modulate.a = 0.0
-	band.position = Vector2(0.0, title.position.y - 34.0)
+	band.position = Vector2(field.position.x - area.position.x, title.position.y - 34.0)
 	band.size.y = title.size.y + sub.size.y + 80.0
 	band.modulate.a = 0.0
 	var home := title.position
@@ -115,12 +127,12 @@ func start(winner: int) -> void:
 		title.scale = Vector2(0.3, 0.3)
 		tw.tween_property(title, "modulate:a", 1.0, d.call(0.12))
 		tw.tween_property(title, "scale", Vector2.ONE, d.call(0.55)).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-		var burst_at := area.get_center()
+		var burst_at := field.get_center()
 		var bursts: Array = [[0.15, burst_at, 28, 260.0]]
 		if series:
-			bursts.append([0.55, burst_at + Vector2(-area.size.x * 0.28, area.size.y * 0.12), 22, 200.0])
-			bursts.append([0.75, burst_at + Vector2(area.size.x * 0.28, area.size.y * 0.12), 22, 200.0])
-			bursts.append([1.25, burst_at + Vector2(0, -area.size.y * 0.2), 30, 300.0])
+			bursts.append([0.55, burst_at + Vector2(-field.size.x * 0.28, field.size.y * 0.12), 22, 200.0])
+			bursts.append([0.75, burst_at + Vector2(field.size.x * 0.28, field.size.y * 0.12), 22, 200.0])
+			bursts.append([1.25, burst_at + Vector2(0, -field.size.y * 0.2), 30, 300.0])
 		for b in bursts:
 			tw.tween_callback(func(): _fx.burst(FxBurst.Kind.SPARK, b[1], WIN.lightened(0.25), b[2], b[3], 0.8)).set_delay(d.call(b[0]))
 		tw.tween_callback(func(): screen.plate_of(screen.me()).pulse()).set_delay(d.call(0.2))
