@@ -341,7 +341,22 @@ func _maybe_coin_flip() -> void:
 	coin.position = play_area.position
 	coin.size = play_area.size
 	add_child(coin)
+	# Owner feedback 2026-10-18: the opening hands are dealt after the coin flip, not under it.
+	hand.layer.modulate.a = 0.0
+	board.opp_hand_box.modulate.a = 0.0
+	coin.finished.connect(_deal_after_coin)
+	coin.tree_exiting.connect(_deal_after_coin)   # backstop: the coin removed early
 	coin.play(String(pv(first)["name"]), String(pv(1 - first)["name"]), first == me())
+
+
+## Shows the hands once the coin flip is done: mine dealt in from the draw pile, the opponent's
+## faded in. Runs once per coin (finished, or the coin leaving early).
+func _deal_after_coin() -> void:
+	if hand.layer.modulate.a >= 1.0:
+		return
+	hand.layer.modulate.a = 1.0
+	hand.deal_all()
+	create_tween().tween_property(board.opp_hand_box, "modulate:a", 1.0, UIStyle.dur(0.3))
 
 
 ## New presentation events since the last view; empty (skip animations) on first load,

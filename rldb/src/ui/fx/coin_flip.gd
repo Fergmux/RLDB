@@ -24,6 +24,9 @@ static var _pool_tex: GradientTexture2D
 static var _glow_tex: GradientTexture2D
 
 ## Player names [winner, other].
+## Emitted as the coin starts to fade out: the opening hands are dealt then (2026-10-18).
+signal finished
+
 var names: Array = ["", ""]
 ## True when the local player goes first (gold face, "You go first").
 var winner_is_me: bool = false
@@ -94,6 +97,7 @@ func play(winner_name: String, other_name: String, me_first: bool) -> void:
 		tw.parallel().tween_property(self, "land_t", 1.0, 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tw.parallel().tween_property(self, "result_a", 1.0, 0.25)
 		tw.tween_interval(HOLD_TIME)
+	tw.tween_callback(func(): finished.emit())
 	tw.tween_property(self, "modulate:a", 0.0, 0.35)
 	tw.tween_callback(queue_free)
 
