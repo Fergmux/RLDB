@@ -128,10 +128,10 @@ no intended effect changes. It is now the imported source.
 - The Arcane requirement now uses the export's own wording ("Exhaust Units from Spent whose combined
   Cost equals this Unit's Cost"); it states the confirmed exact-total rule. Only the old ambiguous
   "equivilant" wording would still be replaced.
-- One wording made a rule precise: Demented Apparition forces attacks "if ... this Unit is
-  Unprotected". The engine already did this except for an Infiltrate attacker, which could
-  previously be forced onto a protected Apparition; now it is not
-  (`test_c147_demented_apparition_forces_attacks_only_while_unprotected`).
+- Demented Apparition (owner ruling, 18 October): "If your opponent's Unit attacks and can attack
+  this Unit: that Unit must attack this Unit." The importer applies this wording (the export still
+  says "is Unprotected"); a protected Apparition forces an Infiltrate attacker but not an ordinary one
+  (`test_c147_demented_apparition_forces_any_attacker_that_can_attack_it`).
 - Dante's On Destroy now reads "At the start of your next turn: you can lose -1 AP to Summon this
   Unit". Kept as implemented (you decide when it is destroyed, the AP is lost next turn and it
   returns at the start of that turn), per "no effect changes".

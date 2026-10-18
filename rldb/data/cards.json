@@ -4718,10 +4718,10 @@
    ],
    "condition": "Monster Unit + Dark Unit",
    "on_summon": "Apply 2 Paralyse to your opponent's Unprotected Units.",
-   "on_field": "At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and this Unit is Unprotected: that Unit must attack this Unit.",
+   "on_field": "At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and can attack this Unit: that Unit must attack this Unit.",
    "on_destruction": "Change the Stance of all Units.",
    "material": "Monster Unit + Dark Unit",
-   "description": "On Summon: Apply 2 Paralyse to your opponent's Unprotected Units. At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and this Unit is Unprotected: that Unit must attack this Unit. On Destroy: Change the Stance of all Units.",
+   "description": "On Summon: Apply 2 Paralyse to your opponent's Unprotected Units. At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and can attack this Unit: that Unit must attack this Unit. On Destroy: Change the Stance of all Units.",
    "art": {
     "image": "147.png",
     "card_img": "163.png",
@@ -4730,7 +4730,11 @@
    "source": {
     "file": "RLDB Master - Card Database (2026-10-18b).csv",
     "sheet": "fusion",
-    "index": 163
+    "index": 163,
+    "raw": {
+     "On Field": "At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and this Unit is Unprotected: that Unit must attack this Unit.",
+     "description": "On Summon: Apply 2 Paralyse to your opponent's Unprotected Units. At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and this Unit is Unprotected: that Unit must attack this Unit. On Destroy: Change the Stance of all Units."
+    }
    }
   },
   {

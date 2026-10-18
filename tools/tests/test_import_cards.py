@@ -145,7 +145,8 @@ class ImportRegressionTest(unittest.TestCase):
         for cid in (12, 40, 73, 102, 141, 162, 184, 186, 187, 188):
             self.assertNotIn("raw", self.by_id[cid]["source"], cid)
         self.assertIn("Unit's", self.by_id[102]["on_field"])
-        self.assertEqual(sorted(ic.TEXT_CORRECTIONS), [45, 47, 48])
+        self.assertEqual(sorted(ic.TEXT_CORRECTIONS), [45, 47, 48, 147])
+        self.assertIn("and can attack this Unit: that Unit must attack this Unit", self.by_id[147]["on_field"])
 
     def test_no_orphan_card_or_note(self):
         self.assertEqual(self.data["unassigned_source_notes"], [])

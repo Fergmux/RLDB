@@ -796,16 +796,17 @@ func test_c188_target_cleanse_prevents_the_spread() -> void:
 	assert_int(m.status_count(necro, "poison")).is_equal(2)
 
 
-func test_c147_demented_apparition_forces_attacks_only_while_unprotected() -> void:
+func test_c147_demented_apparition_forces_any_attacker_that_can_attack_it() -> void:
 	var m := TB.make()
 	TB.to_turn2(m)
 	TB.to_battle(m)
 	TB.unit(m, 0, MAGE_WATER, 0)                               # front unit protecting it
 	var app := TB.unit(m, 0, 147, 3)
 	var other := TB.unit(m, 0, MAGE_FIRE, 1)
-	var a := TB.unit(m, 1, MAGE_WATER, 1)
+	var plain := TB.unit(m, 1, MAGE_WATER, 1)
+	assert_bool(m.attack_targets(plain).has(app)).is_false()   # cannot attack it: not forced
+	assert_bool(m.attack_targets(plain).has(other)).is_true()
+	var a := TB.unit(m, 1, MAGE_WATER, 2)
 	m.apply_status(a, "infiltrate", 1)
-	assert_bool(m.attack_targets(a).has(other)).is_true()      # protected: no longer forces
-	assert_bool(m.attack_targets(a).has(app)).is_true()
-	var free := TB.unit(m, 0, 147, 2)                          # an unprotected copy forces again
-	assert_array(m.attack_targets(a)).contains_exactly([free])
+	assert_array(m.attack_targets(a)).contains_exactly([app])  # can attack it: must attack it
+	assert_str(CardDB.get_def(147)["on_field"]).contains("and can attack this Unit: that Unit must attack this Unit.")

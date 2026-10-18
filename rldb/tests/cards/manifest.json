@@ -2733,7 +2733,7 @@
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
 					"tests": [
-						"test_c147_demented_apparition_forces_attacks_only_while_unprotected"
+						"test_c147_demented_apparition_forces_any_attacker_that_can_attack_it"
 					]
 				},
 				{

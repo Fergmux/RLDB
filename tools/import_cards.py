@@ -56,12 +56,15 @@ LEGACY_CONDITION_TO_SUMMON = {63, 97}
 #   45/47 (C-03): Magic Cylinder / Damage Conversion trigger only on an attack on a unit in
 #         this column (raw text still says "declares an Attack in this Column").
 #   48 (F03-19): Overextend's controller chooses the target; raw text still says highest ATK.
+#   147 (owner, 2026-10-18): Demented Apparition forces any attacker that can attack it, so an
+#         Infiltrate attacker is forced even while it is Protected (raw text: "is Unprotected").
 # Dropped as obsolete (the standardised export fixed them): the possessive and typo fixes on 12,
 # 40, 73, 102, 141, 162, 184, 186, 187 and 188, and earlier 169, 90 and 183.
 TEXT_CORRECTIONS = {
     45: {"condition": "If your opponent declares an Attack on one of your Units in this Column:"},
     47: {"condition": "If your opponent declares an Attack on one of your Units in this Column:"},
     48: {"on_summon": "Choose one of your opponent's Units, it Permanently loses -20 ATK."},
+    147: {"on_field": "At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and can attack this Unit: that Unit must attack this Unit."},
 }
 
 # F03-04: Arcane material is an exact payment. The standardised export states it itself ("whose
