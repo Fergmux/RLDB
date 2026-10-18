@@ -131,3 +131,35 @@ func test_fusion_by_ability_arrow_starts_at_the_fusion_unit() -> void:
 	var src: Rect2 = gs.targeting._source_rect()
 	assert_bool(src.size != Vector2.ZERO).is_true()
 	assert_bool(src == _slot_rect(1)).override_failure_message("arrow starts at Aleister").is_false()
+
+
+## Owner feedback 2026-10-18: while Fusion materials are picked, the arrow starts at the Fusion
+## unit being summoned (the prompt's card), never at a material, even when the summoning card is
+## itself the first material (Tag Team - S).
+func test_fusion_material_arrow_starts_at_the_fusion_unit_not_a_material() -> void:
+	var p := m.active
+	var guard := TB.unit(m, p, 28, 0)               # Beast, front zone 1
+	var hydra := TB.unit(m, p, 27, 1)               # Dragon, front zone 2
+	var tt := TB.card(m, p, 8, "hand")              # Tag Team - S: On Summon Fusion (Field)
+	var wyrm := TB.card(m, p, 93, "extra")          # Bastion Wyrm: Beast + Dragon
+	m.players[p]["ap"] = 3
+	host.broadcast()
+	await _settle()
+	_act(tt, "summon", "atk")
+	await _settle()
+	TB.choose(m, ["Back row, column 1"])
+	TB.choose(m, ["Yes"])
+	TB.choose_uids(m, [wyrm])
+	host.broadcast()
+	await _settle()
+	for mat in [guard, hydra]:
+		assert_str(String(gs.pending().get("prompt", ""))).contains("for the summon of Bastion Wyrm")
+		assert_int(gs.targeting.source_uid()).is_equal(wyrm)
+		var src: Rect2 = gs.targeting._source_rect()
+		assert_bool(src.size != Vector2.ZERO).override_failure_message("no arrow source").is_true()
+		for s in [0, 1, 3]:
+			assert_bool(src == _slot_rect(s)).override_failure_message("arrow starts at zone %d" % s).is_false()
+		TB.choose_uids(m, [mat])
+		host.broadcast()
+		await _settle()
+	assert_str(String(gs.pending().get("kind", ""))).is_equal("slot")

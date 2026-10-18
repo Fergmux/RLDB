@@ -233,7 +233,7 @@ func _op_fusion_mat(f: Dictionary, op: Dictionary) -> int:
 	for u in ok:
 		opts.append(card_option(u, "%s (%s)" % [name_of(u), cards[u]["zone"].capitalize()]))
 	return ask(f, f["ctl"], "select", "Choose %s for the summon of %s (material %d of %d)." % [_a_an(_req_text(reqs[op["i"]])), name_of(fu), op["i"] + 1, reqs.size()],
-		opts, 1, 1, op.get("cancellable", false), {"reveal_pile": true})
+		opts, 1, 1, op.get("cancellable", false), {"reveal_pile": true, "placing": fu})   # arrow from the Fusion unit (2026-10-18)
 
 
 ## "a Fire unit" / "an Earth unit" (fusion material prompts).
