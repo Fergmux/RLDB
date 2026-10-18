@@ -132,7 +132,7 @@ func test_choice_from_draw_is_not_presented_in_draw_order() -> void:
 	var ids := []
 	for i in 6:
 		ids.append(TB.card(m, 0, 122, "draw"))
-	TB.summon(m, 0, 73, 0)                                  # Mans Best Friend: Warrior from Draw
+	TB.summon(m, 0, 73, 0)                                  # Man's Best Friend: Warrior from Draw
 	var shown: Array = m.pending["options"].map(func(o): return o["v"])
 	var sorted := shown.duplicate()
 	sorted.sort()
@@ -304,18 +304,18 @@ func test_column_summon_ability_refused_without_a_free_zone() -> void:
 	assert_int(m.players[0]["ap"]).is_equal(2)
 
 
-## Sepukku: when the self-destroy cost is prevented (Mans Best Friend), no Fusion happens
-## and Sepukku is never offered as its own material.
+## Seppuku: when the self-destroy cost is prevented (Man's Best Friend), no Fusion happens
+## and Seppuku is never offered as its own material.
 func test_sepukku_prevented_self_destroy_does_not_fusion() -> void:
 	var m := TB.make()
 	var sep := TB.unit(m, 0, 68, 0)
-	TB.unit(m, 0, 73, 3)                                       # Mans Best Friend, same column
+	TB.unit(m, 0, 73, 3)                                       # Man's Best Friend, same column
 	TB.unit(m, 0, TB.FIRE, 1)
 	TB.unit(m, 0, 3, 2)
 	var sol := TB.card(m, 0, 181, "extra")                     # Warrior + Fire
 	assert_str(TB.ability(m, sep)).is_empty()
 	TB.choose_uids(m, [sol])
-	# F04-22: every choice comes first; Sepukku is never offered as its own material.
+	# F04-22: every choice comes first; Seppuku is never offered as its own material.
 	var offered_self := false
 	var guard := 0
 	while not m.pending.is_empty() and guard < 6:

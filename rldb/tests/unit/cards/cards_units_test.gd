@@ -350,7 +350,7 @@ func test_c068_sepukku_destroys_itself_to_fuse() -> void:
 	# F04-22 / F07: materials are picked one by one, then the zone; the stance choice commits.
 	TB.choose_uids(m, [beast])
 	TB.choose_uids(m, [dragon])
-	TB.choose(m, ["Front row, column 1"])                # Sepukku's own zone: it leaves first
+	TB.choose(m, ["Front row, column 1"])                # Seppuku's own zone: it leaves first
 	TB.choose(m, ["Attack"])
 	assert_str(m.cards[sp]["zone"]).is_equal("spent")
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")

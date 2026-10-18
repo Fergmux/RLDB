@@ -144,7 +144,7 @@ func run() -> void:
 	_check("Necro inspector shows its Fusion materials", t.contains("Mage Unit + Debuffed Unit"))
 	_check("Necro inspector shows its doubling ability", t.contains("double the Debuffs"))
 	t = await _inspect_slot(me, "unit", 1, "02_inspect_drako")
-	_check("Drako inspector shows its Arcane requirement and Power ability", t.contains("total exactly") and t.contains("Destroy a Power"))
+	_check("Drako inspector shows its Arcane requirement and Power ability", t.contains("combined Cost equals this Unit's Cost") and t.contains("Destroy a Power"))
 	t = await _inspect_slot(me, "unit", 2, "03_inspect_fence")
 	_check("Fence inspector shows the lower-case apply", t.contains("you can apply 1 Rune"))
 	t = await _inspect_slot(me, "unit", 3, "04_inspect_chaos_witch_dark")
@@ -154,7 +154,7 @@ func run() -> void:
 	t = await _inspect_slot(foe, "unit", 0, "06_inspect_light_basic")
 	_check("A basic unit reads Light", t.contains("Light") and not t.contains("Heavenly"))
 	t = await _inspect_slot(foe, "unit", 2, "07_inspect_tag_team_w")
-	_check("Tag Team - W reads Spell/Trap", t.contains("Destroy all Spell/Trap cards in this Column"))
+	_check("Tag Team - W reads Spell/Trap", t.contains("Destroy all Spells/Traps in this Column"))
 	t = await _inspect_slot(me, "power", 0, "08_inspect_options")
 	_check("Options reads a start-of-turn draw", t.contains("At the start of your turn: draw a card"))
 
@@ -204,7 +204,7 @@ func run() -> void:
 		host.handle(foe, {"t": "choose", "id": m.pending["id"], "indices": [0]})
 	await _frames(6)
 	var placed := m.power_cards(foe).filter(func(u): return int(m.cards[u]["id"]) == 166)
-	_check("Saboteurs Guild was played from Spent", placed.size() == 1)
+	_check("Saboteurs' Guild was played from Spent", placed.size() == 1)
 	main._shown_seat = me
 	gs.attach(host.seats[me])
 	await _frames(4)

@@ -249,7 +249,7 @@ func test_c049_trap_hole_paralyses_two_cost_summon() -> void:
 	var m := _p1_turn()
 	TB.set_card(m, 0, 49, 0)
 	var u := TB.summon(m, 1, 28, 0)                         # Guardian of the Forest, cost 2
-	TB.choose(m, ["Activate Trap hole"])
+	TB.choose(m, ["Activate Trap Hole"])
 	assert_int(m.status_count(u, "paralyse")).is_equal(3)
 
 

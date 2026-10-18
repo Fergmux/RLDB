@@ -6,7 +6,7 @@ extends GdUnitTestSuite
 
 const LONE_WARRIOR := 38       # Warrior, flag no_buffs
 const STEADFAST := 39          # Warrior, battle_immune_30atk
-const MBF := 73                # Mans Best Friend: warrior_guard
+const MBF := 73                # Man's Best Friend: warrior_guard
 const ELEMENTAL_MASTERY := 88
 const RAGING_INFERNO := 98     # Ritual, 1 Rune
 const BAHATIA := 141           # type_summon_lock (Physical)
@@ -217,7 +217,7 @@ func test_preview_agrees_with_battle_across_cases() -> void:
 
 
 func test_preview_guarded_lone_warrior_matches_real_battle() -> void:
-	# Arrange: Lone Warrior cannot receive Buffs, so Mans Best Friend's Eternal fails
+	# Arrange: Lone Warrior cannot receive Buffs, so Man's Best Friend's Eternal fails
 	var m := _battle()
 	var t := TB.unit(m, 0, LONE_WARRIOR, 0, "def", null, 10)
 	TB.unit(m, 0, MBF, 3)
@@ -225,11 +225,11 @@ func test_preview_guarded_lone_warrior_matches_real_battle() -> void:
 	# Act
 	var r := _preview_then_battle(m, a, t)
 	# Assert: the preview promised protection; the battle must deliver it (or preview must not promise)
-	_assert_agrees(r, "Lone Warrior + Mans Best Friend")
+	_assert_agrees(r, "Lone Warrior + Man's Best Friend")
 
 
 func test_preview_guarded_cursed_warrior_matches_real_battle() -> void:
-	# Arrange: Curse blocks the Eternal Mans Best Friend applies
+	# Arrange: Curse blocks the Eternal Man's Best Friend applies
 	var m := _battle()
 	var t := TB.unit(m, 0, STEADFAST, 0, "def", null, 2)
 	m.apply_status(t, "curse", 1)
@@ -238,7 +238,7 @@ func test_preview_guarded_cursed_warrior_matches_real_battle() -> void:
 	# Act
 	var r := _preview_then_battle(m, a, t)
 	# Assert
-	_assert_agrees(r, "cursed Steadfast + Mans Best Friend")
+	_assert_agrees(r, "cursed Steadfast + Man's Best Friend")
 
 
 func test_preview_reaches_only_the_chooser_and_hides_opponent_hand() -> void:

@@ -1,9 +1,9 @@
 """Import the RLDB source CSVs into rldb/data/*.json.
 
-Active card source (card database update 2026-10-18, design/card-database-update-2026-10-18.md):
-    rules/sources/RLDB Master - Card Database (2026-10-18).csv   (SHA-256 85bb97c9...8e73c5bc)
-The 2026-10-17 snapshot and the undated `RLDB Master - Card Database.csv` are kept as comparison
-history only and are never read here. No CSV is modified.
+Active card source (standardised wording, 18 October 2026, design/card-database-update-2026-10-18.md):
+    rules/sources/RLDB Master - Card Database (2026-10-18b).csv   (SHA-256 f9c75837...4890f8ca)
+Earlier snapshots (2026-10-18, 2026-10-17 and the undated baseline) are comparison history only and
+are never read here. No CSV is modified.
 
 Applies only confirmed corrections (rules/06, design/decision-register-answers.md, playtest
 feedback 03-06) and records every raw cell the importer changed under `source.raw`, so the
@@ -23,9 +23,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "rules", "sources")
 OUT = os.path.join(ROOT, "rldb", "data")
 
-CARD_SOURCE = "RLDB Master - Card Database (2026-10-18).csv"
-CARD_SOURCE_SHA256 = "85bb97c947df5459ea68d0246a05a3cac643dbab975c6c1e9bbe8b007e73c5bc"
-PREVIOUS_SOURCES = ["RLDB Master - Card Database (2026-10-17).csv",   # audit history only; never imported
+CARD_SOURCE = "RLDB Master - Card Database (2026-10-18b).csv"
+CARD_SOURCE_SHA256 = "f9c7583762e8710812a350694bb9c08f5eb2cc8c24aa768b390cc0734890f8ca"
+PREVIOUS_SOURCES = ["RLDB Master - Card Database (2026-10-18).csv",   # audit history only; never imported
+                    "RLDB Master - Card Database (2026-10-17).csv",
                     "RLDB Master - Card Database.csv"]
 STATUS_SOURCE = "RLDB Master - status.csv"
 EXPECTED_CARDS = 188
@@ -50,38 +51,24 @@ EDITORIAL_CONDITIONS = {"temp"}
 # empty and the condition is real effect text. The 2026-10-17 export populates both properly.
 LEGACY_CONDITION_TO_SUMMON = {63, 97}
 
-# Corrections audited per ID against the 2026-10-18 export. Field -> text.
+# Corrections audited per ID against the standardised 2026-10-18 export. Field -> text.
 # User-confirmed rule rewordings (the raw text still carries the old rule):
 #   45/47 (C-03): Magic Cylinder / Damage Conversion trigger only on an attack on a unit in
-#         this column (raw text still says "declares an attack in this Column").
+#         this column (raw text still says "declares an Attack in this Column").
 #   48 (F03-19): Overextend's controller chooses the target; raw text still says highest ATK.
-# Typos, and the export's own new house style on new rows it missed (2026-10-18 list: "Units you
-# Control" for "Units from your Field", lower-case "apply" mid-sentence):
-#   12/73/102/162: possessives the export's "Unit's" -> "Units" replacement broke.
-#   40: "using you Control" lost its "Units". 141: sentence-initial "Your". 184: "Sell/Trap".
-#   186: "Units from your Field". 187: "Apply". 188: "opponents Unit".
-# Arcane councillors (172, 185, 187) keep the export's "that Unit costs -1 AP this turn".
-# Dropped as obsolete (the export now carries the confirmed wording): 169 Options ("At the start
-# of your turn: draw a card"), 48's condition, 90 Chains of Binding, 183 Yamata.
+# Dropped as obsolete (the standardised export fixed them): the possessive and typo fixes on 12,
+# 40, 73, 102, 141, 162, 184, 186, 187 and 188, and earlier 169, 90 and 183.
 TEXT_CORRECTIONS = {
-    12: {"on_field": "You can lose -2 AP, Summon a Unit from your Spent in this Unit's Column."},
-    40: {"on_field": "You can lose -1 AP, Fusion Summon using Units you Control as Tribute."},
-    45: {"condition": "If your opponent declares an attack on one of your Units in this Column:"},
-    47: {"condition": "If your opponent declares an attack on one of your Units in this Column:"},
+    45: {"condition": "If your opponent declares an Attack on one of your Units in this Column:"},
+    47: {"condition": "If your opponent declares an Attack on one of your Units in this Column:"},
     48: {"on_summon": "Choose one of your opponent's Units, it Permanently loses -20 ATK."},
-    73: {"on_field": "If your Warrior Unit in this Unit's Column would be Destroyed, apply 1 Eternal to that Unit, this Unit is Destroyed."},
-    102: {"on_field": "Once per turn: this Unit's Type can become Water, Fire, Earth or Lightning. Once per turn you can apply 1 Curse to a Unit with the same Type."},
-    141: {"on_field": "Once per turn: this Unit's Type can become Physical, Light or Dark. Your opponent cannot summon Units with the same Type as this Unit."},
-    162: {"on_field": "This Unit can attack your opponent directly. If this Unit is Sacrificed, increase this Unit's cost +1 AP."},
-    184: {"condition": "If a Spell/Trap is Destroyed:"},
-    186: {"on_summon": "You can Fusion Summon using Units you Control as Tribute."},
-    187: {"on_field": "If a Spell is activated, you can apply 1 Rune to a Unit."},
-    188: {"on_field": "Once per turn: you can double the Debuffs on this Unit, apply the same Debuffs to an opponent's Unit."},
 }
 
-# F03-04: Arcane material is an exact payment. The export's requirement text ("Cost
-# equivilant to Arcane") is replaced by the confirmed wording in both condition and material.
+# F03-04: Arcane material is an exact payment. The standardised export states it itself ("whose
+# combined Cost equals this Unit's Cost"); only the older ambiguous wording ("Cost equivilant to
+# Arcane") is still replaced, in both condition and material.
 ARCANE_REQUIREMENT = "Exhaust Units from your Spent whose costs total exactly its Arcane cost"
+AMBIGUOUS_ARCANE = "equivilant"
 
 # F03-09: basic-unit display names drop the redundant "(Type)" suffix; Type stays in `type`.
 BASIC_TYPE_SUFFIX = " ("
@@ -188,7 +175,7 @@ def build(card_csv=None):
         rebuild = "On Summon/Play" in raw
         if category == "arcane":
             for key, col in (("condition", "condition"), ("material", "material")):
-                if c[key] != ARCANE_REQUIREMENT:
+                if AMBIGUOUS_ARCANE in c[key].lower() or not c[key]:
                     raw[col] = row[col]
                     c[key] = ARCANE_REQUIREMENT
         for field, text in TEXT_CORRECTIONS.get(cid, {}).items():

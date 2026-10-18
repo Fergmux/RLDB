@@ -769,7 +769,7 @@ func snapshot(uid: int) -> Dictionary:
 
 
 ## Destroys a field card (or a Spell resolving in limbo, for Energy Dispel). Handles replacement
-## (Mans Best Friend), protection flags and Eternal. Returns true if the card was destroyed.
+## (Man's Best Friend), protection flags and Eternal. Returns true if the card was destroyed.
 ## battle_vs: the other combatant's state captured before either unit was destroyed
 ## ({"atk", "type", "debilitated"}), so simultaneous destruction reads consistent values.
 func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Dictionary = {}) -> bool:
@@ -824,7 +824,7 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Di
 	return true
 
 
-## Mans Best Friend: if your Warrior in its column would be destroyed, give it Eternal and destroy MBF.
+## Man's Best Friend: if your Warrior in its column would be destroyed, give it Eternal and destroy MBF.
 func _guardian_replacement(uid: int) -> void:
 	if unit_race(uid) != "Warrior":
 		return

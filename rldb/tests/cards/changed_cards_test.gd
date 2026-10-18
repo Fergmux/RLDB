@@ -149,7 +149,7 @@ func test_c051_rushed_recklessly_gives_column_units_eight_def_this_turn() -> voi
 	assert_int(m.def_of(back)).is_equal(8)
 
 
-# ---------------------------------------------------------------- 96 Roma, Exhile of The Order
+# ---------------------------------------------------------------- 96 Roma, Exile of The Order
 
 func _roma(m: MatchEngine, runes: int) -> int:
 	var uid := m._create_instance(96, 0)

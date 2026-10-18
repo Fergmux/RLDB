@@ -949,7 +949,7 @@
 			]
 		},
 		"49": {
-			"name": "Trap hole",
+			"name": "Trap Hole",
 			"category": "trap",
 			"csv_2026_10_17": "unchanged",
 			"csv_2026_10_18": "changed",
@@ -1294,7 +1294,7 @@
 			]
 		},
 		"68": {
-			"name": "Sepukku",
+			"name": "Seppuku",
 			"category": "unit",
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
@@ -1408,7 +1408,7 @@
 			]
 		},
 		"73": {
-			"name": "Mans Best Friend",
+			"name": "Man's Best Friend",
 			"category": "unit",
 			"csv_2026_10_17": "unchanged",
 			"csv_2026_10_18": "changed",
@@ -1843,7 +1843,7 @@
 			]
 		},
 		"96": {
-			"name": "Roma, Exhile of The Order",
+			"name": "Roma, Exile of The Order",
 			"category": "ritual",
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
@@ -2731,6 +2731,12 @@
 			"status": "covered",
 			"tests": [
 				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
+					"tests": [
+						"test_c147_demented_apparition_forces_attacks_only_while_unprotected"
+					]
+				},
+				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
 						"test_c147_demented_apparition_forces_attacks_onto_itself",
@@ -3132,7 +3138,7 @@
 			]
 		},
 		"166": {
-			"name": "Saboteurs Guild",
+			"name": "Saboteurs' Guild",
 			"category": "power",
 			"csv_2026_10_17": "unchanged",
 			"csv_2026_10_18": "changed",
@@ -3432,7 +3438,7 @@
 			]
 		},
 		"179": {
-			"name": "Tyrants Lantern",
+			"name": "Tyrant's Lantern",
 			"category": "power",
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",

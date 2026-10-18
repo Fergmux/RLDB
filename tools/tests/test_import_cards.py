@@ -31,14 +31,14 @@ class ImportRegressionTest(unittest.TestCase):
             self.assertEqual(c["source"]["file"], ic.CARD_SOURCE)
 
     def test_temp_conditions_are_stripped_and_kept_as_provenance(self):
+        # The standardised export dropped the editorial `temp` cells; an export that still carries
+        # them (the 2026-10-17 / first 2026-10-18 layout) is stripped with provenance kept.
+        for c in self.data["cards"]:
+            self.assertNotEqual(c["condition"].strip().lower(), "temp", c["id"])
+        old = {c["id"]: c for c in ic.build(os.path.join(ic.SRC, ic.PREVIOUS_SOURCES[0]))["cards"]}
         for cid in TEMP_IDS:
-            c = self.by_id[cid]
-            self.assertEqual(c["condition"], "", cid)
-            self.assertEqual(c["source"]["raw"]["condition"], "temp", cid)
-            for key in ("on_summon", "on_field", "on_destruction", "description"):
-                self.assertNotIn("temp", c[key].lower().split(), (cid, key))
-        stripped = {c["id"] for c in self.data["cards"] if c.get("source", {}).get("raw", {}).get("condition") == "temp"}
-        self.assertEqual(stripped, TEMP_IDS)
+            self.assertEqual(old[cid]["condition"], "", cid)
+            self.assertEqual(old[cid]["source"]["raw"]["condition"], "temp", cid)
 
     def test_populated_summon_fields_are_not_duplicated(self):
         self.assertEqual(self.by_id[63]["on_summon"], "Apply Reveal to all Spells/Traps.")
@@ -82,7 +82,6 @@ class ImportRegressionTest(unittest.TestCase):
         for cid, (name, cat) in expect.items():
             self.assertEqual((self.by_id[cid]["name"], self.by_id[cid]["category"]), (name, cat), cid)
         self.assertEqual(self.by_id[184]["condition"], "If a Spell/Trap is Destroyed:")   # "Sell/Trap" typo
-        self.assertEqual(self.by_id[184]["source"]["raw"]["condition"], "If a Sell/Trap is Destroyed:")
         self.assertEqual((self.by_id[186]["cost_kind"], self.by_id[186]["cost"]), ("ritual", 1))
         self.assertEqual((self.by_id[185]["cost"], self.by_id[187]["cost"]), (3, 1))
         self.assertIsNone(self.by_id[188]["cost"])
@@ -107,7 +106,10 @@ class ImportRegressionTest(unittest.TestCase):
                   157: "Symbiote Siphonophore"}
         for cid, name in expect.items():
             self.assertEqual(self.by_id[cid]["name"], name, cid)
-        self.assertEqual(self.by_id[157]["source"]["raw"]["name"], "Symbiote Siphonophore ")
+        self.assertEqual(self.by_id[157]["name"], "Symbiote Siphonophore")
+        for cid, name in {68: "Seppuku", 73: "Man's Best Friend", 49: "Trap Hole", 166: "Saboteurs' Guild",
+                          179: "Tyrant's Lantern", 96: "Roma, Exile of The Order"}.items():
+            self.assertEqual(self.by_id[cid]["name"], name, cid)
         names = [c["name"] for c in self.data["cards"] if c["category"] != "basic_unit"]
         self.assertEqual(len(names), len(set(names)), "a rename created a duplicate display name")
 
@@ -130,19 +132,20 @@ class ImportRegressionTest(unittest.TestCase):
         self.assertIn("one of your Units in this Column", self.by_id[45]["condition"])
         self.assertEqual(self.by_id[1]["name"].find("("), -1)
         for cid in list(range(170, 178)) + [185, 187]:
-            self.assertEqual(self.by_id[cid]["condition"], ic.ARCANE_REQUIREMENT)
+            self.assertEqual(self.by_id[cid]["condition"], "Exhaust Units from Spent whose combined Cost equals this Unit's Cost.")
+        old = {c["id"]: c for c in ic.build(os.path.join(ic.SRC, ic.PREVIOUS_SOURCES[0]))["cards"]}
+        self.assertEqual(old[170]["condition"], ic.ARCANE_REQUIREMENT)   # the ambiguous wording is still replaced
         # Obsolete overrides dropped: the export now carries the confirmed wording.
         self.assertEqual(self.by_id[169]["on_field"], "At the start of your turn: draw a card.")
         self.assertNotIn("raw", self.by_id[169]["source"])
         self.assertEqual(self.by_id[90]["on_field"], "Once per turn: you can apply 1 Paralyse to a Unit.")
         self.assertEqual(self.by_id[183]["on_field"], "At the start of your turn: your opponent takes -6 HP Damage.")
 
-    def test_broken_possessives_and_typos_are_corrected_with_provenance(self):
-        for cid, raw_bit in ((12, "this Units Column"), (73, "this Units Column"), (102, "this Units Type"),
-                             (162, "this Units cost"), (40, "using you Control")):
-            self.assertNotIn(raw_bit, self.by_id[cid]["on_field"], cid)
-            self.assertIn(raw_bit, self.by_id[cid]["source"]["raw"]["On Field"], cid)
-        self.assertIn("Unit's", self.by_id[162]["on_field"])
+    def test_standardised_export_needs_no_typo_corrections(self):
+        for cid in (12, 40, 73, 102, 141, 162, 184, 186, 187, 188):
+            self.assertNotIn("raw", self.by_id[cid]["source"], cid)
+        self.assertIn("Unit's", self.by_id[102]["on_field"])
+        self.assertEqual(sorted(ic.TEXT_CORRECTIONS), [45, 47, 48])
 
     def test_no_orphan_card_or_note(self):
         self.assertEqual(self.data["unassigned_source_notes"], [])

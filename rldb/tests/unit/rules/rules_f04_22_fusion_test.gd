@@ -4,7 +4,7 @@ extends GdUnitTestSuite
 ## Before it the action is cancellable and nothing has changed; after it the cost /
 ## self-destruction resolves, then the summon. Choices are asked
 ## with the method's source still on the Field (pending `source`).
-## Methods: Sepukku (68), Void Basilisk (67), Magentric (69), Aleister the Invoker (40),
+## Methods: Seppuku (68), Void Basilisk (67), Magentric (69), Aleister the Invoker (40),
 ## Fusion Laboratory (89), Fusion Ceremony cast (82) and set-activated, Tag Team - S (8, On Summon),
 ## and Unstable Fusions (137, Hand materials through Fusion Ceremony).
 
@@ -50,7 +50,7 @@ func _setup(method: String) -> Dictionary:
 			var b := TB.unit(m, 0, BEAST, 1)
 			var dr := TB.unit(m, 0, DRAGON, 2)
 			d.merge({"src": sp, "mats": [b, dr], "cmd": {"t": "ability", "uid": sp, "idx": 0},
-				"answers": [wyrm, b, dr, 0, 0], "cost": "Sepukku is destroyed"})
+				"answers": [wyrm, b, dr, 0, 0], "cost": "Seppuku is destroyed"})
 		"basilisk":
 			var vb := TB.unit(m, 0, BASILISK, 0)
 			var b := TB.card(m, 0, BEAST, "spent")
@@ -163,13 +163,13 @@ func test_f04_22_sepukku_destroyed_after_stance_and_its_zone_is_offered() -> voi
 	var sp: int = d["src"]
 	m.submit(0, d["cmd"])
 	_answer(m, d["wyrm"])
-	# Sepukku is never its own material.
+	# Seppuku is never its own material.
 	for o in m.pending["options"]:
 		assert_int(int(o.get("uid", -1))).is_not_equal(sp)
 	_answer(m, d["mats"][0])
 	_answer(m, d["mats"][1])
 	var slots: Array = m.pending["options"].map(func(o): return o["v"])
-	assert_bool(0 in slots).is_true()                   # Sepukku's own zone (it leaves first)
+	assert_bool(0 in slots).is_true()                   # Seppuku's own zone (it leaves first)
 	_answer(m, 0)
 	assert_str(m.cards[sp]["zone"]).is_equal("unit")   # still there at the stance prompt
 	_answer(m, 0)

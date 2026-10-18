@@ -47,11 +47,11 @@ func test_p12_pierce_kept_when_attack_deals_no_damage() -> void:
 func test_p22_on_summon_resolves_before_summon_trap() -> void:
 	var m := TB.make()
 	TB.to_turn2(m)
-	TB.set_card(m, 0, 49, 0)                              # Trap hole (2+ cost summons)
+	TB.set_card(m, 0, 49, 0)                              # Trap Hole (2+ cost summons)
 	var u := TB.summon(m, 1, 78, 0)                       # Abraxus: On Summon Cleanse 1
 	assert_str(m.pending["kind"]).is_equal("trap_response")
 	assert_int(m.status_count(u, "cleanse")).is_equal(1)
-	TB.choose(m, ["Activate Trap hole"])
+	TB.choose(m, ["Activate Trap Hole"])
 	assert_int(m.status_count(u, "paralyse")).is_equal(0)   # its Cleanse blocks the Paralyse
 
 

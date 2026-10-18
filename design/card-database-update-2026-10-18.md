@@ -101,15 +101,40 @@ Statuses: Implemented — verified (tests and live run), unless a row says other
 - `GameCore.change_hp` logs Damage/Healing; the game log colours them as before.
 - Tutorial: Fusion Ceremony, Damage wording, lesson 7 numbers.
 
-## Questions for the owner (implemented as the text reads; easy to change)
+## Owner answers (18 October 2026)
 
-1. **Energy Dispel** no longer says "Negate". As written, it destroys the activating card but the effect still
-   resolves (so it is weak against a Spell cast from the Hand). Was dropping the negation intended?
-2. **Elemental Mastery** "gains +6": two copies give 18 now (P-19 gave 24). Keep 18?
-3. **Counter Transmutation**: "Play a Power from Spent" is implemented as free (no AP) and from your own Spent. Right?
-4. **Necro, the Loathsome**: "apply the same Debuffs" gives the target the *doubled* stacks. Or should it get the
-   stacks from before the doubling?
-5. **Reinforcements** cost 2 and -2 AP were not on the list — confirm they are intended.
+1. Energy Dispel: dropping the negation is intended; it is meant to be weak against Spells.
+2. Elemental Mastery: +6 per copy, so two copies give 18.
+3. Counter Transmutation: free, from your own Spent. Confirmed.
+4. Necro, the Loathsome: the target gets the doubled stacks. Confirmed.
+5. Reinforcements: cost 2 and -2 AP are correct.
+
+All five match the implementation; nothing changed.
+
+## Standardised wording pass (second 18 October export)
+
+The owner then supplied `RLDB Master - Card Database - Updated.csv`, preserved as
+`rules/sources/RLDB Master - Card Database (2026-10-18b).csv` (SHA-256
+`f9c7583762e8710812a350694bb9c08f5eb2cc8c24aa768b390cc0734890f8ca`), with standardised wording and
+no intended effect changes. It is now the imported source.
+
+- 125 cards changed: wording in condition / On Summon / On Field / On Destruction / material cells,
+  the editorial `temp` cells removed, 23 index moves, and seven names: Seppuku (was Sepukku),
+  Man's Best Friend, Trap Hole, Saboteurs' Guild, Tyrant's Lantern, Roma, Exile of The Order (was
+  Exhile), and Symbiote Siphonophore without its trailing space. Code, tests and tools follow the names.
+- The importer's typo and house-style corrections (12, 40, 73, 102, 141, 162, 184, 186, 187, 188)
+  are dropped: the export fixed them itself. Kept: C-03 (Magic Cylinder / Damage Conversion attack
+  on one of your Units) and F03-19 (Overextend's chosen target).
+- The Arcane requirement now uses the export's own wording ("Exhaust Units from Spent whose combined
+  Cost equals this Unit's Cost"); it states the confirmed exact-total rule. Only the old ambiguous
+  "equivilant" wording would still be replaced.
+- One wording made a rule precise: Demented Apparition forces attacks "if ... this Unit is
+  Unprotected". The engine already did this except for an Infiltrate attacker, which could
+  previously be forced onto a protected Apparition; now it is not
+  (`test_c147_demented_apparition_forces_attacks_only_while_unprotected`).
+- Dante's On Destroy now reads "At the start of your next turn: you can lose -1 AP to Summon this
+  Unit". Kept as implemented (you decide when it is destroyed, the AP is lost next turn and it
+  returns at the start of that turn), per "no effect changes".
 
 ## Per-card ledger
 

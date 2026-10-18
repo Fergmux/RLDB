@@ -493,7 +493,7 @@ func _execute(p: int, cmd: Dictionary) -> void:
 			var flead := _fusion_lead(ab["ops"], split[0], true)
 			split[0] += flead
 			var ops: Array = split[0] + [{"op": "ability_cost", "idx": idx}]
-			# F04-22: a Fusion method's self-destruction / exhaustion (Sepukku, Void Basilisk) is a
+			# F04-22: a Fusion method's self-destruction / exhaustion (Seppuku, Void Basilisk) is a
 			# cost, paid with the AP/HP cost right after the committing stance, before the window.
 			if not flead.is_empty():
 				while not split[1].is_empty() and split[1][0]["op"] in ["move", "destroy"] and split[1][0].get("target", "") == "self":

@@ -107,7 +107,7 @@ func test_trap_owner_orders_multiple_eligible_traps() -> void:
 func test_traps_cannot_activate_on_own_turn() -> void:
 	var m := TB.make()
 	TB.to_turn2(m)
-	TB.set_card(m, 1, 49, 0)                    # Trap hole owned by active player
+	TB.set_card(m, 1, 49, 0)                    # Trap Hole owned by active player
 	var u := TB.card(m, 1, 28)
 	m.submit(1, {"t": "summon", "uid": u})
 	TB.choose(m, ["Front row, column 1"])

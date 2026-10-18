@@ -158,7 +158,7 @@ func test_c070_krakeshin_summons_with_three_nimble() -> void:
 	assert_int(m.atk_of(k)).is_equal(14)
 
 
-# ---------------------------------------------------------------- 73 Mans Best Friend
+# ---------------------------------------------------------------- 73 Man's Best Friend
 
 func test_c073_mans_best_friend_search_offers_only_warriors() -> void:
 	var m := CF.make()

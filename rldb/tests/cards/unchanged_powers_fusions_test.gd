@@ -68,7 +68,7 @@ func test_c148_martyrdom_needs_an_own_unit_to_exhaust() -> void:
 	assert_str(TB.ability(m, mart)).is_equal("No legal target.")
 
 
-# ---------------------------------------------------------------- 139 Magical Council / 166 Saboteurs Guild
+# ---------------------------------------------------------------- 139 Magical Council / 166 Saboteurs' Guild
 
 func test_c139_magical_council_does_not_discount_traps_or_go_below_zero() -> void:
 	var m := CF.make()

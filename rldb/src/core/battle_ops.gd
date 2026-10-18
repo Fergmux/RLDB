@@ -39,7 +39,9 @@ func attack_targets(uid: int) -> Array:
 	for u in foes:
 		if not is_protected(u) or status_count(uid, "infiltrate") > 0:
 			out.append(u)
-	var forced := out.filter(func(u): return has_flag(u, "taunt"))
+	# Demented Apparition forces attacks only while it is Unprotected (wording of 2026-10-18), so an
+	# Infiltrate attacker may still pick another target when it hides behind a front unit.
+	var forced := out.filter(func(u): return has_flag(u, "taunt") and not is_protected(u))
 	if not forced.is_empty():
 		return forced
 	if foes.is_empty() or has_flag(uid, "direct_attack"):

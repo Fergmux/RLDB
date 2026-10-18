@@ -163,7 +163,7 @@ func test_c085_energy_capture_does_not_answer_own_effects() -> void:
 	assert_str(CF.zone(m, trap)).is_equal("backrow")
 
 
-# ---------------------------------------------------------------- 49 Trap hole
+# ---------------------------------------------------------------- 49 Trap Hole
 
 func test_c049_trap_hole_pass_keeps_trap_set_and_unit_untouched() -> void:
 	var m := CF.p1_main()
@@ -178,7 +178,7 @@ func test_c049_trap_hole_goes_to_spent_after_activation() -> void:
 	var m := CF.p1_main()
 	var trap := TB.set_card(m, 0, 49, 0)
 	TB.summon(m, 1, 28, 0)
-	TB.choose(m, ["Activate Trap hole"])
+	TB.choose(m, ["Activate Trap Hole"])
 	assert_str(CF.zone(m, trap)).is_equal("spent")
 
 
