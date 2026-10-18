@@ -43,6 +43,11 @@ func gone_cards() -> Array:
 	return _gone.values()
 
 
+## Deals the whole hand in from the draw pile again (the opening hand, after the coin flip).
+func deal_all() -> void:
+	layout(order.duplicate(), false)
+
+
 ## Places the hand cards; `new_ids` are dealt in from the draw pile unless `instant`.
 func layout(new_ids: Array, instant: bool) -> void:
 	var n := order.size()
@@ -127,6 +132,7 @@ func render(targeting: bool) -> void:
 			holder.pivot_offset = holder.size / 2.0
 			var w := CardWidget.new()
 			w.auto_hover = false
+			w.show_tooltip = false      # 2026-10-18: hovering enlarges the card instead
 			w.pressed.connect(sel.on_widget_pressed)
 			w.right_pressed.connect(sel.on_widget_right)
 			holder.add_child(w)

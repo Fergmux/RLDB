@@ -8,8 +8,9 @@ const _UNIT := {"uid": 7, "id": 7, "name": "Neva the Divine Mother", "category":
 	"race": "God", "type": "", "atk": 16, "def": 30, "printed_atk": 16, "printed_def": 30}
 const _SPELL := {"uid": 8, "id": 8, "name": "Shimmer Serum", "category": "spell", "cost_kind": "ap", "cost": 0,
 	"printed_cost": 0, "zone": "hand", "face_up": true, "statuses": {}, "runes": 0, "text": _LONG}
-## Steps of a hover lift, including the TRANS_BACK overshoot and the 1.05 draft / reward lift.
-const _STEPS := [1.0, 1.013, 1.05, 1.1, 1.137, 1.2, 1.25, 1.28]
+## Steps of a hover lift, including the TRANS_BACK overshoot, the 1.05 draft / reward lift and the
+## 1.75 hand lift (2026-10-18) with its overshoot.
+const _STEPS := [1.0, 1.013, 1.05, 1.1, 1.137, 1.2, 1.25, 1.28, 1.5, 1.75, 1.82]
 
 
 func _widget(v: Dictionary, kind: String) -> CardWidget:

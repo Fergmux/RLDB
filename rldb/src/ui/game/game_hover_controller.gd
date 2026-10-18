@@ -4,7 +4,12 @@ extends RefCounted
 ## it never shows action buttons and never sends anything. Over the selected card's action
 ## row, the tray or the banner nothing else hovers.
 
-const HAND_SCALE := 1.25
+## Owner feedback 2026-10-18: a hovered hand card grows enough to read its whole text (hand cards
+## carry no tooltip). 1.75 x 120x180 = 210x315.
+const HAND_SCALE := 1.75
+## Rise of a hovered hand card: the growth above its centre plus the old 25 px lift, so its bottom
+## edge stays where it was and the card grows upwards.
+const HAND_LIFT := -92.0
 const FIELD_SCALE := 1.08
 ## Seconds the pointer may leave a hovered card before it drops.
 const CLOSE_DELAY := 0.12
@@ -105,10 +110,10 @@ func update(m: Vector2) -> void:
 static func lift_params(kind: String) -> Array:
 	var hand := kind == "hand"
 	var sc := HAND_SCALE if hand else FIELD_SCALE
-	var lift := Vector2(0, -48) if hand else Vector2.ZERO
-	if UIStyle.reduce_motion:
+	var lift := Vector2(0, HAND_LIFT) if hand else Vector2.ZERO
+	# Reduced motion keeps the hand card's readable size (it changes at once, without the bounce).
+	if UIStyle.reduce_motion and not hand:
 		sc = minf(sc, 1.05)
-		lift = Vector2(0, -16) if hand else Vector2.ZERO
 	return [sc, lift]
 
 
