@@ -90,6 +90,14 @@ func test_f02_02_malformed_stance_rejected() -> void:
 	assert_str(NetSession.sanitize_command({"t": "summon", "uid": u, "stance": "def"})).is_empty()
 
 
+## Online regression (2026-10-18): a unit that may attack a unit or directly (Flying Sandworm) sends
+## "mode"; the host rejected it as an unknown field, so the joining player could not attack with it.
+func test_g07_attack_mode_from_a_remote_client_accepted_and_type_checked() -> void:
+	assert_str(NetSession.sanitize_command({"t": "attack", "uid": 7, "mode": "direct"})).is_empty()
+	assert_str(NetSession.sanitize_command({"t": "attack", "uid": 7, "mode": "unit"})).is_empty()
+	assert_str(NetSession.sanitize_command({"t": "attack", "uid": 7, "mode": 1})).is_not_empty()
+
+
 # ---------------------------------------------------------------- F02-04
 
 func test_f02_04_ability_buttons_use_short_labels_full_text_kept() -> void:

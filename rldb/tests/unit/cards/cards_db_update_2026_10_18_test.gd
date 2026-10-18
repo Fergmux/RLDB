@@ -613,12 +613,12 @@ func test_c185_drako_ability_needs_a_power_on_the_field() -> void:
 
 # ---------------------------------------------------------------- Bronze Salaman
 
-func test_c186_bronze_salaman_is_a_1_rune_light_dragon_in_the_lone_warrior_deck() -> void:
+func test_c186_bronze_salaman_is_a_1_rune_light_dragon_in_the_trial_of_the_warrior_deck() -> void:
 	var d := CardDB.get_def(BRONZE_SALAMAN)
 	assert_array([d["category"], d["race"], d["type"], d["cost_kind"], d["cost"], d["atk"], d["def"]]) \
 		.is_equal(["ritual", "Dragon", "Light", "ritual", 1, 20, 20])
 	var decks: Array = JSON.parse_string(FileAccess.get_file_as_string("res://data/starter_decks.json"))["decks"]
-	var lone: Dictionary = decks.filter(func(x): return String(x["name"]).begins_with("Lone Warrior"))[0]
+	var lone: Dictionary = decks.filter(func(x): return String(x["name"]) == "Trial of the Warrior")[0]
 	assert_array(lone["extra"].map(func(x): return int(x))).contains([BRONZE_SALAMAN])
 	assert_int(lone["extra"].size()).is_equal(3)
 
