@@ -445,14 +445,14 @@ func _leaf_panel(target: String) -> Control:
 				var hp := addr.text.split(":")
 				lan_join_requested.emit(hp[0], int(hp[1]) if hp.size() > 1 else SessionOptions.DEFAULT_LAN_PORT))
 		"host_online":
-			pv = _center_panel("Host game", "Creates a Steam lobby and opens the invite dialog.", "Play · online")
+			pv = _center_panel("Host game", "Creates a Steam lobby. Invite a friend from the next screen.", "Play · online")
 			_series_options(pv[1])
 			var pub := _check_box("List my lobby publicly", _options.series.get("public_lobby", false),
 					func(on): _options.series["public_lobby"] = on)
 			pub.tooltip_text = "Off: friends-only, joined by invite. On: also visible under Join game."
 			pv[1].add_child(pub)
 			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, UIStyle.TEXT_DIM, true))
-			_start_button(pv[1], "Host and invite", steam_host_requested.emit)
+			_start_button(pv[1], "Host", steam_host_requested.emit)
 		"join_online":
 			pv = _center_panel("Join game", "Accept a friend's invite in the Steam overlay, or browse public lobbies.", "Play · online")
 			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, UIStyle.TEXT_DIM, true))

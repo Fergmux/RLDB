@@ -192,8 +192,9 @@ func _on_lobby_created(connect: int, id: int) -> void:
 		_status("Could not open the Steam host socket (error %d)." % err)
 		return
 	api.multiplayer_peer = peer
-	_status("Steam lobby ready. Invite a friend from the Steam overlay.")
-	invite_friend()
+	# Owner feedback 2026-10-18: hosting only opens the lobby; the deck choice screen's
+	# "Invite a Steam friend" button opens the invite dialog.
+	_status("Steam lobby ready. Invite a friend with the Invite button.")
 	_broadcast()
 
 

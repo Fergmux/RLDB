@@ -79,7 +79,8 @@ func _lobby_bar(box: VBoxContainer) -> void:
 	msg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lob.add_child(msg)
 	if net.get("transport", "") == "steam":
-		var inv := UIStyle.primary_button("Invite a Steam friend", 15)
+		var inv := UIStyle.primary_button("Invite", 15)
+		inv.tooltip_text = "Invite a Steam friend to this lobby."
 		inv.pressed.connect(func(): gs.get_tree().call_group("net_session", "invite_friend"))
 		lob.add_child(inv)
 
