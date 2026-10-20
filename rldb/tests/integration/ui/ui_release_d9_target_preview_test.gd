@@ -96,3 +96,19 @@ func test_preview_clears_when_the_row_closes() -> void:
 	await await_idle_frame()
 	gs.action_row.clear()
 	assert_array(gs.board.preview_refs).is_empty()
+
+
+## Owner (21 Oct): a field card's action labels ("To Defense", "Apply Pierce") show whole, never cut
+## with an ellipsis: each button is at least as wide as its label plus the medallion and margins.
+func test_field_action_buttons_fit_their_whole_labels() -> void:
+	gs.selection.select(mine)
+	await await_idle_frame()
+	var buttons := gs.action_row.stack.get_children()
+	assert_int(buttons.size()).is_greater_equal(2)
+	for b in buttons:
+		var btn := b as Button
+		var sb := btn.get_theme_stylebox("normal")
+		var font := btn.get_theme_font("font")
+		var text_w := font.get_string_size(btn.text, HORIZONTAL_ALIGNMENT_LEFT, -1, btn.get_theme_font_size("font_size")).x
+		assert_float(btn.size.x).override_failure_message("'%s' is cut: %.0f px for %.0f px of label" % [btn.text, btn.size.x, text_w + sb.content_margin_left + sb.content_margin_right]) \
+			.is_greater_equal(text_w + sb.content_margin_left + sb.content_margin_right)

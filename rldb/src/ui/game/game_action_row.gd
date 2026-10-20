@@ -105,6 +105,12 @@ func rebuild() -> void:
 	var rows := int(ceil(float(n) / float(cols)))
 	var w := maxf(tr.size.x, ONE_COL_W if cols == 1 else TWO_COL_W)
 	var bw := (w - gap * float(cols - 1)) / float(cols)
+	# Owner (21 Oct): labels show whole. A button widens to its longest label instead of cutting it.
+	var labels := []
+	for a in acts:
+		labels.append(String(a["label"]) if a["ok"] else String(a["reason"]))
+	bw = maxf(bw, label_fit_width(labels))
+	w = bw * float(cols) + gap * float(cols - 1)
 	var total := rows * bh + (rows - 1) * gap
 	var x := tr.get_center().x - w / 2.0
 	var top := 0.0
@@ -195,6 +201,16 @@ func run_action(uid: int, a: Dictionary) -> void:
 		gs.hover.unlift(it)
 	Sfx.play("confirm")
 	gs.send(cmd)
+
+
+## Width (px) an action button needs to show the longest of `labels` whole: the label in the
+## button font plus the medallion and the side margins.
+static func label_fit_width(labels: Array) -> float:
+	var font := UIStyle.font_display(700)
+	var widest := 0.0
+	for t in labels:
+		widest = maxf(widest, font.get_string_size(String(t), HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_PX).x)
+	return ceilf(widest + ActionButton.GLYPH_W + 6.0 + 12.0 + 4.0)
 
 
 ## H2 (owner, 21 Oct): a card action button as a forged plate in the game's gold and metal: a dark
