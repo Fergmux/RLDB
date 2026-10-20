@@ -74,6 +74,6 @@ func _draw() -> void:
 	draw_string(font, Vector2(0.0, base_y), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UIStyle.TEXT)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if is_unit and String(card.get("type", "")) != "":
-		TypeIcons.draw_pip(self, String(card["type"]), Vector2(14, 20), 8.0)
+		TypeIcons.draw_pip_jewel(self, String(card["type"]), Vector2(14, 20), 8.0)
 	# Rim: bronze, gold when hovered.
 	draw_rect(r, UIStyle.BRONZE.lerp(UIStyle.GOLD_HI, _hover), false, 1.5 + _hover * 0.5)

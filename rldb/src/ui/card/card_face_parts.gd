@@ -15,6 +15,11 @@ const BODY_TILE := 210.0
 const PLATE := Color(0.102, 0.086, 0.075, 0.94)
 const PLATE_GRAIN := 0.45
 const PLATE_TILE := 150.0
+## H17: depth (base units) of the gilded setting round the cost gem, and the round gem's table size.
+const GEM_SETTING := 2.5
+const GEM_TABLE_K := 0.6
+## Dark gap (base units) between the cost gem's setting and its stone.
+const GEM_GAP := 0.5
 
 
 ## Card body: kind-coloured border with a drop shadow (larger while hovered), inner gradient and a
@@ -61,31 +66,40 @@ static func gem(pt: CardPainter, c: Vector2, r: float, fs: int) -> void:
 	pt.upright_begin(c)
 	var kind := String(pt.view.get("cost_kind", "ap"))
 	var col: Color = UIStyle.COST_COLORS.get(kind, UIStyle.COST_COLORS["ap"])
-	var dark := col.darkened(0.7)
-	var bw := maxf(1.5, 2.0 * pt.s)
+	var s := pt.s
+	var band := maxf(1.4, GEM_SETTING * s)
+	# H17: a faceted gem in a gilded setting, the AP gems' look. The shape still says the cost kind:
+	# a round brilliant (AP: topaz, Fusion: sapphire with a ring engraved round its table), a lozenge
+	# (Ritual) or a hexagon (Arcane).
+	var outer: PackedVector2Array
+	var girdle_n := 8
+	var rot := PI / 8.0
 	match kind:
 		"ritual":
-			var rr := r * 1.22
-			ci.draw_colored_polygon(CardGeometry.poly(c, rr, 4, PI / 4.0), dark)
-			ci.draw_colored_polygon(CardGeometry.poly(c, rr - bw * 1.3, 4, PI / 4.0), col)
-			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -(rr - bw * 1.3)), c + Vector2(rr - bw * 1.3, 0), c + Vector2(0, 0), c + Vector2(-(rr - bw * 1.3), 0)]), col.lightened(0.25))
+			outer = CardGeometry.poly(c, r * 1.24, 4, PI / 2.0)
+			girdle_n = 4
+			rot = PI / 2.0
 		"arcane":
-			var rh := r * 1.08
-			ci.draw_colored_polygon(CardGeometry.poly(c, rh, 6, 0.0), dark)
-			ci.draw_colored_polygon(CardGeometry.poly(c, rh - bw, 6, 0.0), col)
-			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-(rh - bw), 0), c + Vector2(-(rh - bw) / 2.0, -(rh - bw) * 0.866), c + Vector2((rh - bw) / 2.0, -(rh - bw) * 0.866), c + Vector2(rh - bw, 0)]), col.lightened(0.25))
-		"fusion":
-			ci.draw_circle(c, r, dark, true, -1.0, true)
-			ci.draw_circle(c, r - bw, col, true, -1.0, true)
-			ci.draw_arc(c, r * 0.68, 0.0, TAU, 28, dark, maxf(1.0, 1.5 * pt.s), true)
-			ci.draw_circle(c + Vector2(-r * 0.25, -r * 0.3), r * 0.28, Color(1, 1, 1, 0.25), true, -1.0, true)
+			outer = CardGeometry.poly(c, r * 1.1, 6, 0.0)
+			girdle_n = 6
+			rot = 0.0
 		_:
-			ci.draw_circle(c, r, dark, true, -1.0, true)
-			ci.draw_circle(c, r - bw, col, true, -1.0, true)
-			ci.draw_circle(c + Vector2(-r * 0.22, -r * 0.3), r * 0.38, Color(1, 1, 1, 0.28), true, -1.0, true)
+			outer = CardGeometry.poly(c, r, 24, 0.0)
+	CardJewel.drop_shadow(ci, outer, c, s)
+	var inner := CardJewel.setting(ci, outer, c, band, s)
+	# A dark ink gap between the metal and the stone (as in the AP sockets) so the gem reads apart.
+	ci.draw_colored_polygon(inner, CardJewel.GEM_EDGE)
+	var gr := c.distance_to(inner[0]) - GEM_GAP * s
+	var girdle := CardGeometry.grow_pts(inner, c, -GEM_GAP * s) if girdle_n != 8 else CardGeometry.poly(c, gr, 8, rot)
+	var dark_text := kind == "ap"
+	var pal: Array = [ApGemRow.TOPAZ_HI, ApGemRow.TOPAZ, ApGemRow.TOPAZ_LO] if kind == "ap" else []
+	CardJewel.gem(ci, girdle, c, col, GEM_TABLE_K if girdle_n == 8 else 0.58, false, not dark_text, pal)
+	if kind == "fusion":
+		ci.draw_arc(c, gr * 0.74, 0.0, TAU, 24, Color(col.darkened(0.6), 0.85), maxf(1.0, 0.9 * s), true)
 	var txt := cost_text(pt.view)
 	var tc := cost_color(pt.view)
-	pt.text_c(UIStyle.font_display(700), txt, c + Vector2(0, 0.5 * pt.s), fs, tc, 0.0 if tc == UIStyle.ON_GOLD else 1.5)
+	pt.text_c(UIStyle.font_display(700), txt, c + Vector2(0, 0.5 * s), fs, tc, 0.0 if tc == UIStyle.ON_GOLD else 1.5)
+	CardJewel.sparkle(ci, c + CardJewel.LIGHT.normalized() * gr * 0.68, maxf(0.9, gr * 0.16), 0.9)
 	pt.upright_end()
 
 
@@ -134,7 +148,7 @@ static func type_pip(pt: CardPainter, c: Vector2, r: float) -> void:
 		return
 	var t = view.get("type")
 	pt.upright_begin(c)
-	TypeIcons.draw_pip(pt.ci, "" if t == null else str(t), c, r)
+	TypeIcons.draw_pip_jewel(pt.ci, "" if t == null else str(t), c, r)
 	pt.upright_end()
 
 
