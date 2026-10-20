@@ -343,7 +343,9 @@ func exhaust(e: Dictionary, prev_mv: Dictionary) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_title_label("EXHAUSTED", 18, VOID.lightened(0.35), 4))
+	var ex := _title_label("EXHAUSTED", 18, VOID.lightened(0.35), 4)
+	row.add_child(ex)
+	TitleText.apply(ex, TitleText.Tier.HERO, 18)
 	var sub := UIStyle.label(("%s  ·  %s to Exhaust" % [who, from.capitalize()]) if known else ("A card from %s" % from.capitalize()), 14, UIStyle.TEXT)
 	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(sub)

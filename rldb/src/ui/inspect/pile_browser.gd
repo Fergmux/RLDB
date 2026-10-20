@@ -176,6 +176,7 @@ func _build() -> void:
 	head.add_child(titles)
 	_title_label = UIStyle.label("", 30, UIStyle.GOLD, false, true)
 	titles.add_child(_title_label)
+	TitleText.apply(_title_label, TitleText.Tier.SCREEN, 30)   # D3: T2 screen title
 	_hint_label = UIStyle.label("", 13, UIStyle.MUTED)
 	titles.add_child(_hint_label)
 	var x := UIStyle.size_button(UIStyle.secondary_button("Close", 15), "standard")

@@ -377,7 +377,7 @@ func _maybe_coin_flip() -> void:
 	board.opp_hand_box.modulate.a = 0.0
 	coin.finished.connect(_deal_after_coin)
 	coin.tree_exiting.connect(_deal_after_coin)   # backstop: the coin removed early
-	coin.play(String(pv(first)["name"]), String(pv(1 - first)["name"]), first == me() and not is_spectator())
+	coin.play(String(pv(first)["name"]), String(pv(1 - first)["name"]), first == me() and not is_spectator(), first)
 
 
 ## Shows the hands once the coin flip is done: mine dealt in from the draw pile, the opponent's

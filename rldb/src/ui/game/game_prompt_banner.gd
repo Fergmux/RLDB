@@ -26,6 +26,10 @@ const HEADLINE_NARROW_PX := 17
 ## it is the whole instruction (no status line between them).
 const HEADLINE_PAY_PX := 19
 const HEADLINE_PAY_NARROW_PX := 16
+## Design review #33 (P1): a long title never runs past this many lines; it steps down to
+## HEADLINE_MIN_PX first (and only wraps further at that size).
+const HEADLINE_MAX_LINES := 3
+const HEADLINE_MIN_PX := 14
 const BANNER_GAP := 12.0
 ## Breathing border period (s).
 const BANNER_BREATH := 1.4
@@ -177,7 +181,7 @@ func build() -> void:
 	gs.add_child(ctx_banner)
 	var bcol := plate.body
 	banner_tag = plate.title_label
-	banner_title = plate.add_headline("", 21)
+	banner_title = plate.add_headline("", 21, false, 8.0, true, TitleText.Tier.SCREEN)   # D3: T2
 	StatusHelp.watch_label(banner_title)
 	_build_subject(bcol)
 	_build_mentions(bcol)
@@ -237,11 +241,9 @@ func build() -> void:
 ## text beside it. Right-click the card to inspect it in full.
 func _build_subject(col: VBoxContainer) -> void:
 	subject_box = PanelContainer.new()
-	var sb := UIStyle.flat(Color(0.045, 0.035, 0.025, 0.92), Color(UIStyle.BRONZE, 0.75), 1, 8)
-	sb.content_margin_left = 6
-	sb.content_margin_right = 8
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
+	# Design review #36: an engraved F3 ink well with room inside (12 px sides, 8 px top / bottom).
+	var sb := UIStyle.inset_style(Color(0.045, 0.035, 0.025, 0.92), 8, 0.2)
+	UIStyle.pad(sb, "md", "sm")
 	subject_box.add_theme_stylebox_override("panel", sb)
 	subject_box.visible = false
 	subject_box.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -249,7 +251,7 @@ func _build_subject(col: VBoxContainer) -> void:
 	# A plain BoxContainer: _fit_subject flips it vertical in the narrow side column (an
 	# HBoxContainer's orientation is fixed; setting it only logs an error).
 	var h := BoxContainer.new()
-	h.add_theme_constant_override("separation", 8)
+	UIStyle.pad(h, "md")
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	subject_box.add_child(h)
 	subject_card = CardWidget.new().setup(null, "mini")
@@ -332,7 +334,8 @@ func _render_subject(pd: Dictionary) -> void:
 	GameUi.resize_card(subject_card, SUBJECT_CARD)
 	subject_name.text = String(c.get("name", ""))
 	var txt := String(c.get("text", "")).strip_edges()
-	subject_text.text = txt if txt != "" else "No rules text."
+	subject_text.text = txt
+	subject_text.visible = txt != ""   # design review #36: no "No rules text" line, the name says it
 	subject_text.tooltip_text = txt
 	subject_box.tooltip_text = "%s\n%s" % [String(c.get("name", "")), txt]
 
@@ -1025,10 +1028,31 @@ func _fit_subject(w: float, compact: bool = false) -> void:
 	var px := HEADLINE_NARROW_PX if thin or compact else HEADLINE_PX
 	if _exact_pay:
 		px = HEADLINE_PAY_NARROW_PX if thin or compact else HEADLINE_PAY_PX
+	px = headline_px(banner_title.text, w - (ctx_banner as HousePanel).chrome_size().x, px)
 	banner_title.add_theme_font_size_override("font_size", px)
 	if _tag_full != "":
 		banner_tag.text = "YOUR DECISION" if thin else _tag_full
 		banner_tag.tooltip_text = _tag_full
+
+
+## Headline size for `text` in a `width` px column (design review #33): `px` when it fits in
+## HEADLINE_MAX_LINES lines of the T2 face, else the largest size down to HEADLINE_MIN_PX that does
+## (HEADLINE_MIN_PX when none does).
+static func headline_px(text: String, width: float, px: int) -> int:
+	if text == "" or width <= 1.0:
+		return px
+	for fs in range(px, HEADLINE_MIN_PX - 1, -1):
+		if headline_lines(text, width, fs) <= HEADLINE_MAX_LINES:
+			return fs
+	return mini(px, HEADLINE_MIN_PX)
+
+
+## Lines `text` takes word-wrapped at `width` px in the T2 face at `fs` px.
+static func headline_lines(text: String, width: float, fs: int) -> int:
+	var font := TitleText.tier_font(TitleText.Tier.SCREEN)
+	var h := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, width, fs, -1,
+		TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE).y
+	return maxi(1, roundi(h / maxf(1.0, font.get_height(fs))))
 
 
 ## Attention treatment (F03-25): a pop and gold flare when a new choice appears, then a gentle

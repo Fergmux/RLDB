@@ -19,6 +19,14 @@ const POOL_ALPHA := 0.75
 const GLOW_ALPHA := 0.95
 ## Uniform darkening of the whole play area (the vignette floor, so the field never competes with the coin).
 const DIM_ALPHA := 0.5
+## The result title (design review #72): T1 hero text on its own child above the veil, landing with
+## an impact punch, and its gap under the coin.
+const RESULT_PX := 56
+const RESULT_GAP := 40.0
+const RESULT_PUNCH := 1.25
+## House metals of the two faces: seat 1's sun face (gold) and seat 2's moon face (bronze).
+const SUN_METAL := Color("e2b54a")
+const MOON_METAL := Color("b9864a")
 
 static var _pool_tex: GradientTexture2D
 static var _glow_tex: GradientTexture2D
@@ -40,6 +48,11 @@ var result_a: float = 0.0: set = _set_result
 var backdrop_a: float = 0.0: set = _set_backdrop
 ## Landing shockwave progress 0 -> 1 (0 = not started).
 var land_t: float = 0.0: set = _set_land
+## Seat (0 / 1) of the player who goes first: their face shows the sun crest, the other the moon.
+var first_seat: int = 0
+## The result title ("You go first" / "Ben goes first"): a TitleText child, so it draws above the
+## veil this control paints (#72).
+var result_title: TitleText
 
 
 func _init() -> void:
@@ -59,6 +72,8 @@ func _set_lift(v: float) -> void:
 
 func _set_result(v: float) -> void:
 	result_a = v
+	if result_title != null:
+		result_title.modulate.a = v
 	queue_redraw()
 
 
@@ -72,10 +87,18 @@ func _set_land(v: float) -> void:
 	queue_redraw()
 
 
-## Starts the flip centred in this control's rect.
-func play(winner_name: String, other_name: String, me_first: bool) -> void:
+## Starts the flip centred in this control's rect. `seat` is the first player's seat (its crest).
+func play(winner_name: String, other_name: String, me_first: bool, seat: int = 0) -> void:
 	names = [winner_name, other_name]
 	winner_is_me = me_first
+	first_seat = seat
+	result_title = TitleText.make("You go first" if me_first else "%s goes first" % winner_name, TitleText.Tier.HERO, RESULT_PX)
+	result_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_title.modulate.a = 0.0
+	add_child(result_title)
+	_place_result()
+	resized.connect(_place_result)
 	var tw := create_tween()
 	if UIStyle.reduce_motion:
 		phase = float(HALF_TURNS) * PI
@@ -91,7 +114,8 @@ func play(winner_name: String, other_name: String, me_first: bool) -> void:
 		tw.parallel().tween_method(func(t: float): lift = sin(t * PI) * 70.0, 0.0, 1.0, SPIN_TIME * 0.8).set_trans(Tween.TRANS_SINE)
 		tw.tween_callback(func():
 			Sfx.play("notice")
-			Sfx.play("impact", -8.0, 0.0))
+			Sfx.play("impact", -8.0, 0.0)
+			_land_title())
 		# Landing: a small bounce, a ring of light and the result plate.
 		tw.tween_method(func(t: float): lift = sin(t * PI) * 12.0, 0.0, 1.0, 0.16)
 		tw.parallel().tween_property(self, "land_t", 1.0, 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -100,6 +124,28 @@ func play(winner_name: String, other_name: String, me_first: bool) -> void:
 	tw.tween_callback(func(): finished.emit())
 	tw.tween_property(self, "modulate:a", 0.0, 0.35)
 	tw.tween_callback(queue_free)
+
+
+## Centres the result title under the coin.
+func _place_result() -> void:
+	if result_title == null:
+		return
+	result_title.reset_size()
+	var sz := result_title.get_combined_minimum_size()
+	result_title.size = sz
+	result_title.pivot_offset = sz / 2.0
+	result_title.position = Vector2(size.x / 2.0 - sz.x / 2.0, size.y / 2.0 + R + RESULT_GAP)
+
+
+## The title lands with the coin (motion token `impact`): it drops in from RESULT_PUNCH scale, holds a
+## hit-stop beat and settles with an elastic shake. Reduce motion: it fades in (result_a).
+func _land_title() -> void:
+	if result_title == null:
+		return
+	result_title.scale = Vector2(RESULT_PUNCH, RESULT_PUNCH)
+	var tt := create_tween()
+	tt.tween_interval(UIStyle.motion("hit_stop"))
+	UIStyle.tween_token(tt, result_title, "scale", Vector2.ONE, "impact")
 
 
 ## Which face is up: the coin shows the winner's face when `phase` is a multiple of 2*PI from the
@@ -153,8 +199,9 @@ func _draw() -> void:
 			draw_line(mid + d * lr * 0.8, mid + d * lr * (0.8 + 0.28 * (1.0 - land_t)), Color(1, 0.93, 0.7, 1.0 - land_t), 2.5, true)
 	var sx := absf(cos(phase))
 	var face := _face()
-	var mine_face: bool = (face == 0) == winner_is_me
-	var metal := Color("e2b54a") if mine_face else Color("c9ccd4")
+	# The face's seat: face 0 is the first player's. Seat 1 wears the sun on gold, seat 2 the moon on bronze.
+	var seat := first_seat if face == 0 else 1 - first_seat
+	var metal := SUN_METAL if seat == 0 else MOON_METAL
 	var dark := metal.darkened(0.45)
 	draw_set_transform(c, 0.0, Vector2(maxf(sx, 0.04), 1.0))
 	draw_circle(Vector2.ZERO, R + 6.0, Color(0, 0, 0, 0.35))
@@ -163,42 +210,53 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, R - 6.0, metal)
 	draw_arc(Vector2.ZERO, R - 12.0, 0.0, TAU, 48, Color(dark, 0.8), 2.0, true)
 	draw_arc(Vector2.ZERO, R - 3.0, PI * 1.1, PI * 1.8, 24, Color(1, 1, 1, 0.35), 2.0, true)
-	draw_circle(Vector2(-R * 0.3, -R * 0.35), R * 0.28, Color(1, 1, 1, 0.22))
+	draw_circle(Vector2(-R * 0.58, -R * 0.5), R * 0.1, Color(1, 1, 1, 0.3), true, -1.0, true)
+	# Embossed crest (a sun or a crescent moon) with the player's initial small under it.
+	_draw_crest(Vector2(0, -R * 0.1), R * 0.46, seat == 0, metal)
 	var nm: String = String(names[face])
 	var letter := nm.substr(0, 1).to_upper() if nm != "" else "?"
 	var font := UIStyle.font_display(700)
-	var fs := 64
+	var fs := 20
 	var ts := font.get_string_size(letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
-	var pos := Vector2(-ts.x / 2.0, (font.get_ascent(fs) - font.get_descent(fs)) / 2.0)
-	draw_string(font, pos + Vector2(2, 2), letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.35))
+	var pos := Vector2(-ts.x / 2.0, R * 0.56 + (font.get_ascent(fs) - font.get_descent(fs)) / 2.0)
+	draw_string(font, pos + Vector2(1, 1), letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.3))
 	draw_string(font, pos, letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, dark.darkened(0.3))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# Result plate under the coin: dark fill, gold border, soft shadow; outlined text on top.
+	# The "COIN FLIP" caption under the result title (the title itself is the TitleText child).
 	if result_a > 0.001:
-		var txt := "You go first" if winner_is_me else "%s goes first" % String(names[0])
-		var rf := UIStyle.font_display(700)
-		var rfs := 40
-		var rs := rf.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, rfs)
+		var sf := UIStyle.font_display(600)
 		var sub := "COIN FLIP"
-		var sf := UIStyle.font_bold()
-		var ss := sf.get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
-		var pw := maxf(rs.x, ss.x) + 72.0
-		var ph := rs.y + 20.0 + 36.0
-		var top := mid.y + R + 46.0
-		var prect := Rect2(mid.x - pw / 2.0, top, pw, ph)
-		var edge := UIStyle.GOLD_HI if winner_is_me else Color("b9ab8c")
-		var sb := UIStyle.flat(Color(0.05, 0.035, 0.025, 0.9 * result_a), Color(edge, result_a), 2, 16)
-		sb.shadow_color = Color(0, 0, 0, 0.6 * result_a)
-		sb.shadow_size = 16
-		sb.shadow_offset = Vector2(0, 5)
-		draw_style_box(sb, prect)
-		draw_rect(Rect2(prect.position + Vector2(14, 5), Vector2(prect.size.x - 28, 1)), Color(edge, 0.35 * result_a))
-		var col := Color(UIStyle.GOLD_HI, result_a) if winner_is_me else Color(Color("efe3c6"), result_a)
-		var rp := Vector2(mid.x - rs.x / 2.0, top + 14.0 + rf.get_ascent(rfs))
-		draw_string(rf, rp + Vector2(0, 3), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, rfs, Color(0, 0, 0, 0.6 * result_a))
-		draw_string_outline(rf, rp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, rfs, 7, Color(0, 0, 0, 0.85 * result_a))
-		draw_string(rf, rp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, rfs, col)
-		var sp := Vector2(mid.x - ss.x / 2.0, rp.y + 26.0)
-		draw_string(sf, sp, sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(UIStyle.MUTED.lightened(0.15), result_a))
+		var ss := sf.get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
+		var ty := result_title.position.y + result_title.size.y if result_title != null else mid.y + R + RESULT_GAP + 60.0
+		var sp := Vector2(mid.x - ss.x / 2.0, ty + 14.0)
+		draw_string_outline(sf, sp, sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 4, Color(0, 0, 0, 0.8 * result_a))
+		draw_string(sf, sp, sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(UIStyle.GOLD, 0.9 * result_a))
 	if not UIStyle.reduce_motion:
 		queue_redraw()   # the glow breathes while the coin is up
+
+
+## A raised crest of radius `r` at `c` (in the coin's face space): a sun (a disc with twelve rays) or
+## a crescent moon, embossed: a dark offset relief under a lighter face of the coin's `metal`.
+func _draw_crest(c: Vector2, r: float, sun: bool, metal: Color) -> void:
+	var lo := metal.darkened(0.55)
+	var hi := metal.lightened(0.28)
+	for layer in 2:
+		var off := Vector2(1.5, 1.5) if layer == 0 else Vector2.ZERO
+		var col := Color(lo, 0.9) if layer == 0 else hi
+		if sun:
+			for i in 12:
+				var a := TAU * float(i) / 12.0
+				var d := Vector2(cos(a), sin(a))
+				var t := Vector2(-d.y, d.x)
+				var long := 1.0 if i % 2 == 0 else 0.78
+				draw_colored_polygon(PackedVector2Array([c + off + d * r * 0.62 + t * r * 0.13, c + off + d * r * long, c + off + d * r * 0.62 - t * r * 0.13]), col)
+			draw_circle(c + off, r * 0.5, col, true, -1.0, true)
+		else:
+			# Crescent: the moon disc, then the coin's own metal cut out of it, offset to the right.
+			draw_circle(c + off, r * 0.86, col, true, -1.0, true)
+	if not sun:
+		draw_circle(c + Vector2(r * 0.38, -r * 0.08), r * 0.7, metal, true, -1.0, true)
+		draw_arc(c + Vector2(r * 0.38, -r * 0.08), r * 0.7, PI * 0.55, PI * 1.45, 24, Color(lo, 0.45), 1.2, true)
+	if sun:
+		draw_circle(c, r * 0.5, Color(lo, 0.35), false, 1.2, true)
+		draw_circle(c + Vector2(-r * 0.15, -r * 0.15), r * 0.14, Color(1, 1, 1, 0.35), true, -1.0, true)

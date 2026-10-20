@@ -139,7 +139,7 @@ func _build_identity(c: Dictionary) -> void:
 	sections.append("identity")
 	var cat: String = c.get("category", "unit")
 	var cat_col: Color = UIStyle.CATEGORY_COLORS.get(cat, UIStyle.MUTED)
-	add_child(_lbl(String(c.get("name", "?")), TITLE, UIStyle.GOLD_HI, false, true))
+	add_child(_name_title(String(c.get("name", "?"))))
 	var badges := _flow()
 	add_child(badges)
 	badges.add_child(_chip(String(UIStyle.CATEGORY_NAMES.get(cat, cat)), cat_col, "", true))
@@ -437,6 +437,53 @@ func _collect(n: Node, out: PackedStringArray) -> void:
 	for ch in n.get_children():
 		if not ch.is_queued_for_deletion():
 			_collect(ch, out)
+
+
+## Card name size range (design review #44): T2 at NAME_PX, shrinking to NAME_MIN_PX before it wraps.
+const NAME_PX := 20
+const NAME_MIN_PX := 16
+
+
+## The card name as a T2 screen title (TitleText SCREEN, D3). It shrinks from NAME_PX to NAME_MIN_PX
+## to stay on one line; a name still too long splits after its first comma ("Boom," / "Councillor of
+## the Order"), else word-wraps. Refitted whenever its width changes.
+func _name_title(text: String) -> Label:
+	var l := _lbl(text, NAME_PX, UIStyle.GOLD_HI, false, true, false)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.custom_minimum_size.x = 40.0
+	l.set_meta(&"full_name", text)
+	TitleText.apply(l, TitleText.Tier.SCREEN, _fs(NAME_PX))
+	l.resized.connect(_fit_name.bind(l))
+	return l
+
+
+## Fits the name title `l` to its width (see _name_title). Pure layout, no state.
+func _fit_name(l: Label) -> void:
+	if not is_instance_valid(l) or l.size.x < 41.0:
+		return
+	var plan := name_fit(String(l.get_meta(&"full_name", l.text)), l.size.x, _fs(NAME_PX), _fs(NAME_MIN_PX))
+	if l.text != String(plan["text"]):
+		l.text = plan["text"]
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if bool(plan["wrap"]) else TextServer.AUTOWRAP_OFF
+	if l.get_theme_font_size("font_size") != int(plan["size"]):
+		l.add_theme_font_size_override("font_size", int(plan["size"]))
+
+
+## How a card name fits `width` px: {text, size, wrap}. The largest size from `px` down to `min_px`
+## that keeps it on one line; else `min_px` with a break after the first comma when both halves fit,
+## else `min_px` word-wrapped.
+static func name_fit(text: String, width: float, px: int, min_px: int) -> Dictionary:
+	var font := TitleText.tier_font(TitleText.Tier.SCREEN)
+	for fs in range(px, min_px - 1, -1):
+		if font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= width:
+			return {"text": text, "size": fs, "wrap": false}
+	var at := text.find(", ")
+	if at > 0:
+		var a := text.substr(0, at + 1)
+		var b := text.substr(at + 2)
+		if font.get_string_size(a, HORIZONTAL_ALIGNMENT_LEFT, -1, min_px).x <= width and font.get_string_size(b, HORIZONTAL_ALIGNMENT_LEFT, -1, min_px).x <= width:
+			return {"text": a + "\n" + b, "size": min_px, "wrap": false}
+	return {"text": text, "size": min_px, "wrap": true}
 
 
 ## Wrapping (by default) label that expands to the available width.

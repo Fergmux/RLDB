@@ -28,15 +28,19 @@ static func side_panel(color: Color = Color(UIStyle.PANEL, 0.96)) -> PanelContai
 	return p
 
 
-## Gold section title with a thin rule under it; the title Label is child 0.
+## Section header size (T3, design review 1.4.1: 16-20 px with +1.5 px tracking).
+const HEADER_PX := 16
+
+
+## Gold section header (TitleText SECTION, D3): flat gold Cinzel with a hard drop shadow and the
+## engraved double underline across the panel. The title Label is child 0.
 static func header(text: String) -> Control:
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 2)
-	v.add_child(UIStyle.label(text, 15, UIStyle.GOLD, false, true))
-	var rule := ColorRect.new()
-	rule.color = Color(UIStyle.GOLD, 0.5)
-	rule.custom_minimum_size = Vector2(0, 1)
-	v.add_child(rule)
+	v.add_theme_constant_override("separation", 0)
+	var l := UIStyle.label(text, HEADER_PX, UIStyle.GOLD, false, true)
+	l.clip_text = true
+	v.add_child(l)
+	TitleText.apply(l, TitleText.Tier.SECTION, HEADER_PX)
 	return v
 
 
