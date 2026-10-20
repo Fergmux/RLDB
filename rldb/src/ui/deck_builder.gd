@@ -438,14 +438,22 @@ func ui_remove() -> bool:
 
 # ------------------------------------------------------------ small widgets
 
-## Round-cornered icon button drawn from vectors (no font glyph needed): cross, pencil.
+## Round icon button drawn from vectors (no font glyph needed): cross, pencil. J1 (owner, 22 Oct):
+## a true circle. Its box stays square (SHRINK_CENTER in a taller row) and the JuicyButton gloss
+## (a rectangle and straight highlight lines) is replaced by a round one that follows the rim.
 class IconBtn extends JuicyButton:
 	var glyph: String = "cross"
 	var tint: Color = UIStyle.TEXT
 
 	func _draw() -> void:
-		super._draw()
 		var c := size / 2.0
+		var rr := minf(size.x, size.y) / 2.0
+		if not disabled and rr >= 4.0:
+			# Soft gloss on the upper half of the disc and a thin highlight arc under the rim.
+			var ga := 0.12 if _hover and not _down else (0.04 if _down else 0.07)
+			draw_circle(c + Vector2(0, -rr * 0.32), rr * 0.6, Color(1, 1, 1, ga * 0.6), true, -1.0, true)
+			draw_arc(c, rr - 2.5, deg_to_rad(205), deg_to_rad(335), 18, Color(1, 1, 1, 0.3 if _hover else 0.18), 1.0, true)
+			draw_arc(c, rr - 2.5, deg_to_rad(25), deg_to_rad(155), 18, Color(0, 0, 0, 0.3), 1.0, true)
 		var col := UIStyle.DISABLED if disabled else (UIStyle.GOLD_HI if is_hovered() else tint)
 		var r := minf(size.x, size.y) * 0.24
 		var w := maxf(1.8, minf(size.x, size.y) * 0.1)
@@ -618,6 +626,9 @@ static func _icon_btn(glyph: String, px: int, tip: String, danger: bool = false)
 	var b := IconBtn.new()
 	b.glyph = glyph
 	b.custom_minimum_size = Vector2(px, px)
+	# J1: never stretched to the row's height (that drew a pill, not a circle).
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	b.tooltip_text = tip
 	b.focus_mode = Control.FOCUS_NONE
 	var rim := UIStyle.BAD.darkened(0.15) if danger else UIStyle.BRONZE
