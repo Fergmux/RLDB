@@ -146,5 +146,31 @@ func test_rounded_window_outline_stays_inside_and_cuts_the_corner() -> void:
 	assert_bool(pts.has(rect.position)).is_false()
 
 
+# ---------------------------------------------------------------- overlay layer (performance)
+
+func test_animated_selection_repaints_only_the_overlay_not_the_face() -> void:
+	var was := UIStyle.reduce_motion
+	UIStyle.reduce_motion = false
+	var w := _widget(_view(LONG_TEXT_ID, "unit"), "board")
+	w.set_marks(true, true)
+	w.set_ready(true)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var before := w.face_draws
+	for i in 4:
+		await get_tree().process_frame
+	UIStyle.reduce_motion = was
+	assert_bool(w.is_processing()).is_true()
+	assert_int(w.face_draws).is_equal(before)
+
+
+func test_overlay_layer_is_internal_and_takes_the_dim() -> void:
+	var w := _widget(_view(LONG_TEXT_ID, "unit"), "board")
+	assert_int(w.get_child_count()).is_equal(0)
+	w.set_marks(false, false, true)
+	var ov := w.get_child(0, true) as CanvasItem
+	assert_object(ov.self_modulate).is_equal(w.self_modulate)
+
+
 func test_selected_card_stays_under_the_fx_vignette() -> void:
 	assert_int(CardWidget.SELECTED_Z).is_less(FxPlayer.VIGNETTE_Z)
