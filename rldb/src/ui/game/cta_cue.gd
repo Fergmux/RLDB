@@ -67,18 +67,28 @@ func _draw() -> void:
 	var x := lerpf(-BAND_PX, size.x + BAND_PX, s)
 	var sk := size.y * 0.5   # a 30-degree-ish slant
 	var hi := Color(1, 0.97, 0.85, 0.32 * sin(s * PI))
-	var inner := PackedVector2Array([Vector2(3, 2), Vector2(size.x - 3, 2), Vector2(size.x - 3, size.y - 2), Vector2(3, size.y - 2)])
-	# The slanted band in two halves (so a vertex lies on its bright centre line), each clipped to the
-	# button's inner rect and shaded per vertex.
+	for part in band_parts(size, x, sk):
+		var cols := PackedColorArray()
+		for p in part:
+			cols.append(_band_col(p, x, sk, hi))
+		draw_polygon(part, cols)
+
+
+## The sheen band at `x` (slant `sk`) on a button of `sz`, in two halves (so a vertex lies on its
+## bright centre line), each clipped to the button's inner rect. Slivers at the edge, which have no
+## visible area and fail to triangulate, are dropped.
+static func band_parts(sz: Vector2, x: float, sk: float) -> Array[PackedVector2Array]:
+	var out: Array[PackedVector2Array] = []
+	var inner := PackedVector2Array([Vector2(3, 2), Vector2(sz.x - 3, 2), Vector2(sz.x - 3, sz.y - 2), Vector2(3, sz.y - 2)])
 	for q in 2:
 		var b0 := x - BAND_PX * 0.5 + BAND_PX * 0.5 * q
 		var b1 := b0 + BAND_PX * 0.5
-		var half := PackedVector2Array([Vector2(b0 + sk, 2), Vector2(b1 + sk, 2), Vector2(b1 - sk, size.y - 2), Vector2(b0 - sk, size.y - 2)])
+		var half := PackedVector2Array([Vector2(b0 + sk, 2), Vector2(b1 + sk, 2), Vector2(b1 - sk, sz.y - 2), Vector2(b0 - sk, sz.y - 2)])
 		for part in Geometry2D.intersect_polygons(half, inner):
-			var cols := PackedColorArray()
-			for p in part:
-				cols.append(_band_col(p, x, sk, hi))
-			draw_polygon(part, cols)
+			if absf(_area(part)) < 0.5 or Geometry2D.triangulate_polygon(part).is_empty():
+				continue
+			out.append(part)
+	return out
 
 
 # The band colour at point `p`: brightest on the band's slanted centre line, clear at its edges.
@@ -86,3 +96,11 @@ func _band_col(p: Vector2, x: float, sk: float, hi: Color) -> Color:
 	var cx := x + sk - 2.0 * sk * (p.y / maxf(size.y, 1.0))
 	var d := absf(p.x - cx) / (BAND_PX * 0.5)
 	return Color(hi, hi.a * clampf(1.0 - d, 0.0, 1.0))
+
+
+# The signed area of polygon `pts` (shoelace).
+static func _area(pts: PackedVector2Array) -> float:
+	var a := 0.0
+	for i in pts.size():
+		a += pts[i].cross(pts[(i + 1) % pts.size()])
+	return a * 0.5
