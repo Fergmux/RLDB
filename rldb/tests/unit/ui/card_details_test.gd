@@ -54,7 +54,7 @@ func test_unit_with_statuses_modifiers_and_abilities() -> void:
 	assert_bool(p.all_text().contains("Buff")).is_true()
 	assert_bool(p.all_text().contains(String(v["race"]))).is_true()
 	assert_bool(p.all_text().contains("Race:")).is_false()
-	assert_bool(p.all_text().contains("Attack stance")).is_true()
+	assert_bool(p.all_text().contains("Attack stance")).is_false()   # owner 21 Oct: no stance tag
 	assert_int(p.count_text("Cannot attack")).is_equal(0)
 	# The burn explanation appears once, without repeating the status name prefix.
 	assert_int(p.count_text("its controller takes Damage equal to Burn")).is_equal(1)
@@ -87,7 +87,7 @@ func test_stat_markers_and_flags() -> void:
 	assert_bool(t.contains("Type:")).is_false()
 	assert_bool(t.contains("3 AP (base 2)")).is_true()
 	assert_bool(t.contains("Cost")).is_false()
-	assert_bool(t.contains("Defense stance")).is_true()
+	assert_bool(t.contains("Defense stance")).is_false()   # owner 21 Oct: no stance tag
 	assert_bool(t.contains("Protected")).is_true()
 	assert_bool(t.contains("Summoned this turn")).is_false()   # feedback 04: tags removed
 	assert_bool(t.contains("Attacked this turn")).is_false()

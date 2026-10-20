@@ -35,6 +35,7 @@ and have a few more things for you to change". Standing instructions from the 20
 | H27 | "the in this deck section at the bottom should not have three empty by default, it should show one empty, and fill it when one is in, and add more filled gems when more are added, not this +2 or whatever after the three have been filled" | E deck builder | done |
 | H28 | "ALSO THE ARCAN SUMMON COMPLETE SOUND EFFECT IS A BIT JARRING CAN ME MAKE IT MORE MYSTICAL AND COOL" | F audio | done |
 | H29 | "i like the new arcane sound effect, update ritual and fusion to have better mroe unique and fantasy esque epic sound effects" | F audio | open |
+| H30 | "also we don't need attack/defense stance tag in the right details panel" | integrator | done |
 
 ## Decisions for review
 

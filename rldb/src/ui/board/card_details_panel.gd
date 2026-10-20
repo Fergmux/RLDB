@@ -262,7 +262,7 @@ func _build_stats(c: Dictionary) -> void:
 	row.add_child(_stat_tile("DEF", c.get("def"), c.get("printed_def")))
 	var flags := _flow()
 	if c.get("zone", "") == "unit":
-		flags.add_child(_chip("Attack stance" if c.get("stance", "atk") == "atk" else "Defense stance", UIStyle.STATE_STEEL))
+		# Owner (21 Oct): no Attack / Defense stance tag; the card's rotation on the field shows it.
 		if c.get("protected", false):
 			flags.add_child(_chip("Protected", UIStyle.GOOD))
 		if c.get("protecting", false):
