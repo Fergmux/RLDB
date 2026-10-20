@@ -66,9 +66,9 @@ func build_pause() -> void:
 	pause_dim.color = Color(0, 0, 0, 0.6)
 	pause_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	pause_dim.visible = false
-	# Above the series modal (built later, layer 0), which used to hide the veil between duels;
-	# below the in-game menu so Menu still works while paused.
-	pause_dim.z_index = UiLayers.GAME_END + 1
+	# Above the series modal, which used to hide the veil between duels; below the in-game menu so
+	# Menu still works while paused.
+	pause_dim.z_index = UiLayers.PAUSE
 	gs.add_child(pause_dim)
 	var pp := HousePanel.new("Match paused", "Network", Vector2(22, 18), 8)
 	pause_panel = pp
@@ -83,12 +83,18 @@ func build_modals() -> void:
 	overlay_dim.color = Color(0, 0, 0, 0.6)
 	overlay_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	overlay_dim.visible = false
+	overlay_dim.z_index = UiLayers.SERIES_MODAL   # J10: above every board layer of the finished game
 	gs.add_child(overlay_dim)
 	var op := HousePanel.new("Series", "", Vector2(10, 10), 4)
 	op.arm = 22.0
 	overlay = op
 	overlay.visible = false
+	overlay.z_index = UiLayers.SERIES_MODAL
 	gs.add_child(overlay)
+	# Controls take clicks in tree order, not z order: the pause veil (built earlier, drawn above the
+	# modal) must also come after it in the tree, or the modal under it would take the veil's clicks.
+	if pause_dim != null and pause_dim.get_parent() == gs:
+		gs.move_child(pause_dim, -1)
 	var sc := SmoothScroll.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	op.body.add_child(sc)
@@ -339,6 +345,8 @@ func render() -> void:
 		rewards.mode = ""
 		return
 	var opening := not overlay.visible
+	if opening:
+		clear_board_interactions()
 	overlay.visible = true
 	overlay_dim.visible = true
 	var house := overlay as HousePanel
@@ -380,6 +388,19 @@ func render() -> void:
 		overlay_box.add_child(see)
 	place_modals()
 	_fit_overlay()
+
+
+## J9 / J10 (owner, 22 Oct): drops everything the finished game left in hand: the click-selection and its
+## action row, a hover lift, an open card inspector or pile browser, the Fusion-method picker and a status
+## tip. Called when the killing blow's view arrives and again when the series modal opens.
+func clear_board_interactions() -> void:
+	gs.selection.deselect()
+	gs.keyboard.kb_uid = -1
+	gs.action_row.clear()
+	gs.hover.clear()
+	gs.inspect.close_all()
+	gs.details.close_method_picker()
+	StatusTip.hide_all()
 
 
 ## Shared stage header: Cinzel title between flourished rules, then seat plates around the score.

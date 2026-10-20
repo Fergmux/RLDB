@@ -79,6 +79,8 @@ func order_no(opt: int) -> int:
 ## click-selects the card (F02-01) — details pinned, and for my own card while nothing is
 ## pending, its legal action buttons. Clicking the selected card again deselects it.
 func on_widget_pressed(w: CardWidget) -> void:
+	if gs.game_ending():
+		return   # J9: the kill was made; no further action, selection or skip
 	gs.fx.finish_all()
 	var opt := -1
 	var slots := gs.board.slots
@@ -109,6 +111,8 @@ func on_widget_pressed(w: CardWidget) -> void:
 ## plays or cancels. A hidden/face-down card does nothing; an empty zone is empty space and
 ## cancels like Esc.
 func on_widget_right(w: CardWidget) -> void:
+	if gs.game_ending():
+		return
 	gs.fx.finish_all()
 	if gs.inspect.inspect_widget(w):
 		return

@@ -282,6 +282,8 @@ func _on_view(v: Dictionary) -> void:
 		_multi_pid = pid
 	var events := _collect_fx()
 	fx.expect_game_end(events)   # F03-13: the result modal waits for the victory / defeat presentation
+	if fx.game_end_hold:
+		overlays.clear_board_interactions()   # J9 / J10: the kill was made; nothing else stays in hand
 	hand.draws_me = 0
 	for e in events:
 		if e["k"] == "draw" and int(e["p"]) == me():
@@ -483,9 +485,15 @@ func locked() -> bool:
 	return net.get("paused", false)
 
 
-## True while a modal, popup, menu or pause covers the board (no hover).
+## J9 (owner, 22 Oct): true from the view that ends the game until its killing blow and victory / defeat
+## presentation have played. Nothing can be clicked, hovered, typed or skipped meanwhile.
+func game_ending() -> bool:
+	return fx != null and fx.game_end_hold
+
+
+## True while a modal, popup, menu or pause covers the board, or the game is ending (no hover).
 func hover_blocked() -> bool:
-	return overlays.overlay.visible or overlays.pile_popup.visible or menu.settings_popup.visible or menu.game_menu.visible \
+	return game_ending() or overlays.overlay.visible or overlays.pile_popup.visible or menu.settings_popup.visible or menu.game_menu.visible \
 		or overlays.pause_dim.visible or mv.is_empty() or inspect.is_open() or details.method_picker_open() or over_side_popover()
 
 
@@ -542,6 +550,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if game_ending() and is_visible_in_tree() and _ending_blocks(event):
+		get_viewport().set_input_as_handled()   # J9: the kill plays out; no click, key or skip reaches anything
+		return
 	if event is InputEventKey and event.pressed and is_visible_in_tree() and chat.is_open():
 		# A1: Esc closes the chat box first; while typing, no key is a game shortcut.
 		if (event as InputEventKey).keycode == KEY_ESCAPE and not event.echo:
@@ -564,6 +575,16 @@ func _input(event: InputEvent) -> void:
 			fx.finish_all()
 		if not _held.is_empty():
 			_release_held()   # a click skips the spotlight and applies its effects at once
+
+
+## J9: the input swallowed while the game ends: every mouse button but the wheel, and every key outside
+## the chat box (an online player may finish typing a message).
+func _ending_blocks(event: InputEvent) -> bool:
+	if event is InputEventMouseButton:
+		return not ((event as InputEventMouseButton).button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_LEFT, MOUSE_BUTTON_WHEEL_RIGHT])
+	if event is InputEventKey:
+		return not chat.typing()
+	return false
 
 
 func _process(_d: float) -> void:

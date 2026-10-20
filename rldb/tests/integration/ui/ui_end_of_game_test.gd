@@ -44,3 +44,118 @@ func test_j13_concede_game_comes_below_return_to_menu() -> void:
 	var order := _menu_order()
 	# Assert
 	assert_array(order).contains_exactly(["settings", "return", "concede", "quit"])
+
+
+## Turn 2's Battle Phase for the active seat `a`, shown on the screen: two ready attackers, the opponent on
+## 5 HP with an empty field (any attack kills). Returns a.
+func _kill_board() -> int:
+	host.handle(m.active, {"t": "next_phase"})
+	host.handle(m.active, {"t": "next_phase"})
+	var a := m.active
+	TB.unit(m, a, TB.FIRE, 0, "atk", 30, 30)
+	TB.unit(m, a, TB.WATER, 1)
+	TB.card(m, a, TB.WATER)
+	m.players[1 - a]["hp"] = 5
+	var guard := 0
+	while String(m.phase) != "battle" and guard < 4:
+		guard += 1
+		host.handle(a, {"t": "next_phase"})
+	host.broadcast()
+	await gs.attach(host.seats[a])
+	await await_idle_frame()
+	return a
+
+
+func _answer_all() -> void:
+	var guard := 0
+	while not m.pending.is_empty() and guard < 8:
+		guard += 1
+		host.handle(int(m.pending["player"]), {"t": "choose", "id": m.pending["id"], "indices": [0]})
+
+
+func _push_click(at: Vector2) -> void:
+	for down in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.position = at
+		ev.global_position = at
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = down
+		gs.get_viewport().push_input(ev, true)
+	await await_idle_frame()
+
+
+func _push_key(k: Key) -> void:
+	for down in [true, false]:
+		var ev := InputEventKey.new()
+		ev.keycode = k
+		ev.pressed = down
+		gs.get_viewport().push_input(ev, true)
+	await await_idle_frame()
+
+
+## Effective z_index of a canvas item (its own plus its relative parents').
+static func _abs_z(n: CanvasItem) -> int:
+	var z := 0
+	var c: Node = n
+	while c != null and c is CanvasItem:
+		z += (c as CanvasItem).z_index
+		if not (c as CanvasItem).z_as_relative:
+			break
+		c = c.get_parent()
+	return z
+
+
+func test_j9_input_after_the_killing_attack_sends_nothing_and_never_skips_the_kill() -> void:
+	# Arrange: the killing direct attack has been made and its view has arrived
+	var a := await _kill_board()
+	host.handle(a, {"t": "attack", "uid": int(m.players[a]["units"][0])})
+	_answer_all()
+	await await_idle_frame()
+	assert_int(m.winner).is_equal(a)
+	assert_bool(gs.game_ending()).is_true()
+	var sent := gs.debug_sent
+	var other: CardWidget = gs.fx_slot_item(a, "unit", 1)["widget"]
+	# Act: the player clicks the other attacker, a hand card and the table, and presses Tab / Enter / Esc
+	await _push_click(gs.fx_slot_global_rect(a, "unit", 1).get_center())
+	gs.selection.on_widget_pressed(other)
+	var huid: int = gs.hand.order[0]
+	await _push_click((gs.hand.items[huid]["holder"] as Control).get_global_rect().get_center())
+	await _push_click(gs.play_area.get_center())
+	for k in [KEY_TAB, KEY_ENTER, KEY_ESCAPE]:
+		await _push_key(k)
+	# Assert: nothing selected, opened or sent; the kill is still playing and the result still held back
+	assert_int(gs.selected_uid).is_equal(-1)
+	assert_object(gs.action_row.stack).is_null()
+	assert_bool(gs.menu.game_menu.visible).is_false()
+	assert_int(gs.debug_sent).is_equal(sent)
+	assert_bool(gs.fx.busy()).is_true()
+	assert_bool(gs.fx.game_end_hold).is_true()
+	assert_bool(gs.overlays.overlay.visible).is_false()
+	gs.skip_effects()
+
+
+func test_j10_a_selected_card_and_a_status_tip_never_sit_over_the_rewards_screen() -> void:
+	# Arrange: a hand card click-selected (lifted, its action row open) and a status tip showing
+	var a := await _kill_board()
+	var huid: int = gs.hand.order[0]
+	gs.selection.select(huid)
+	await await_idle_frame()
+	var holder: Control = gs.hand.items[huid]["holder"]
+	assert_int(holder.z_index).is_equal(UiLayers.LIFTED_CARD)
+	var w: CardWidget = gs.fx_slot_item(a, "unit", 1)["widget"]
+	StatusTip.show_for(w, "Poison ×2", w.get_global_rect())
+	# Act: the opponent concedes; the end presentation runs to the rewards screen
+	host.handle(1 - a, {"t": "concede"})
+	await await_idle_frame()
+	gs.skip_effects()
+	await await_idle_frame()
+	# Assert: the modal is up, the selection and tip are gone, and the modal draws above every board layer
+	assert_bool(gs.overlays.overlay.visible).is_true()
+	assert_int(gs.selected_uid).is_equal(-1)
+	assert_str(StatusTip.shown_text()).is_empty()
+	var modal_z := _abs_z(gs.overlays.overlay)
+	assert_int(_abs_z(gs.overlays.overlay_dim)).is_equal(modal_z)
+	for layer in [gs.arrow, gs.fx_layer, gs.hand.layer, gs.board.layer]:
+		assert_int(_abs_z(layer) + UiLayers.LIFTED_CARD).is_less(modal_z)
+	assert_int(_abs_z(gs.hover_layer)).is_less(modal_z)
+
