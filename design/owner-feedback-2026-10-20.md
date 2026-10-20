@@ -86,7 +86,7 @@ Status key: `todo`, `wip`, `done` (with commit), `n/a` (already done / not neede
 
 | # | Item | Status |
 |---|---|---|
-| G1 | Apply the updated wording from the new CSV, with no effect changes. Report any row whose change would alter an effect instead of applying it. | todo |
+| G1 | Apply the updated wording from the new CSV, with no effect changes. Report any row whose change would alter an effect instead of applying it. | done a308eab (Mirror Force kept counting cards, flagged) |
 
 ## H. Full design review
 

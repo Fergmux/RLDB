@@ -20,8 +20,9 @@ your final report (the integrator copies them to the owner).
   (never `-d`: the debugger hangs on script errors). A single suite: `-a res://tests/unit/rules/xyz_test.gd`.
   Baseline: 1102/1102 pass.
 - Naming: file `[system]_[feature]_test.gd`, function `test_[scenario]_[expected]`, arrange/act/assert.
-- **Every bug fix needs a regression test that you watched fail first** (stash the fix or toggle the
-  code, run it, see red, restore, see green).
+- **Every bug fix needs a regression test that you watched fail first** (temporarily revert the fix in
+  the file, run it, see red, restore, see green). **Never use `git stash`**: the stash stack is shared by
+  every worktree and agent.
 - Windowed screenshot drivers (they open a real window, so run them without `--headless`):
   - `$G --path . -s res://src/dev/card_redesign_shots.gd -- <outdir> 1600x1000`
   - `$G --path . -- --f04-series-shots=<outdir> --no-steam` (series, draft, rewards, prompts)
