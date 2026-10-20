@@ -46,6 +46,15 @@ static func draw_round(ci: CanvasItem, rect: Rect2, radius: float, name: String,
 	ci.draw_polygon(pts, PackedColorArray([tint(base, strength)]), uvs_for(pts, tile, offset), tex)
 
 
+## Grain of material `name` over the arbitrary polygon `pts` (tabs, joined plates), as draw_round.
+## The grain is laid by screen position, so polygons drawn on one canvas item show one seamless grain.
+static func draw_poly(ci: CanvasItem, pts: PackedVector2Array, name: String, base: Color, strength: float, tile: float = TILE_PX, offset: Vector2 = Vector2.ZERO) -> void:
+	var tex := texture(name)
+	if tex == null or strength <= 0.0 or pts.size() < 3:
+		return
+	ci.draw_polygon(pts, PackedColorArray([tint(base, strength)]), uvs_for(pts, tile, offset), tex)
+
+
 ## Draw colour that turns a 0.5-mean relief map into `base` with grain: twice the colour, alpha = strength.
 static func tint(base: Color, strength: float) -> Color:
 	return Color(base.r * 2.0, base.g * 2.0, base.b * 2.0, clampf(strength, 0.0, 1.0))

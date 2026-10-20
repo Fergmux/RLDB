@@ -151,7 +151,7 @@ func run() -> void:
 
 	_check("one grid cell per catalogue card", db.browser.grid.get_child_count() == CardDB.all().size())
 	_check("F23 no Delete on a new deck", not db.delete_button().visible)
-	_check("F20 tabs without counts", db._tab_saved.text == "Saved Decks" and db._tab_starters.text == "Starter Decks")
+	_check("F20 tabs without counts", db.deck_tabs().tab("saved").title == "Saved Decks" and db.deck_tabs().tab("starters").title == "Structure Decks")
 	await _shot("01_empty")
 
 	# Same-name basic variants: find two ids whose names share a stem but differ in Type.
@@ -172,6 +172,9 @@ func run() -> void:
 	var wa := db.cell_widget(a)
 	await _scroll_into_view(wa)
 	await _move(wa.get_global_rect().get_center())
+	await create_timer(0.15).timeout
+	_check("F2 hovering a catalogue card shows it in the details pane", db.preview_id() == a)
+	_check("F2 hovering does not edit the deck", db.counts.is_empty())
 	await _shot("02_hover")
 	_press(wa.get_global_rect().get_center(), MOUSE_BUTTON_LEFT, true)
 	await process_frame
@@ -181,15 +184,12 @@ func run() -> void:
 	_check("click selects and adds one", db.preview_id() == a and int(db.counts.get(a, 0)) == 1 and db.counts.size() == 1)
 	_check("ghost card in flight during click add", db.ghost_count() >= 1 or UIStyle.reduce_motion)
 	await create_timer(0.5).timeout
-	await _move(db.add_button().get_global_rect().get_center())
-	_press(db.add_button().get_global_rect().get_center(), MOUSE_BUTTON_LEFT, true)
-	await process_frame
-	_press(db.add_button().get_global_rect().get_center(), MOUSE_BUTTON_LEFT, false)
+	await _key(KEY_EQUAL)
 	await create_timer(0.14).timeout
 	await _snap("02b_add_in_flight")
 	_check("ghost card in flight during add", db.ghost_count() >= 1 or UIStyle.reduce_motion)
 	await create_timer(0.5).timeout
-	_check("preview Add adds the selected card", int(db.counts.get(a, 0)) == 2)
+	_check("+ key adds the shown card", int(db.counts.get(a, 0)) == 2)
 	await _select_and_add(b)
 	_check("click adds the exact variant id", int(db.counts.get(a, 0)) == 2 and int(db.counts.get(b, 0)) == 1 and db.counts.size() == 2)
 	var ctag: Control = db.browser.cell(a).get_meta("tag")
@@ -230,9 +230,9 @@ func run() -> void:
 	await _scroll_into_view(da)
 	await _click_node(da)
 	_check("deck tile click selects and removes one", db.preview_id() == a and int(db.counts.get(a, 0)) == 1)
-	await _click_node(db.add_button())
-	await _click_node(db.remove_button())
-	_check("preview Remove removes one copy", int(db.counts.get(a, 0)) == 1)
+	await _key(KEY_EQUAL)
+	await _key(KEY_MINUS)
+	_check("+ then - on the shown card nets zero", int(db.counts.get(a, 0)) == 1)
 
 	# Deck grid: right-click inspects without editing.
 	var dw := db.deck_widget(b)
@@ -246,15 +246,18 @@ func run() -> void:
 
 	# F24: rapid clicking (one frame apart) never loses or duplicates an edit.
 	var nb := int(db.counts.get(b, 0))
-	await _rapid(db.add_button().get_global_rect().get_center(), 8)
+	await _scroll_into_view(db.cell_widget(b))
+	await _rapid(db.cell_widget(b).get_global_rect().get_center(), 8)
 	await _snap("03c_rapid_adds")
 	_check("8 rapid Add clicks = 8 copies", int(db.counts.get(b, 0)) == nb + 8)
-	await _rapid(db.remove_button().get_global_rect().get_center(), 14)
+	for i in 14:
+		await _key(KEY_MINUS)
 	await create_timer(0.7).timeout
 	_check("14 rapid Remove clicks stop at zero", not db.counts.has(b) and db.deck_widget(b) == null and db.ghost_count() == 0)
-	await _move(db.cell_widget(a).get_global_rect().get_center())
+	await _move(db.cell_widget(b).get_global_rect().get_center())
+	await create_timer(0.12).timeout
 	await _key(KEY_EQUAL)
-	_check("+ key adds the selected card", int(db.counts.get(b, 0)) == 1)
+	_check("+ key adds the card under the pointer", int(db.counts.get(b, 0)) == 1)
 	await _key(KEY_MINUS)
 	_check("- key removes it", not db.counts.has(b))
 	await _key(KEY_EQUAL)
@@ -269,10 +272,9 @@ func run() -> void:
 	await _scroll_into_view(db.cell_widget(ex))
 	await _click_node(db.cell_widget(ex))
 	_check("F16 Extra Deck stops at 15", _extra_n() == DeckStore.MAX_EXTRA)
-	_check("F16 Add unavailable for a full Extra Deck", db.add_button().disabled)
-	await _click_node(db.add_button())
-	_check("F16 disabled Add does nothing", _extra_n() == DeckStore.MAX_EXTRA)
-	await _move(db.add_button().get_global_rect().get_center())
+	_check("F16 Add unavailable for a full Extra Deck", not db.can_add_shown())
+	await _key(KEY_EQUAL)
+	_check("F16 a refused add does nothing", _extra_n() == DeckStore.MAX_EXTRA)
 	await _shot("03d_extra_full")
 	for i in 5:
 		db.remove_card(ex)
@@ -324,13 +326,12 @@ func run() -> void:
 	names = DeckStore.list().map(func(e): return e["name"])
 	_check("Delete (confirmed) removes the deck", not names.has(DECK_B))
 	_check("F23 Delete hidden after deleting", not db.delete_button().visible)
-	await _click_node(db._tab_starters)
+	await _click_node(db.deck_tabs().tab("starters"))
 	await _frames(3)
 	await _shot("09_starters")
 
 	# F21: Esc with unsaved edits asks; Esc again cancels; Esc then Discard leaves once.
 	await _click_node(db.cell_widget(a))
-	await _click_node(db.add_button())
 	await _key(KEY_ESCAPE)
 	_check("Esc with unsaved edits asks first", db._modal_open() and main.menu == db)
 	await _shot("10_esc_unsaved")

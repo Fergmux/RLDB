@@ -97,22 +97,64 @@ func test_selecting_without_click_does_not_edit() -> void:
 	assert_bool(db.dirty).is_false()
 
 
-func test_preview_add_and_remove_edit_the_selected_card() -> void:
+func test_keys_add_and_remove_edit_the_shown_card() -> void:
 	var db := _builder()
 	var v := _variants()
 	db.show_preview(v[1])
-	db.add_button().pressed.emit()
-	db.add_button().pressed.emit()
+	db.ui_add()
+	db.ui_add()
 	assert_int(int(db.counts.get(v[1], 0))).is_equal(2)
 	assert_int(int(db.counts.get(v[0], 0))).is_equal(0)
 	assert_str(db.cell_count_text(v[1])).is_equal("x2")
-	db.remove_button().pressed.emit()
+	db.ui_remove()
 	assert_int(int(db.counts.get(v[1], 0))).is_equal(1)
-	db.remove_button().pressed.emit()
-	db.remove_button().pressed.emit()   # already zero: no negative count
+	db.ui_remove()
+	assert_bool(db.ui_remove()).is_false()   # already zero: no negative count
 	assert_bool(db.counts.has(v[1])).is_false()
-	assert_bool(db.remove_button().disabled).is_true()
 	assert_str(db.cell_count_text(v[1])).is_equal("")
+
+
+## F2 (2026-10-20): the details pane has no Add / Remove buttons any more.
+func test_details_pane_has_no_add_or_remove_buttons() -> void:
+	var db := _builder()
+	for b in db.find_children("*", "Button", true, false):
+		var t := (b as Button).text
+		assert_bool(t == "Add to deck" or t == "Remove one" or t == "Add one").is_false()
+
+
+## F2: hovering a catalogue card shows it in the details pane without selecting or editing.
+func test_hovering_a_catalogue_card_shows_its_details() -> void:
+	var db := _builder()
+	var v := _variants()
+	db.show_preview(v[0])
+	db.browser.card_hovered.emit(v[1])
+	await get_tree().create_timer(0.15).timeout
+	assert_int(db.preview_id()).is_equal(v[1])
+	assert_int(db.browser.selected_id).is_equal(v[0])   # hovering does not select
+	assert_bool(db.counts.is_empty()).is_true()
+	assert_bool(db.dirty).is_false()
+
+
+## F2 decision: when the pointer leaves, the pane keeps the last hovered card.
+func test_pointer_leaving_keeps_the_last_hovered_card() -> void:
+	var db := _builder()
+	var v := _variants()
+	db.hover_card(v[1])
+	db.browser.cell_widget(v[1]).mouse_exited.emit()
+	assert_int(db.preview_id()).is_equal(v[1])
+
+
+## F2: a click or arrow selection takes the pane back from an earlier hover, and + acts on what is shown.
+func test_selection_overrides_hover_and_plus_edits_the_shown_card() -> void:
+	var db := _builder()
+	var v := _variants()
+	db.hover_card(v[0])
+	db.browser.select(v[1])
+	assert_int(db.preview_id()).is_equal(v[1])
+	db.hover_card(v[0])
+	db.ui_add()
+	assert_int(int(db.counts.get(v[0], 0))).is_equal(1)
+	assert_int(int(db.counts.get(v[1], 0))).is_equal(0)
 
 
 func test_no_plus_minus_buttons_on_entries() -> void:
@@ -244,15 +286,15 @@ func test_caps_block_add_through_availability() -> void:
 	var extra := _first(true)
 	assert_int(db.add_card(extra, 20)).is_equal(15)
 	db.show_preview(extra)
-	assert_bool(db.add_button().disabled).is_true()
+	assert_bool(db.can_add_shown()).is_false()
 	assert_bool(db.ui_add()).is_false()
 	assert_int(int(db.counts[extra])).is_equal(15)
 	assert_int(db.add_card(main, 100)).is_equal(84)
 	db.show_preview(main)
-	assert_bool(db.add_button().disabled).is_true()
+	assert_bool(db.can_add_shown()).is_false()
 	assert_int(DeckBuilder.counts_to_cards(db.counts).size()).is_equal(99)
 	db.ui_remove()
-	assert_bool(db.add_button().disabled).is_false()
+	assert_bool(db.can_add_shown()).is_true()
 
 
 ## Existing oversized saves open intact, can shrink, and cannot be saved until legal.
@@ -298,8 +340,20 @@ func test_deck_tabs_have_no_counts() -> void:
 	var db := _builder()
 	DeckStore.save_deck("One", [1])
 	db._refresh_saved()
-	assert_str(db._tab_saved.text).is_equal("Saved Decks")
-	assert_str(db._tab_starters.text).is_equal("Starter Decks")
+	assert_str(db.deck_tabs().tab("saved").title).is_equal("Saved Decks")
+	assert_str(db.deck_tabs().tab("starters").title).is_equal("Structure Decks")
+
+
+## F3: the saved / Structure choice is a folder-tab strip; choosing a tab swaps the list.
+func test_deck_tabs_switch_the_list() -> void:
+	var db := _builder()
+	DeckStore.save_deck("One", [1])
+	db._refresh_saved()
+	assert_str(db.deck_tabs().selected).is_equal("saved")
+	assert_object(db.saved_row("One")).is_not_null()
+	db.deck_tabs().tab("starters").pressed.emit()
+	assert_str(db.deck_tabs().selected).is_equal("starters")
+	assert_object(db.saved_row("One")).is_null()
 
 
 ## F23: Delete only while an actual saved deck is loaded.

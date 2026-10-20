@@ -5,15 +5,18 @@ extends Control
 ## capped by DeckStore (99 combined, 15 Extra, F16) with no visible limit labels: Add simply
 ## becomes unavailable. Presentation only: persists through DeckStore.
 ##
-## Layout: catalogue (shared CardBrowser) | preview of the selected card with Add /
-## Remove controls (F18) | the deck (name + inline errors, actions, saved/starter tiles, Main/Extra
-## grids in canonical catalogue order, F17).
+## Layout: catalogue (shared CardBrowser) | details of the shown card | the deck (name + inline
+## errors, actions, Saved / Structure folder tabs over the deck tiles, Main/Extra grids in
+## canonical catalogue order, F17).
 ##
-## Input (no drag and drop): left-click a catalogue card to select it and add a copy, or a deck
-## card to select it and remove a copy; right-click inspects; Add / Remove in the preview also
-## edit the deck. Keyboard: arrows move
-## the catalogue selection, Enter or + adds, - removes, Esc = Back (F21) unless an inspector or a
-## confirmation is open. Edits update `counts` at once; the fly / pop animation and sound (F24)
+## The middle pane shows the card last hovered or selected (2026-10-20, F2): it follows the pointer
+## over catalogue cards and deck tiles, stays on the last one when the pointer leaves (so its text
+## can be scrolled and read) and jumps to a card chosen by click or arrow keys. + / - / Enter edit
+## the card shown there.
+##
+## Input (no drag and drop): left-click a catalogue card to add a copy, or a deck card to remove
+## one; right-click inspects. Keyboard: arrows move the catalogue selection, Enter or + adds, -
+## removes, Esc = Back (F21) unless an inspector or a confirmation is open. Edits update `counts` at once; the fly / pop animation and sound (F24)
 ## are presentation on top and never gate input.
 
 signal closed
@@ -61,8 +64,6 @@ var _details: CardDetailsPanel
 var _preview_note: Label
 var _preview_count: Label
 var _preview_chip: PanelContainer
-var _add_btn: Button
-var _rem_btn: Button
 var _save_btn: Button
 var _rename_btn: Button
 var _delete_btn: Button
@@ -71,8 +72,7 @@ var _name_box: VBoxContainer
 var _name_shake: Tween
 var _list_box: VBoxContainer
 var _list_scroll: ScrollContainer
-var _tab_saved: Button
-var _tab_starters: Button
+var _deck_tabs: FolderTabs
 var _show_starters: bool = false
 var _status: Label
 var _status_panel: PanelContainer
@@ -80,6 +80,8 @@ var _status_tw: Tween
 var _starters: Array = []
 var _summaries: Dictionary = {}
 var _preview_id: int = -1
+## The card a hover is about to show (debounced so sweeping the pointer does not rebuild the pane).
+var _hover_want: int = -1
 var _overlay: ConfirmDialog
 var _fx_layer: Control
 var _ghosts: Array = []
@@ -319,13 +321,14 @@ func preview_id() -> int:
 	return _preview_id
 
 
-## The preview pane's Add / Remove buttons (the only deck editing controls, F18).
-func add_button() -> Button:
-	return _add_btn
+## True when one more copy of the shown card can be added right now (false: deck full, or none shown).
+func can_add_shown() -> bool:
+	return _preview_id >= 0 and add_block_reason(_preview_id) == ""
 
 
-func remove_button() -> Button:
-	return _rem_btn
+## The Saved / Structure folder tabs.
+func deck_tabs() -> FolderTabs:
+	return _deck_tabs
 
 
 func delete_button() -> Button:
@@ -361,7 +364,15 @@ func show_preview(id: int) -> void:
 	_select(id)
 
 
-## Preview-pane Add (also Enter / +, or a catalogue click): adds one copy with sound and the fly
+## The pointer is over card `id` (catalogue cell or deck tile): the details pane shows it, and + / -
+## act on it. Nothing happens when the pointer leaves: the pane keeps the last card, so its text can
+## be read and scrolled. Does not touch the catalogue selection.
+func hover_card(id: int) -> void:
+	_hover_want = id
+	_show(id)
+
+
+## Add (Enter / +, or a catalogue click) the shown card: adds one copy with sound and the fly
 ## animation (F24), flying from `from` (default: the preview card). Unavailable (deck full) gives
 ## the deny sound and a small shake instead.
 func ui_add(from: Rect2 = Rect2()) -> bool:
@@ -369,7 +380,8 @@ func ui_add(from: Rect2 = Rect2()) -> bool:
 		return false
 	if add_block_reason(_preview_id) != "":
 		Sfx.play("deny")
-		_shake(_add_btn)
+		_shake(_preview_chip)
+		_say(add_block_reason(_preview_id))
 		return false
 	if from.size == Vector2.ZERO and _preview_card != null:
 		from = _preview_card.get_global_rect()
@@ -381,7 +393,7 @@ func ui_add(from: Rect2 = Rect2()) -> bool:
 	return true
 
 
-## Preview-pane Remove (also -): removes one copy with sound and the return animation (F24).
+## Remove (- or a deck-card click) one copy of the shown card: removes one copy with sound and the return animation (F24).
 func ui_remove() -> bool:
 	if _preview_id < 0 or int(counts.get(_preview_id, 0)) <= 0:
 		Sfx.play("deny")
@@ -684,6 +696,7 @@ func _build_catalogue(body: HBoxContainer) -> void:
 	browser.card_activated.connect(func(_id): ui_add())
 	browser.click_sound = false
 	browser.card_clicked.connect(_on_catalogue_clicked)
+	browser.card_hovered.connect(_on_hover)
 	v.add_child(browser)
 	browser.build()
 	for d in CardDB.all():
@@ -701,7 +714,7 @@ func _build_preview(body: HBoxContainer) -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	p.add_child(v)
-	v.add_child(heading("Preview"))
+	v.add_child(heading("Card details"))
 	_preview_holder = VBoxContainer.new()
 	_preview_holder.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(_preview_holder)
@@ -709,25 +722,13 @@ func _build_preview(body: HBoxContainer) -> void:
 	mid.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(mid)
 	_preview_chip = PanelContainer.new()
-	_preview_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_preview_chip.mouse_filter = Control.MOUSE_FILTER_PASS
+	_preview_chip.tooltip_text = "Shows the card under the pointer, or the last one you picked.\nClick a catalogue card to add a copy, a deck card to remove one.\nKeys: + or Enter adds, - removes. Right-click inspects."
 	_preview_count = UIStyle.label("", 14, UIStyle.TEXT_DIM)
 	_preview_count.add_theme_font_override("font", UIStyle.font_bold())
 	_preview_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_preview_chip.add_child(_preview_count)
 	mid.add_child(_preview_chip)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	v.add_child(row)
-	_add_btn = UIStyle.primary_button("Add to deck", 15)
-	_add_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_add_btn.custom_minimum_size = Vector2(0, 38)
-	_add_btn.pressed.connect(ui_add)
-	row.add_child(_add_btn)
-	_rem_btn = UIStyle.button("Remove one", 15)
-	_rem_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_rem_btn.custom_minimum_size = Vector2(0, 38)
-	_rem_btn.pressed.connect(ui_remove)
-	row.add_child(_rem_btn)
 	var sc := SmoothScroll.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(sc)
@@ -795,20 +796,21 @@ func _build_deck(body: HBoxContainer) -> void:
 	_delete_btn.pressed.connect(func(): _ask_delete())
 	actions.add_child(_delete_btn)
 
-	# Saved / starter deck tiles (F04-17, F20): two established-style toggle buttons over one list.
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 8)
-	v.add_child(tabs)
-	var group := ButtonGroup.new()
-	_tab_saved = _tab_button("Saved Decks", group, true)
-	_tab_starters = _tab_button("Starter Decks", group, false)
-	_tab_saved.pressed.connect(func(): _show_starters = false; _refresh_saved())
-	_tab_starters.pressed.connect(func(): _show_starters = true; _refresh_saved())
-	tabs.add_child(_tab_saved)
-	tabs.add_child(_tab_starters)
+	# Saved / Structure decks (F04-17, F20, F3): folder tabs joined to the pane that holds the tiles.
+	_deck_tabs = FolderTabs.new()
+	_deck_tabs.tab_height = 38.0
+	_deck_tabs.font_size = 15
+	_deck_tabs.left_margin = 16.0
+	_deck_tabs.set_pane_margins(8, 12, 8, 8)
+	_deck_tabs.add_tab("saved", "Saved Decks", {"min_width": 130.0})
+	_deck_tabs.add_tab("starters", "Structure Decks", {"min_width": 150.0})
+	_deck_tabs.tab_selected.connect(func(key: String):
+		_show_starters = key == "starters"
+		_refresh_saved())
+	v.add_child(_deck_tabs)
 	var list_sc := SmoothScroll.new()
 	_list_scroll = list_sc
-	v.add_child(list_sc)
+	_deck_tabs.pane.add_child(list_sc)
 	_list_box = VBoxContainer.new()
 	_list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list_box.add_theme_constant_override("separation", 5)
@@ -838,7 +840,7 @@ func _build_deck(body: HBoxContainer) -> void:
 	uc.add_child(ul)
 	_unsaved_chip = uc
 	_deck_chips.add_child(uc)
-	_empty_note = _empty_state("Your deck is empty", "Select a card and press Add to deck. Fusion, Ritual and Arcane cards go to the Extra Deck.")
+	_empty_note = _empty_state("Your deck is empty", "Hover a card to read it, click it to add a copy. Fusion, Ritual and Arcane cards go to the Extra Deck.")
 	v.add_child(_empty_note)
 	_deck_scroll = SmoothScroll.new()
 	_deck_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -869,33 +871,6 @@ func _build_deck(body: HBoxContainer) -> void:
 		_sections[key] = {"box": box, "flow": flow, "value": chip.get_child(0).get_child(0)}
 
 
-## Saved / Starter selector (F20): the established button shape and height; the selected one
-## takes the gold primary fill. No counts in the labels.
-func _tab_button(text: String, group: ButtonGroup, on: bool) -> Button:
-	var b := UIStyle.button(text, 14)
-	b.toggle_mode = true
-	b.button_group = group
-	b.button_pressed = on
-	b.custom_minimum_size = Vector2(140, 34)
-	b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	var p := UIStyle.flat(UIStyle.GOLD, UIStyle.GOLD_HI, 1, 6)
-	var ph := UIStyle.flat(UIStyle.GOLD_HI, Color.WHITE, 1, 6)
-	for sb in [p, ph]:
-		sb.content_margin_left = 14
-		sb.content_margin_right = 14
-		sb.content_margin_top = 5
-		sb.content_margin_bottom = 5
-	p.border_width_bottom = 2
-	p.border_color = UIStyle.GOLD.darkened(0.35)
-	UIStyle.lift_style(p, Color(0, 0, 0, 0.5), 4, 2)
-	UIStyle.lift_style(ph, Color(UIStyle.GOLD_HI, 0.45), 9, 0)
-	b.add_theme_stylebox_override("pressed", p)
-	b.add_theme_stylebox_override("hover_pressed", ph)
-	b.add_theme_color_override("font_pressed_color", UIStyle.ON_GOLD)
-	b.add_theme_color_override("font_hover_pressed_color", UIStyle.ON_GOLD)
-	return b
-
-
 # ------------------------------------------------------------ refresh
 
 func _summary(id: int) -> Dictionary:
@@ -922,10 +897,18 @@ func _after_replace() -> void:
 func _select(id: int, sync_browser: bool = true) -> void:
 	if not CardDB.has(id):
 		return
-	var changed := id != _preview_id
-	_preview_id = id
 	if sync_browser and browser.selected_id != id:
 		browser.select(id, false)
+	_hover_want = id
+	_show(id)
+
+
+## Shows card `id` in the details pane (rebuilt only when it is a different card than the one shown).
+func _show(id: int) -> void:
+	if not CardDB.has(id):
+		return
+	var changed := id != _preview_id
+	_preview_id = id
 	if changed:
 		for c in _preview_holder.get_children():
 			_preview_holder.remove_child(c)
@@ -942,6 +925,18 @@ func _select(id: int, sync_browser: bool = true) -> void:
 		_preview_note.text = "Implementation: %s" % s["support"]
 	_mark_deck_selection()
 	_update_preview_count()
+
+
+## Pointer entered a card: show it once the pointer has rested a moment (a sweep over many cards
+## builds the pane once, not for each).
+func _on_hover(id: int) -> void:
+	_hover_want = id
+	if not is_inside_tree():
+		hover_card(id)
+		return
+	await get_tree().create_timer(0.05).timeout
+	if _hover_want == id and is_inside_tree():
+		_show(id)
 
 
 func _mark_deck_selection() -> void:
@@ -963,12 +958,6 @@ func _update_preview_count() -> void:
 	sb.content_margin_bottom = 3
 	_preview_chip.add_theme_stylebox_override("panel", sb)
 	_preview_chip.custom_minimum_size.x = ceilf(UIStyle.font_bold().get_string_size("In your deck: x99", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x) + 28.0
-	# Legal-action availability (F16): Add is simply unavailable when the deck is full.
-	var reason := add_block_reason(_preview_id) if _preview_id >= 0 else "Select a card first."
-	_add_btn.disabled = reason != ""
-	_add_btn.tooltip_text = reason if reason != "" else "Add one copy to the deck (Enter or +)"
-	_rem_btn.disabled = n <= 0
-	_rem_btn.tooltip_text = "Not in your deck" if n <= 0 else "Remove one copy from the deck (-)"
 
 
 func _cell_tag(id: int) -> Control:
@@ -994,7 +983,8 @@ func _make_tile(id: int) -> Control:
 	var w := CardWidget.new().setup(MatchView.summary_view(_summary(id)), "mini")
 	w.position = Vector2(5, 4)
 	w.show_tooltip = false
-	w.tooltip_text = "%s\nClick to select, right-click to inspect" % String(_summary(id)["name"])
+	w.tooltip_text = "%s\nClick to remove a copy, right-click to inspect" % String(_summary(id)["name"])
+	w.mouse_entered.connect(func(): _on_hover(id))
 	w.pressed.connect(func(_w): _on_tile_clicked(id))
 	w.right_pressed.connect(func(_w): inspect_card(id))
 	tile.add_child(w)
@@ -1083,13 +1073,12 @@ func _refresh_saved() -> void:
 		_list_box.remove_child(c)
 		c.queue_free()
 	var decks := DeckStore.list()
-	_tab_saved.set_pressed_no_signal(not _show_starters)
-	_tab_starters.set_pressed_no_signal(_show_starters)
+	_deck_tabs.select("starters" if _show_starters else "saved", false)
 	if _show_starters:
 		for s in _starters:
 			_list_box.add_child(_deck_tile(String(s["name"]), s["main"] + s["extra"], false, true))
 	elif decks.is_empty():
-		_list_box.add_child(_empty_state("No saved decks yet", "Name your deck and press Save, or copy a starter deck."))
+		_list_box.add_child(_empty_state("No saved decks yet", "Name your deck and press Save, or copy a Structure deck."))
 	else:
 		for dk in decks:
 			_list_box.add_child(_deck_tile(String(dk["name"]), dk["cards"], String(dk["name"]) == _loaded_name, false))
@@ -1385,14 +1374,14 @@ func _begin_rename(n: String) -> void:
 	_say("Type the new name for \"%s\", then press Rename." % n)
 
 
-## Starter decks are read-only: picking one copies it into the editor as a new unsaved deck.
+## Structure (starter) decks are read-only: picking one copies it into the editor as a new unsaved deck.
 func _copy_starter_cards(starter_name: String, cards: Array) -> void:
 	load_cards(starter_name + " (copy)", cards)
 	dirty = true
 	_loaded_name = ""
 	_refresh_saved()
 	_refresh_deck()
-	_say("Copied starter deck \"%s\". Save to keep your edits." % starter_name)
+	_say("Copied Structure deck \"%s\". Save to keep your edits." % starter_name)
 
 
 ## Runs `proceed` immediately, or after confirmation if there are unsaved edits.
