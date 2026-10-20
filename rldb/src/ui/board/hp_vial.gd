@@ -97,8 +97,6 @@ const MAX_PARTICLES := 24
 const NUMBER_X := 10.0
 const NUMBER_SIZE := 22
 const SMALL_SIZE := 11
-## "/ max" is shown at the right end only when the vial is at least this wide.
-const SCALE_LABEL_MIN_W := 160.0
 
 ## Real HP (what set_hp was last given, never below 0).
 var hp: int = 0
@@ -111,6 +109,7 @@ var max_hp: int = DEFAULT_MAX_HP:
 		_max_from = shown_max()
 		_max_t0 = _now()
 		max_hp = v
+		_update_tip()
 		if _animating_allowed():
 			_wake()
 		else:
@@ -280,7 +279,8 @@ class HitVignette extends Control:
 
 func _init() -> void:
 	custom_minimum_size = VIAL_SIZE
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# PASS: the tooltip (the max HP, since H3 drops the "/ max" label) without taking the plate's clicks.
+	mouse_filter = Control.MOUSE_FILTER_PASS
 	rng.seed = 7
 	_body = Body.new()
 	_mat.shader = SHADER
@@ -422,6 +422,7 @@ func set_hp(v: int, snap: bool = false) -> void:
 	# and set `hp` back to the real one is measured from what is shown, so its blow still animates).
 	var old := roundi(_settled_level) if _has_value else hp
 	hp = v
+	_update_tip()
 	if snap or not _has_value or not is_inside_tree():
 		_has_value = true
 		_clear_events()
@@ -633,6 +634,15 @@ func step() -> void:
 
 
 # ---------------------------------------------------------------- internals
+
+## The hover text: the HP and its maximum (H3: the vial no longer prints "/ max").
+func tip() -> String:
+	return "Health: %d of %d" % [hp, max_hp]
+
+
+func _update_tip() -> void:
+	tooltip_text = tip()
+
 
 func _now() -> float:
 	return float(clock.call())
@@ -1007,12 +1017,7 @@ func _draw_number(ci: Control, t: float) -> void:
 	var hp_pos := Vector2(NUMBER_X + sz.x + 5.0, base_y - 1.0)
 	ci.draw_string_outline(small, hp_pos, "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE, 3, Color(0, 0, 0, 0.55))
 	ci.draw_string(small, hp_pos, "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE, Color(UIStyle.TEXT, 0.7))
-	if size.x >= SCALE_LABEL_MIN_W:
-		var scale_txt := "/ %d" % max_hp
-		var sw := small.get_string_size(scale_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE).x
-		var sp := Vector2(size.x - 12.0 - sw, base_y - 1.0)
-		ci.draw_string_outline(small, sp, scale_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE, 3, Color(0, 0, 0, 0.45))
-		ci.draw_string(small, sp, scale_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE, Color(UIStyle.TEXT, 0.5))
+	# H3 (21 Oct): no "/ max" at the right end; the liquid's length already shows the scale.
 
 
 func _draw_particles(ci: Control) -> void:
