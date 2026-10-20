@@ -138,5 +138,5 @@ static func draw_empty(pt: CardPainter, size: Vector2, highlighted: bool) -> voi
 		fill = Color(tint.lightened(0.25), 0.85)
 	pt.round_rect(r, fill, rad, Color(UIStyle.BRONZE, 0.55), maxf(1.0, s))
 	pt.vgrad(Rect2(2 * s, 2 * s, size.x - 4 * s, 12 * s), Color(0, 0, 0, 0.35), Color(0, 0, 0, 0))
-	CardArt.draw_glyph(pt.ci, {"unit": "sword", "trap": "eye", "power": "crown"}[role], r.get_center(), minf(size.x, size.y) * 0.22, Color(1, 1, 1, 0.09))
+	CardArt.draw_glyph(pt.ci, {"unit": "sword", "trap": "eye", "power": "crown"}[role], r.get_center(), minf(size.x, size.y) * 0.25, Color(1, 1, 1, 0.17))
 	# Zones never show a text label ("Front 1", "Trap / Spell 2", ...) — user feedback 2026-10-16.

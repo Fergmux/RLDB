@@ -49,9 +49,7 @@ static func draw_glyph(ci: CanvasItem, kind: String, c: Vector2, r: float, col: 
 	var w := maxf(1.5, 0.12 * r)
 	match kind:
 		"sword":
-			ci.draw_line(c + Vector2(0, -r), c + Vector2(0, r * 0.55), col, w * 1.3, true)
-			ci.draw_line(c + Vector2(-r * 0.5, r * 0.05), c + Vector2(r * 0.5, r * 0.05), col, w, true)
-			ci.draw_circle(c + Vector2(0, r * 0.75), r * 0.14, col, true, -1.0, true)
+			_draw_sword(ci, c, r, col)
 		"star":
 			var pts := PackedVector2Array()
 			for i in 16:
@@ -73,6 +71,43 @@ static func draw_glyph(ci: CanvasItem, kind: String, c: Vector2, r: float, col: 
 		"crown":
 			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r * 0.8, 0), c + Vector2(0, r), c + Vector2(-r * 0.8, 0)]), col)
 			ci.draw_circle(c, r * 0.3, Color(0, 0, 0, col.a * 1.2), true, -1.0, true)
+
+
+## A pointed blade with a fuller, a curved cross-guard, a grip and a round pommel, `2 r` tall and centred
+## on `c`. Each part is a filled polygon with a hairline rim of the same colour on top (the rim doubles
+## the alpha on the very edge, which crisps the shape up and anti-aliases it); a faint halo surrounds it.
+static func _draw_sword(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
+	var rim_w := maxf(1.0, r * 0.035)
+	var rim := Color(col, minf(1.0, col.a * 1.9))
+	var blade := PackedVector2Array([Vector2(0, -1.0), Vector2(0.095, -0.80), Vector2(0.125, -0.06), Vector2(0.125, 0.17),
+		Vector2(-0.125, 0.17), Vector2(-0.125, -0.06), Vector2(-0.095, -0.80)])
+	var guard := PackedVector2Array([Vector2(-0.46, 0.185), Vector2(-0.30, 0.17), Vector2(0.30, 0.17), Vector2(0.46, 0.185),
+		Vector2(0.52, 0.275), Vector2(0.43, 0.335), Vector2(0.17, 0.30), Vector2(-0.17, 0.30), Vector2(-0.43, 0.335), Vector2(-0.52, 0.275)])
+	var grip := PackedVector2Array([Vector2(-0.06, 0.31), Vector2(0.06, 0.31), Vector2(0.06, 0.70), Vector2(-0.06, 0.70)])
+	var parts: Array = [blade, guard, grip]
+	# Soft halo first: the shape grown a little, as a wide, very faint stroke.
+	for part in parts:
+		var halo := _xf(part, c, r * 1.07)
+		halo.append(halo[0])
+		ci.draw_polyline(halo, Color(col, col.a * 0.5), maxf(2.0, r * 0.12), true)
+	for part in parts:
+		var pts := _xf(part, c, r)
+		ci.draw_colored_polygon(pts, col)
+		pts.append(pts[0])
+		ci.draw_polyline(pts, rim, rim_w, true)
+	# Pommel.
+	var pc := c + Vector2(0, r * 0.83)
+	ci.draw_circle(pc, r * 0.135, col, true, -1.0, true)
+	ci.draw_arc(pc, r * 0.135, 0.0, TAU, 24, rim, rim_w, true)
+	# The fuller: a fine groove down the blade.
+	ci.draw_line(c + Vector2(0, -r * 0.72), c + Vector2(0, r * 0.10), Color(0, 0, 0, minf(0.4, col.a * 2.0)), maxf(1.0, r * 0.035), true)
+
+
+static func _xf(pts: PackedVector2Array, c: Vector2, r: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p in pts:
+		out.append(c + p * r)
+	return out
 
 
 ## Resource path of card `id`'s art (whether or not it exists).
