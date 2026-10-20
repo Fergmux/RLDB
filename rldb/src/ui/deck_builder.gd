@@ -11,8 +11,10 @@ extends Control
 ##
 ## The middle pane shows the card last hovered or selected (2026-10-20, F2): it follows the pointer
 ## over catalogue cards and deck tiles, stays on the last one when the pointer leaves (so its text
-## can be scrolled and read) and jumps to a card chosen by click or arrow keys. + / - / Enter edit
-## the card shown there.
+## can be read) and jumps to a card chosen by click or arrow keys. + / - / Enter edit the card shown
+## there. 21 Oct (H24-H27): it never scrolls (the art shrinks to fit the rules, which are split by
+## timing like the match panel), its ATK / DEF tiles are short, there is no "In your deck" tag and
+## the copy gems show one empty socket, then one gem per copy.
 ##
 ## Input (no drag and drop): left-click a catalogue card to add a copy, or a deck card to remove
 ## one; right-click inspects. Keyboard: arrows move the catalogue selection, Enter or + adds, -
@@ -40,6 +42,12 @@ const LIST_MAX_H := 190.0
 ## Fly animation (F24): seconds, and how many ghost cards may be in flight at once.
 const FLY_TIME := 0.34
 const MAX_GHOSTS := 6
+## Details pane (H25): the card art's height range (2:3 portrait; ART_MAX_H is the "big" card),
+## the gap between the art, the details and the facts, and the rule blocks' padding.
+const ART_MAX_H := 336.0
+const ART_MIN_H := 180.0
+const PANE_SEP := 8
+const BLOCK_PAD := 10
 
 ## card id -> copies in the working deck
 var counts: Dictionary = {}
@@ -65,6 +73,12 @@ var _cat_index: Dictionary = {}
 var _main_n := 0
 var _extra_n := 0
 var _preview_holder: VBoxContainer
+## The details pane's clipping room and the column inside it (H25).
+var _pane: Control
+var _pane_box: VBoxContainer
+var _fit_queued := false
+## Card art height the last fit chose (a new card starts at it, so hovering does not jump).
+var _art_h: float = ART_MAX_H
 var _preview_card: CardWidget
 var _details: CardDetailsPanel
 var _facts: PreviewFacts
@@ -374,7 +388,7 @@ func show_preview(id: int) -> void:
 
 ## The pointer is over card `id` (catalogue cell or deck tile): the details pane shows it, and + / -
 ## act on it. Nothing happens when the pointer leaves: the pane keeps the last card, so its text can
-## be read and scrolled. Does not touch the catalogue selection.
+## be read. Does not touch the catalogue selection.
 func hover_card(id: int) -> void:
 	_hover_want = id
 	_show(id)
@@ -730,16 +744,27 @@ func _build_preview(body: HBoxContainer) -> void:
 	UIStyle.pad(v, "md")
 	p.add_child(v)
 	v.add_child(heading("Card details"))
+	# H25 (owner, 21 Oct: "I don't want to have to scroll that middle pane ever"): no scroll area.
+	# The pane's room is a plain clipping Control, so the content's height never pushes the column;
+	# _fit_preview sizes the card art so card + details + facts always fit (see preview_fit).
+	_pane = Control.new()
+	_pane.name = "DetailsPane"
+	_pane.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_pane.clip_contents = true
+	_pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(_pane)
+	_pane_box = VBoxContainer.new()
+	_pane_box.add_theme_constant_override("separation", PANE_SEP)
+	_pane_box.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_pane.add_child(_pane_box)
+	_pane.resized.connect(_queue_fit)
+	_pane_box.minimum_size_changed.connect(_queue_fit)
 	_preview_holder = VBoxContainer.new()
 	_preview_holder.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_child(_preview_holder)
-	var sc := ScrollArea.new()
-	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	v.add_child(sc)
-	var inner := VBoxContainer.new()
-	UIStyle.pad(inner, "md")
-	sc.set_content(inner)
+	_pane_box.add_child(_preview_holder)
+	var inner := _pane_box
 	_details = CardDetailsPanel.new()
+	_details.block_pad = BLOCK_PAD
 	_details.construction = true
 	_details.slim_stats = true   # H24: short ATK / DEF tiles, same text size
 	inner.add_child(_details)
@@ -929,12 +954,62 @@ func _show(id: int) -> void:
 		_preview_card.show_tooltip = false
 		_preview_card.tooltip_text = ""
 		_preview_card.right_pressed.connect(func(_w): inspect_card(id))
+		_set_art_h(_art_h)
 		_preview_holder.add_child(_preview_card)
-		_details.show_card(MatchView.summary_view(s))
+		_details.show_card(details_view(id))
 		_preview_note.visible = s["support"] != "full"
 		_preview_note.text = "Implementation: %s" % s["support"]
 	_mark_deck_selection()
 	_update_facts()
+
+
+## The details-pane view of card `id` (H25): the catalogue summary plus its rules split by timing
+## (MatchView.rules_parts), so the pane draws one block per effect with its timing heading
+## ("Materials", "On Summon", "Once per turn", ...) like the match's card details panel.
+func details_view(id: int) -> Dictionary:
+	var v := MatchView.summary_view(_summary(id))
+	v["text_parts"] = MatchView.rules_parts(CardDB.get_def(id))
+	return v
+
+
+## How the details pane fits (H25): {"room": its height, "need": the content's height with the
+## art at ART_MIN_H, "used": the content's height now, "art_h": the art's height now}. The pane
+## never scrolls: `need` <= `room` is the guarantee (a test walks every card at the smallest window).
+func preview_fit() -> Dictionary:
+	var card_h := _preview_card.custom_minimum_size.y if _preview_card != null else 0.0
+	var used := _pane_box.get_combined_minimum_size().y
+	return {"room": _pane.size.y, "need": used - card_h + ART_MIN_H, "used": used, "art_h": card_h}
+
+
+func _queue_fit() -> void:
+	if _fit_queued:
+		return
+	_fit_queued = true
+	_fit_preview.call_deferred()
+
+
+## Sizes the card art to the room left by the details: as large as fits, between ART_MIN_H and
+## ART_MAX_H. Runs (deferred) whenever the pane or its content changes size, never per frame; it
+## settles in one pass because the details' height does not depend on the art's.
+func _fit_preview() -> void:
+	_fit_queued = false
+	if _preview_card == null or not is_instance_valid(_preview_card) or _pane.size.y < 1.0:
+		return
+	var f := preview_fit()
+	var rest: float = f["used"] - f["art_h"]
+	_set_art_h(clampf(floorf(f["room"] - rest), ART_MIN_H, ART_MAX_H))
+
+
+func _set_art_h(h: float) -> void:
+	_art_h = h
+	if _preview_card == null:
+		return
+	var sz := Vector2(roundf(h * 2.0 / 3.0), h)
+	if _preview_card.custom_minimum_size != sz:
+		_preview_card.custom_minimum_size = sz
+		_preview_card.size = sz
+		_preview_card.pivot_offset = sz / 2.0
+		_preview_card.queue_redraw()
 
 
 ## Updates the preview's facts block (rules placeholder, copies in the deck, kind line).
