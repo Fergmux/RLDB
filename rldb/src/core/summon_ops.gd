@@ -90,7 +90,9 @@ func _op_place(f: Dictionary, op: Dictionary) -> int:
 	place_unit(uid, f["ctl"], slot, stance)
 	add_log("%s summons %s in %s stance (%s row, column %d)." % [pname(f["ctl"]), name_of(uid),
 		"Attack" if stance == "atk" else "Defense", "front" if slot_row(slot) == 0 else "back", slot_col(slot) + 1])
-	add_fx({"k": "summon", "p": f["ctl"], "slot": slot})
+	# A summoned unit is face up and public: `id` lets the presentation show it even when it leaves the
+	# field again in the same batch (B5, Divine Serpents).
+	add_fx({"k": "summon", "p": f["ctl"], "slot": slot, "id": d(uid)["id"], "stance": stance})
 	return R.CONT
 
 

@@ -15,8 +15,14 @@ extends Node
 
 ## Seconds one Spell/Trap spotlight occupies the screen (see FxSpotlight.HOLD).
 const SPOT_HOLD := FxSpotlight.HOLD
+const SHOCKWAVE_SHADER := "res://assets/shaders/canvas_fx_shockwave.gdshader"
+## Absolute z of the set-piece vignette and distortion: above the board, below UiLayers.FX_CARD.
+const VIGNETTE_Z := 12
+const DISTORT_Z := 16
 ## A batch is compressed to fit this many seconds (spotlight holds are added afterwards).
 const MAX_BATCH_TIME := 3.0
+## B5: seconds a unit summoned and removed in the same batch stands (as a ghost) before it can be removed.
+const TRANSIENT_HOLD := 0.55
 
 ## The host screen (GameScreen) that owns the layers and answers the host contract.
 var screen: GameScreen
@@ -32,6 +38,10 @@ var _banner := FxBanner.new(self)
 var _piles := FxPileEffects.new(self)
 var _game_end := FxGameEnd.new(self)
 var _strike := FxStrike.new(self)
+var _summon := FxSummon.new(self)
+var _serpent := FxSerpent.new(self)
+## B5: ghosts of cards summoned and removed in the same batch, by transient_key().
+var _transient := {}
 ## True from the moment a view that ends the game arrives until its victory / defeat presentation has
 ## finished (or been skipped): GameSeriesOverlay keeps the result modal back meanwhile (F03-13).
 var game_end_hold := false
@@ -44,6 +54,8 @@ var _last_attack := {}
 var _last_attack_game := -1
 ## Mode of the last killing blow played ("direct", "unit", "effect" or ""; dev/QA verification only).
 var last_lethal_mode := ""
+## The schedule of the last play() call, [{t: seconds after the call, tag}] (dev/QA and tests only).
+var last_plan: Array = []
 
 
 ## True while any effect, banner or spotlight is still running.
@@ -100,6 +112,26 @@ func play_destroy(e: Dictionary, prev_mv: Dictionary) -> void:
 	_piles.destroy(e, prev_mv)
 
 
+## B5: a ghost of the unit summoned by `summon_e`, standing in its slot until it is removed (or null).
+func summon_ghost(p: int, slot: int, summon_e: Dictionary) -> CardWidget:
+	return _piles.summon_ghost(p, slot, summon_e)
+
+
+## A still ghost of the card destroyed by `e` in its slot (or null when it may not be shown).
+func destroy_ghost(e: Dictionary, prev_mv: Dictionary) -> CardWidget:
+	return _piles.destroy_ghost(e, prev_mv)
+
+
+## The card view an event may show (FxPileEffects.ghost_view: public or authorised cards only).
+func pile_view(e: Dictionary, prev_mv: Dictionary) -> Dictionary:
+	return _piles.ghost_view(e, prev_mv)
+
+
+## The big punchy damage number of the strikes for a plate at global `plate_c` (placed clear of the edge).
+func damage_number(plate_c: Vector2, dmg: int, col: Color, fs: int) -> void:
+	_strike.big_number(plate_c, dmg, col, fs)
+
+
 ## Lets the result modal appear (idempotent).
 func release_game_end_hold() -> void:
 	if not game_end_hold:
@@ -129,6 +161,7 @@ func finish_all() -> void:
 		if is_instance_valid(n):
 			n.queue_free()
 	_nodes.clear()
+	_transient.clear()
 	_banner.reset()
 	_spotlight.reset()
 	_game_end.reset()
@@ -139,14 +172,19 @@ func finish_all() -> void:
 
 ## Plays the events of the newly seen log entries in order. `prev_mv` is the match view
 ## before this update (used to draw destroyed cards that are already gone).
+##
+## Holds (never compressed): a Spell/Trap spotlight, a special-summon set piece (FxSummon), the arrival of
+## a unit that leaves the field again in the same batch (B5, TRANSIENT_HOLD) and the Divine Serpents'
+## strike (FxSerpent) each delay everything after them in the batch by their full length, so the events
+## that follow (triggers, destructions, damage) always play after them, in log order.
 func play(events: Array, prev_mv: Dictionary) -> void:
 	if events.is_empty():
 		return
 	if not busy():
 		_tweens.clear()
 		_cleanups.clear()
-	var sched: Array = []   # [time, Callable]
-	var spot_marks: Array = []   # sched indices after which a spotlight hold starts
+	var sched: Array = []   # [time, Callable, tag]
+	var holds: Array = []   # [sched index from which the hold applies, seconds]
 	var t := 0.0
 	var attack_end := 0.0
 	var turn_in_batch := false
@@ -162,37 +200,42 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 	var lstrike := lmode == "direct" or lmode == "unit"
 	var ldestroy := int(lethal.get("destroy", -1))
 	var claimed := {}   # hp event index -> true when a direct attack shows that damage itself
-	var special := {}   # player -> kind of the special summon whose materials were just shown
+	var serpent := FxSerpent.detect(events)   # B5: the Divine Serpents' strike, if this batch has one
+	var serpent_owned := {}   # event indices the Serpent strike shows itself (its damage and destructions)
+	if not serpent.is_empty():
+		_serpent.prepare(serpent)   # the struck HP bar waits for the blow
+		serpent_owned[int(serpent["hp"])] = true
+		for j in serpent["destroys"]:
+			serpent_owned[int(j)] = true
+	var mats := {}   # player -> material events of the special summon that follows (F03-17 / D8)
 	for i in events.size():
 		var e: Dictionary = events[i]
+		var k := String(e["k"])
 		# F12: the attack was declared in an earlier batch (trap window): the killing blow plays here.
 		if lstrike and int(lethal["attack"]) < 0 and i == int(lethal["start"]):
 			var st_l := maxf(t, attack_end)
-			sched.append([st_l, _lethal_call(lethal, prev_mv)])
+			sched.append([st_l, _lethal_call(lethal, prev_mv), "lethal"])
 			attack_end = st_l + (0.3 if fast else 0.9)
 			t = st_l + (0.1 if fast else 0.3)
-		# F03-17: a Fusion / Ritual / Arcane summon waits for its materials to be drawn in.
 		var summon_kind := ""
-		if e["k"] == "summon" and special.has(int(e["p"])):
-			summon_kind = String(special[int(e["p"])])
-			special.erase(int(e["p"]))
-			t += 0.55
+		if k == "summon" and mats.has(int(e["p"])):
+			summon_kind = String(mats[int(e["p"])][0].get("kind", "fusion"))
 		# F02-13: each public event's sound starts with its animation (Sfx rate-limits bursts).
 		var snd := Sfx.for_fx(e, screen.me())
-		if summon_kind != "":
-			snd = FxPileEffects.KIND_SOUND[summon_kind]
-		elif e["k"] == "game_over":
+		if summon_kind != "" or k == "material" or serpent_owned.has(i):
+			snd = ""   # the set pieces play their own layered sounds
+		elif k == "game_over":
 			snd = ""   # FxGameEnd plays the victory / defeat sound itself
-		elif e["k"] == "hp" and not lethal.is_empty() and i == int(lethal["hp"]):
+		elif k == "hp" and not lethal.is_empty() and i == int(lethal["hp"]):
 			snd = ""   # the killing blow plays its own boom
-		elif e["k"] == "destroy" and i == ldestroy:
+		elif k == "destroy" and i == ldestroy:
 			snd = ""   # F12: shown (with its sound) at the impact of the killing blow
 		if snd != "":
-			var st0 := maxf(t, attack_end) if e["k"] == "attack" else (t + 0.2 if e["k"] == "game_over" else t)
-			sched.append([st0, Sfx.play.bind(snd, 0.0, 0.04)])
-			if e["k"] == "attack" and not e.get("to", {}).get("direct", false) and not (lmode == "unit" and i == int(lethal["attack"])):
-				sched.append([st0 + (0.12 if fast else 0.26), Sfx.play.bind("impact", 0.0, 0.04)])
-		match String(e["k"]):
+			var st0 := maxf(t, attack_end) if k == "attack" else (t + 0.2 if k == "game_over" else t)
+			sched.append([st0, Sfx.play.bind(snd, 0.0, 0.04), "sfx:" + snd])
+			if k == "attack" and not e.get("to", {}).get("direct", false) and not (lmode == "unit" and i == int(lethal["attack"])):
+				sched.append([st0 + (0.12 if fast else 0.26), Sfx.play.bind("impact", 0.0, 0.04), "sfx:impact"])
+		match k:
 			"attack":
 				var st := maxf(t, attack_end)
 				if bool(e["to"].get("direct", false)):
@@ -202,105 +245,133 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 					if hi >= 0:
 						claimed[hi] = true
 					if not lethal.is_empty() and int(lethal["attack"]) == i:
-						sched.append([st, _strike.lethal.bind(e, lethal)])
+						sched.append([st, _strike.lethal.bind(e, lethal), "lethal"])
 					else:
-						sched.append([st, _strike.direct.bind(e, dmg)])
+						sched.append([st, _strike.direct.bind(e, dmg), "direct"])
 					attack_end = st + (0.3 if fast else 0.9)
 					t = st + (0.1 if fast else 0.3)
 				elif lmode == "unit" and int(lethal["attack"]) == i:
-					sched.append([st, _lethal_call(lethal, prev_mv)])   # F12
+					sched.append([st, _lethal_call(lethal, prev_mv), "lethal"])   # F12
 					attack_end = st + (0.3 if fast else 0.9)
 					t = st + (0.1 if fast else 0.3)
 				else:
-					sched.append([st, _cards.attack.bind(e)])
+					sched.append([st, _cards.attack.bind(e), "attack"])
 					attack_end = st + (0.2 if fast else 0.46)
 					t = st + (0.1 if fast else 0.2)
 			"summon":
-				var arrive_fn: Callable = _cards.arrive.bind(int(e["p"]), "unit", int(e["slot"]))
+				var sp := int(e["p"])
+				var sslot := int(e["slot"])
+				var it: Dictionary = screen.fx_slot_item(sp, "unit", sslot)
+				var gone: bool = it.is_empty() or not (it["widget"] as CardWidget).visible
 				if summon_kind != "":
-					arrive_fn = _piles.arrive_special.bind(int(e["p"]), int(e["slot"]), summon_kind)
-				_prehide(int(e["p"]), "unit", int(e["slot"]), t, sched, arrive_fn)
+					# D8: the Fusion / Ritual / Arcane set piece (materials drawn in, climax, the card slams down).
+					_prehide(sp, "unit", sslot, t, sched, _summon.play.bind(summon_kind, sp, sslot, mats[sp], e, prev_mv))
+					sched[-1].append("set_piece:%s:%d:%d" % [summon_kind, sp, sslot])
+					mats.erase(sp)
+					holds.append([sched.size(), FxSummon.length_for(summon_kind)])
+				elif gone and e.has("id"):
+					# B5: the unit already left the field in this batch: it arrives as a ghost that stands in
+					# its slot until whatever removes it plays.
+					sched.append([t, _piles.summon_ghost.bind(sp, sslot, e, true), "summon_ghost:%d:%d" % [sp, sslot]])
+					holds.append([sched.size(), TRANSIENT_HOLD])
+				else:
+					_prehide(sp, "unit", sslot, t, sched, _cards.arrive.bind(sp, "unit", sslot))
+					sched[-1].append("summon:%d:%d" % [sp, sslot])
 				t += 0.16
 			"material":
-				# Gather point: the slot of the summon that follows in this batch (else the unit block).
+				# Gathered into the set piece of the summon that follows (shown on their own if none does).
 				var mp := int(e["p"])
-				var gather: Vector2 = screen.side_center(mp)
-				for j in range(i + 1, events.size()):
-					if events[j]["k"] == "summon" and int(events[j]["p"]) == mp:
-						gather = screen.fx_slot_global_rect(mp, "unit", int(events[j]["slot"])).get_center()
-						break
-				special[mp] = String(e.get("kind", "fusion"))
-				sched.append([t, _piles.material.bind(e, prev_mv, gather)])
-				t += 0.14
+				if not mats.has(mp):
+					mats[mp] = []
+				mats[mp].append(e)
+			"sacrifice":
+				# D6: the unit is consumed and its embers drift into the AP gems; the AP gain lands with them.
+				sched.append([t, _piles.sacrifice.bind(e, prev_mv), "sacrifice:%d:%d" % [int(e["at"]["p"]), int(e["at"]["slot"])]])
+				t += 0.0 if fast else FxPileEffects.SACRIFICE_TO_AP
 			"exhaust":
-				sched.append([t, _piles.exhaust.bind(e, prev_mv)])
+				sched.append([t, _piles.exhaust.bind(e, prev_mv), "exhaust"])
 				t += 0.3
 			"play":
 				_prehide(int(e["p"]), String(e["zone"]), int(e["slot"]), t, sched, _cards.arrive.bind(int(e["p"]), String(e["zone"]), int(e["slot"])))
+				sched[-1].append("play")
 				t += 0.16
 			"hp":
-				if not lethal.is_empty() and i == int(lethal["hp"]):
+				if serpent_owned.has(i):
+					# B5: the Serpents combine and strike this damage into the plate themselves.
+					var sl := lethal if (not lethal.is_empty() and i == int(lethal["hp"])) else {}
+					sched.append([t, _serpent.play.bind(serpent, events, prev_mv, sl), "serpent"])
+					holds.append([sched.size(), FxSerpent.length_for()])
+				elif not lethal.is_empty() and i == int(lethal["hp"]):
 					if String(lethal["mode"]) == "effect":
-						sched.append([t, _strike.flourish.bind(lethal)])   # smaller final-blow flourish
+						sched.append([t, _strike.flourish.bind(lethal), "flourish"])   # smaller final-blow flourish
 					# a killing direct attack shows this damage itself
 				else:
-					sched.append([t, _resources.hp.bind(int(e["p"]), int(e["d"]), claimed.has(i))])
+					sched.append([t, _resources.hp.bind(int(e["p"]), int(e["d"]), claimed.has(i)), "hp:%d" % int(e["p"])])
 				t += 0.06
 			"ap":
-				sched.append([t, _resources.ap.bind(int(e["p"]), int(e["d"]))])
+				sched.append([t, _resources.ap.bind(int(e["p"]), int(e["d"])), "ap:%d" % int(e["p"])])
 				t += 0.04
 			"draw":
 				if int(e["p"]) != screen.me():
-					sched.append([t, _resources.draw_opp.bind(int(e["p"]), int(e["n"]))])
+					sched.append([t, _resources.draw_opp.bind(int(e["p"]), int(e["n"])), "draw"])
 			"discard":
-				sched.append([t, _resources.discard.bind(int(e["p"]), int(e["n"]))])
+				sched.append([t, _resources.discard.bind(int(e["p"]), int(e["n"])), "discard"])
 			"destroy":
-				if i != ldestroy:   # F12: the killing blow on a unit shows it at its impact
-					sched.append([t, _piles.destroy.bind(e, prev_mv)])
+				# F12: the killing blow on a unit shows it at its impact; B5: the Serpent strike shows its own.
+				if i != ldestroy and not serpent_owned.has(i):
+					sched.append([t, _piles.destroy.bind(e, prev_mv), "destroy:%d:%d" % [int(e["at"]["p"]), int(e["at"]["slot"])]])
 					t += 0.12
 			"status":
-				sched.append([t, _cards.status.bind(e["at"], String(e["s"]), int(e.get("n", 1)))])
+				sched.append([t, _cards.status.bind(e["at"], String(e["s"]), int(e.get("n", 1))), "status"])
 				t += 0.06
 			"stat":
 				if e.has("from"):
-					sched.append([t, _cards.effect_arrow.bind(e["from"], e["at"])])
+					sched.append([t, _cards.effect_arrow.bind(e["from"], e["at"]), "arrow"])
 					t += 0.35
-				sched.append([t, _cards.stat.bind(e["at"])])
+				sched.append([t, _cards.stat.bind(e["at"]), "stat"])
 			"stance":
 				var sat: Dictionary = e["at"]
-				sched.append([t, _cards.stance.bind(int(sat["p"]), int(sat["slot"]), String(e.get("to", "def")))])
+				sched.append([t, _cards.stance.bind(int(sat["p"]), int(sat["slot"]), String(e.get("to", "def"))), "stance"])
 				t += 0.12
 			"trigger":
-				sched.append([t, _cards.trigger.bind(e["at"])])
+				sched.append([t, _cards.trigger.bind(e["at"]), "trigger"])
 				t += 0.1
 			"spotlight":
 				# The card is shown first; everything after it in this batch (statuses, destroys,
 				# HP changes) waits until it has left the screen.
-				sched.append([t, _spotlight.enqueue.bind(e)])
+				sched.append([t, _spotlight.enqueue.bind(e), "spotlight"])
 				t += 0.05
-				spot_marks.append(sched.size())
+				holds.append([sched.size(), SPOT_HOLD])
 			"turn":
 				var mine: bool = int(e["p"]) == screen.me()
-				sched.append([t, _banner.enqueue.bind("YOUR TURN" if mine else "OPPONENT'S TURN", "Turn %d" % int(e["turn"]), UIStyle.GOLD_HI if mine else Color("d8c9a8"), mine)])
+				sched.append([t, _banner.enqueue.bind("YOUR TURN" if mine else "OPPONENT'S TURN", "Turn %d" % int(e["turn"]), UIStyle.GOLD_HI if mine else Color("d8c9a8"), mine), "turn"])
 			"phase":
 				var ph := String(e["phase"])
 				if ph in ["battle", "main2"] or (ph == "main1" and not turn_in_batch):
-					sched.append([t, _banner.enqueue.bind(FxBanner.PHASE_NAMES[ph], "", Color("e8dcc0"), false)])
+					sched.append([t, _banner.enqueue.bind(FxBanner.PHASE_NAMES[ph], "", Color("e8dcc0"), false), "phase"])
 			"game_over":
 				if lethal.is_empty():
-					sched.append([t + 0.2, _game_end.start.bind(int(e["winner"]))])
-				# else: the killing blow starts the victory / defeat look when it has played
+					sched.append([t + 0.2, _game_end.start.bind(int(e["winner"])), "game_end"])
+				# else: the killing blow (or the Serpent strike) starts the victory / defeat look when it has played
+	# Materials whose summon never came (it failed): each is still drawn in and sent to its pile.
+	for mp in mats:
+		for me_ in mats[mp]:
+			var gather: Vector2 = screen.side_center(int(mp))
+			sched.append([t, _piles.material.bind(me_, prev_mv, gather), "material"])
+			t += 0.14
 	var last := 0.0
 	for s in sched:
 		last = maxf(last, s[0])
-	var k := 1.0 if last <= MAX_BATCH_TIME else MAX_BATCH_TIME / last
-	# Spotlight holds are added after the batch compression so they always last their full time.
+	var kc := 1.0 if last <= MAX_BATCH_TIME else MAX_BATCH_TIME / last
+	# Holds are added after the batch compression so they always last their full time.
 	var shift := 0.0
+	last_plan = []
 	for i in sched.size():
-		while not spot_marks.is_empty() and spot_marks[0] <= i:
-			spot_marks.pop_front()
-			shift += SPOT_HOLD
-		_later((float(sched[i][0]) * k + shift) * UIStyle.dur(1.0), sched[i][1])
+		while not holds.is_empty() and int(holds[0][0]) <= i:
+			shift += float(holds.pop_front()[1])
+		var at := (float(sched[i][0]) * kc + shift) * UIStyle.dur(1.0)
+		last_plan.append({"t": at, "tag": String(sched[i][2]) if sched[i].size() > 2 else ""})
+		_later(at, sched[i][1])
 
 
 ## The strike call for a killing blow `lethal` (mode "direct" or "unit").
@@ -399,6 +470,97 @@ func screen_flash(col: Color, peak: float, hold: float, fade: float, origin: Vec
 	tw.tween_interval(UIStyle.dur(hold))
 	tw.tween_property(r, "modulate:a", 0.0, UIStyle.dur(fade) * (1.5 if reduced else 1.0)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(free_node.bind(r))
+
+
+## Screen-space distortion (canvas_fx_shockwave): a refracting ring expanding from `global_c` to
+## `max_radius` px over `life` s with a crest push of `strength` px, plus an optional `swirl` (radians at the
+## centre, easing out over `life`). It bends the board and the effects under it (it sits just under the
+## other overlays). Returns the node (null under reduced motion: no distortion at all).
+func distort(global_c: Vector2, max_radius: float, life: float, strength: float, swirl: float = 0.0, glint: Color = Color(1, 1, 1, 0.0)) -> ColorRect:
+	if UIStyle.reduce_motion or screen == null:
+		return null
+	var win: Rect2 = screen.get_global_rect()
+	var h := maxf(win.size.y, 1.0)
+	var r := ColorRect.new()
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.color = Color.WHITE
+	var mat := ShaderMaterial.new()
+	mat.shader = load(SHOCKWAVE_SHADER)
+	mat.set_shader_parameter("centre", (global_c - win.position) / win.size)
+	mat.set_shader_parameter("aspect", win.size.x / h)
+	mat.set_shader_parameter("width", 0.05)
+	mat.set_shader_parameter("swirl_radius", max_radius * 0.6 / h)
+	mat.set_shader_parameter("glint", glint)
+	r.material = mat
+	# Over the table and the resting cards, under the card in flight (FX_CARD) and every effect drawing.
+	r.z_as_relative = false
+	r.z_index = DISTORT_Z
+	add_node(r)
+	r.position = fx_pos(win.position)
+	r.size = win.size
+	var tw := new_tween()
+	tw.set_parallel(true)
+	tw.tween_method(func(v: float): mat.set_shader_parameter("radius", v), 0.0, max_radius / h, UIStyle.dur(life)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_method(func(v: float): mat.set_shader_parameter("strength", v), strength / h, 0.0, UIStyle.dur(life)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_method(func(v: float): mat.set_shader_parameter("width", v), 0.03, 0.09, UIStyle.dur(life))
+	if swirl != 0.0:
+		tw.tween_method(func(v: float): mat.set_shader_parameter("swirl", v), swirl, 0.0, UIStyle.dur(life)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_callback(free_node.bind(r))
+	return r
+
+
+## A dark radial vignette over the whole window that fades in over `fade_in`, holds `hold` and fades out
+## over `fade_out` (all seconds before UIStyle.dur). `strength` is the edge darkness (0..1); `tint` its colour.
+func vignette(strength: float, fade_in: float, hold: float, fade_out: float, tint: Color = Color(0.02, 0.0, 0.03)) -> void:
+	if screen == null:
+		return
+	var win: Rect2 = screen.get_global_rect()
+	var g := Gradient.new()
+	g.set_color(0, Color(tint, strength * 0.25))
+	g.set_color(1, Color(tint, strength))
+	g.add_point(0.5, Color(tint, strength * 0.45))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.05, 0.5)
+	gt.width = 256
+	gt.height = 256
+	var v := TextureRect.new()
+	v.texture = gt
+	v.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	v.stretch_mode = TextureRect.STRETCH_SCALE
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.z_as_relative = false
+	v.z_index = VIGNETTE_Z   # dims the board; the summoned card (FX_CARD) and the effects stay bright
+	add_node(v)
+	v.position = fx_pos(win.position)
+	v.size = win.size
+	v.modulate.a = 0.0
+	var reduced := UIStyle.reduce_motion
+	var tw := new_tween()
+	tw.tween_property(v, "modulate:a", 0.6 if reduced else 1.0, UIStyle.dur(fade_in)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(UIStyle.dur(hold))
+	tw.tween_property(v, "modulate:a", 0.0, UIStyle.dur(fade_out)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_callback(free_node.bind(v))
+
+
+## B5: a ghost standing in for a card that was summoned and left the field in the same batch (the board
+## already shows its slot empty). `key` is transient_key(p, zone, slot); the destruction takes it back.
+func hold_transient(key: String, ghost: CardWidget) -> void:
+	_transient[key] = ghost
+
+
+## Takes (and forgets) the ghost held for `key`, or null.
+func take_transient(key: String) -> CardWidget:
+	var g = _transient.get(key, null)
+	_transient.erase(key)
+	return g if g != null and is_instance_valid(g) else null
+
+
+## The key of a board slot in the transient registry.
+static func transient_key(p: int, zone: String, slot: int) -> String:
+	return "%d:%s:%d" % [p, zone, slot]
 
 
 ## Runs `fn` after `delay` seconds (at once when the delay is negligible), on a tracked tween.
