@@ -1,15 +1,17 @@
 class_name DeckSelectView
 extends RefCounted
-## "Choose your deck" stage of the series modal (F04-02): lobby bar, Structured / Custom tabs,
+## "Choose your deck" stage of the series modal (F04-02): lobby bar, Structure / Custom tabs,
 ## uniform deck tiles in a smooth scrolling plate, the locked-in waiting state and the draft
 ## (category tabs drafted in any order, the basic unit changeable at any time, the offer).
 ## Renders into the overlay's content box; sends commands through the host screen.
 
 
-## Which tab is open: "structured" (starter decks) or "custom" (saved decks).
+## Which tab is open: "structured" (Structure decks) or "custom" (saved decks).
 var tab: String = "structured"
 ## The ScrollArea holding the tiles (null when this stage shows no list); the overlay sizes to it.
 var list_area: ScrollArea
+## The Structure / Custom folder tabs (null when this stage shows none).
+var tab_widget: FolderTabs
 var ov: GameSeriesOverlay
 
 ## The Choose basic unit picker (a HousePanel over a dim), or null while closed.
@@ -96,34 +98,32 @@ func _tabs_and_list(box: VBoxContainer) -> void:
 	var saved: Array = DeckStore.list() if custom_ok else []
 	if tab == "custom" and not custom_ok:
 		tab = "structured"
-	# Tabs sit on the plate's top edge.
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 6)
-	box.add_child(tabs)
-	tabs.add_child(_tab_button("structured", "Structured", starters.size(), "shield"))
+	# Folder tabs joined to the pane that holds the tile list (one widget for every tab strip).
+	var ft := FolderTabs.new()
+	ft.tab_height = 50.0
+	ft.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	ft.set_pane_margins(8, 14, 6, 8)
+	_add_tab(ft, "structured", "Structure", starters.size(), "shield")
 	if custom_ok:
-		tabs.add_child(_tab_button("custom", "Custom", saved.size(), "tome"))
-	var hint := UIStyle.label("Starter decks, ready to play" if tab == "structured" else "Decks you built and saved", 14, UIStyle.TEXT_DIM)
-	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_add_tab(ft, "custom", "Custom", saved.size(), "tome")
+	ft.select(tab, false)
+	var hint := UIStyle.label("Structure decks, ready to play" if tab == "structured" else "Decks you built and saved", 14, UIStyle.TEXT_DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	hint.size_flags_vertical = Control.SIZE_SHRINK_END
-	tabs.add_child(hint)
-	# Plate with the scrolling tile list.
-	var plate := PanelContainer.new()
-	var psb := UIStyle.flat(Color(0.035, 0.03, 0.026, 0.82), Color(UIStyle.BRONZE, 0.75), 2, 8)
-	for s in [SIDE_LEFT, SIDE_TOP, SIDE_BOTTOM]:
-		psb.set_content_margin(s, 8)
-	psb.set_content_margin(SIDE_RIGHT, 6)
-	plate.add_theme_stylebox_override("panel", psb)
-	plate.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(plate)
+	ft.set_trailing(hint)
+	ft.tab_selected.connect(func(key: String):
+		if tab != key:
+			tab = key
+			ov.deck_open.clear()
+			ov.refresh())
+	box.add_child(ft)
+	tab_widget = ft
 	var area := ScrollArea.new()
 	area.custom_minimum_size = Vector2(0, 220)
 	area.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	plate.add_child(area)
+	ft.pane.add_child(area)
 	list_area = area
 	var inner := MarginContainer.new()
-	# F01: the content fills the plate's height, so a sparse or empty tab keeps the same plate and
+	# F01: the content fills the pane's height, so a sparse or empty tab keeps the same pane and
 	# its empty-state panel sits in the middle of it.
 	inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	inner.add_theme_constant_override("margin_right", 8)
@@ -235,10 +235,10 @@ func _empty_custom() -> Control:
 	var t := UIStyle.label("No saved decks yet", 22, UIStyle.GOLD, false, true)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
-	var s := UIStyle.label("Decks you build and save in the Deck Builder appear here, ready to play. Until then, pick a Structured deck.", 15, UIStyle.MUTED, true)
+	var s := UIStyle.label("Decks you build and save in the Deck Builder appear here, ready to play. Until then, pick a Structure deck.", 15, UIStyle.MUTED, true)
 	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(s)
-	var go := UIStyle.button("Show Structured decks", 14)
+	var go := UIStyle.button("Show Structure decks", 14)
 	go.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	go.pressed.connect(func():
 		tab = "structured"
@@ -247,49 +247,11 @@ func _empty_custom() -> Control:
 	return wp
 
 
-func _tab_button(key: String, text: String, count: int, glyph: String) -> Button:
+## Adds the deck-source tab `key` to `ft`: its glyph, title and deck count.
+func _add_tab(ft: FolderTabs, key: String, title: String, count: int, glyph: String) -> void:
 	var on: bool = tab == key
-	var b := Button.new()
-	b.focus_mode = Control.FOCUS_NONE
-	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	b.custom_minimum_size = Vector2(190, 46)
-	var fills := {"normal": Color(0.085, 0.07, 0.056, 0.95), "hover": Color(0.14, 0.11, 0.075, 0.98), "pressed": Color(0.07, 0.057, 0.04, 0.98)}
-	for k in fills:
-		var sb := UIStyle.flat(fills[k], UIStyle.BRONZE, 2, 10)
-		sb.corner_radius_bottom_left = 0
-		sb.corner_radius_bottom_right = 0
-		if on:
-			sb = UIStyle.flat(Color(0.2, 0.15, 0.08, 0.99), UIStyle.GOLD, 2, 10)
-			sb.corner_radius_bottom_left = 0
-			sb.corner_radius_bottom_right = 0
-			UIStyle.lift_style(sb, Color(UIStyle.GOLD, 0.35), 10, 0)
-		elif k == "hover":
-			sb.border_color = UIStyle.GOLD
-		sb.border_width_bottom = 0
-		b.add_theme_stylebox_override(k, sb)
-	b.pressed.connect(func():
-		if tab != key:
-			tab = key
-			ov.deck_open.clear()
-			ov.refresh())
-	var h := HBoxContainer.new()
-	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	h.alignment = BoxContainer.ALIGNMENT_CENTER
-	h.add_theme_constant_override("separation", 9)
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(h)
-	var g := TabGlyph.new(glyph, UIStyle.GOLD_HI if on else UIStyle.BRONZE.lightened(0.35))
-	g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(g)
-	var l := UIStyle.label(text, 18, UIStyle.GOLD_HI if on else UIStyle.MUTED, false, true)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_child(l)
-	var cp := GameUi.pill(str(count), UIStyle.GOLD if on else UIStyle.BRONZE, 13)
-	cp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	cp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cp.get_child(0).mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_child(cp)
-	return b
+	ft.add_tab(key, title, {"glyph": TabGlyph.new(glyph, UIStyle.GOLD_HI if on else UIStyle.BRONZE.lightened(0.35)),
+		"badge": str(count), "min_width": 190.0})
 
 
 # ---------------------------------------------------------------- draft
@@ -310,30 +272,12 @@ func _draft(box: VBoxContainer) -> void:
 	var od: Dictionary = dr.get("opponent", {})
 	if not od.is_empty() and not gs.view["deck_ready"][1 - gs.me()]:
 		strip.add_child(ov.rewards._info_chip("%s %s" % [String(gs.view["names"][1 - gs.me()]), _opponent_doing(dr)], false))
-	# Category tabs, then the basic unit at the right of the same row.
-	var row1 := HBoxContainer.new()
-	row1.add_theme_constant_override("separation", 8)
-	box.add_child(row1)
-	var labels: Dictionary = dr.get("labels", {})
-	var left: Dictionary = dr.get("left", {})
-	for cat in dr.get("categories", []):
-		row1.add_child(_category_tab(String(cat), String(labels.get(cat, String(cat).capitalize())), int(left.get(cat, 0)), String(dr["category"]) == String(cat)))
-	var gap := Control.new()
-	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row1.add_child(gap)
-	var b: Dictionary = dr.get("basic", {})
-	if not b.is_empty() and int(dr.get("basic_copies", 0)) > 0:
-		var chip := GameUi.pill("Basic: %s (%s) ×%d" % [b["name"], b["type"], int(dr["basic_copies"])], UIStyle.type_color(b["type"]), 14)
-		chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row1.add_child(chip)
-		var change := UIStyle.button("Change", 14)
-		change.tooltip_text = "Choose a different Type and Race for your basic units. You can change it until your draft is done."
-		change.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		change.pressed.connect(func(): _open_picker(dr))
-		row1.add_child(change)
+	# Category folder tabs (the basic unit at the right of the strip) joined to the pane with the offer.
+	var ft := category_tabs(dr)
+	box.add_child(ft)
 	var row := HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.add_child(row)
+	ft.pane.add_child(row)
 	for i in dr["offer"].size():
 		var c: Dictionary = dr["offer"][i]
 		var colm := CenterContainer.new()
@@ -350,52 +294,41 @@ func _draft(box: VBoxContainer) -> void:
 		colm.add_child(cw)
 
 
-## A draft category tab: its icon, name and picks left. The open one is lit; a finished one is
-## disabled and shows a tick.
-func _category_tab(cat: String, title: String, n_left: int, on: bool) -> Button:
-	var col: Color = UIStyle.CATEGORY_COLORS.get(cat, UIStyle.BRONZE)
-	var b := Button.new()
-	b.focus_mode = Control.FOCUS_ALL
-	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if n_left > 0 else Control.CURSOR_ARROW
-	b.custom_minimum_size = Vector2(0, 42)
-	b.disabled = n_left <= 0
-	b.tooltip_text = ("Draft %s cards: %d pick%s left." % [title, n_left, "" if n_left == 1 else "s"]) if n_left > 0 else "%s: all picks made." % title
-	for k in ["normal", "hover", "pressed", "disabled", "focus"]:
-		var fill := Color(col.darkened(0.55 if on else 0.82), 0.97)
-		if k == "hover" and not on:
-			fill = Color(col.darkened(0.7), 0.98)
-		var sb := UIStyle.flat(fill, UIStyle.GOLD if on else Color(col.lightened(0.1), 0.55 if n_left > 0 else 0.25), 2, 9)
-		sb.content_margin_left = 10
-		sb.content_margin_right = 12
-		if k == "focus":
-			sb.draw_center = false
-			sb.border_color = UIStyle.GOLD_HI
-		if on:
-			UIStyle.lift_style(sb, Color(UIStyle.GOLD, 0.3), 8, 0)
-		b.add_theme_stylebox_override(k, sb)
-	b.pressed.connect(func():
-		if not on:
-			ov.gs.send({"t": "draft_category", "category": cat}))
-	var h := HBoxContainer.new()
-	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	h.add_theme_constant_override("separation", 8)
-	h.alignment = BoxContainer.ALIGNMENT_CENTER
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(h)
-	var ic := ChoiceTile.Icon.new(cat, col, 26.0)
-	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(ic)
-	var txt_col: Color = UIStyle.GOLD_HI if on else (UIStyle.TEXT if n_left > 0 else UIStyle.TEXT_DIM)
-	var l := UIStyle.label(title, 16, txt_col, false, true)
-	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(l)
-	var cp := GameUi.pill(str(n_left) if n_left > 0 else "✓", UIStyle.category_text_color(cat) if n_left > 0 else UIStyle.GOOD, 13)
-	cp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	GameUi.ignore_mouse(cp)
-	h.add_child(cp)
-	# The tab is as wide as its content (the HBox is anchored, so it does not size the button).
-	b.custom_minimum_size.x = 26.0 + 8.0 + UIStyle.font_display(700).get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 8.0 + 30.0 + 26.0
-	return b
+## The draft's category tabs as folder tabs: each shows its icon, name and picks left; the open one
+## is joined to the pane below it, a finished one is disabled and shows a tick. The basic unit chip
+## and its Change button sit at the right end of the strip. Picking a tab sends `draft_category`.
+func category_tabs(dr: Dictionary) -> FolderTabs:
+	var ft := FolderTabs.new()
+	ft.tab_height = 46.0
+	ft.font_size = 16
+	ft.left_margin = 20.0
+	ft.set_pane_margins(10, 14, 10, 10)
+	var labels: Dictionary = dr.get("labels", {})
+	var left: Dictionary = dr.get("left", {})
+	for cat in dr.get("categories", []):
+		var key := String(cat)
+		var n_left := int(left.get(cat, 0))
+		var title := String(labels.get(cat, key.capitalize()))
+		var col: Color = UIStyle.CATEGORY_COLORS.get(key, UIStyle.BRONZE)
+		var tip := ("Draft %s cards: %d pick%s left." % [title, n_left, "" if n_left == 1 else "s"]) if n_left > 0 else "%s: all picks made." % title
+		ft.add_tab(key, title, {"accent": col, "disabled": n_left <= 0, "tooltip": tip,
+			"glyph": ChoiceTile.Icon.new(key, col, 26.0), "badge": str(n_left) if n_left > 0 else "\u2713"})
+	ft.select(String(dr["category"]), false)
+	ft.tab_selected.connect(func(key: String): ov.gs.send({"t": "draft_category", "category": key}))
+	var b: Dictionary = dr.get("basic", {})
+	if not b.is_empty() and int(dr.get("basic_copies", 0)) > 0:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var chip := GameUi.pill("Basic: %s (%s) \u00d7%d" % [b["name"], b["type"], int(dr["basic_copies"])], UIStyle.type_color(b["type"]), 14)
+		chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(chip)
+		var change := UIStyle.button("Change", 14)
+		change.tooltip_text = "Choose a different Type and Race for your basic units. You can change it until your draft is done."
+		change.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		change.pressed.connect(func(): _open_picker(dr))
+		row.add_child(change)
+		ft.set_trailing(row)
+	return ft
 
 
 ## What the other seat is doing in a draft (its progress only; its offers are never sent).
@@ -500,7 +433,7 @@ class DraftPips extends Control:
 				Ornate.diamond(self, c, 3.5, Color(0.05, 0.04, 0.03, 1.0))
 
 
-## Small vector glyph for the tabs: "shield" (Structured) or "tome" (Custom).
+## Small vector glyph for the tabs: "shield" (Structure) or "tome" (Custom).
 class TabGlyph extends Control:
 	var kind := "shield"
 	var col := UIStyle.GOLD

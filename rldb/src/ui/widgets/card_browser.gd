@@ -5,7 +5,7 @@ extends VBoxContainer
 ## Browsing only: it never edits a deck. Owners listen to its signals and decorate cells through
 ## `footer(id)` / `set_marked(id, on)` (the deck builder puts its count tags there).
 ##
-## Input (no drag and drop): hover highlights a card, left-click selects it (`card_selected`),
+## Input (no drag and drop): hover highlights a card (and emits `card_hovered`), left-click selects it (`card_selected`),
 ## right-click asks for inspection (`card_inspected`); a mouse click also emits `card_clicked`. With no text field focused, the arrow keys
 ## move the selection through the visible cards and Enter emits `card_activated`.
 ##
@@ -22,6 +22,8 @@ signal card_inspected(id: int)
 signal card_activated(id: int)
 ## Left mouse click on a card, emitted after `card_selected` (the deck builder adds a copy).
 signal card_clicked(id: int)
+## The pointer entered a card (no click). Nothing is emitted when it leaves.
+signal card_hovered(id: int)
 ## The visible set changed (search, filter or sort).
 signal filters_changed
 
@@ -449,6 +451,7 @@ func _make_cell(d: Dictionary) -> Control:
 		w.tooltip_text += "\n\nImplementation: %s" % status
 	w.pressed.connect(func(_w): _on_click(id))
 	w.right_pressed.connect(func(_w): card_inspected.emit(id))
+	w.mouse_entered.connect(func(): card_hovered.emit(id))
 	c.add_child(w)
 	if status != "full":
 		var warn := PanelContainer.new()
