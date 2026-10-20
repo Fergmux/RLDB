@@ -507,7 +507,7 @@ func is_spectator() -> bool:
 ## A2: true while the mouse is over the chat box or the Spectators list (no board hover there).
 func over_side_popover() -> bool:
 	var m := get_local_mouse_position()
-	for p in [chat.panel, spectate.panel]:
+	for p in [chat.panel, spectate.panel, chat.peek]:   # J17: the new-message preview too
 		if p != null and p.visible and Rect2(p.position, p.size).has_point(m):
 			return true
 	return false

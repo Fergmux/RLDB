@@ -468,6 +468,21 @@ def s_chat(r):
     return finish(lowpass(x, 7000), tail_kw=dict(wet=0.3, extra_s=0.18))
 
 
+def s_chat_pop(r):
+    # J17 new chat message (the preview bubble pops out under the Chat button): a rounded bubble
+    # "bloop" (a short sine glide up with a soft body), then a bright, friendly two-bell chime a
+    # fourth apart with a little sparkle on top. Clearly a message, still lighter than game sounds.
+    n = n_samples(0.07)
+    bloop = mul(sweep(420.0, 980.0, 0.07), env_exp(n, 0.03, 0.004))
+    body = mul(sine(210.0, 0.07), env_exp(n, 0.02, 0.003))
+    b1 = bell(1567.98, 0.42, 0.11)            # G6
+    b2 = bell(2093.0, 0.55, 0.16)             # C7
+    sparkle = mul(highpass(noise(r, 0.12), 6000), env_exp(n_samples(0.12), 0.03, 0.002))
+    x = mix(scale(bloop, 0.7), scale(body, 0.25), (0.055, scale(b1, 0.6)), (0.13, scale(b2, 0.62)),
+            (0.13, scale(sparkle, 0.06)))
+    return finish(lowpass(x, 8500), tail_kw=dict(wet=0.28, extra_s=0.2))
+
+
 # ---------------------------------------------------------------- set pieces (D8 / B5 / D6, 2026-10-20)
 # Layered designs: each set piece has an anticipation layer that swells into its climax (played at the start)
 # and a separate climax hit, so the climax always lands on the visual flash whatever the frame rate.
@@ -1068,7 +1083,7 @@ SOUNDS = [
     ("boom", s_boom), ("charge", s_charge),
     ("click_primary", s_click_primary), ("click_secondary", s_click_secondary), ("back", s_back),
     ("deck_add", s_deck_add), ("deck_remove", s_deck_remove),
-    ("chat", s_chat),
+    ("chat", s_chat), ("chat_pop", s_chat_pop),
     ("fusion_vortex", s_fusion_vortex), ("fusion_impact", s_fusion_impact),
     ("ritual_choir", s_ritual_choir), ("ritual_impact", s_ritual_impact),
     ("arcane_shimmer", s_arcane_shimmer), ("arcane_impact", s_arcane_impact),
@@ -1081,7 +1096,7 @@ SOUNDS = [
 ]
 
 # Per-sound peak level (dBFS); default PEAK_DBFS. UI clicks sit well under the game sounds.
-PEAK = {"chat": -12.0, "click_primary": -11.0, "click_secondary": -12.0, "back": -10.5, "deck_add": -10.0, "deck_remove": -10.5,
+PEAK = {"chat": -12.0, "chat_pop": -10.0,"click_primary": -11.0, "click_secondary": -12.0, "back": -10.5, "deck_add": -10.0, "deck_remove": -10.5,
         "ap_gain": -10.0, "ap_loss": -11.0, "card_slam": -7.5, "sacrifice": -8.0,
         "ui_hover": -21.0, "panel_open": -13.5, "panel_close": -14.5, "tab": -13.0,
         "toggle_on": -14.0, "toggle_off": -14.5, "hp_low_heartbeat": -7.0,
@@ -1102,7 +1117,7 @@ MAX_LEN = {"boom": 1.6, "charge": 1.4, "victory_big": 2.6, "exhaust": 1.3, "fuse
            "arcane_impact": 2.4, "card_slam": 0.6, "serpent_coil": 1.6, "serpent_strike": 1.6, "sacrifice": 1.2,
            "ap_gain": 0.6, "ap_loss": 0.45,
            "ui_hover": 0.12, "panel_open": 0.55, "panel_close": 0.35, "tab": 0.2, "toggle_on": 0.16, "toggle_off": 0.16,
-           "hp_low_heartbeat": 0.75, "card_hover": 0.14, "reward_reveal": 0.9, "reward_pick": 0.6, "step_done": 0.6}
+           "hp_low_heartbeat": 0.75, "card_hover": 0.14, "chat_pop": 0.8, "reward_reveal": 0.9, "reward_pick": 0.6, "step_done": 0.6}
 
 
 def write_wav(path, x):

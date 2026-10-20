@@ -760,6 +760,12 @@ func spectator_list(seat: int) -> Array:
 	return out
 
 
+## J22: every spectator as another spectator sees them in the lobby list: [{"id", "name"}] in
+## joining order (no permissions: who lets whom see their cards is the players' business).
+func spectator_people() -> Array:
+	return spectator_list(HOST_SEAT).map(func(s): return {"id": s["id"], "name": s["name"]})
+
+
 func _send_view(seat: int) -> void:
 	var v := series.view_for(seat)
 	v["net"] = _net_info(seat)
@@ -894,6 +900,7 @@ func _send_spectator_view(peer: int) -> void:
 		"allowed_by": [spectator_allow[0].has(sp["id"]), spectator_allow[1].has(sp["id"])],
 		"paused": away, "opponent_connected": remote_peer != 0, "transport": transport, "is_host": false,
 		"lobby": lobby_id, "claim_in": -1, "suspended": host_suspended, "spectator_count": spectators.size(),
+		"people": spectator_people(),
 		"message": ("%s disconnected. The match is paused until they reconnect." % series.names[CLIENT_SEAT]) if away else ""}
 	var st := _log_delta(v, int(sp["log_sent"]), int(sp["log_game"]))
 	sp["log_sent"] = st[0]
@@ -933,18 +940,19 @@ func _c2s_chat(text: String) -> void:
 	if sender == remote_peer and remote_peer != 0:
 		_host_chat(sender, String(series.names[CLIENT_SEAT]), "player", CLIENT_SEAT, text)
 	elif spectators.has(sender):
-		_host_chat(sender, String(spectators[sender]["name"]), "spectator", -1, text)
+		_host_chat(sender, String(spectators[sender]["name"]), "spectator", -1, text, int(spectators[sender]["id"]))
 
 
 ## Host: cleans, rate-limits and relays one message from `key` (0 = the host itself, else a peer).
-func _host_chat(key: int, from: String, role: String, seat: int, text: String) -> String:
+## `sid` is a spectator sender's spectator id (J21: viewers mute by it), -1 for a player.
+func _host_chat(key: int, from: String, role: String, seat: int, text: String, sid: int = -1) -> String:
 	var clean := NetChat.sanitize(String(text))
 	if clean == "":
 		return "empty"
 	if not _chat_guard.allow(key, Time.get_ticks_msec()):
 		_notice(key, NetChat.SLOW_DOWN)
 		return NetChat.SLOW_DOWN
-	_relay_chat({"from": NetChat.clean_name(from), "role": role, "seat": seat, "text": clean})
+	_relay_chat({"from": NetChat.clean_name(from), "role": role, "seat": seat, "sid": sid, "text": clean})
 	return ""
 
 
@@ -978,8 +986,9 @@ func _s2c_chat(e: Dictionary) -> void:
 	if not role in ["player", "spectator", "system", "notice"]:
 		return
 	var seat: int = int(e.get("seat", -1)) if (e.get("seat") is int or e.get("seat") is float) else -1
+	var sid: int = int(e.get("sid", -1)) if role == "spectator" and (e.get("sid") is int or e.get("sid") is float) else -1
 	_on_chat({"from": NetChat.clean_name(String(e.get("from", ""))) if role in ["player", "spectator"] else "",
-		"role": role, "seat": clampi(seat, -1, 1), "text": NetChat.sanitize(String(e.get("text", "")))})
+		"role": role, "seat": clampi(seat, -1, 1), "sid": sid, "text": NetChat.sanitize(String(e.get("text", "")))})
 
 
 func _on_chat(e: Dictionary) -> void:
