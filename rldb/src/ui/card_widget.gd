@@ -445,9 +445,10 @@ func _get_tooltip(at_position: Vector2) -> String:
 	return tooltip_text
 
 
-## The card's tooltip, with a section describing each status it names (2026-10-18).
+## The card's tooltip (H8, owner 21 Oct): coloured like the details panel, one section per rules part
+## and per status it names (2026-10-18), with any caller lines around it kept plain.
 func _make_custom_tooltip(for_text: String) -> Object:
-	return StatusHelp.tooltip(for_text)
+	return StatusHelp.tooltip_for_card(view, for_text)
 
 
 func _exit_tree() -> void:

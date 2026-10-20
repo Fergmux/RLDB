@@ -41,7 +41,19 @@ func build(col: VBoxContainer) -> PanelContainer:
 	var lv := VBoxContainer.new()
 	UIStyle.pad(lv, "sm")
 	panel.add_child(lv)
-	lv.add_child(GameUi.header("Game log"))
+	# H11 (owner, 21 Oct): the header carries the collapse / expand toggle at its right.
+	var head := HBoxContainer.new()
+	head.name = "LogHead"
+	head.add_theme_constant_override("separation", UIStyle.sp("sm"))
+	lv.add_child(head)
+	var title := GameUi.header("Game log")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	toggle = LogToggle.new(GameLog.expanded())
+	toggle.name = "LogToggle"
+	toggle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	toggle.pressed.connect(func(): set_expanded(not GameLog.expanded()))
+	head.add_child(toggle)
 	# #46: an F3 ink well with leather grain (not a terminal-black box), 14 px padding and md between
 	# the text and its scrollbar.
 	var lbg := PanelContainer.new()
@@ -87,6 +99,113 @@ func build(col: VBoxContainer) -> PanelContainer:
 
 ## The ink fade over the top of the log text (visible while the log is scrolled down).
 var top_fade: Control
+## H11: the collapse / expand button in the log header.
+var toggle: LogToggle
+
+
+# ---------------------------------------------------------------- H11 log size
+## Settings section and key of the log size choice (kept in the UI settings file, beside [ui]).
+const SIZE_SECTION := "layout"
+const SIZE_KEY := "log_expanded"
+## Automated runs (GdUnit, -s drivers, --*-shots) keep the choice in this file instead.
+const TEST_SETTINGS_PATH := "user://test_ui_layout.cfg"
+static var _expanded: bool = false
+static var _expanded_loaded: bool = false
+
+
+## Where the log size choice is saved: the UI settings file, or a test file in automated runs.
+static func settings_path() -> String:
+	return TEST_SETTINGS_PATH if DeckStore.PATH == DeckStore.TEST_PATH else UIStyle.SETTINGS_PATH
+
+
+## True while the viewer has chosen the tall game log (the short one is the default).
+static func expanded() -> bool:
+	if not _expanded_loaded:
+		_expanded_loaded = true
+		var cf := ConfigFile.new()
+		if cf.load(settings_path()) == OK:
+			_expanded = bool(cf.get_value(SIZE_SECTION, SIZE_KEY, false))
+	return _expanded
+
+
+## Records the viewer's log size choice (and saves it when `persist`), keeping the file's other
+## sections.
+static func store_expanded(on: bool, persist: bool = true) -> void:
+	_expanded = on
+	_expanded_loaded = true
+	if not persist:
+		return
+	var cf := ConfigFile.new()
+	cf.load(settings_path())
+	cf.set_value(SIZE_SECTION, SIZE_KEY, on)
+	cf.save(settings_path())
+
+
+## Switches the log between its short and tall size: saves the choice, plays toggle_on / toggle_off,
+## turns the chevron and eases the panel to its new height (GameSidebar.animate_log; instant under
+## reduce motion). `persist` false leaves the saved choice alone (screenshots, tests).
+func set_expanded(on: bool, persist: bool = true) -> void:
+	if on == GameLog.expanded():
+		return
+	GameLog.store_expanded(on, persist)
+	Sfx.play("toggle_on" if on else "toggle_off")
+	if toggle != null and is_instance_valid(toggle):
+		toggle.set_open(on)
+	if gs != null and gs.sidebar != null:
+		gs.sidebar.animate_log()
+
+
+## H11: the log header's collapse / expand button: a small iron plate with a gold chevron pointing
+## down while the log is short (more to show) and up while it is tall; the chevron turns over on a
+## toggle. A JuicyButton (hover lift, press, the shared hover cue); the click sound is the toggle's.
+class LogToggle extends JuicyButton:
+	const SIZE := Vector2(30, 24)
+	## 0 = chevron down (short log), 1 = up (tall log); eased by set_open.
+	var turn: float = 0.0:
+		set(v):
+			turn = v
+			queue_redraw()
+	var open := false
+
+	func _init(is_open: bool = false) -> void:
+		super()
+		UIStyle.style_button(self, "secondary")
+		for st in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+			var sb := get_theme_stylebox(st)
+			sb.content_margin_left = 0
+			sb.content_margin_right = 0
+			sb.content_margin_top = 0
+			sb.content_margin_bottom = 0
+		custom_minimum_size = SIZE
+		focus_mode = Control.FOCUS_NONE
+		set_meta(Sfx.BUTTON_META, "none")   # set_expanded plays toggle_on / toggle_off
+		open = is_open
+		turn = 1.0 if is_open else 0.0
+		_tip()
+
+	## Shows the tall (`on`) or short state, turning the chevron (instant under reduce motion).
+	func set_open(on: bool) -> void:
+		open = on
+		_tip()
+		var to := 1.0 if on else 0.0
+		if UIStyle.reduce_motion or not is_inside_tree():
+			turn = to
+			return
+		var tw := UIStyle.restart_tween(self, &"turn_tw")
+		UIStyle.tween_token(tw, self, "turn", to, "slide")
+
+	func _tip() -> void:
+		tooltip_text = "Show less of the game log" if open else "Show more of the game log"
+
+	func _draw() -> void:
+		super()
+		var c := size / 2.0
+		var w := 6.0
+		var h := 3.5 * cos(turn * PI)   # +: pointing down, -: pointing up
+		var col := UIStyle.GOLD_HI if _hover else UIStyle.GOLD
+		var pts := PackedVector2Array([c + Vector2(-w, -h), c + Vector2(0, h), c + Vector2(w, -h)])
+		draw_polyline(pts, Color(0, 0, 0, 0.5), 3.6, true)
+		draw_polyline(pts, col, 2.0, true)
 
 
 class TopFade extends Control:

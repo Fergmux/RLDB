@@ -9,10 +9,10 @@ enum R { CONT, WAIT, STAY, END }
 
 const HIDDEN_PILES := ["hand", "draw", "spent", "exhaust", "extra"]
 ## D13 (owner feedback 2026-10-20): the three answers of a Trap response window. "Skip" declines
-## this window only; "Pass for the rest of this turn" declines every window until the turn ends.
+## this window only; "Skip for the rest of this turn" declines every window until the turn ends.
 const TRAP_SKIP := "Skip"
 const TRAP_SKIP_NONE := "Skip (no Trap can respond)"
-const TRAP_PASS_TURN := "Pass for the rest of this turn"
+const TRAP_PASS_TURN := "Skip for the rest of this turn"
 ## Option values of the two declining answers (an Activate option's value is the Trap's uid).
 const TRAP_V_SKIP := -1
 const TRAP_V_PASS_TURN := -2
@@ -638,7 +638,7 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 	if ev.get("player", -1) == responder:
 		return R.CONT
 	if passing_traps(responder):
-		return R.CONT                     # D13: they passed for the rest of this turn
+		return R.CONT                     # D13: they skipped Traps for the rest of this turn
 	var eligible := []
 	var concealed := false   # any face-down card that could plausibly be a Trap
 	for uid in backrow_cards(responder):
@@ -668,7 +668,7 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 	var choice: int = ans[0]
 	if choice == TRAP_V_PASS_TURN:
 		players[responder]["trap_pass_turn"] = turn
-		add_log("", {responder: "You pass on Traps for the rest of this turn."})
+		add_log("", {responder: "You skip Traps for the rest of this turn."})
 		f["vars"]["passed"] = true
 		return R.CONT
 	if choice == TRAP_V_SKIP:
@@ -679,7 +679,7 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 	return R.STAY
 
 
-## D13: true while player p has chosen "Pass for the rest of this turn" (no Trap window is opened
+## D13: true while player p has chosen "Skip for the rest of this turn" (no Trap window is opened
 ## for them until the turn ends).
 func passing_traps(p: int) -> bool:
 	return int(players[p].get("trap_pass_turn", -1)) == turn
