@@ -19,9 +19,18 @@ extends SceneTree
 ## `--drawcalls` (J31) lists, per idle screen, the canvas items whose subtree issues the most draw
 ## calls: each is hidden at the RenderingServer level for a few frames (no layout change) and the drop
 ## in RENDER_TOTAL_DRAW_CALLS_IN_FRAME is its subtree's share.
+## `--zone-mesh-off` (J31 follow-up) draws the empty zones live, one draw call per primitive, as before
+## ZoneMesh: the same build measured before and after.
+## `--budget` (J31 follow-up) fails the run (exit code 1, "PERF BUDGET FAIL") when an idle screen issues
+## more draw calls than DRAW_CALL_BUDGET. Before the empty zones were merged (ZoneMesh) the duel issued
+## ~4040; after, ~1300. The budgets leave ~30-50% headroom over the 22 Oct numbers.
 ## "--perf-shots" only makes main.gd use the dev save folders (no real saves are touched).
 
 const WARM := 90
+## Draw calls per frame allowed on each idle screen with `--budget` (22 Oct, 1600x1000: decks 1832,
+## duel_idle ~1300, rewards ~2160, draft 1686; before ZoneMesh: 4182 / 4040 / ~4900 / 4034).
+const DRAW_CALL_BUDGET := {"menu": 400, "decks": 2500, "duel_idle": 2000, "rewards": 3000, "draft": 2400}
+var _budget_failed := false
 const SAMPLE := 400
 const PLAY_COMMANDS := 120
 
@@ -44,6 +53,8 @@ var _phase := [0.0, 0.0, 0.0]
 func _initialize() -> void:
 	rng.seed = 7
 	attribute = "--attribute" in OS.get_cmdline_user_args()
+	if "--zone-mesh-off" in OS.get_cmdline_user_args():
+		ZoneMesh.enabled = false
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--off="):
 			_off = a.split("=", true, 1)[1].split(",")
@@ -80,7 +91,7 @@ func _run() -> void:
 	await _frames(240)
 	await _measure("duel_idle")
 	if "--quick" in OS.get_cmdline_user_args():
-		quit()
+		quit(1 if _budget_failed else 0)
 		return
 	if attribute:
 		_hook_draws(root)
@@ -108,7 +119,7 @@ func _run() -> void:
 	main.call("_start_local", {"seed": 777, "best_of": 3, "deck_mode": "draft", "names": ["Ana", "Ben"]})
 	await _frames(240)
 	await _measure("draft")
-	quit()
+	quit(1 if _budget_failed else 0)
 
 
 func _on_frame_start() -> void:
@@ -143,7 +154,7 @@ func _my_idle_turn(host: LocalHost) -> bool:
 
 func _begin() -> Dictionary:
 	return {"dt": [], "proc": 0.0, "gpu": 0.0, "rcpu": 0.0, "draws": 0.0, "n": 0, "last": Time.get_ticks_usec(),
-		"scr": 0.0, "rnd": 0.0, "oth": 0.0}
+		"scr": 0.0, "rnd": 0.0, "oth": 0.0, "frames": []}
 
 
 func _sample(s: Dictionary) -> void:
@@ -154,6 +165,7 @@ func _sample(s: Dictionary) -> void:
 	s["last"] = now
 	# The phases of the frame that just ended (stamped by _on_frame_start).
 	s["scr"] += _phase[0]
+	s["frames"].append([dt_ms, _phase[0], _phase[1], _phase[2]])
 	s["rnd"] += _phase[1]
 	s["oth"] += _phase[2]
 	s["proc"] += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
@@ -210,10 +222,28 @@ func _report(label: String, s: Dictionary) -> void:
 		avg += f
 	avg /= maxf(n, 1)
 	var k := maxf(s["n"], 1)
-	print("PERF %-10s frames=%d avg=%.2fms (%.0f fps) p95=%.2fms process=%.2fms render_cpu=%.2fms gpu=%.2fms draw_calls=%.0f nodes=%d split scr=%.2f rnd=%.2f oth=%.2f" % [
+	print("PERF %-10s frames=%d avg=%.2fms (%.0f fps) p95=%.2fms process=%.2fms render_cpu=%.2fms gpu=%.2fms draw_calls=%.0f nodes=%d split scr=%.2f rnd=%.2f oth=%.2f zone_meshes=%d" % [
 		label, n, avg, 1000.0 / maxf(avg, 0.001), dt[int(n * 0.95)], s["proc"] / k, s["rcpu"] / k,
 		s["gpu"] / k, s["draws"] / k, Performance.get_monitor(Performance.OBJECT_NODE_COUNT),
-		s["scr"] / k, s["rnd"] / k, s["oth"] / k])
+		s["scr"] / k, s["rnd"] / k, s["oth"] / k, ZoneMesh.builds])
+	if "--budget" in OS.get_cmdline_user_args() and DRAW_CALL_BUDGET.has(label):
+		var dc: float = s["draws"] / k
+		var lim: int = DRAW_CALL_BUDGET[label]
+		print("PERF budget %-10s draw_calls=%.0f limit=%d %s" % [label, dc, lim, "ok" if dc <= lim else "FAIL"])
+		if dc > lim:
+			print("PERF BUDGET FAIL %s: %.0f draw calls > %d" % [label, dc, lim])
+			_budget_failed = true
+	# The slowest 5% of frames: where their time goes (work in scripts / render, or waiting elsewhere).
+	var fr: Array = s["frames"]
+	if fr.size() >= 20:
+		fr.sort_custom(func(a, b): return a[0] > b[0])
+		var top := fr.slice(0, maxi(1, fr.size() / 20))
+		var acc := [0.0, 0.0, 0.0, 0.0]
+		for f in top:
+			for j in 4:
+				acc[j] += f[j]
+		print("PERF %-10s slowest 5%%: avg=%.2fms split scr=%.2f rnd=%.2f oth=%.2f" % [label, acc[0] / top.size(),
+			acc[1] / top.size(), acc[2] / top.size(), acc[3] / top.size()])
 
 
 func _draw_call_tree(label: String) -> void:
@@ -290,6 +320,14 @@ func _attribution(label: String, frames: int = SAMPLE) -> void:
 			hot.append([_draws[id], _names[id]])
 	hot.sort_custom(func(a, b): return a[0] > b[0])
 	print("PERF %s redraws (>25%% of %d frames): %d items" % [label, frames, hot.size()])
+	var empty_draws := 0
+	var empty_items := 0
+	for id in _draws:
+		var o := instance_from_id(id)
+		if o is CardWidget and (o as CardWidget).view.is_empty() and _draws[id] > 0:
+			empty_draws += _draws[id]
+			empty_items += 1
+	print("PERF %s empty zone redraws: %d over %d zones" % [label, empty_draws, empty_items])
 	for h in hot.slice(0, 40):
 		print("    %4d  %s" % h)
 	var procs: Dictionary = {}

@@ -174,40 +174,81 @@ const MOTE_RISE := 0.55
 ## The kind mark (sword / eye / crown) is engraved (D10). `highlighted` = a zone pick (#28): a light
 ## target fill, a breathing inner glow and a gold border; the zone under the pointer (`pt.hover`)
 ## lifts its glow to PICK_GLOW_HOVER_A and sends a mote up.
+## J31 follow-up: the three layers are drawn by draw_empty_base, draw_empty_pick and draw_empty_mark
+## (in that order); ZoneBake bakes the static ones and CardWidget draws only the animated pick live.
 static func draw_empty(pt: CardPainter, size: Vector2, highlighted: bool) -> void:
+	draw_empty_base(pt, size)
+	if highlighted:
+		draw_empty_pick(pt, size)
+	draw_empty_mark(pt, size, highlighted)
+	# Zones never show a text label ("Front 1", "Trap / Spell 2", ...) — user feedback 2026-10-16.
+
+
+## The painter scale of an empty zone `size` px (CardWidget sets pt.s to this).
+static func empty_scale(size: Vector2) -> float:
+	return clampf(minf(size.x, size.y) / 85.0, 0.5, 1.3)
+
+
+## The zone role ("unit" / "trap" / "power") of a card size kind.
+static func _empty_role(kind: String) -> String:
+	match kind:
+		"trap": return "trap"
+		"power": return "power"
+	return "unit"
+
+
+## Test hook (J31 follow-up): when valid, the zone pick's breathing and mote read this clock (ms)
+## instead of Time.get_ticks_msec(), so a pixel comparison can freeze them.
+static var clock_ms: Callable = Callable()
+
+
+static func _now_ms() -> float:
+	return float(clock_ms.call()) if clock_ms.is_valid() else float(Time.get_ticks_msec())
+
+
+## The static recess of an empty zone: recess, tint, inner shadow, rim and lip.
+static func draw_empty_base(pt: CardPainter, size: Vector2) -> void:
 	var s := pt.s
-	var role := "unit"
-	match pt.size_kind:
-		"trap": role = "trap"
-		"power": role = "power"
-	var tint: Color = UIStyle.ZONE_TINT[role]
+	var tint: Color = UIStyle.ZONE_TINT[_empty_role(pt.size_kind)]
 	var r := Rect2(Vector2.ZERO, size)
 	var rad := 8.0 * s
 	pt.round_rect(r, Color(0, 0, 0, ZONE_RECESS_A), rad)
 	pt.round_rect(r, Color(tint, ZONE_FILL_A), rad)
-	inner_shadow(pt.ci, r, rad, ZONE_SHADOW_PX * s, ZONE_SHADOW_A)
+	inner_shadow(pt.out(), r, rad, ZONE_SHADOW_PX * s, ZONE_SHADOW_A)
 	pt.ring(ZONE_RIM, 1.0, r, rad)
-	_lip(pt.ci, r, rad, ZONE_LIP)
-	if highlighted:
-		var k := UIStyle.breathe(float(Time.get_ticks_msec()) / 1000.0, 0.12)
-		var ga := (PICK_GLOW_HOVER_A if pt.hover else PICK_GLOW_A) * k
-		pt.round_rect(r, Color(UIStyle.TARGET, PICK_FILL_A), rad)
-		inner_shadow(pt.ci, r, rad, PICK_GLOW_PX, minf(1.0, ga), UIStyle.TARGET)
-		pt.ring(UIStyle.GOLD_HI if pt.hover else UIStyle.GOLD, 2.0, r, rad)
-		if pt.hover and not UIStyle.reduce_motion:
-			var ph := fmod(float(Time.get_ticks_msec()) / 1000.0 / MOTE_PERIOD, 1.0)
-			var mp := Vector2(r.get_center().x + sin(ph * TAU) * 4.0 * s, r.end.y - 10.0 * s - ph * r.size.y * MOTE_RISE)
-			var ma := sin(ph * PI)
-			pt.ci.draw_circle(mp, 5.0 * s, Color(UIStyle.GOLD_HI, 0.18 * ma), true, -1.0, true)
-			pt.ci.draw_circle(mp, 2.0 * s, Color(1.0, 0.95, 0.8, 0.85 * ma), true, -1.0, true)
-	engraved_mark(pt.ci, {"unit": "sword", "trap": "eye", "power": "crown"}[role], r.get_center(), minf(size.x, size.y) * MARK_K,
-		1.6 if highlighted else 1.0)
-	# Zones never show a text label ("Front 1", "Trap / Spell 2", ...) — user feedback 2026-10-16.
+	_lip(pt.out(), r, rad, ZONE_LIP)
+
+
+## The animated zone pick over the recess (#28): target fill, breathing inner glow, gold border and,
+## on the hovered zone, a rising mote.
+static func draw_empty_pick(pt: CardPainter, size: Vector2) -> void:
+	var s := pt.s
+	var r := Rect2(Vector2.ZERO, size)
+	var rad := 8.0 * s
+	var k := UIStyle.breathe(_now_ms() / 1000.0, 0.12)
+	var ga := (PICK_GLOW_HOVER_A if pt.hover else PICK_GLOW_A) * k
+	pt.round_rect(r, Color(UIStyle.TARGET, PICK_FILL_A), rad)
+	inner_shadow(pt.ci, r, rad, PICK_GLOW_PX, minf(1.0, ga), UIStyle.TARGET)
+	pt.ring(UIStyle.GOLD_HI if pt.hover else UIStyle.GOLD, 2.0, r, rad)
+	if pt.hover and not UIStyle.reduce_motion:
+		var ph := fmod(_now_ms() / 1000.0 / MOTE_PERIOD, 1.0)
+		var mp := Vector2(r.get_center().x + sin(ph * TAU) * 4.0 * s, r.end.y - 10.0 * s - ph * r.size.y * MOTE_RISE)
+		var ma := sin(ph * PI)
+		pt.ci.draw_circle(mp, 5.0 * s, Color(UIStyle.GOLD_HI, 0.18 * ma), true, -1.0, true)
+		pt.ci.draw_circle(mp, 2.0 * s, Color(1.0, 0.95, 0.8, 0.85 * ma), true, -1.0, true)
+
+
+## The engraved kind mark of an empty zone, a little stronger on a zone pick.
+static func draw_empty_mark(pt: CardPainter, size: Vector2, highlighted: bool) -> void:
+	var r := Rect2(Vector2.ZERO, size)
+	engraved_mark(pt.out(), {"unit": "sword", "trap": "eye", "power": "crown"}[_empty_role(pt.size_kind)], r.get_center(),
+		minf(size.x, size.y) * MARK_K, 1.6 if highlighted else 1.0)
 
 
 ## D10: a kind mark engraved into the table: a dark cut 1 px above, a lit edge 1 px below and a faint
-## warm face (MARK_A). `k` scales every alpha (a zone pick shows it a little more).
-static func engraved_mark(ci: CanvasItem, kind: String, c: Vector2, r: float, k: float = 1.0) -> void:
+## warm face (MARK_A). `k` scales every alpha (a zone pick shows it a little more). `ci` is a
+## CanvasItem or a MeshPen.
+static func engraved_mark(ci: Object, kind: String, c: Vector2, r: float, k: float = 1.0) -> void:
 	CardArt.draw_glyph(ci, kind, c + Vector2(0, -1.0), r, Color(0, 0, 0, MARK_CUT_A * k))
 	CardArt.draw_glyph(ci, kind, c + Vector2(0, 1.0), r, Color(MARK_LIT, MARK_LIT.a * k))
 	CardArt.draw_glyph(ci, kind, c, r, Color(1.0, 0.93, 0.8, MARK_A * k))
@@ -215,7 +256,7 @@ static func engraved_mark(ci: CanvasItem, kind: String, c: Vector2, r: float, k:
 
 ## Inner shadow (or inner glow in `col`) `px` deep inside the rounded rect `r`: concentric 1 px rings
 ## fading inwards, each a little lower than the last so the top edge carries more of it.
-static func inner_shadow(ci: CanvasItem, r: Rect2, rad: float, px: float, a: float, col: Color = Color.BLACK) -> void:
+static func inner_shadow(ci: Object, r: Rect2, rad: float, px: float, a: float, col: Color = Color.BLACK) -> void:
 	var n := maxi(2, ceili(px))
 	var sb := StyleBoxFlat.new()
 	sb.draw_center = false
@@ -232,7 +273,7 @@ static func inner_shadow(ci: CanvasItem, r: Rect2, rad: float, px: float, a: flo
 
 
 ## The faint gold lip on the bottom and right edges of a recess (straight runs between the corners).
-static func _lip(ci: CanvasItem, r: Rect2, rad: float, col: Color) -> void:
+static func _lip(ci: Object, r: Rect2, rad: float, col: Color) -> void:
 	ci.draw_line(Vector2(r.position.x + rad, r.end.y - 0.5), Vector2(r.end.x - rad, r.end.y - 0.5), col, 1.0, true)
 	ci.draw_line(Vector2(r.end.x - 0.5, r.position.y + rad), Vector2(r.end.x - 0.5, r.end.y - rad), col, 1.0, true)
 

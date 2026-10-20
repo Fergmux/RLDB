@@ -102,6 +102,8 @@ var _paint := CardPainter.new(self)
 var _overlay: Control
 ## Face redraws so far (tests: an animated overlay must not repaint the face).
 var face_draws := 0
+## J31 follow-up: the empty zone's static layers were drawn from a shared ZoneMesh by the last redraw.
+var _zone_merged := false
 
 
 func _init() -> void:
@@ -508,9 +510,10 @@ func _draw() -> void:
 		pt.cr = Rect2(Vector2.ZERO, ls)
 		pt.reset_transform()
 		pt.hover = pt.hover or (highlighted and _mouse_in)
-		CardLayouts.draw_empty(pt, ls, highlighted)
+		_draw_empty_zone(pt, ls)
 		_overlay.queue_redraw()
 		return
+	_zone_merged = false
 	pt.cr = _card_rect_in(ls)
 	pt.ps = Vector2(pt.cr.size.y, pt.cr.size.x) if rotated else pt.cr.size
 	pt.s = maxf(0.2, pt.ps.x / _base().x)
@@ -530,6 +533,26 @@ func _draw() -> void:
 			_: CardLayouts.draw_square(pt)
 	pt.reset_transform()
 	_overlay.queue_redraw()
+
+
+## An empty zone (J31 follow-up): the static recess and mark are one ZoneMesh triangle list (one draw
+## call, the same pixels as drawing them one by one). A zone being picked (highlighted) draws live, the
+## pre-J31 path exactly: its glow animates and redraws every frame anyway, and under 4x MSAA the old
+## path is not frame-stable there, so a merged pick could not be shown identical (see zone_mesh_diff.gd).
+func _draw_empty_zone(pt: CardPainter, ls: Vector2) -> void:
+	var vp := get_viewport()
+	var os := vp.get_oversampling() if vp != null else 1.0
+	var base: MeshPen = null if highlighted else ZoneMesh.for_zone(size_kind, ls, os, true, self_modulate)
+	_zone_merged = base != null
+	if base == null:
+		CardLayouts.draw_empty(pt, ls, highlighted)
+		return
+	base.emit(get_canvas_item())
+
+
+## True when the last redraw drew this empty zone's static layers from a ZoneMesh (tests, probes).
+func is_zone_merged() -> bool:
+	return _zone_merged
 
 
 ## Draws the state overlays (CardOverlays) on the internal overlay item from the painter snapshot the

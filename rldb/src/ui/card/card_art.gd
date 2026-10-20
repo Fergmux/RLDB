@@ -122,7 +122,7 @@ static func _uvs(pts: PackedVector2Array, rect: Rect2, uv: Rect2) -> PackedVecto
 
 
 ## Kind glyph centred on `c` with radius `r`: "sword" (units), "star" (spells), "eye" (traps), "crown" (powers).
-static func draw_glyph(ci: CanvasItem, kind: String, c: Vector2, r: float, col: Color) -> void:
+static func draw_glyph(ci: Object, kind: String, c: Vector2, r: float, col: Color) -> void:
 	match kind:
 		"sword":
 			_draw_sword(ci, c, r, col)
@@ -142,7 +142,7 @@ static func draw_glyph(ci: CanvasItem, kind: String, c: Vector2, r: float, col: 
 ## A pointed blade with a fuller, a curved cross-guard, a grip and a round pommel, `2 r` tall and centred
 ## on `c`. Each part is a filled polygon with a hairline rim of the same colour on top (the rim doubles
 ## the alpha on the very edge, which crisps the shape up and anti-aliases it); a faint halo surrounds it.
-static func _draw_sword(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
+static func _draw_sword(ci: Object, c: Vector2, r: float, col: Color) -> void:
 	var rim_w := maxf(1.0, r * 0.035)
 	var rim := Color(col, minf(1.0, col.a * 1.9))
 	var blade := PackedVector2Array([Vector2(0, -1.0), Vector2(0.095, -0.80), Vector2(0.125, -0.06), Vector2(0.125, 0.17),
@@ -173,7 +173,7 @@ static func _draw_sword(ci: CanvasItem, c: Vector2, r: float, col: Color) -> voi
 ## H13 (owner feedback 2026-10-21): the Trap mark in the sword's style. A pointed almond eye (`1.84 r`
 ## wide), an iris ring around a cut slit pupil with a glint, and a fine brow line above it. Each part is a
 ## filled polygon with a hairline rim of the same colour and a faint halo, as in _draw_sword.
-static func _draw_eye(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
+static func _draw_eye(ci: Object, c: Vector2, r: float, col: Color) -> void:
 	var rim_w := maxf(1.0, r * 0.035)
 	var rim := Color(col, minf(1.0, col.a * 1.9))
 	var cut := Color(0, 0, 0, minf(0.4, col.a * 2.0))
@@ -213,7 +213,7 @@ static func _draw_eye(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
 ## H13: the Power mark in the sword's style. A three-pointed crown (`1.4 r` wide) on a band split from
 ## the points by a fine groove, a pearl on every point and a cut jewel in the band. Filled parts with a
 ## hairline rim and a faint halo, as in _draw_sword.
-static func _draw_crown(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
+static func _draw_crown(ci: Object, c: Vector2, r: float, col: Color) -> void:
 	var rim_w := maxf(1.0, r * 0.035)
 	var rim := Color(col, minf(1.0, col.a * 1.9))
 	var cut := Color(0, 0, 0, minf(0.4, col.a * 2.0))

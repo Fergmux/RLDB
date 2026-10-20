@@ -19,6 +19,9 @@ static var _sb := StyleBoxFlat.new()
 
 ## Canvas every part draws on (the owning CardWidget).
 var ci: CanvasItem
+## J31 follow-up: when set, round_rect / ring and the transform record into this MeshPen instead of
+## drawing on `ci` (ZoneMesh records the static layers of an empty zone this way).
+var pen: MeshPen = null
 ## Redacted card view being drawn (shared with the widget; never modified while drawing).
 var view: Dictionary = {}
 ## Card size kind ("board", "hand", "big" ...).
@@ -61,6 +64,11 @@ var trace: Array = []
 
 func _init(canvas: CanvasItem) -> void:
 	ci = canvas
+
+
+## Where the static helpers draw: the MeshPen while recording, else the canvas item.
+func out() -> Object:
+	return pen if pen != null else ci
 
 
 ## Scaled rect from base units.
@@ -129,6 +137,9 @@ var _xf := Transform2D.IDENTITY
 
 func _set_xf(xf: Transform2D) -> void:
 	_xf = xf
+	if pen != null:
+		pen.draw_set_transform_matrix(xf)
+		return
 	ci.draw_set_transform_matrix(xf)
 
 
@@ -211,12 +222,20 @@ func sbox(fill: Color, border: Color, bw: int, radius: int, with_center: bool = 
 
 ## Unfilled rounded ring of width `width` on `rect`.
 func ring(col: Color, width: float, rect: Rect2, radius: float) -> void:
-	ci.draw_style_box(sbox(Color.TRANSPARENT, col, maxi(1, roundi(width)), maxi(1, roundi(radius)), false), rect)
+	var sb := sbox(Color.TRANSPARENT, col, maxi(1, roundi(width)), maxi(1, roundi(radius)), false)
+	if pen != null:
+		pen.draw_style_box(sb, rect)
+		return
+	ci.draw_style_box(sb, rect)
 
 
 ## Filled rounded rect with an optional border `bw` px wide.
 func round_rect(rect: Rect2, fill: Color, radius: float, border: Color = Color.TRANSPARENT, bw: float = 0.0) -> void:
-	ci.draw_style_box(sbox(fill, border, maxi(1, roundi(bw)) if bw > 0.0 else 0, maxi(1, roundi(radius))), rect)
+	var sb := sbox(fill, border, maxi(1, roundi(bw)) if bw > 0.0 else 0, maxi(1, roundi(radius)))
+	if pen != null:
+		pen.draw_style_box(sb, rect)
+		return
+	ci.draw_style_box(sb, rect)
 
 
 ## Vertical gradient filling `rect` from `top` to `bottom`.
