@@ -35,7 +35,7 @@ func _summon_pending() -> int:
 
 
 func _press_summon() -> void:
-	var b: Button = gs.action_row.stack.get_children().filter(func(x): return (x as Button).text == "Summon Attack")[0]
+	var b: Button = gs.action_row.stack.get_children().filter(func(x): return (x as Button).text == "Summon")[0]
 	b.pressed.emit()
 	await await_millis(250)
 

@@ -145,7 +145,7 @@ func _d2_summon_shrink() -> void:
 	await _click(_hand_rect(uids["h_water"]).get_center())
 	await _wait(0.4)
 	await _shot("d2_selected_row")
-	await _click_row("Summon Attack")
+	await _click_row("Summon")
 	await _wait(0.1)
 	await _shot("d2_just_after_choice")
 	await _move(_hand_rect(uids["h_water"]).get_center())
