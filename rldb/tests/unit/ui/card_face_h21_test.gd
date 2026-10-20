@@ -85,5 +85,34 @@ func test_selected_card_draws_above_later_zones_and_drops_back_when_cleared() ->
 	assert_int(card.z_index).is_equal(0)
 
 
+## The name records of a widget's last draw: "line" traces whose text is (part of) the card name.
+func _name_lines(trace: Array, nm: String) -> Array:
+	return trace.filter(func(r): return r[0] == "line" and (nm.begins_with(String(r[1]).trim_suffix(CardTextLayout.ELLIPSIS)) or String(r[1]).ends_with(")")))
+
+
+# ---------------------------------------------------------------- H14 / H19 one-line names
+
+func test_long_names_show_whole_on_one_line_on_every_kind() -> void:
+	# Anduras (#99), Drako (#185), Saviour Appears (#165), Infernogate (#58).
+	for id in [99, 185, 165, 58]:
+		for kind in ["board", "hand", "big"]:
+			var v := _view(id, "unit" if kind == "board" else "hand")
+			var nm := String(v["name"])
+			var w := _widget(v, kind)
+			var lines := _name_lines(await _trace(w), nm)
+			assert_int(lines.size()).override_failure_message("%s on %s: %d name lines" % [nm, kind, lines.size()]).is_equal(1)
+			assert_str(String(lines[0][1])).is_equal(nm)
+
+
+func test_name_fit_shrinks_first_then_condenses_within_the_plate() -> void:
+	var font := UIStyle.font_display(600)
+	var short_fit := CardTextLayout.fit_name_line("Dante", 75.0, 10.5, 9.0, font, 1.0)
+	assert_float(float(short_fit[1])).is_equal(1.0)
+	var nm := "Anduras, Fisherman of the Ocean Tribe"
+	var fit := CardTextLayout.fit_name_line(nm, 75.0, 10.5, 9.0, font, 1.0)
+	assert_float(float(fit[1])).is_less(1.0)
+	assert_float(font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, int(fit[0])).x * float(fit[1])).is_less_equal(75.01)
+
+
 func test_selected_card_stays_under_the_fx_vignette() -> void:
 	assert_int(CardWidget.SELECTED_Z).is_less(FxPlayer.VIGNETTE_Z)

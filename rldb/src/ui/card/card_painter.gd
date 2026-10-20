@@ -102,25 +102,34 @@ func face_xform() -> Transform2D:
 
 ## Draw subsequent commands in card-face space.
 func set_face_transform() -> void:
-	ci.draw_set_transform_matrix(face_xform())
+	_set_xf(face_xform())
 
 
 ## Draw subsequent commands in plain (resting-layout) widget space.
 func reset_transform() -> void:
-	ci.draw_set_transform_matrix(base_xform())
+	_set_xf(base_xform())
 
 
 ## While a rotated face is drawn, the parts drawn next (centred on face point `c`) stay upright in
 ## screen space at the same spot on the card: ATK/DEF badges, cost gem, type pip. Pair with upright_end().
 func upright_begin(c: Vector2) -> void:
 	if rotated:
-		ci.draw_set_transform(face_xform() * c - c * k, 0.0, Vector2(k, k))
+		_set_xf(Transform2D(0.0, Vector2(k, k), 0.0, face_xform() * c - c * k))
 
 
 ## Ends an upright-drawing section started by upright_begin().
 func upright_end() -> void:
 	if rotated:
-		ci.draw_set_transform_matrix(face_xform())
+		_set_xf(face_xform())
+
+
+## The canvas transform the painter last set (what a local transform must compose onto).
+var _xf := Transform2D.IDENTITY
+
+
+func _set_xf(xf: Transform2D) -> void:
+	_xf = xf
+	ci.draw_set_transform_matrix(xf)
 
 
 ## One line of text whose box (`line_h` tall, default 1.1 x fs) starts at `pos_top_left`, vertically centred.
@@ -141,6 +150,24 @@ func text_c(font: Font, text: String, centre: Vector2, fsz: int, col: Color, out
 	if outline > 0.0:
 		ci.draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, int(ceil(outline)), Color(0, 0, 0, 0.7), _JUST, TextServer.DIRECTION_AUTO, TextServer.ORIENTATION_HORIZONTAL, text_os)
 	ci.draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, col, _JUST, TextServer.DIRECTION_AUTO, TextServer.ORIENTATION_HORIZONTAL, text_os)
+
+
+## H14 / H19: one line of text centred in a box `width` wide whose top-left is `pos_top_left` and
+## `line_h` tall, condensed horizontally by `xk` (<= 1) about its own centre, so a long card name
+## keeps every letter on one line. `xk` 1 is a plain centred line.
+func text_squeezed(font: Font, text: String, pos_top_left: Vector2, width: float, fsz: int, col: Color, xk: float, line_h: float) -> void:
+	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
+	var base_y := pos_top_left.y + line_h / 2.0 + (font.get_ascent(fsz) - font.get_descent(fsz)) / 2.0
+	var left := pos_top_left.x + (width - tw * xk) / 2.0
+	if tracing:
+		trace.append(["line", text, fsz, Vector2(left, base_y), tw * xk, HORIZONTAL_ALIGNMENT_CENTER, xk])
+	var back := _xf
+	if xk < 0.999:
+		ci.draw_set_transform_matrix(_xf * Transform2D(0.0, Vector2(xk, 1.0), 0.0, Vector2(left, 0.0)))
+		left = 0.0
+	ci.draw_string(font, Vector2(left, base_y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, col, _JUST, TextServer.DIRECTION_AUTO, TextServer.ORIENTATION_HORIZONTAL, text_os)
+	if xk < 0.999:
+		ci.draw_set_transform_matrix(back)
 
 
 ## A shaped paragraph (CardTextLayout) with its top-left at `pos`, rasterised at `text_os`.

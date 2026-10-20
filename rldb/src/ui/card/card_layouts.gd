@@ -46,7 +46,7 @@ static func draw_square(pt: CardPainter) -> void:
 	CardArt.draw(pt, _r(pt, g["art"]))
 	_art_corners(pt, g)
 	_icons(pt, g["icons"], 0.0)
-	# #26: one line at 9 px or more on the field, ellipsised past that.
+	# H14: the full name on one line, shrunk then condensed to fit (never ellipsised).
 	CardFaceParts.name_plate(pt, _r(pt, g["banner"]), g["f_name"], 0.0, 0.0, pt.accent(), g["f_name_min"], true)
 	if _is_unit(pt):
 		CardStatBadge.draw(pt, _r(pt, g["atk"]), true, g["f_stat"])

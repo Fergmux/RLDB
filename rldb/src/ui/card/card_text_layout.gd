@@ -93,6 +93,30 @@ static func fit_name(text: String, width: float, fs_max: float, fs_min: float, f
 	return fs
 
 
+## H14 / H19: how a card name fits on ONE line `width` px wide, never wrapped or ellipsised:
+## [font size, horizontal condense]. The size steps down from fs_max to fs_min (base units, scaled
+## by `s`); a name still too wide is condensed (narrowed like a printed card's long title) down to
+## NAME_MIN_XK, then shrinks further towards MIN_FS at that condense, and only past that is it
+## condensed as far as it takes.
+static func fit_name_line(text: String, width: float, fs_max: float, fs_min: float, font: Font, s: float) -> Array:
+	var fs := maxi(MIN_FS, roundi(fs_max * s))
+	var lo := mini(fs, maxi(MIN_FS, roundi(fs_min * s)))
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	while fs > lo and w > width:
+		fs -= 1
+		w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	if w <= width:
+		return [fs, 1.0]
+	while fs > MIN_FS and w * NAME_MIN_XK > width:
+		fs -= 1
+		w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	return [fs, minf(1.0, width / maxf(1.0, w))]
+
+
+## Narrowest horizontal condense fit_name_line() uses before it shrinks a name below its fs_min.
+const NAME_MIN_XK := 0.66
+
+
 ## Splits a long name for a two-line plate: before a trailing "(...)" if present, else at the space
 ## nearest the middle. Returns [name] when it cannot be split.
 static func split_name(nm: String) -> PackedStringArray:

@@ -5,6 +5,9 @@ extends Control
 ## Hover lifts the rim to gold. Draws from the same card summary dictionaries as the card widget.
 
 const BAND_H := 17.0
+## Name size on the band and the size it may shrink to before it is condensed (H19).
+const NAME_FS := 11.0
+const NAME_FS_MIN := 9.0
 
 var card: Dictionary = {}
 var _hover := 0.0
@@ -59,16 +62,17 @@ func _draw() -> void:
 	draw_rect(band, Color(0.03, 0.025, 0.02, 0.88))
 	draw_line(band.position, Vector2(band.end.x, band.position.y), Color(kind_col, 0.8), 1.0)
 	var font := UIStyle.font_bold()
-	var fs := 11
+	# H19: the whole name on one line, shrunk then condensed to fit (never ellipsised).
 	var nm := String(card.get("name", ""))
 	var maxw := band.size.x - 8.0
-	while nm.length() > 3 and font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > maxw:
-		nm = nm.substr(0, nm.length() - 2)
-		if font.get_string_size(nm + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= maxw:
-			nm += "…"
-			break
-	var tw := font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	draw_string(font, Vector2((size.x - tw) / 2.0, band.position.y + 12.5), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UIStyle.TEXT)
+	var fit := CardTextLayout.fit_name_line(nm, maxw, NAME_FS, NAME_FS_MIN, font, 1.0)
+	var fs := int(fit[0])
+	var xk := float(fit[1])
+	var tw := font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x * xk
+	var base_y := band.get_center().y + (font.get_ascent(fs) - font.get_descent(fs)) / 2.0
+	draw_set_transform(Vector2((size.x - tw) / 2.0, 0.0), 0.0, Vector2(xk, 1.0))
+	draw_string(font, Vector2(0.0, base_y), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UIStyle.TEXT)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if is_unit and String(card.get("type", "")) != "":
 		TypeIcons.draw_pip(self, String(card["type"]), Vector2(14, 20), 8.0)
 	# Rim: bronze, gold when hovered.

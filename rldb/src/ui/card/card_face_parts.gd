@@ -34,11 +34,10 @@ static func frame(pt: CardPainter, radius: float) -> void:
 	ci.draw_line(Vector2(radius * s, 3.5 * s), Vector2(pt.ps.x - radius * s, 3.5 * s), Color(UIStyle.GOLD_HI, 0.4), maxf(1.0, s), true)
 
 
-## Name plate. One line when the name fits at a legible size, otherwise two lines (split before a
-## trailing "(Type)") so "Basic Mage (Water)" and "(Fire)" stay distinguishable (D9). `stripe` is
-## the colour of the kind stripe along the plate's foot.
-## `one_line` (field cards, #26): never split the name over two lines; below `fs_min` it is ellipsised
-## (the full name is in the hover details and the inspector).
+## Name plate. The full name always shows on one line (H14 / H19, 21 Oct: it replaced the two-line
+## split and the field ellipsis): from `fs_max` it shrinks to `fs_min`, then condenses
+## (CardTextLayout.fit_name_line). `stripe` is the colour of the kind stripe along the plate's foot.
+## `one_line` is kept for callers; every plate is one line now.
 static func name_plate(pt: CardPainter, rect: Rect2, fs_max: float, reserve_l: float, reserve_r: float, stripe: Color, fs_min: float = 9.0, one_line: bool = false) -> void:
 	var ci := pt.ci
 	var s := pt.s
@@ -49,24 +48,10 @@ static func name_plate(pt: CardPainter, rect: Rect2, fs_max: float, reserve_l: f
 	var avail := rect.size.x - (reserve_l + reserve_r) * s - 6.0 * s
 	var nm: String = pt.view["name"]
 	var x := rect.position.x + (reserve_l + 3.0) * s
-	var fs := CardTextLayout.fit_name(nm, avail, fs_max, fs_min, font, s)
-	# Names are centred on the plate (user feedback 2026-10-16).
-	if font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= avail:
-		pt.text_at(font, nm, Vector2(x, rect.position.y), fs, UIStyle.TEXT, avail, HORIZONTAL_ALIGNMENT_CENTER, rect.size.y - 3.0 * s)
-		return
-	var parts := CardTextLayout.split_name(nm) if not one_line else PackedStringArray([nm])
-	var inner_h := rect.size.y - 3.0 * s
-	var fs2 := mini(roundi(fs_max * s), floori(inner_h / 2.0 / 1.05))
-	if parts.size() == 2 and fs2 >= 7:
-		var longest := parts[0] if parts[0].length() >= parts[1].length() else parts[1]
-		while fs2 > 7 and font.get_string_size(longest, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x > avail:
-			fs2 -= 1
-		var lh := float(fs2) * 1.05
-		var y0 := rect.position.y + (inner_h - 2.0 * lh) / 2.0
-		for k in 2:
-			pt.text_at(font, CardTextLayout.ellipsize(font, parts[k], fs2, avail), Vector2(x, y0 + float(k) * lh), fs2, UIStyle.TEXT if k == 0 else UIStyle.MUTED, avail, HORIZONTAL_ALIGNMENT_CENTER, lh)
-		return
-	pt.text_at(font, CardTextLayout.ellipsize(font, nm, fs, avail), Vector2(x, rect.position.y), fs, UIStyle.TEXT, avail, HORIZONTAL_ALIGNMENT_CENTER, inner_h)
+	# H14 / H19 (21 Oct): the whole name on one line, centred (2026-10-16), on every card: shrunk, then
+	# condensed, never wrapped and never ellipsised.
+	var fit := CardTextLayout.fit_name_line(nm, avail, fs_max, fs_min, font, s)
+	pt.text_squeezed(font, nm, Vector2(x, rect.position.y), avail, int(fit[0]), UIStyle.TEXT, float(fit[1]), rect.size.y - 3.0 * s)
 
 
 ## Cost gem centred on `c` (radius `r` px, text size `fs` px), upright on a rotated card: circle (AP),
