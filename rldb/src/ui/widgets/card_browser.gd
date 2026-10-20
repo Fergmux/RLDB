@@ -33,11 +33,16 @@ var click_sound: bool = true
 ## Card ("hand" 120x180) and the room around it for the glow and selection brackets.
 const CARD_W := 120
 const CARD_H := 180
-const CELL_PAD := 11
+const CELL_PAD := 8
 const CELL_W := CARD_W + CELL_PAD * 2
-## Smallest gap between columns (the rest of the row width is shared out between them).
-const GRID_MIN_GAP := 8
-const ROW_GAP := 4
+## Gap between cells. Each cell keeps CELL_PAD around its card, so the visible gutter between two
+## cards is 2 * CELL_PAD + this: 16 px both ways (design review #74: equal 16 px gutters). The
+## columns are centred and the leftover width is split equally either side.
+const GRID_MIN_GAP := 0
+const ROW_GAP := 0
+## Search field and filter control heights (design review #78: 40 and 36 px).
+const SEARCH_H := 40.0
+const FILTER_H := 36.0
 ## Seconds a keyboard / programmatic scroll takes to glide a card into view.
 const SCROLL_TIME := 0.22
 
@@ -62,6 +67,8 @@ var race_opt: OptionButton
 var cost_opt: OptionButton
 var sort_opt: OptionButton
 var scroll: SmoothScroll
+## The scroll area around `scroll` (fade masks, track).
+var area: ScrollArea
 var grid: HFlowContainer
 
 ## card id -> {cell, widget, glow, footer}
@@ -97,15 +104,19 @@ func build() -> void:
 	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(stack)
-	scroll = SmoothScroll.new()
-	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	stack.add_child(scroll)
+	# A ScrollArea: the house track 12 px from the grid and 24 px fade masks while more cards lie
+	# above or below (design review #74, #105).
+	area = ScrollArea.new()
+	area.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stack.add_child(area)
+	scroll = area.scroll
 	grid = HFlowContainer.new()
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", GRID_MIN_GAP)
 	grid.add_theme_constant_override("v_separation", ROW_GAP)
+	grid.alignment = FlowContainer.ALIGNMENT_CENTER
+	grid.last_wrap_alignment = FlowContainer.LAST_WRAP_ALIGNMENT_BEGIN
 	scroll.add_child(grid)
-	grid.resized.connect(_spread_grid)
 	for d in CardDB.all():
 		grid.add_child(_make_cell(d))
 	var cc := CenterContainer.new()
@@ -114,7 +125,7 @@ func build() -> void:
 	stack.add_child(cc)
 	_no_match = empty_state("No cards match", "Try another search or loosen the filters.", "Clear filters", clear_filters)
 	cc.add_child(_no_match)
-	_empty_lib = empty_state("The card library is empty", "No card data could be loaded.", "", Callable())
+	_empty_lib = empty_state("The card library is empty", "No card data could be loaded.", "", Callable(), "card")
 	cc.add_child(_empty_lib)
 	refresh()
 
@@ -295,7 +306,18 @@ func move_selection(step: int) -> int:
 
 ## Number of grid columns at the current width.
 func columns() -> int:
-	return maxi(1, int(floor((grid.size.x + GRID_MIN_GAP) / float(CELL_W + GRID_MIN_GAP))))
+	return grid_columns(grid.size.x)
+
+
+## Columns of CELL_W cells (GRID_MIN_GAP apart) that fit `width` px (at least one).
+static func grid_columns(width: float) -> int:
+	return maxi(1, int(floor((width + GRID_MIN_GAP) / float(CELL_W + GRID_MIN_GAP))))
+
+
+## Left inset of the centred grid at `width` px: the leftover width split equally either side.
+static func grid_inset(width: float) -> float:
+	var cols := grid_columns(width)
+	return floorf((width - cols * CELL_W - (cols - 1) * GRID_MIN_GAP) / 2.0)
 
 
 ## Re-applies search, filters and sort.
@@ -318,44 +340,29 @@ func refresh() -> void:
 
 # ------------------------------------------------------------ construction
 
-## Empty / no-results block: a soft slot with a title, a hint and an optional action button.
-static func empty_state(title: String, hint: String, action: String, on_action: Callable) -> PanelContainer:
-	var pc := PanelContainer.new()
-	var sb := UIStyle.flat(Color(0.05, 0.04, 0.03, 0.85), Color(UIStyle.BRONZE, 0.7), 1, 10)
-	sb.set_content_margin_all(22)
-	UIStyle.lift_style(sb, Color(0, 0, 0, 0.5), 10, 2)
-	pc.add_theme_stylebox_override("panel", sb)
-	pc.custom_minimum_size = Vector2(320, 0)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
-	pc.add_child(v)
-	var t := UIStyle.title_label(title, 20, UIStyle.GOLD_HI)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
-	var h := UIStyle.label(hint, 14, UIStyle.TEXT_DIM, true)
-	h.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(h)
-	if action != "":
-		var b := UIStyle.button(action, 14)
-		b.custom_minimum_size = Vector2(140, 34)
-		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		b.pressed.connect(on_action)
-		v.add_child(b)
-	return pc
+## Empty / no-results state (design review #79): no box, an engraved emblem (`glyph`, a
+## magnifier by default) breathing on the leather, a SCREEN title, the hint and an optional 44 px
+## secondary action button (EngravedIcon.empty_state).
+static func empty_state(title: String, hint: String, action: String, on_action: Callable, glyph: String = "magnifier") -> Control:
+	return EngravedIcon.empty_state(glyph, title, hint, action, on_action, 340.0)
 
 
 ## Gives a LineEdit the house look (ink fill, bronze rim, gold when focused; red rim for errors).
 static func style_edit(le: LineEdit, err: bool = false) -> void:
-	var n := UIStyle.flat(UIStyle.PANEL_INK, UIStyle.BAD if err else UIStyle.BRONZE, 2 if err else 1, 6)
+	# F3 ink well (design review #78): engraved dark top edge, 12 px text inset.
+	var n := UIStyle.flat(UIStyle.PANEL_INK, UIStyle.BAD if err else Color(UIStyle.BRONZE, 0.85), 2 if err else 1, 6)
 	var f := UIStyle.flat(UIStyle.PANEL_INK, UIStyle.BAD if err else UIStyle.GOLD, 2, 6)
 	for sb in [n, f]:
-		sb.content_margin_left = 10
-		sb.content_margin_right = 10
-		sb.content_margin_top = 6
-		sb.content_margin_bottom = 6
-	n.shadow_color = Color(0, 0, 0, 0.35)
-	n.shadow_size = 3
+		UIStyle.pad(sb, "md", "sm")
+		if not err:
+			sb.border_width_top = 2
+	if not err:
+		n.border_color = Color(UIStyle.BRONZE, 0.85)
+	n.shadow_color = Color(1, 0.85, 0.5, 0.06)
+	n.shadow_size = 1
 	n.shadow_offset = Vector2(0, 1)
+	f.shadow_color = Color(UIStyle.GOLD, 0.22)
+	f.shadow_size = 6
 	le.add_theme_stylebox_override("normal", n)
 	le.add_theme_stylebox_override("focus", f)
 	le.add_theme_color_override("font_color", UIStyle.TEXT)
@@ -371,10 +378,10 @@ func _build_filters() -> void:
 	search.clear_button_enabled = true
 	style_edit(search)
 	search.text_changed.connect(func(_t): refresh())
+	search.custom_minimum_size.y = SEARCH_H
 	add_child(search)
 	var filters := HFlowContainer.new()
-	filters.add_theme_constant_override("h_separation", 8)
-	filters.add_theme_constant_override("v_separation", 6)
+	UIStyle.pad(filters, "sm")
 	add_child(filters)
 	cat_opt = OptionButton.new()
 	cat_opt.add_item("Any category")
@@ -399,9 +406,11 @@ func _build_filters() -> void:
 	for o in opts:
 		o.item_selected.connect(func(_i): refresh())
 		o.focus_mode = Control.FOCUS_NONE
+		o.custom_minimum_size.y = FILTER_H
+		SettingsForm.style_dropdown(o)
 		filters.add_child(o)
-	var reset := UIStyle.button("Clear filters", 13)
-	reset.custom_minimum_size = Vector2(0, 30)
+	var reset := UIStyle.button("Clear filters", 14)
+	reset.custom_minimum_size = Vector2(0, FILTER_H)
 	reset.pressed.connect(clear_filters)
 	filters.add_child(reset)
 
@@ -506,16 +515,6 @@ func _apply_sort() -> void:
 		var c: Control = _cells[int(defs[i]["id"])]["cell"]
 		if c.get_index() != i:
 			grid.move_child(c, i)
-
-
-## Spreads the columns across the full width: the leftover space becomes the gap between
-## columns instead of a dead strip at the right edge.
-func _spread_grid() -> void:
-	var w := grid.size.x
-	var cols := columns()
-	var gap := GRID_MIN_GAP if cols == 1 else int(floor((w - cols * CELL_W) / float(cols - 1)))
-	if grid.get_theme_constant("h_separation") != gap:
-		grid.add_theme_constant_override("h_separation", gap)
 
 
 ## Arrow keys move the selection, Enter activates it (never while typing or under a modal).

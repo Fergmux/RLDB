@@ -8,6 +8,10 @@ extends Control
 ## `local_host`, `menu`, `opts`, `_privacy`, `_shown_seat`, `_start_local`, `_show_menu`, ...
 
 const DEV_SAVES_DIR := "user://dev_saves"
+## `-- --debug-margins`: the dev-only margin overlay (src/dev/debug_margins.gd), loaded by path so a
+## normal run never touches it.
+const DEBUG_MARGINS_FLAG := "--debug-margins"
+const DEBUG_MARGINS_SCRIPT := "res://src/dev/debug_margins.gd"
 ## Frame cap while the window is in the background (F05-04).
 const BACKGROUND_FPS := 30
 const DECKBUILDER_SHOT_DRIVER := "res://src/dev/deck_builder_shot_driver.gd"
@@ -77,6 +81,9 @@ func _ready() -> void:
 		return
 	Music.start()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if DEBUG_MARGINS_FLAG in args:
+		# Dev only (design review D5): the 12 px content-floor overlay over every screen.
+		get_tree().root.add_child.call_deferred(load(DEBUG_MARGINS_SCRIPT).new())
 	if not ("--no-steam" in args):
 		SteamBridge.init()
 		if SteamBridge.available():

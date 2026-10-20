@@ -5,6 +5,15 @@ extends RefCounted
 ## confirmation dialogs for leaving or conceding.
 
 const SETTINGS_W := 400.0
+## Menu button (design review #15): the standard small height that fits the 44 px top strip (the
+## review's 40 px at 16 px from the top needs a taller strip, GameScreen.TOP_H), 96 px wide with
+## the ☰ glyph; Chat beside it takes the same size.
+const MENU_BUTTON := Vector2(96, 36)
+## Veil behind the in-game settings (design review #13: the standard modal veil).
+const SETTINGS_VEIL := Color(0, 0, 0, 0.55)
+## In-game menu opening (design review #14): it grows out of the Menu button corner.
+const MENU_OPEN_SCALE := 0.94
+const MENU_OPEN_DROP := 8.0
 ## In-game menu items that end the game (Danger family, design review #14).
 const DANGER_ITEMS := ["concede", "quit"]
 ## Gap between the Menu button strip and the popups under it.
@@ -22,6 +31,12 @@ var game_menu: PanelContainer
 var settings_popup: PanelContainer
 ## The in-game menu's buttons by key (settings, spectators, concede, return, stop, quit).
 var items: Dictionary = {}
+## The Menu button in the top strip.
+var menu_button: Button
+## The veil behind the in-game settings (shown with it).
+var settings_veil: ColorRect
+## The shared settings form inside the settings popup.
+var settings_form: SettingsForm
 var _dialog_root: ConfirmDialog
 
 
@@ -37,11 +52,11 @@ func build_top_strip() -> void:
 	gs.add_child(top_strip)
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	row.offset_left = 12
-	row.offset_right = -8
-	row.offset_top = 6
-	row.offset_bottom = -6
-	row.add_theme_constant_override("separation", 8)
+	row.offset_left = UIStyle.sp("md")
+	row.offset_right = -UIStyle.sp("lg")
+	row.offset_top = (GameScreen.TOP_H - MENU_BUTTON.y) / 2.0
+	row.offset_bottom = -(GameScreen.TOP_H - MENU_BUTTON.y) / 2.0
+	row.add_theme_constant_override("separation", UIStyle.sp("md"))
 	top_strip.add_child(row)
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -49,12 +64,18 @@ func build_top_strip() -> void:
 	conn_label = UIStyle.label("", 14, UIStyle.MUTED)
 	conn_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(conn_label)
-	var menu_b := UIStyle.button("Menu", 13)
-	menu_b.custom_minimum_size = Vector2(76, 30)
+	var menu_b := UIStyle.secondary_button("☰  Menu", 15)
+	menu_b.name = "MenuButton"
+	menu_b.custom_minimum_size = MENU_BUTTON
+	menu_b.tooltip_text = "Menu (Esc)"
 	menu_b.pressed.connect(toggle)
 	row.add_child(menu_b)
+	menu_button = menu_b
 	# A1 / A2: Chat sits right before Menu; the spectator badge (and Watch button) before Chat.
 	gs.chat.build(row, menu_b)
+	if gs.chat.button != null:
+		gs.chat.button.custom_minimum_size = MENU_BUTTON   # review #15: Chat matches Menu, 12 px apart
+		gs.chat.button.add_theme_font_size_override("font_size", 15)
 	gs.spectate.build(row, gs.chat.button)
 
 
@@ -89,31 +110,37 @@ func build_popups() -> void:
 		gmv.add_child(gb)
 		items[it[0]] = gb
 	refresh_items()
-	# Settings
-	var set_plate := HousePanel.new("Settings", "Interface", Vector2(16, 14), 6)
+	# Settings (design review #12, #13): the shared SettingsForm (the same builder as the main
+	# menu's Settings), centred on the board over the standard veil, with a 44 px Close.
+	settings_veil = ColorRect.new()
+	settings_veil.name = "SettingsVeil"
+	settings_veil.color = SETTINGS_VEIL
+	settings_veil.visible = false
+	settings_veil.z_index = UiLayers.GAME_MENU
+	settings_veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	settings_veil.gui_input.connect(func(ev): if ev is InputEventMouseButton and ev.pressed: settings_popup.visible = false)
+	gs.add_child(settings_veil)
+	var set_plate := HousePanel.new("Settings", "In game", Vector2(28, 24), UIStyle.sp("md"))
+	set_plate.arm = 18.0
 	settings_popup = set_plate
 	settings_popup.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	settings_popup.visible = false
 	settings_popup.z_index = UiLayers.GAME_MENU
 	gs.add_child(settings_popup)
+	settings_popup.visibility_changed.connect(func(): settings_veil.visible = settings_popup.visible)
 	var sv := set_plate.body
-	set_plate.add_headline("Interface settings", 19, false, 8.0, false)
-	var rm := CheckBox.new()
-	rm.text = "Reduced motion (no travel, shake or particles)"
-	rm.button_pressed = UIStyle.reduce_motion
-	rm.toggled.connect(func(on): UIStyle.set_reduce_motion(on); gs.fx.finish_all(); gs.render_all())
-	sv.add_child(rm)
-	var fa := CheckBox.new()
-	fa.text = "Fast animations (half duration)"
-	fa.button_pressed = UIStyle.fast_anim
-	fa.toggled.connect(func(on): UIStyle.set_fast_anim(on))
-	sv.add_child(fa)
-	sv.add_child(UIStyle.display_controls(14))
-	sv.add_child(audio_controls(14))
-	sv.add_child(Telemetry.settings_control(13))
-	var cl := UIStyle.button("Close", 13)
+	var head := set_plate.add_headline("Settings", 28, false, 10.0, false)
+	set_plate.set_meta(&"headline", TitleText.apply(head, TitleText.Tier.SCREEN, 28))
+	settings_form = SettingsForm.new(func(_on): gs.fx.finish_all(); gs.render_all())
+	sv.add_child(settings_form)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var cl := UIStyle.size_button(UIStyle.secondary_button("Close", 15), "standard")
+	cl.name = "Close"
+	cl.custom_minimum_size.x = 160
 	cl.pressed.connect(func(): settings_popup.visible = false)
-	sv.add_child(cl)
+	row.add_child(cl)
+	sv.add_child(row)
 
 
 ## Places the top strip over the play field and the popups under it, against the sidebar.
@@ -125,8 +152,14 @@ func layout(w: float) -> void:
 ## Places the settings popup and the menu (called after the banner and pause are placed).
 func layout_popups(w: float) -> void:
 	settings_popup.reset_size()
-	var sw := maxf(SETTINGS_W, settings_popup.get_combined_minimum_size().x)
-	settings_popup.position = Vector2(w - gs.sidebar_w - sw - 10.0, GameScreen.TOP_H + POPUP_GAP)
+	var ss := settings_popup.get_combined_minimum_size()
+	var sw := maxf(SETTINGS_W, ss.x)
+	var board_w := w - gs.sidebar_w
+	var h := gs.size.y
+	settings_popup.size = Vector2(sw, ss.y)
+	settings_popup.position = Vector2(floorf((board_w - sw) / 2.0), maxf(GameScreen.TOP_H, floorf((h - ss.y) / 2.0)))
+	settings_veil.position = Vector2.ZERO
+	settings_veil.size = Vector2(w, h)
 	game_menu.reset_size()
 	game_menu.position = Vector2(w - gs.sidebar_w - game_menu.get_combined_minimum_size().x - 10.0, GameScreen.TOP_H + POPUP_GAP)
 
@@ -187,11 +220,36 @@ func toggle() -> void:
 		gs.hover.clear()
 
 
-## Shows a house popover with its opening animation.
+## Shows a house popover with its opening animation. The in-game menu grows out of the Menu
+## button (review #14: from its top-right corner, 8 px of drop, panel_in with the panel_open cue);
+## the settings pop in the middle of the board with their title's sweep.
 func _show_popup(p: Control) -> void:
 	p.visible = true
 	p.reset_size()
-	(p as HousePanel).appear()
+	if p == settings_popup:
+		layout_popups(gs.size.x)
+	var hp := p as HousePanel
+	hp.appear()
+	if p == game_menu:
+		_grow_from_button()
+	var tt: TitleText = p.get_meta(&"headline") if p.has_meta(&"headline") else null
+	if tt != null:
+		tt.play_sweep()
+
+
+## The in-game menu's open motion: scale 0.94 -> 1 pivoting on its top-right corner (under the
+## Menu button) while it drops 8 px into place; a plain fade under reduce motion (appear's).
+func _grow_from_button() -> void:
+	if UIStyle.reduce_motion or not game_menu.is_inside_tree():
+		return
+	var rest := game_menu.position
+	game_menu.pivot_offset = Vector2(game_menu.size.x, 0)
+	game_menu.scale = Vector2.ONE * MENU_OPEN_SCALE
+	game_menu.position = rest - Vector2(0, MENU_OPEN_DROP)
+	var tw := game_menu.create_tween().set_parallel(true)
+	UIStyle.tween_token(tw, game_menu, "scale", Vector2.ONE, "panel_in")
+	UIStyle.tween_token(tw, game_menu, "position", rest, "panel_in")
+	tw.chain().tween_callback(func(): game_menu.pivot_offset = game_menu.size / 2.0)
 
 
 ## Return to menu / Quit to desktop (and the window's close button). G01: between duels (rewards,

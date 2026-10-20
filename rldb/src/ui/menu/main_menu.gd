@@ -42,13 +42,42 @@ const PLAY_TUTORIAL_ITEM := ["Play tutorial", "play_tutorial"]
 ## Third-party asset credits shown under Credits, and the height of their scroll area.
 const CREDITS_PATH := "res://data/credits.json"
 const CREDITS_H := 430.0
+## Space above each credits section heading (review #8).
+const CREDITS_HEAD_GAP := 20
 const BAND_W := 520.0
 const BAND_FADE_W := 160.0
 const BAND_COLOR := Color(0.02, 0.018, 0.025)
 const BACKGROUND_DIM := 0.05
 const ROOT_ITEM_SIZE := 34
 const SUB_ITEM_SIZE := 30
-const BACK_ITEM_SIZE := 22
+## The sub-level "Back" item: 15% smaller than its siblings (review #4, not 30%), 16 px above it.
+const BACK_ITEM_SIZE := 26
+const BACK_GAP := 16
+## Hero logo and subtitle (D3, review #1 / #2), and the width of the divider under them.
+const LOGO_SIZE := 88
+const SUBTITLE_SIZE := 14
+const LOGO_RULE_W := 300.0
+## Ambient motes, the light shaft in the arch (fractions of the screen) and the Ken Burns drift.
+const MOTE_COUNT := 26
+const SHAFT_RECT := Rect2(0.4, 0.0, 0.22, 0.86)
+const KEN_BURNS_SCALE := 1.006
+const KEN_BURNS_TIME := 40.0
+## Centre panels: padding (24 px modal padding, 28 px clear of the filigree corners) and the
+## Settings panel's Close button row.
+const CENTER_PAD := Vector2(28, 24)
+## Header strip tags of each leaf (review #7): [section on the left, context on the right].
+const LEAF_TAGS := {
+	"bot": ["Play · local", "Against the bot"], "hotseat": ["Play · local", "This screen"],
+	"host_lan": ["Play · local", "LAN"], "join_lan": ["Play · local", "LAN"],
+	"host_online": ["Play · online", "Steam"], "join_online": ["Play · online", "Steam"],
+	"tutorial": ["Play", "Guided lessons"], "resume": ["Play", "Saved series"],
+	"settings": ["Options", "This device"], "credits": ["About", "v%s"],
+}
+
+## The menu backdrop (the Ken Burns drift scales it), its ambient motes and the hero logo.
+var backdrop: Control
+var motes: AmbientMotes
+var logo: TitleText
 ## Slide-in of a menu level: per-item delay, start offset, fade and slide durations.
 const SLIDE_STAGGER := 0.045
 const SLIDE_FROM := -60.0
@@ -78,27 +107,47 @@ func _init(options: SessionOptions) -> void:
 
 
 func _build() -> void:
-	add_child(UIStyle.background(BACKGROUND_DIM, UIStyle.MENU_BACKGROUND))
+	backdrop = UIStyle.background(BACKGROUND_DIM, UIStyle.MENU_BACKGROUND)
+	backdrop.name = "Backdrop"
+	add_child(backdrop)
+	backdrop.resized.connect(func(): backdrop.pivot_offset = backdrop.size / 2.0)
+	# Ambient life (design review #6): drifting petals and gold motes, a light shaft in the arch.
+	motes = AmbientMotes.new(MOTE_COUNT, [AmbientMotes.PETAL, AmbientMotes.GOLD])
+	motes.name = "AmbientMotes"
+	motes.shaft = SHAFT_RECT
+	add_child(motes)
 	add_child(_band())
-	# Menu column (left-aligned, user feedback).
+	# Menu column (left-aligned, user feedback). Its foot keeps the 24 px safe margin (review #5).
 	var col := VBoxContainer.new()
 	col.anchor_bottom = 1.0
 	col.offset_left = 56.0
 	col.offset_right = BAND_W - 60.0
-	col.offset_top = 80.0
-	col.offset_bottom = -40.0
-	col.add_theme_constant_override("separation", 4)
+	col.offset_top = 72.0
+	col.offset_bottom = -UIStyle.SAFE_HUD
+	col.add_theme_constant_override("separation", 0)
 	add_child(col)
-	var title := UIStyle.title_label("RLDB", 88, UIStyle.GOLD)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
-	title.add_theme_constant_override("shadow_offset_y", 3)
-	col.add_child(title)
-	var sub := UIStyle.title_label("A TWO-PLAYER ROGUELIKE DECK BATTLER", 14, UIStyle.TEXT_DIM)
+	# Hero logo (D3, review #1): the T1 gold metal title with its glow and a sweep every 6 s.
+	logo = TitleText.make("RLDB", TitleText.Tier.HERO, LOGO_SIZE)
+	logo.name = "Logo"
+	col.add_child(logo)
+	col.add_child(_gap(UIStyle.sp("sm")))
+	# Subtitle (review #2): 13 px Cinzel 600, +2 px tracking, MUTED with a hard shadow.
+	var sub := UIStyle.label("A TWO-PLAYER ROGUELIKE DECK BATTLER", SUBTITLE_SIZE, UIStyle.MUTED)
+	sub.name = "Subtitle"
+	sub.add_theme_font_override("font", _subtitle_font())
+	sub.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	sub.add_theme_constant_override("shadow_offset_x", 0)
+	sub.add_theme_constant_override("shadow_offset_y", 1)
+	sub.add_theme_constant_override("shadow_outline_size", 2)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	col.add_child(sub)
-	col.add_child(_gap(54))
-	col.add_child(_gap(24))
+	col.add_child(_gap(UIStyle.sp("lg")))
+	# The house divider under the title block.
+	var rule := Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 12.0)
+	rule.custom_minimum_size.x = LOGO_RULE_W
+	rule.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	col.add_child(rule)
+	col.add_child(_gap(UIStyle.sp("xxxl")))
 	_menu_list = VBoxContainer.new()
 	_menu_list.add_theme_constant_override("separation", 2)
 	col.add_child(_menu_list)
@@ -116,6 +165,32 @@ func _build() -> void:
 	_menu_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_menu_center)
 	_build_menu_level(false)
+
+
+func _ready() -> void:
+	_ken_burns()
+
+
+## A 40 s "Ken Burns" drift of the backdrop (1.00 -> 1.006 and back, design review 1.4.5); off
+## under reduce motion.
+func _ken_burns() -> void:
+	if UIStyle.reduce_motion or backdrop == null:
+		return
+	var tw := backdrop.create_tween().set_loops()
+	tw.tween_property(backdrop, "scale", Vector2.ONE * KEN_BURNS_SCALE, KEN_BURNS_TIME / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(backdrop, "scale", Vector2.ONE, KEN_BURNS_TIME / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+static var _sub_font: FontVariation
+
+
+## Cinzel 600 with +2 px tracking (the menu subtitle).
+static func _subtitle_font() -> FontVariation:
+	if _sub_font == null:
+		_sub_font = FontVariation.new()
+		_sub_font.base_font = UIStyle.font_display(600)
+		_sub_font.spacing_glyph = 2
+	return _sub_font
 
 
 ## F1 (owner feedback 20 Oct): the status lines at the foot of the menu column. "Logged in as
@@ -149,11 +224,12 @@ static func identity_block() -> VBoxContainer:
 		row.add_child(nm)
 		box.add_child(row)
 	else:
-		var msg := UIStyle.label(SteamBridge.describe(), 13, UIStyle.TEXT_DIM, true)
+		var msg := UIStyle.label(SteamBridge.describe(), 13, UIStyle.MUTED, true)
 		msg.name = "SteamState"
 		shadow.call(msg)
 		box.add_child(msg)
-	var ver := UIStyle.label("Build version %s" % SteamBridge.build_version(), 13, UIStyle.TEXT_DIM, false, true)
+	# Review #5: the status lines read at 12-13 px in MUTED (about 7:1), not dim small print.
+	var ver := UIStyle.label("Build version %s" % SteamBridge.build_version(), 12, UIStyle.MUTED, false, true)
 	ver.name = "BuildVersion"
 	shadow.call(ver)
 	box.add_child(ver)
@@ -210,6 +286,7 @@ func _build_menu_level(animate: bool = true) -> void:
 		_slide_in(mi, i, animate)
 		i += 1
 	if level != "root":
+		_menu_list.add_child(_gap(BACK_GAP))
 		var back := MenuItem.new("Back", BACK_ITEM_SIZE, true)
 		back.pressed.connect(back_out)
 		_menu_list.add_child(back)
@@ -279,60 +356,127 @@ func step_back() -> void:
 		back_out()
 
 
-## Shows `panel` in the centre area with a short fade (or clears it when null).
+## Shows `panel` in the centre area (or clears it when null). The panel opens with the house
+## motion (HousePanel.appear: pop, gold flare and the panel_open cue) and its title sweeps once;
+## the panel it replaces leaves with `panel_out` (UIStyle.tween_out), and clearing the centre plays
+## panel_close (design review #106).
 func _set_center(panel: Control) -> void:
+	var had := false
 	for ch in _menu_center.get_children():
-		_menu_center.remove_child(ch)
-		ch.queue_free()
+		had = true
+		_retire(ch as Control)
 	if panel == null:
+		if had:
+			Sfx.play("panel_close")
 		return
 	_menu_center.add_child(panel)
-	if UIStyle.reduce_motion:
+	if panel is HousePanel:
+		(panel as HousePanel).appear()
+	var tt: TitleText = panel.get_meta(&"headline") if panel.has_meta(&"headline") else null
+	if tt != null:
+		tt.play_sweep()
+
+
+## Takes `old` out of the centre container and lets it fade out where it stood (freed after).
+func _retire(old: Control) -> void:
+	if old == null:
 		return
-	panel.modulate.a = 0.0
-	var tw := panel.create_tween()
-	tw.tween_property(panel, "modulate:a", 1.0, CENTER_FADE_TIME).set_trans(Tween.TRANS_SINE)
+	var at := old.global_position
+	_menu_center.remove_child(old)
+	if UIStyle.reduce_motion or not is_inside_tree():
+		old.queue_free()
+		return
+	add_child(old)
+	old.global_position = at
+	old.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for c in old.find_children("*", "Control", true, false):
+		(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UIStyle.tween_out(old, true)
 
 
 # ---------------------------------------------------------------- leaf panels
 
-## A dark panel for centre content: returns [panel, content VBox].
-static func _center_panel(title: String, note: String = "", section: String = "") -> Array:
-	var p := HousePanel.new(section if section != "" else title, "", Vector2(26, 22), 14)
+## A house plate for centre content: returns [panel, content VBox]. The header strip carries the
+## leaf's section on the left and its context on the right (`tag`, review #7); the title is a
+## SCREEN-tier TitleText (D3) that sweeps once when the panel opens (its "headline" meta).
+static func _center_panel(title: String, note: String = "", section: String = "", tag: String = "") -> Array:
+	var p := HousePanel.new(section if section != "" else title, tag, CENTER_PAD, UIStyle.sp("md"))
 	p.arm = 18.0
 	p.custom_minimum_size = Vector2(CENTER_PANEL_W, 0)
 	var v := p.body
-	var t := UIStyle.title_label(title, 30, UIStyle.GOLD_HI)
+	var t := UIStyle.label(title, 30, UIStyle.GOLD_HI)
+	t.name = "Headline"
 	v.add_child(t)
+	p.set_meta(&"headline", TitleText.apply(t, TitleText.Tier.SCREEN, 30))
 	v.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 10.0))
 	if note != "":
-		v.add_child(UIStyle.label(note, 15, UIStyle.TEXT_DIM, true))
+		var n := UIStyle.label(note, 15, UIStyle.MUTED, true)
+		n.add_theme_constant_override("line_spacing", 4)
+		v.add_child(n)
 	return [p, v]
 
 
-## Third-party asset credits and licences from data/credits.json, in a scroll area.
+## The [section, context] header tags of leaf `target` (review #7); the credits carry the version.
+static func leaf_tags(target: String) -> Array:
+	var t: Array = LEAF_TAGS.get(target, ["Main menu", ""])
+	var ctx := String(t[1])
+	if ctx.contains("%s"):
+		ctx = ctx % SteamBridge.build_version()
+	return [String(t[0]), ctx]
+
+
+## _center_panel with the leaf's header tags.
+static func _leaf(target: String, title: String, note: String = "") -> Array:
+	var tags := leaf_tags(target)
+	return _center_panel(title, note, tags[0], tags[1])
+
+
+## Third-party asset credits and licences from data/credits.json, in a ScrollArea (design review
+## #8): 24 px fade masks while more lies above or below, 12 px between the text and the track,
+## SECTION headings with 20 px above and 8 px below, body lines at line height 1.35.
 static func credits_view() -> Control:
-	var sc := ScrollContainer.new()
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sc.custom_minimum_size = Vector2(0, CREDITS_H)
+	var sa := ScrollArea.new()
+	sa.name = "Credits"
+	sa.custom_minimum_size = Vector2(0, CREDITS_H)
 	var v := VBoxContainer.new()
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	v.add_theme_constant_override("separation", 6)
-	sc.add_child(v)
+	v.add_theme_constant_override("separation", UIStyle.sp("xs"))
+	sa.set_content(v)
 	var data = JSON.parse_string(FileAccess.get_file_as_string(CREDITS_PATH))
+	var first := true
 	for sec in (data.get("sections", []) if data is Dictionary else []):
-		v.add_child(UIStyle.label(String(sec.get("title", "")), 17, UIStyle.GOLD, false, true))
+		if not first:
+			v.add_child(_gap(CREDITS_HEAD_GAP - UIStyle.sp("xs")))
+		first = false
+		var h := UIStyle.label(String(sec.get("title", "")).to_upper(), 15, UIStyle.GOLD)
+		v.add_child(h)
+		TitleText.apply(h, TitleText.Tier.SECTION, 15)
+		v.add_child(_gap(UIStyle.sp("sm") - UIStyle.sp("xs")))
 		for line in sec.get("lines", []):
-			v.add_child(UIStyle.label(String(line), 14, UIStyle.TEXT_DIM, true))
-	return sc
+			var l := UIStyle.label(String(line), 14, UIStyle.MUTED, true)
+			l.add_theme_constant_override("line_spacing", 5)
+			v.add_child(l)
+	v.add_child(_gap(UIStyle.sp("xl")))   # the last line can scroll clear of the bottom fade
+	return sa
 
 
+## A form row in the settings grid (review #9): a 160 px label column, 12 px, the control, at the
+## 44 px row pitch. Dropdowns get the house style at 200x32.
 static func _labelled(v: VBoxContainer, text: String, ctl: Control) -> void:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
-	var l := UIStyle.label(text, 17, UIStyle.TEXT)
-	l.custom_minimum_size = Vector2(150, 0)
+	row.custom_minimum_size.y = SettingsForm.ROW_H
+	row.add_theme_constant_override("separation", SettingsForm.COL_GAP)
+	var l := UIStyle.label(text, SettingsForm.FONT, UIStyle.TEXT)
+	l.custom_minimum_size = Vector2(SettingsForm.LABEL_W, 0)
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(l)
+	ctl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if ctl is OptionButton:
+		ctl.custom_minimum_size = SettingsForm.DROPDOWN
+		ctl.focus_mode = Control.FOCUS_NONE
+		SettingsForm.style_dropdown(ctl as OptionButton)
+	elif ctl is LineEdit:
+		CardBrowser.style_edit(ctl as LineEdit)
+		ctl.custom_minimum_size.y = SettingsForm.DROPDOWN.y + 4.0
 	row.add_child(ctl)
 	v.add_child(row)
 
@@ -344,7 +488,8 @@ func _start_button(v: VBoxContainer, text: String, fn: Callable) -> void:
 	if guarded:
 		var upd := func(): b.disabled = not _series_start_ok()
 		series_options_changed.connect(upd)
-		b.tree_exiting.connect(func(): series_options_changed.disconnect(upd))
+		# A retired panel leaves the tree twice (it fades out where it stood): disconnect once.
+		b.tree_exiting.connect(func(): if series_options_changed.is_connected(upd): series_options_changed.disconnect(upd))
 		upd.call()
 	b.pressed.connect(func():
 		# F03-10: an unusable draft composition is explained by the pickers and blocks the start.
@@ -361,10 +506,10 @@ func _series_start_ok() -> bool:
 	return not (so.get("deck_mode", "") == "draft" and Series.validate_draft_quota(so.get("draft_quota", Series.default_draft_quota())) != "")
 
 
+## A house toggle row (SettingsForm.HouseCheck: bevelled box, drawn tick, row hover).
 static func _check_box(text: String, on: bool, toggled: Callable) -> CheckBox:
-	var cb := CheckBox.new()
-	cb.text = text
-	cb.button_pressed = on
+	var cb := SettingsForm.HouseCheck.new(text, on)
+	cb.custom_minimum_size.y = 40
 	cb.toggled.connect(toggled)
 	return cb
 
@@ -402,11 +547,14 @@ func _draft_quota_box(opts: Dictionary) -> VBoxContainer:
 		opts["draft_quota"] = Series.default_draft_quota()
 	var q: Dictionary = opts["draft_quota"]
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	box.add_child(UIStyle.label("Draft picks per category", 15, UIStyle.MUTED))
+	box.add_theme_constant_override("separation", UIStyle.sp("sm"))
+	box.add_child(_gap(UIStyle.sp("xs")))
+	var dh := UIStyle.label("DRAFT PICKS PER CATEGORY", 14, UIStyle.GOLD)
+	box.add_child(dh)
+	TitleText.apply(dh, TitleText.Tier.SECTION, 14)
 	# F06-06: the basic unit is no longer a counted category; F06-05: each player orders these.
 	var copies := int(Series.load_mode_config()["draft"].get("basic_copies", 3))
-	var note := UIStyle.label("Before drafting, each player chooses a basic unit (×%d copies) and the order of these categories." % copies, 13, UIStyle.TEXT_DIM, true)
+	var note := UIStyle.label("Before drafting, each player chooses a basic unit (×%d copies) and the order of these categories." % copies, 13, UIStyle.MUTED, true)
 	note.custom_minimum_size = Vector2(300, 0)
 	box.add_child(note)
 	var total_l := UIStyle.label("", 14, UIStyle.MUTED)
@@ -424,15 +572,18 @@ func _draft_quota_box(opts: Dictionary) -> VBoxContainer:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		var name_l := UIStyle.label(String(Series.DRAFT_LABELS[cat]), 15, UIStyle.TEXT)
-		name_l.custom_minimum_size = Vector2(150, 0)
+		name_l.custom_minimum_size = Vector2(SettingsForm.LABEL_W, 0)
+		name_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(name_l)
-		var minus := UIStyle.button("-", 15)
-		minus.custom_minimum_size = Vector2(36, 30)
-		var val := UIStyle.label(str(int(q.get(cat, 0))), 16, UIStyle.TEXT)
+		var minus := UIStyle.button("−", 16)
+		minus.custom_minimum_size = Vector2(UIStyle.BUTTON_H["small"], UIStyle.BUTTON_H["small"])
+		var val := UIStyle.label(str(int(q.get(cat, 0))), 17, UIStyle.GOLD_HI)
+		val.add_theme_font_override("font", UIStyle.font_display(700))
+		val.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		val.custom_minimum_size = Vector2(40, 0)
 		val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var plus := UIStyle.button("+", 15)
-		plus.custom_minimum_size = Vector2(36, 30)
+		var plus := UIStyle.button("+", 16)
+		plus.custom_minimum_size = Vector2(UIStyle.BUTTON_H["small"], UIStyle.BUTTON_H["small"])
 		var c2: String = cat
 		minus.pressed.connect(func():
 			q[c2] = maxi(int(q.get(c2, 0)) - 1, 0)
@@ -452,6 +603,20 @@ func _draft_quota_box(opts: Dictionary) -> VBoxContainer:
 	return box
 
 
+## A secondary "Close" at the bottom right of a centre panel (review #11): 44 px, 12 px above it
+## from the content (the body's separation), the panel padding below.
+func _close_row() -> Control:
+	var row := HBoxContainer.new()
+	row.name = "CloseRow"
+	row.alignment = BoxContainer.ALIGNMENT_END
+	var b := UIStyle.size_button(UIStyle.secondary_button("Close", 15), "standard")
+	b.name = "Close"
+	b.custom_minimum_size.x = 140
+	b.pressed.connect(step_back)
+	row.add_child(b)
+	return row
+
+
 func _privacy_box(text: String) -> CheckBox:
 	return _check_box(text, _options.privacy, func(on): _options.privacy = on)
 
@@ -462,16 +627,16 @@ func _leaf_panel(target: String) -> Control:
 	_series_panel_active = false
 	match target:
 		"bot":
-			pv = _center_panel("Play vs Bot", "A series against the computer. The bot picks a random Structure deck.", "Play · local")
+			pv = _leaf(target, "Play vs Bot", "A series against the computer. The bot picks a random Structure deck.")
 			_series_options(pv[1])
 			_start_button(pv[1], "Start series", bot_requested.emit)
 		"hotseat":
-			pv = _center_panel("Hot-seat", "Two players take turns on this screen.", "Play · local")
+			pv = _leaf(target, "Hot-seat", "Two players take turns on this screen.")
 			_series_options(pv[1])
 			pv[1].add_child(_privacy_box("Privacy screen between turns"))
 			_start_button(pv[1], "Start series", hotseat_requested.emit)
 		"host_lan":
-			pv = _center_panel("Host LAN", "Your friend joins with your computer's local IP address and this port.", "Play · local")
+			pv = _leaf(target, "Host LAN", "Your friend joins with your computer's local IP address and this port.")
 			_series_options(pv[1])
 			var port := LineEdit.new()
 			port.text = _options.lan_addr.split(":")[-1]
@@ -479,7 +644,7 @@ func _leaf_panel(target: String) -> Control:
 			_labelled(pv[1], "Port", port)
 			_start_button(pv[1], "Host series", func(): lan_host_requested.emit(int(port.text)))
 		"join_lan":
-			pv = _center_panel("Join LAN", "Enter the host's address and port (for example 192.168.1.20:24680).", "Play · local")
+			pv = _leaf(target, "Join LAN", "Enter the host's address and port (for example 192.168.1.20:24680).")
 			var addr := LineEdit.new()
 			addr.text = _options.lan_addr
 			addr.custom_minimum_size = Vector2(260, 0)
@@ -489,7 +654,7 @@ func _leaf_panel(target: String) -> Control:
 				var hp := addr.text.split(":")
 				lan_join_requested.emit(hp[0], int(hp[1]) if hp.size() > 1 else SessionOptions.DEFAULT_LAN_PORT))
 		"host_online":
-			pv = _center_panel("Host game", "Creates a Steam lobby. Invite a friend from the next screen.", "Play · online")
+			pv = _leaf(target, "Host game", "Creates a Steam lobby. Invite a friend from the next screen.")
 			_series_options(pv[1])
 			var pub := _check_box("List my lobby publicly", _options.series.get("public_lobby", false),
 					func(on): _options.series["public_lobby"] = on)
@@ -498,28 +663,25 @@ func _leaf_panel(target: String) -> Control:
 			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, UIStyle.TEXT_DIM, true))
 			_start_button(pv[1], "Host", steam_host_requested.emit)
 		"join_online":
-			pv = _center_panel("Join game", "Accept a friend's invite in the Steam overlay, or browse public lobbies.", "Play · online")
+			pv = _leaf(target, "Join game", "Accept a friend's invite in the Steam overlay, or browse public lobbies.")
 			pv[1].add_child(UIStyle.label(SteamBridge.describe(), 14, UIStyle.TEXT_DIM, true))
 			_start_button(pv[1], "Browse public lobbies", steam_browse_requested.emit)
 		"tutorial":
-			pv = _center_panel("Tutorial", "Guided lessons on a prepared board against a scripted Rival. Nothing is saved.", "Play")
+			pv = _leaf(target, "Tutorial", "Guided lessons on a prepared board against a scripted Rival. Nothing is saved.")
 			TutorialMenu.add_lessons(pv[1], tutorial_requested.emit)
 		"resume":
-			pv = _center_panel("Resume", "Pick up a series where you left it.", "Main menu")
+			pv = _leaf(target, "Resume", "Pick up a series where you left it.")
 			SavedSeriesList.add_to(pv[1], SeriesStore.list(), resume_requested.emit, delete_save_requested.emit)
 		"settings":
-			pv = _center_panel("Settings", "", "Main menu")
-			pv[1].add_child(UIStyle.display_controls(16))
-			pv[1].add_child(GameMenu.audio_controls(16))
-			pv[1].add_child(Telemetry.settings_control(15))
-			pv[1].add_child(_check_box("Reduced motion (no travel, shake or particles)", UIStyle.reduce_motion,
-					func(on): UIStyle.set_reduce_motion(on)))
-			pv[1].add_child(_check_box("Fast animations (half duration)", UIStyle.fast_anim,
-					func(on): UIStyle.set_fast_anim(on)))
-			pv[1].add_child(_privacy_box("Privacy screen between turns (hot-seat)"))
+			pv = _leaf(target, "Settings")
+			# The shared settings form (review #9-#11): the same builder as the in-game settings.
+			pv[1].add_child(SettingsForm.new(Callable(), [{"key": "privacy", "text": "Privacy screen between turns (hot-seat)",
+					"on": _options.privacy, "toggled": func(on): _options.privacy = on}]))
+			pv[1].add_child(_close_row())
 		"credits":
-			pv = _center_panel("Credits", "", "Main menu")
+			pv = _leaf(target, "Credits")
 			pv[1].add_child(credits_view())
+			pv[1].add_child(_close_row())
 		_:
 			return null
 	return pv[0]

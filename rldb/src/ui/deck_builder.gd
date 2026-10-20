@@ -21,7 +21,11 @@ extends Control
 
 signal closed
 
-const MARGIN := 16
+## Gap between the status toast and the bottom edge of the page (design review #83: 24 px).
+const TOAST_GAP := 24
+## Summary chip height and its number size (design review #81).
+const CHIP_H := 28.0
+const CHIP_VALUE_FONT := 15
 ## Deck grid tile: "mini" card 90x135 with its count tag just below it (F18).
 const TILE_W := 100
 const TILE_H := 168
@@ -43,6 +47,8 @@ var deck_name_edit: LineEdit
 var dirty: bool = false
 ## The shared catalogue browser (filters + grid).
 var browser: CardBrowser
+## The page header (title, divider, Back).
+var header: PageHeader
 
 var _loaded_name: String = ""
 var _deck_box: VBoxContainer
@@ -61,6 +67,7 @@ var _extra_n := 0
 var _preview_holder: VBoxContainer
 var _preview_card: CardWidget
 var _details: CardDetailsPanel
+var _facts: PreviewFacts
 var _preview_note: Label
 var _preview_count: Label
 var _preview_chip: PanelContainer
@@ -463,10 +470,7 @@ static func plate(color: Color = UIStyle.PANEL) -> PanelContainer:
 	var sb := UIStyle.panel_style(color, UIStyle.BRONZE, 8)
 	sb.shadow_size = 10
 	sb.shadow_color = Color(0, 0, 0, 0.5)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 10
+	UIStyle.pad(sb, "lg")   # sidebar-panel padding (design review 1.4.2)
 	p.add_theme_stylebox_override("panel", UiSurface.box(sb, UiSurface.LEATHER, UIStyle.PANEL_GRAIN))
 	# Vertical sheen: lighter at the top, gone by the middle.
 	var g := Gradient.new()
@@ -486,12 +490,16 @@ static func plate(color: Color = UIStyle.PANEL) -> PanelContainer:
 	return p
 
 
-## Section heading: Cinzel title with the fading gold rule under it.
+## Section heading (design review D3, T3): a SECTION-tier title (TitleText: gold, letter-spaced,
+## a hard shadow) with its engraved double underline across the column. Returns a VBoxContainer
+## holding the title Label (its "Title" child).
 static func heading(text: String, size: int = 18) -> VBoxContainer:
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 3)
-	v.add_child(UIStyle.title_label(text, size, UIStyle.GOLD_HI))
-	v.add_child(Rule.new())
+	v.add_theme_constant_override("separation", 0)
+	var l := UIStyle.label(text.to_upper(), size, UIStyle.GOLD)
+	l.name = "Title"
+	v.add_child(l)
+	TitleText.apply(l, TitleText.Tier.SECTION, size)
 	return v
 
 
@@ -517,29 +525,32 @@ static func table_backdrop(host: Control) -> void:
 	host.add_child(vignette)
 
 
-## Summary pill: a bold value in a fixed-width slot (room for 99, F16) and a dim caption.
-## Returns the pill; the value Label is its "Value" node.
+## Summary pill (design review #81): an F4 bronze chip, 28 px high, whose number stands out (15 px
+## Cinzel 700 in GOLD_HI, in a fixed-width slot with room for 99, F16) before an 11 px MUTED caption.
+## Returns the pill; the value Label is its first HBox child ("Value").
 static func count_chip(caption: String, accent: Color = UIStyle.GOLD_HI) -> PanelContainer:
 	var pc := PanelContainer.new()
-	var sb := UIStyle.flat(Color(0, 0, 0, 0.32), Color(UIStyle.BRONZE, 0.7), 1, 10)
-	sb.content_margin_left = 8
-	sb.content_margin_right = 9
-	sb.content_margin_top = 2
-	sb.content_margin_bottom = 2
-	pc.add_theme_stylebox_override("panel", sb)
+	pc.add_theme_stylebox_override("panel", UIStyle.chip_style(UIStyle.BRONZE.lightened(0.15), 8))
+	pc.custom_minimum_size.y = CHIP_H
 	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 5)
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pc.add_child(h)
-	var a := UIStyle.label("0", 13, accent)
+	var a := UIStyle.label("0", CHIP_VALUE_FONT, accent)
 	a.name = "Value"
-	a.add_theme_font_override("font", UIStyle.font_bold())
+	a.add_theme_font_override("font", UIStyle.font_display(700))
+	a.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	a.add_theme_constant_override("shadow_offset_y", 1)
 	a.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	a.custom_minimum_size.x = ceilf(UIStyle.font_bold().get_string_size("99", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x) + 2.0
+	a.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	a.custom_minimum_size.x = ceilf(UIStyle.font_display(700).get_string_size("99", HORIZONTAL_ALIGNMENT_LEFT, -1, CHIP_VALUE_FONT).x) + 2.0
 	h.add_child(a)
 	if caption != "":
-		h.add_child(UIStyle.label(caption, 12, UIStyle.TEXT_DIM))
+		var cl := UIStyle.label(caption, 11, UIStyle.MUTED)
+		cl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		cl.add_theme_font_override("font", UIStyle.font_bold())
+		h.add_child(cl)
 	return pc
 
 
@@ -565,6 +576,14 @@ static func count_tag() -> PanelContainer:
 	l.name = "Text"
 	pc.add_child(l)
 	return pc
+
+
+## A fixed vertical gap of `h` px.
+static func _gap(h: float) -> Control:
+	var g := Control.new()
+	g.custom_minimum_size = Vector2(0, h)
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return g
 
 
 ## Centres `c` horizontally in a full-rect row inside `host` (host keeps its own size).
@@ -600,50 +619,47 @@ static func _icon_btn(glyph: String, px: int, tip: String, danger: bool = false)
 	return b
 
 
-## Empty-state block: a soft slot with a title and a hint.
-static func _empty_state(title: String, hint: String) -> PanelContainer:
-	var pc := PanelContainer.new()
-	var sb := UIStyle.flat(Color(0, 0, 0, 0.2), Color(UIStyle.BRONZE, 0.5), 1, 8)
-	sb.set_content_margin_all(14)
-	pc.add_theme_stylebox_override("panel", sb)
+## Compact empty state for the deck-list pane (no nested box, design review #54): a small engraved
+## tome beside a SCREEN-tier title and the hint, laid directly on the pane.
+static func _empty_state(title: String, hint: String) -> Control:
+	var row := HBoxContainer.new()
+	row.name = "EmptyState"
+	UIStyle.pad(row, "md")
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var icon := EngravedIcon.new("tome", 44.0)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(icon)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 4)
-	pc.add_child(v)
-	var t := UIStyle.label(title, 16, UIStyle.GOLD, false, true)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", UIStyle.sp("xs"))
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(v)
+	var t := UIStyle.label(title, 18, UIStyle.GOLD_HI)
 	v.add_child(t)
-	var h := UIStyle.label(hint, 13, UIStyle.TEXT_DIM, true)
-	h.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	TitleText.apply(t, TitleText.Tier.SCREEN, 18)
+	var h := UIStyle.label(hint, 14, UIStyle.MUTED, true)
 	v.add_child(h)
-	return pc
+	return row
 
 
 # ------------------------------------------------------------ construction
 
 func _build() -> void:
 	table_backdrop(self)
-	var margin := UIStyle.full_rect_margin(MARGIN)
+	var margin := UIStyle.full_rect_margin(UIStyle.SAFE_PAGE)
 	add_child(margin)
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 10)
+	UIStyle.pad(root, "lg")
 	margin.add_child(root)
 
-	var head := HBoxContainer.new()
-	root.add_child(head)
-	var tv := VBoxContainer.new()
-	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tv.add_theme_constant_override("separation", 2)
-	tv.add_child(UIStyle.title_label("DECK BUILDER", 30, UIStyle.GOLD))
-	tv.add_child(Rule.new())
-	head.add_child(tv)
-	var back := UIStyle.button("Back", 15)
-	back.custom_minimum_size = Vector2(90, 36)
-	back.pressed.connect(_on_back)
-	head.add_child(back)
+	# Page header (design review #73): the same component as the card catalogue.
+	header = PageHeader.new("Deck Builder")
+	header.back_pressed.connect(_on_back)
+	root.add_child(header)
 
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 12)
+	UIStyle.pad(body, "lg")
 	root.add_child(body)
 	_build_catalogue(body)
 	_build_preview(body)
@@ -651,13 +667,10 @@ func _build() -> void:
 
 	# Status toast: floats over the bottom edge so a message never pushes the columns around.
 	_status_panel = PanelContainer.new()
-	var ssb := UIStyle.flat(Color(0.05, 0.04, 0.03, 0.94), Color(UIStyle.GOLD, 0.6), 1, 8)
-	ssb.content_margin_left = 16
-	ssb.content_margin_right = 16
-	ssb.content_margin_top = 6
-	ssb.content_margin_bottom = 6
-	UIStyle.lift_style(ssb, Color(0, 0, 0, 0.6), 10, 2)
-	_status_panel.add_theme_stylebox_override("panel", ssb)
+	var ssb := UIStyle.flat(Color(0.075, 0.062, 0.048, 0.97), Color(UIStyle.GOLD, 0.6), 1, 6)
+	UIStyle.pad(ssb, "lg", "sm")
+	UIStyle.lift(ssb, UIStyle.DEPTH_FLOATING)
+	_status_panel.add_theme_stylebox_override("panel", UiSurface.box(ssb, UiSurface.LEATHER, UIStyle.PANEL_GRAIN * 0.3))
 	_status_panel.visible = false
 	_status_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_status_panel.anchor_left = 0.5
@@ -666,8 +679,8 @@ func _build() -> void:
 	_status_panel.anchor_bottom = 1.0
 	_status_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_status_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_status_panel.offset_bottom = -MARGIN - 8
-	_status_panel.offset_top = -MARGIN - 8
+	_status_panel.offset_bottom = -UIStyle.SAFE_PAGE - TOAST_GAP
+	_status_panel.offset_top = -UIStyle.SAFE_PAGE - TOAST_GAP
 	_status_panel.z_index = 4
 	_status = UIStyle.label("", 14, UIStyle.TEXT)
 	_status_panel.add_child(_status)
@@ -687,7 +700,7 @@ func _build_catalogue(body: HBoxContainer) -> void:
 	p.size_flags_stretch_ratio = 3.0
 	body.add_child(p)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
+	UIStyle.pad(v, "md")
 	p.add_child(v)
 	v.add_child(heading("Card catalogue"))
 	browser = CardBrowser.new(false, CELL_FOOTER)
@@ -712,7 +725,7 @@ func _build_preview(body: HBoxContainer) -> void:
 	p.custom_minimum_size = Vector2(320, 0)
 	body.add_child(p)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
+	UIStyle.pad(v, "md")
 	p.add_child(v)
 	v.add_child(heading("Card details"))
 	_preview_holder = VBoxContainer.new()
@@ -729,16 +742,19 @@ func _build_preview(body: HBoxContainer) -> void:
 	_preview_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_preview_chip.add_child(_preview_count)
 	mid.add_child(_preview_chip)
-	var sc := SmoothScroll.new()
+	var sc := ScrollArea.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(sc)
 	var inner := VBoxContainer.new()
-	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inner.add_theme_constant_override("separation", 6)
-	sc.add_child(inner)
+	UIStyle.pad(inner, "md")
+	sc.set_content(inner)
 	_details = CardDetailsPanel.new()
 	_details.construction = true
 	inner.add_child(_details)
+	# Always-shown facts (design review #80): the Rules placeholder of a vanilla card, the copies
+	# in this deck as gem sockets that fill on add, the kind and cost line.
+	_facts = PreviewFacts.new(true)
+	inner.add_child(_facts)
 	_preview_note = UIStyle.label("", 13, UIStyle.BAD)
 	inner.add_child(_preview_note)
 
@@ -749,7 +765,7 @@ func _build_deck(body: HBoxContainer) -> void:
 	p.size_flags_stretch_ratio = 2.2
 	body.add_child(p)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
+	UIStyle.pad(v, "md")
 	p.add_child(v)
 	v.add_child(heading("Your deck"))
 
@@ -773,35 +789,36 @@ func _build_deck(body: HBoxContainer) -> void:
 	_name_box.add_child(_name_err)
 
 	var actions := HFlowContainer.new()
-	actions.add_theme_constant_override("h_separation", 6)
-	actions.add_theme_constant_override("v_separation", 6)
+	UIStyle.pad(actions, "md", "sm")
 	v.add_child(actions)
-	_save_btn = UIStyle.primary_button("Save", 14)
-	_save_btn.custom_minimum_size = Vector2(84, 32)
+	_save_btn = UIStyle.primary_button("Save", 15)
+	_save_btn.custom_minimum_size = Vector2(96, UIStyle.BUTTON_H["small"])
 	_save_btn.pressed.connect(_on_save_pressed)
 	actions.add_child(_save_btn)
-	var new_b := UIStyle.button("New", 14)
-	new_b.custom_minimum_size = Vector2(76, 32)
+	var new_b := UIStyle.button("New", 15)
+	new_b.custom_minimum_size = Vector2(84, UIStyle.BUTTON_H["small"])
 	new_b.tooltip_text = "Start a new empty deck"
 	new_b.pressed.connect(func(): _guard_unsaved(new_deck))
 	actions.add_child(new_b)
-	_rename_btn = UIStyle.button("Rename", 14)
-	_rename_btn.custom_minimum_size = Vector2(76, 32)
+	_rename_btn = UIStyle.button("Rename", 15)
+	_rename_btn.custom_minimum_size = Vector2(96, UIStyle.BUTTON_H["small"])
 	_rename_btn.tooltip_text = "Rename the loaded saved deck to the name typed above"
 	_rename_btn.pressed.connect(rename_loaded)
 	actions.add_child(_rename_btn)
-	_delete_btn = UIStyle.button("Delete", 14)
-	_delete_btn.custom_minimum_size = Vector2(76, 32)
+	_delete_btn = UIStyle.button("Delete", 15)
+	_delete_btn.custom_minimum_size = Vector2(96, UIStyle.BUTTON_H["small"])
 	_delete_btn.tooltip_text = "Delete the loaded saved deck"
 	_delete_btn.pressed.connect(func(): _ask_delete())
 	actions.add_child(_delete_btn)
 
-	# Saved / Structure decks (F04-17, F20, F3): folder tabs joined to the pane that holds the tiles.
+	# Saved / Structure decks (F04-17, F20, F3): folder tabs joined to the pane that holds the tiles,
+	# 24 px under the buttons (design review #84: field > 12 > buttons > 24 > tabs > 0 > list).
+	v.add_child(_gap(UIStyle.sp("xl") - UIStyle.sp("md")))
 	_deck_tabs = FolderTabs.new()
 	_deck_tabs.tab_height = 38.0
 	_deck_tabs.font_size = 15
 	_deck_tabs.left_margin = 16.0
-	_deck_tabs.set_pane_margins(8, 12, 8, 8)
+	_deck_tabs.set_pane_margins(UIStyle.sp("sm"), UIStyle.sp("md"), UIStyle.sp("md"), UIStyle.sp("md"))
 	_deck_tabs.add_tab("saved", "Saved Decks", {"min_width": 130.0})
 	_deck_tabs.add_tab("starters", "Structure Decks", {"min_width": 150.0})
 	_deck_tabs.tab_selected.connect(func(key: String):
@@ -817,30 +834,25 @@ func _build_deck(body: HBoxContainer) -> void:
 	list_sc.add_child(_list_box)
 	_list_box.minimum_size_changed.connect(_fit_list)
 
-	v.add_child(Rule.new(false))
+	# List > 24 > stats (design review #84).
+	v.add_child(_gap(UIStyle.sp("xl") - UIStyle.sp("md")))
 	# Summary pills: built once, values in fixed-width slots so nothing shifts (F16).
 	_deck_chips = HFlowContainer.new()
-	_deck_chips.add_theme_constant_override("h_separation", 6)
-	_deck_chips.add_theme_constant_override("v_separation", 4)
+	UIStyle.pad(_deck_chips, "sm")
 	v.add_child(_deck_chips)
 	for k in [["total", "cards"], ["main", "Main"], ["extra", "Extra"], ["unique", "unique"]]:
 		var chip := count_chip(k[1])
 		_chip_vals[k[0]] = chip.get_node("HBoxContainer/Value") if chip.has_node("HBoxContainer/Value") else chip.get_child(0).get_child(0)
 		_deck_chips.add_child(chip)
-	var uc := PanelContainer.new()
-	var usb := UIStyle.flat(Color(0, 0, 0, 0.32), Color(UIStyle.TARGET, 0.7), 1, 10)
-	usb.content_margin_left = 9
-	usb.content_margin_right = 9
-	usb.content_margin_top = 2
-	usb.content_margin_bottom = 2
-	uc.add_theme_stylebox_override("panel", usb)
-	uc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ul := UIStyle.label("Unsaved", 13, UIStyle.TARGET)
-	ul.add_theme_font_override("font", UIStyle.font_bold())
-	uc.add_child(ul)
+	var uc := UIStyle.chip("Unsaved", UIStyle.TARGET, 13)
+	uc.custom_minimum_size.y = CHIP_H
 	_unsaved_chip = uc
 	_deck_chips.add_child(uc)
-	_empty_note = _empty_state("Your deck is empty", "Hover a card to read it, click it to add a copy. Fusion, Ritual and Arcane cards go to the Extra Deck.")
+	# Illustrated empty state (WP-7): an engraved deck emblem on the leather, no box.
+	var en := CenterContainer.new()
+	en.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	en.add_child(EngravedIcon.empty_state("deck", "Your deck is empty", "Hover a card to read it, click it to add a copy. Fusion, Ritual and Arcane cards go to the Extra Deck.", "", Callable(), 340.0))
+	_empty_note = en
 	v.add_child(_empty_note)
 	_deck_scroll = SmoothScroll.new()
 	_deck_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -848,25 +860,28 @@ func _build_deck(body: HBoxContainer) -> void:
 	v.add_child(_deck_scroll)
 	_deck_box = VBoxContainer.new()
 	_deck_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_deck_box.add_theme_constant_override("separation", 8)
+	UIStyle.pad(_deck_box, "lg")
 	_deck_scroll.add_child(_deck_box)
 	for key in ["main", "extra"]:
 		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 4)
+		UIStyle.pad(box, "sm")
 		_deck_box.add_child(box)
 		var h := HBoxContainer.new()
-		h.add_theme_constant_override("separation", 8)
+		UIStyle.pad(h, "md")
 		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var t := UIStyle.title_label("MAIN DECK" if key == "main" else "EXTRA DECK", 15, UIStyle.GOLD)
+		# SECTION tier (D3): MAIN DECK / EXTRA DECK with the engraved underline across the row.
+		var t := UIStyle.label("MAIN DECK" if key == "main" else "EXTRA DECK", 15, UIStyle.GOLD)
 		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		h.add_child(t)
+		TitleText.apply(t, TitleText.Tier.SECTION, 15)
 		var chip := count_chip("cards")
+		chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		h.add_child(chip)
-		h.add_child(Rule.new())
 		box.add_child(h)
 		var flow := HFlowContainer.new()
-		flow.add_theme_constant_override("h_separation", 4)
-		flow.add_theme_constant_override("v_separation", 2)
+		UIStyle.pad(flow, "xs")
 		box.add_child(flow)
 		_sections[key] = {"box": box, "flow": flow, "value": chip.get_child(0).get_child(0)}
 
@@ -925,6 +940,13 @@ func _show(id: int) -> void:
 		_preview_note.text = "Implementation: %s" % s["support"]
 	_mark_deck_selection()
 	_update_preview_count()
+	_update_facts()
+
+
+## Updates the preview's facts block (rules placeholder, copies in the deck, kind line).
+func _update_facts() -> void:
+	if _facts != null and _preview_id >= 0:
+		_facts.show_card(_preview_id, _details.sections.has("rules"), int(counts.get(_preview_id, 0)))
 
 
 ## Pointer entered a card: show it once the pointer has rested a moment (a sweep over many cards
@@ -1053,8 +1075,10 @@ func _refresh_deck() -> void:
 	(_chip_vals["unique"] as Label).text = str(counts.size())
 	_unsaved_chip.modulate.a = 1.0 if dirty else 0.0
 	_empty_note.visible = total == 0
+	_deck_scroll.visible = total > 0
 	_mark_deck_selection()
 	_update_preview_count()
+	_update_facts()
 	_update_actions()
 
 

@@ -130,12 +130,12 @@ func _check_hotseat() -> void:
 func show_privacy(seat: int) -> void:
 	if privacy_overlay != null and is_instance_valid(privacy_overlay):
 		privacy_overlay.queue_free()
-	# Opaque full-screen backdrop (the board must stay hidden) with the house plate in the middle.
-	privacy_overlay = ColorRect.new()
-	(privacy_overlay as ColorRect).color = Color(0.035, 0.03, 0.04, 1.0)
-	privacy_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	privacy_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Opaque full-screen backdrop (the board must stay hidden): the dimmed menu painting, a
+	# vignette and a slowly turning sigil (design review #68), with the house plate in the middle.
+	# The Menu strip is hidden meanwhile (Esc still opens the menu).
+	privacy_overlay = PrivacyBackdrop.new()
 	_root.add_child(privacy_overlay)
+	_set_top_strip(false)
 	var c := CenterContainer.new()
 	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	privacy_overlay.add_child(c)
@@ -145,7 +145,7 @@ func show_privacy(seat: int) -> void:
 	plate.custom_minimum_size = Vector2(480, 0)
 	c.add_child(plate)
 	var v := plate.body
-	plate.add_headline("Pass to %s" % who, 34, true, 12.0)
+	var tt := TitleText.apply(plate.add_headline("Pass to %s" % who, 34, true, 12.0), TitleText.Tier.SCREEN, 34)
 	var note := UIStyle.label("Hidden information is protected between seats.", 15, UIStyle.MUTED, true)
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(note)
@@ -154,9 +154,22 @@ func show_privacy(seat: int) -> void:
 	b.pressed.connect(func():
 		privacy_overlay.queue_free()
 		privacy_overlay = null
+		_set_top_strip(true)
 		switch_seat(seat))
 	v.add_child(b)
 	plate.appear()
+	tt.play_sweep()
+	# The way forward breathes gently (static under reduce motion).
+	if not UIStyle.reduce_motion:
+		var tw := b.create_tween().set_loops()
+		tw.tween_property(b, "self_modulate", Color(1.12, 1.1, 1.0), UIStyle.motion("breathe") / 2.0).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(b, "self_modulate", Color.WHITE, UIStyle.motion("breathe") / 2.0).set_trans(Tween.TRANS_SINE)
+
+
+## Shows or hides the match screen's top strip (the Menu button) behind the privacy screen.
+func _set_top_strip(on: bool) -> void:
+	if screen != null and is_instance_valid(screen) and screen.menu != null and screen.menu.top_strip != null:
+		screen.menu.top_strip.visible = on
 
 
 # ---------------------------------------------------------------- network

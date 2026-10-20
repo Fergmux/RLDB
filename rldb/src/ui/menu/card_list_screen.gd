@@ -12,15 +12,17 @@ extends Control
 ## Emitted when the screen is closed.
 signal closed
 
-const MARGIN := 16
 const PREVIEW_W := 380
 
+## The page header (title, divider, Back).
+var header: PageHeader
 ## The shared browser (filters + grid).
 var browser: CardBrowser
 
 var _preview_holder: CenterContainer
 var _preview_card: CardWidget
 var _details: CardDetailsPanel
+var _facts: PreviewFacts
 var _preview_title: Label
 var _note: Label
 var _preview_empty: Control
@@ -34,35 +36,27 @@ func _ready() -> void:
 	CardDB.ensure_loaded()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	DeckBuilder.table_backdrop(self)
-	var margin := UIStyle.full_rect_margin(MARGIN)
+	var margin := UIStyle.full_rect_margin(UIStyle.SAFE_PAGE)
 	add_child(margin)
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 10)
+	UIStyle.pad(root, "lg")
 	margin.add_child(root)
 
-	var head := HBoxContainer.new()
-	root.add_child(head)
-	var tv := VBoxContainer.new()
-	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tv.add_theme_constant_override("separation", 2)
-	tv.add_child(UIStyle.title_label("CARD CATALOGUE", 30, UIStyle.GOLD))
-	tv.add_child(DeckBuilder.Rule.new())
-	head.add_child(tv)
-	var back := UIStyle.button("Back", 15)
-	back.custom_minimum_size = Vector2(90, 36)
-	back.pressed.connect(_on_back)
-	head.add_child(back)
+	# Page header (design review #73): SCREEN title, house divider, a 44 px "‹ Back".
+	header = PageHeader.new("Card Catalogue")
+	header.back_pressed.connect(_on_back)
+	root.add_child(header)
 
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 12)
+	UIStyle.pad(body, "lg")
 	root.add_child(body)
 
 	var left := DeckBuilder.plate()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(left)
 	var lv := VBoxContainer.new()
-	lv.add_theme_constant_override("separation", 8)
+	UIStyle.pad(lv, "md")
 	left.add_child(lv)
 	lv.add_child(DeckBuilder.heading("All cards"))
 	browser = CardBrowser.new(true, 0)
@@ -86,15 +80,18 @@ func _build_preview(body: HBoxContainer) -> void:
 	p.custom_minimum_size = Vector2(PREVIEW_W, 0)
 	body.add_child(p)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	UIStyle.pad(v, "md")
 	p.add_child(v)
 	v.add_child(DeckBuilder.heading("Selected card"))
-	_preview_empty = CardBrowser.empty_state("No card selected", "Click a card in the catalogue to read it here.", "", Callable())
+	# Illustrated empty state (design review #79): an engraved card outline on the leather, no box.
+	_preview_empty = CenterContainer.new()
+	_preview_empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_preview_empty.add_child(EngravedIcon.empty_state("card", "No card selected", "Click a card in the catalogue to read it here.", "", Callable(), PREVIEW_W - 80.0))
 	_preview_empty.visible = false
 	v.add_child(_preview_empty)
 	_preview_body = VBoxContainer.new()
 	_preview_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_preview_body.add_theme_constant_override("separation", 10)
+	UIStyle.pad(_preview_body, "md")
 	v.add_child(_preview_body)
 	_preview_holder = CenterContainer.new()
 	_preview_body.add_child(_preview_holder)
@@ -102,10 +99,14 @@ func _build_preview(body: HBoxContainer) -> void:
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_preview_body.add_child(sc)
 	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 6)
+	UIStyle.pad(inner, "md")
 	_details = CardDetailsPanel.new()
 	_details.construction = true
 	inner.add_child(_details)
+	# Always-shown facts under the stats (design review #77): the Rules placeholder of a vanilla
+	# card, where the player's saved decks use it, and its kind and cost.
+	_facts = PreviewFacts.new(false)
+	inner.add_child(_facts)
 	_note = UIStyle.label("", 13, UIStyle.BAD, true)
 	inner.add_child(_note)
 	sc.set_content(inner)
@@ -138,6 +139,7 @@ func show_card(id: int) -> void:
 	_preview_card.pressed.connect(func(_w): inspect_card(id))
 	_preview_holder.add_child(_preview_card)
 	_details.show_card(MatchView.summary_view(s))
+	_facts.show_card(id, _details.sections.has("rules"))
 	_note.visible = s["support"] != "full"
 	_note.text = "Implementation: %s" % s["support"]
 	if not UIStyle.reduce_motion and is_inside_tree():
