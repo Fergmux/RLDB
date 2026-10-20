@@ -26,6 +26,8 @@ const PANE_R := 8.0
 ## Closed tabs sit this far below the open one.
 const DROP := 5.0
 const GRAIN := 0.5
+## Least gap between the last tab and the trailing slot, px.
+const TRAILING_GAP := 12.0
 
 ## Key of the open tab ("" when none).
 var selected: String = ""
@@ -35,14 +37,20 @@ var left_margin: float = 24.0
 var tab_height: float = 44.0
 ## Tab title size, px.
 var font_size: int = 18
-## Gap between tabs, px.
-var tab_gap: float = 8.0
+## Gap between tabs, px (set before adding tabs).
+var tab_gap: float = 8.0:
+	set(v):
+		tab_gap = v
+		if _tabs_box != null:
+			_tabs_box.add_theme_constant_override("separation", int(v))
 ## Pane and open-tab fill.
 var pane_fill: Color = Color(0.05, 0.042, 0.034, 0.93)
 ## Rim colour of the pane and the tabs.
 var rim: Color = UIStyle.BRONZE.lightened(0.18)
 ## Grain material of the faces.
 var grain_material: String = UiSurface.LEATHER
+## Gap between the trailing slot's right end and the pane's right frame, px (design review #58).
+var trailing_inset: float = float(UIStyle.SPACE["xl"])
 ## Content parent: the pane under the tabs.
 var pane: PanelContainer
 
@@ -63,10 +71,12 @@ func _init() -> void:
 	_tabs_box = HBoxContainer.new()
 	_tabs_box.add_theme_constant_override("separation", int(tab_gap))
 	_strip.add_child(_tabs_box)
+	# The trailing slot is laid out on its own (not in the strip): it ends `trailing_inset` from the
+	# pane's frame and is centred on the closed tabs' label line, not on the open tab's taller face.
 	_trailing_slot = HBoxContainer.new()
-	_trailing_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_trailing_slot.name = "Trailing"
 	_trailing_slot.alignment = BoxContainer.ALIGNMENT_END
-	_strip.add_child(_trailing_slot)
+	add_child(_trailing_slot)
 	pane = PanelContainer.new()
 	_pane_box = StyleBoxEmpty.new()
 	pane.add_theme_stylebox_override("panel", _pane_box)
@@ -100,13 +110,43 @@ func add_tab(key: String, title: String, opts: Dictionary = {}) -> Tab:
 	return t
 
 
-## Puts `c` at the right end of the tab strip (a hint line, a chip, a button).
-func set_trailing(c: Control) -> void:
+## Puts `c` at the right end of the tab strip (a hint line, a chip, a button), centred on the
+## closed tabs' label line. With `baseline_font` (and its size) the text of a Label `c` sits on the
+## tab titles' baseline instead (design review #53), whatever its own font.
+func set_trailing(c: Control, baseline_font: Font = null, baseline_size: int = 0) -> void:
 	for ch in _trailing_slot.get_children():
 		_trailing_slot.remove_child(ch)
 		ch.queue_free()
-	c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_trailing_slot.add_child(c)
+	var item := c
+	if baseline_font != null and baseline_size > 0:
+		var m := MarginContainer.new()
+		m.name = "Baseline"
+		m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var shift := baseline_shift(baseline_font, baseline_size)
+		# A centred box moves its content by half the margin difference.
+		m.add_theme_constant_override("margin_top", maxi(0, roundi(shift * 2.0)))
+		m.add_theme_constant_override("margin_bottom", maxi(0, roundi(-shift * 2.0)))
+		m.add_child(c)
+		item = m
+	item.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_trailing_slot.add_child(item)
+	queue_sort()
+
+
+## How far (px, positive = down) a line in `font` at `px`, centred on the tab label line, must move
+## for its baseline to sit on the tab titles' baseline (Cinzel 600 at `font_size`).
+func baseline_shift(font: Font, px: int) -> float:
+	var tf := UIStyle.font_display(600)
+	var own := tf.get_ascent(font_size) - tf.get_descent(font_size)
+	var other := font.get_ascent(px) - font.get_descent(px)
+	return (own - other) / 2.0
+
+
+## The trailing slot's rect in this widget's coordinates (its row, right-aligned inside it).
+func trailing_rect() -> Rect2:
+	var y0 := DROP * 0.6   # the closed tabs' content offset (Tab.apply_state)
+	var x0 := left_margin + _tabs_box.get_combined_minimum_size().x + TRAILING_GAP
+	return Rect2(x0, y0, maxf(0.0, size.x - trailing_inset - x0), maxf(0.0, tab_height - y0))
 
 
 ## The tab with `key` (null when absent).
@@ -160,13 +200,16 @@ static func top_border_spans(width: float, open_x0: float, open_x1: float) -> Ar
 
 func _get_minimum_size() -> Vector2:
 	var sm := _strip.get_combined_minimum_size()
+	var tm := _trailing_slot.get_combined_minimum_size()
 	var pm := pane.get_combined_minimum_size()
-	return Vector2(maxf(sm.x + left_margin, pm.x), tab_height + pm.y)
+	var strip_w := sm.x + left_margin + (tm.x + TRAILING_GAP + trailing_inset if tm.x > 0.0 else 0.0)
+	return Vector2(maxf(strip_w, pm.x), tab_height + pm.y)
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_SORT_CHILDREN:
 		fit_child_in_rect(_strip, Rect2(left_margin, 0.0, maxf(0.0, size.x - left_margin - 12.0), tab_height))
+		fit_child_in_rect(_trailing_slot, trailing_rect())
 		fit_child_in_rect(pane, Rect2(0.0, tab_height, size.x, maxf(0.0, size.y - tab_height)))
 		queue_redraw()
 

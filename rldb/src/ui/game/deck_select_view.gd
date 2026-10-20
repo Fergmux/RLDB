@@ -8,6 +8,27 @@ extends RefCounted
 
 ## Which tab is open: "structured" (Structure decks) or "custom" (saved decks).
 var tab: String = "structured"
+## Fill of the deck pane (the leather grain shows on it).
+const PANE_FILL := Color(0.092, 0.074, 0.054, 0.95)
+## The tab hint size (px).
+const HINT_PX := 13
+## Width of the Custom tab's empty state.
+const EMPTY_W := 520.0
+## Draft offer (review #56): card width (tall / short windows), the gap between cards, the hover
+## tilt and the reveal flip of a new offer (per card, staggered by the same step).
+const OFFER_W := 260.0
+const OFFER_W_SHORT := 236.0
+## Window height (px) below which the offer uses OFFER_W_SHORT, so the modal still fits.
+const OFFER_TALL_H := 960.0
+const OFFER_GAP := 48
+const OFFER_TILT_DEG := 2.0
+const OFFER_FLIP := 0.12
+## Draft pips (review #57): diamond size, pitch, the extra gap every PIP_GROUP pips, the most shown.
+const PIP_R := 6.0
+const PIP_PITCH := 16.0
+const PIP_GROUP := 4
+const PIP_GROUP_GAP := 6.0
+const PIP_MAX := 24
 ## The ScrollArea holding the tiles (null when this stage shows no list); the overlay sizes to it.
 var list_area: ScrollArea
 ## The Structure / Custom folder tabs (null when this stage shows none).
@@ -103,13 +124,17 @@ func _tabs_and_list(box: VBoxContainer) -> void:
 	ft.tab_height = 50.0
 	ft.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	ft.set_pane_margins(8, 14, 6, 8)
+	ft.pane_fill = PANE_FILL   # leather that reads as leather, not a black void (review #54)
 	_add_tab(ft, "structured", "Structure", starters.size(), "shield")
 	if custom_ok:
 		_add_tab(ft, "custom", "Custom", saved.size(), "tome")
 	ft.select(tab, false)
-	var hint := UIStyle.label("Structure decks, ready to play" if tab == "structured" else "Decks you built and saved", 14, UIStyle.TEXT_DIM)
+	# Review #53: 13 px italic MUTED, its baseline on the tab titles' baseline.
+	var hint := UIStyle.label("Structure decks, ready to play" if tab == "structured" else "Decks you built and saved", HINT_PX, UIStyle.MUTED)
+	hint.name = "TabHint"
+	hint.add_theme_font_override("font", UIStyle.font_italic())
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	ft.set_trailing(hint)
+	ft.set_trailing(hint, UIStyle.font_italic(), HINT_PX)
 	ft.tab_selected.connect(func(key: String):
 		if tab != key:
 			tab = key
@@ -201,6 +226,8 @@ func _remember_scroll() -> void:
 
 
 var _saved_scroll: int = 0
+## Signature of the draft offer last shown (a new one plays the reveal).
+var _offer_sig: int = 0
 ## Deck tiles of the shown list by id ("s0", "c1", ...), for opening and closing in place.
 var _tiles: Dictionary = {}
 
@@ -221,30 +248,19 @@ func restore_scroll() -> void:
 	_saved_scroll = 0
 
 
+## The Custom tab with no saved deck (review #54 / #55): an illustrated empty state laid straight
+## on the pane's leather (no frame nested in the modal's frame): the engraved tome, a SCREEN title,
+## the explanation and a standard 44 px secondary button back to the Structure decks.
 func _empty_custom() -> Control:
-	var wp := OrnatePanel.new(10, 22)
-	wp.arm = 14.0
-	wp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
-	wp.add_child(v)
-	var g := TabGlyph.new("tome", UIStyle.GOLD)
-	g.custom_minimum_size = Vector2(64, 64)
-	g.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	v.add_child(g)
-	var t := UIStyle.label("No saved decks yet", 22, UIStyle.GOLD, false, true)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
-	var s := UIStyle.label("Decks you build and save in the Deck Builder appear here, ready to play. Until then, pick a Structure deck.", 15, UIStyle.MUTED, true)
-	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(s)
-	var go := UIStyle.button("Show Structure decks", 14)
-	go.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	go.pressed.connect(func():
-		tab = "structured"
-		ov.refresh())
-	v.add_child(go)
-	return wp
+	var es := EngravedIcon.empty_state("tome", "No saved decks yet",
+		"Decks you build and save in the Deck Builder appear here, ready to play. Until then, pick a Structure deck.",
+		"Show Structure decks", func():
+			tab = "structured"
+			ov.refresh(), EMPTY_W)
+	es.name = "EmptyCustom"
+	es.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	es.size_flags_vertical = Control.SIZE_SHRINK_CENTER | Control.SIZE_EXPAND
+	return es
 
 
 ## Adds the deck-source tab `key` to `ft`: its glyph, title and deck count.
@@ -268,30 +284,57 @@ func _draft(box: VBoxContainer) -> void:
 	var pips := DraftPips.new(int(dr["step"]), int(dr["total"]))
 	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	strip.add_child(pips)
-	strip.add_child(UIStyle.label("Pick %d of %d" % [mini(int(dr["step"]) + 1, int(dr["total"])), dr["total"]], 18, UIStyle.TEXT, false, true))
+	# The draft's progress line is a SECTION header (D3: gold, a hard dark shadow).
+	var pick := UIStyle.label("Pick %d of %d" % [mini(int(dr["step"]) + 1, int(dr["total"])), dr["total"]], 18, UIStyle.GOLD, false, true)
+	pick.name = "PickLine"
+	pick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	strip.add_child(pick)
+	var pt := TitleText.apply(pick, TitleText.Tier.SECTION, 18)
+	pt.show_underline = false
+	TitleText.apply(pick, TitleText.Tier.SECTION, 18)
 	var od: Dictionary = dr.get("opponent", {})
 	if not od.is_empty() and not gs.view["deck_ready"][1 - gs.me()]:
 		strip.add_child(ov.rewards._info_chip("%s %s" % [String(gs.view["names"][1 - gs.me()]), _opponent_doing(dr)], false))
 	# Category folder tabs (the basic unit at the right of the strip) joined to the pane with the offer.
 	var ft := category_tabs(dr)
 	box.add_child(ft)
+	# Review #56: the offer is the screen's one decision, so the cards are large, 48 px apart and
+	# centred in the pane; a hover lifts and tilts a card; a new offer flips in card by card.
 	var row := HBoxContainer.new()
+	row.name = "Offer"
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", OFFER_GAP)
 	ft.pane.add_child(row)
+	var cw_w := offer_width(gs.size.y)
+	var card := Vector2(cw_w, roundf(cw_w * 1.5))
+	var room := ceilf(card.y * GameSeriesOverlay.DRAFT_HOVER_SCALE) + 2.0 * UIStyle.sp("md")
+	var sig := offer_sig(dr)
+	var fresh := sig != _offer_sig
+	_offer_sig = sig
+	var cards: Array = []
 	for i in dr["offer"].size():
 		var c: Dictionary = dr["offer"][i]
 		var colm := CenterContainer.new()
-		colm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		colm.custom_minimum_size = Vector2(0, GameSeriesOverlay.DRAFT_CARD_ROOM)
+		colm.custom_minimum_size = Vector2(ceilf(card.x * GameSeriesOverlay.DRAFT_HOVER_SCALE), room)
 		row.add_child(colm)
 		var cw := CardWidget.new().setup(MatchView.summary_view(c), "big")
+		cw.custom_minimum_size = card
 		cw.tooltip_text = "Pick %s" % c["name"]
 		var idx: int = i
 		cw.pressed.connect(func(_w): gs.send({"t": "draft_pick", "index": idx}))
 		cw.right_pressed.connect(gs.inspect.inspect_widget)
-		cw.mouse_entered.connect(func(): ov._lift(cw, GameSeriesOverlay.DRAFT_HOVER_SCALE))
-		cw.mouse_exited.connect(func(): ov._lift(cw, 1.0))
+		cw.mouse_entered.connect(func():
+			ov._lift(cw, GameSeriesOverlay.DRAFT_HOVER_SCALE)
+			_tilt(cw, true))
+		cw.mouse_exited.connect(func():
+			ov._lift(cw, 1.0)
+			_tilt(cw, false))
 		colm.add_child(cw)
+		cards.append(cw)
+	if fresh:
+		_reveal(cards)
 
 
 ## The draft's category tabs as folder tabs: each shows its icon, name and picks left; the open one
@@ -300,7 +343,10 @@ func _draft(box: VBoxContainer) -> void:
 func category_tabs(dr: Dictionary) -> FolderTabs:
 	var ft := FolderTabs.new()
 	ft.tab_height = 46.0
-	ft.font_size = 16
+	# Five tabs and the basic-unit chip share the strip: a 15 px title and 6 px gaps leave the
+	# chip its 24 px from the frame (review #58) without widening the modal.
+	ft.font_size = 15
+	ft.tab_gap = 6.0
 	ft.left_margin = 20.0
 	ft.set_pane_margins(10, 14, 10, 10)
 	var labels: Dictionary = dr.get("labels", {})
@@ -317,18 +363,73 @@ func category_tabs(dr: Dictionary) -> FolderTabs:
 	ft.tab_selected.connect(func(key: String): ov.gs.send({"t": "draft_category", "category": key}))
 	var b: Dictionary = dr.get("basic", {})
 	if not b.is_empty() and int(dr.get("basic_copies", 0)) > 0:
+		# Review #58: an F4 chip at 13 px and a small secondary, 24 px from the frame (FolderTabs).
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		var chip := GameUi.pill("Basic: %s (%s) \u00d7%d" % [b["name"], b["type"], int(dr["basic_copies"])], UIStyle.type_color(b["type"]), 14)
+		row.add_theme_constant_override("separation", UIStyle.sp("md"))
+		var chip := UIStyle.chip("Basic: %s (%s) \u00d7%d" % [b["name"], b["type"], int(dr["basic_copies"])], UIStyle.type_color(b["type"]), 13)
+		chip.name = "BasicChip"
 		chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(chip)
-		var change := UIStyle.button("Change", 14)
+		var change := UIStyle.size_button(UIStyle.secondary_button("Change", 14), "small")
+		change.name = "ChangeBasic"
+		change.custom_minimum_size.x = 0.0   # its own width: the strip is full with five tabs
 		change.tooltip_text = "Choose a different Type and Race for your basic units. You can change it until your draft is done."
 		change.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		change.pressed.connect(func(): _open_picker(dr))
 		row.add_child(change)
 		ft.set_trailing(row)
 	return ft
+
+
+## Width of a draft offer card for a window `h` px tall (the modal has to fit a short window).
+static func offer_width(h: float) -> float:
+	return OFFER_W if h >= OFFER_TALL_H else OFFER_W_SHORT
+
+
+## Identity of a draft offer (its step, category and card ids): a new one flips in.
+static func offer_sig(dr: Dictionary) -> int:
+	var ids := []
+	for c in dr.get("offer", []):
+		ids.append(int(c.get("id", -1)))
+	return hash([int(dr.get("step", 0)), String(dr.get("category", "")), ids])
+
+
+## Hover tilt of an offer card: OFFER_TILT_DEG toward the pointer's side, eased; none under
+## reduce motion.
+func _tilt(cw: CardWidget, on: bool) -> void:
+	if not is_instance_valid(cw) or UIStyle.reduce_motion or not cw.is_inside_tree():
+		return
+	cw.pivot_offset = cw.size / 2.0
+	var side := 1.0 if cw.get_local_mouse_position().x >= cw.size.x / 2.0 else -1.0
+	var old = cw.get_meta("tilt_tw", null)
+	if old is Tween and old.is_valid():
+		old.kill()
+	var tw := cw.create_tween()
+	cw.set_meta("tilt_tw", tw)
+	UIStyle.tween_token(tw, cw, "rotation_degrees", OFFER_TILT_DEG * side if on else 0.0, "hover" if on else "hover_out")
+
+
+## A new offer's reveal: each card flips open (its width grows from an edge-on sliver) OFFER_FLIP
+## after the one before, with the card_draw cue; under reduce motion they fade in together.
+func _reveal(cards: Array) -> void:
+	if cards.is_empty() or not (cards[0] as Control).is_inside_tree():
+		return
+	for i in cards.size():
+		var cw: CardWidget = cards[i]
+		cw.modulate.a = 0.0
+		var tw := cw.create_tween()
+		if UIStyle.reduce_motion:
+			tw.tween_property(cw, "modulate:a", 1.0, UIStyle.motion("reduced"))
+			continue
+		tw.tween_interval(UIStyle.dur(OFFER_FLIP * i))
+		tw.tween_callback(func():
+			if not is_instance_valid(cw):
+				return
+			cw.pivot_offset = cw.size / 2.0
+			cw.scale = Vector2(0.04, 1.0)
+			cw.modulate.a = 1.0
+			Sfx.play("card_draw"))
+		tw.tween_property(cw, "scale", Vector2.ONE, UIStyle.dur(OFFER_FLIP * 2.0)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 ## What the other seat is doing in a draft (its progress only; its offers are never sent).
@@ -406,7 +507,8 @@ func _close_picker() -> void:
 	_picker_dim = null
 
 
-## Row of gems: picks made are filled, the current one glows, the rest are sockets.
+## Row of diamonds (review #57): picks made are gold, the current one breathes, future ones are
+## bronze outlines; grouped in fours by a small extra gap. Past PIP_MAX picks the row samples them.
 class DraftPips extends Control:
 	var step := 0
 	var total := 1
@@ -414,23 +516,38 @@ class DraftPips extends Control:
 	func _init(s: int, t: int) -> void:
 		step = s
 		total = maxi(t, 1)
-		var n := mini(total, 14)
-		custom_minimum_size = Vector2(n * 16.0, 18)
+		custom_minimum_size = Vector2(DraftPips.row_width(mini(total, PIP_MAX)), PIP_R * 2.0 + 10.0)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+	## Width of a row of `n` pips (the groups' extra gaps included).
+	static func row_width(n: int) -> float:
+		return n * PIP_PITCH + float(maxi(0, (n - 1) / PIP_GROUP)) * PIP_GROUP_GAP
+
+	## Centre x of pip `i`.
+	static func pip_x(i: int) -> float:
+		return PIP_PITCH / 2.0 + i * PIP_PITCH + float(i / PIP_GROUP) * PIP_GROUP_GAP
+
+	func _process(_d: float) -> void:
+		if not UIStyle.reduce_motion and is_visible_in_tree():
+			queue_redraw()
+
 	func _draw() -> void:
-		var n := mini(total, 14)
+		var n := mini(total, PIP_MAX)
+		var k := UIStyle.breathe(float(Time.get_ticks_msec()) / 1000.0, 0.35)
 		for i in n:
-			var c := Vector2(8.0 + i * 16.0, size.y / 2.0)
+			var c := Vector2(pip_x(i), size.y / 2.0)
 			var idx := int(float(i) * total / n)
 			if idx < step:
-				Ornate.diamond(self, c, 6.5, UIStyle.GOLD.darkened(0.2))
+				Ornate.diamond(self, c + Vector2(0, 1), PIP_R, Color(0, 0, 0, 0.5))
+				Ornate.diamond(self, c, PIP_R, UIStyle.GOLD)
+				Ornate.diamond(self, c + Vector2(0, -1.5), PIP_R * 0.45, Color(UIStyle.GOLD_HI, 0.9))
 			elif idx == step:
-				Ornate.diamond(self, c, 8.0, Color(UIStyle.GOLD_HI, 0.35))
-				Ornate.diamond(self, c, 6.0, UIStyle.GOLD_HI)
+				Ornate.diamond(self, c, PIP_R + 4.0, Color(UIStyle.GOLD_HI, 0.22 * k))
+				Ornate.diamond(self, c, PIP_R + 1.0, Color(UIStyle.GOLD_HI, clampf(0.85 * k, 0.0, 1.0)))
+				Ornate.diamond(self, c, PIP_R * 0.45, Color(1, 0.97, 0.85, 0.95))
 			else:
-				Ornate.diamond(self, c, 6.0, Color(UIStyle.BRONZE, 0.5))
-				Ornate.diamond(self, c, 3.5, Color(0.05, 0.04, 0.03, 1.0))
+				Ornate.diamond(self, c, PIP_R, Color(UIStyle.BRONZE.lightened(0.15), 0.85))
+				Ornate.diamond(self, c, PIP_R - 1.6, Color(0.05, 0.04, 0.03, 1.0))
 
 
 ## Small vector glyph for the tabs: "shield" (Structure) or "tome" (Custom).

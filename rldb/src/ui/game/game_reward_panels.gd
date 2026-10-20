@@ -12,6 +12,9 @@ const LEDGER_MAX_ROWS := 4
 const LEDGER_ROW_H := 36.0
 ## Seconds the other rewards / offered cards take to fold away once one is chosen.
 const COLLAPSE_TIME := 0.24
+## SECTION header sizes (D3): a sub-panel's title, and the small caps captions of the plates.
+const PANEL_HEAD_PX := 18
+const CAPTION_PX := 13
 ## The reward kinds: [key, title, caption, icon, colour].
 const MODES := [["add", "Add a card", "Pick a card type, then take one of three.", "add"],
 	["remove", "Remove a card", "Take one card out of your deck.", "remove"],
@@ -35,6 +38,8 @@ var _basic_type: String = ""
 var _ledger_seen: int = 0
 ## True while a chosen reward / card is folding the others away (blocks a second choice).
 var _collapsing: bool = false
+## True from choosing a reward kind until its panel is first shown (it then opens with motion).
+var _fresh_panel: bool = false
 
 
 func _init(screen: GameScreen) -> void:
@@ -82,11 +87,19 @@ func render() -> void:
 		if not counts.has(c["id"]):
 			order.append(c)
 		counts[c["id"]] = counts.get(c["id"], 0) + 1
+	var sub: Control = null
 	match mode:
-		"add": box.add_child(_reward_add_panel(r))
-		"remove": box.add_child(_reward_remove_panel(order, counts))
-		"basic": box.add_child(_basic_change_panel(r, order, counts))
-		"extra_basic": box.add_child(_extra_basic_panel(order, counts))
+		"add": sub = _reward_add_panel(r)
+		"remove": sub = _reward_remove_panel(order, counts)
+		"basic": sub = _basic_change_panel(r, order, counts)
+		"extra_basic": sub = _extra_basic_panel(order, counts)
+	if sub != null:
+		box.add_child(sub)
+		# The panel of a reward just chosen opens with the house motion (#106); the tile's own click
+		# was its sound. A re-render of the same panel stays still.
+		if _fresh_panel and sub is OrnatePanel:
+			(sub as OrnatePanel).appear(false)
+	_fresh_panel = false
 	box.add_child(_footer(true, r))
 
 
@@ -122,9 +135,8 @@ func _picks_plate(left: int, total: int) -> Control:
 	h.add_theme_constant_override("separation", 14)
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	op.add_child(h)
-	var cap := UIStyle.label("PICKS", 12, UIStyle.TEXT_DIM, false, true)
+	var cap := section_caption("Picks")
 	cap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	h.add_child(cap)
 	var pips := PickPips.new()
 	pips.left = left
@@ -185,7 +197,7 @@ func _taken_flow(taken: Array) -> Control:
 	plate.add_child(v)
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 10)
-	var cap := UIStyle.label("REWARDS CHOSEN", 12, UIStyle.GOLD, false, true)
+	var cap := section_caption("Rewards chosen")
 	cap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(cap)
 	head.add_child(GameUi.pill(str(taken.size()), UIStyle.GOLD, 12))
@@ -388,6 +400,7 @@ func choose_mode(key: String, row: Control = null) -> void:
 	var go := func():
 		_collapsing = false
 		mode = key
+		_fresh_panel = true
 		_remove_sel = -1
 		_basic_type = ""
 		_basic_race = ""
@@ -531,6 +544,17 @@ func _claim_offer(idx: int, sig: int) -> bool:
 	return true
 
 
+## A small caps plate caption ("PICKS", "REWARDS CHOSEN", "IN YOUR DECK") as a SECTION header
+## (D3: flat gold, a hard dark shadow, no underline: the plates carry their own rules).
+static func section_caption(text: String) -> Label:
+	var cap := UIStyle.label(text.to_upper(), CAPTION_PX, UIStyle.GOLD, false, true)
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tt := TitleText.apply(cap, TitleText.Tier.SECTION, CAPTION_PX)
+	tt.show_underline = false
+	TitleText.apply(cap, TitleText.Tier.SECTION, CAPTION_PX)
+	return cap
+
+
 ## A titled sub-panel of the rewards screen: returns [panel, content VBox].
 static func _reward_panel(title: String, note: String) -> Array:
 	var pc := OrnatePanel.new(10, 14)
@@ -543,9 +567,14 @@ static func _reward_panel(title: String, note: String) -> Array:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	pc.add_child(v)
-	var t := UIStyle.label(title, 18, UIStyle.GOLD, false, true)
+	var t := UIStyle.label(title.to_upper(), PANEL_HEAD_PX, UIStyle.GOLD, false, true)
+	t.name = "PanelTitle"
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
+	# SECTION tier (D3); the house rule below is its underline.
+	var tt := TitleText.apply(t, TitleText.Tier.SECTION, PANEL_HEAD_PX)
+	tt.show_underline = false
+	TitleText.apply(t, TitleText.Tier.SECTION, PANEL_HEAD_PX)
 	v.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 8.0))
 	if note != "":
 		var n := UIStyle.label(note, 14, UIStyle.TEXT_DIM, true)
@@ -719,7 +748,7 @@ func _basic_change_panel(r: Dictionary, order: Array, counts: Dictionary) -> Con
 	now.add_theme_constant_override("h_separation", 8)
 	now.add_theme_constant_override("v_separation", 6)
 	col.add_child(now)
-	var cap := UIStyle.label("IN YOUR DECK", 12, UIStyle.GOLD, false, true)
+	var cap := section_caption("In your deck")
 	cap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	now.add_child(cap)
 	for c in basics:
