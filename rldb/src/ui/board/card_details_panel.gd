@@ -291,7 +291,7 @@ static func modifier_parts(c: Dictionary) -> Array:
 ## #45: the stat tiles' edges echo the card badges (ATK red, DEF blue) at STAT_EDGE_A.
 const STAT_EDGE := {"ATK": Color("e8605a"), "DEF": Color("5aa2ff")}
 const STAT_EDGE_A := 0.4
-const BASE_PX := 11
+const BASE_PX := 12
 
 
 ## One stat tile (#45): an F3 inset with an ATK-red / DEF-blue edge; the caption sits on the big
@@ -302,7 +302,11 @@ func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	var sb := UIStyle.inset_style(UIStyle.PANEL_INK, 6)
 	sb.base.border_color = Color(STAT_EDGE.get(cap, UIStyle.BRONZE), STAT_EDGE_A)
 	sb.base.set_border_width_all(1)
-	UIStyle.pad(sb, "sm", "xs")
+	# D5: 12 px around the caption, the number and its base line (they sat 4 px from the edge).
+	if compact:
+		UIStyle.pad(sb, "sm", "xs")
+	else:
+		UIStyle.pad(sb, "md", "md")
 	sb.base = sb.base
 	pc.add_theme_stylebox_override("panel", sb)
 	var hb := HBoxContainer.new()
@@ -616,13 +620,16 @@ func _block(col: Color, bar_a: float) -> PanelContainer:
 	var pc := PanelContainer.new()
 	var sb := UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(col, bar_a), 0, 4)
 	sb.border_width_left = BLOCK_BAR_W
-	sb.content_margin_left = 9
-	sb.content_margin_right = 6
-	sb.content_margin_top = 3
-	sb.content_margin_bottom = 4
+	# D5: the text keeps the 12 px content floor from the block's edges (it sat 3-6 px from them);
+	# the compact pile rows keep the 8 px chip scale.
+	var pad := UIStyle.CONTENT_FLOOR if not compact else UIStyle.sp("sm")
+	sb.content_margin_left = BLOCK_BAR_W + pad
+	sb.content_margin_right = pad
+	sb.content_margin_top = pad
+	sb.content_margin_bottom = pad
 	pc.add_theme_stylebox_override("panel", sb)
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 0)
+	vb.add_theme_constant_override("separation", 2)
 	pc.add_child(vb)
 	return pc
 

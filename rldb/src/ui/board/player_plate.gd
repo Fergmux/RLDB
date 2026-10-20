@@ -106,7 +106,7 @@ var _active_t0: float = 0.0
 func _init() -> void:
 	custom_minimum_size = Vector2(PLATE_W, 0)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	frame = FrameBox.make(Color(UIStyle.PANEL, 0.95), "md", "sm")
+	frame = FrameBox.make(Color(UIStyle.PANEL, 0.95), "md", "md")   # D5: 12 px floor on every side
 	frame.rim = RIM_IDLE
 	add_theme_stylebox_override("panel", frame)
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # the leather grain tiles

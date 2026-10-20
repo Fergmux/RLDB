@@ -57,6 +57,25 @@ func _draw() -> void:
 			if cr.has_area() and r.encloses(cr) and not inner.encloses(cr):
 				draw_rect(cr, HIT, false, 2.0)
 				violations.append(cc)
+				_report(pc, cc, r, cr)
+
+
+## Prints each violation once per run (node path, its text, the smallest gap to the frame in px), so
+## a driver's log lists what the shots show.
+func _report(panel: Control, c: Control, r: Rect2, cr: Rect2) -> void:
+	var key := str(c.get_instance_id())
+	if _reported.has(key):
+		return
+	_reported[key] = true
+	var gap: float = minf(minf(cr.position.x - r.position.x, cr.position.y - r.position.y),
+			minf(r.end.x - cr.end.x, r.end.y - cr.end.y))
+	var txt := ""
+	if c is Label or c is Button or c is LineEdit:
+		txt = String(c.get("text")).left(32).replace("\n", " ")
+	print("MARGIN gap=%d px  %s  \"%s\"  in %s" % [int(gap), str(c.get_path()).right(70), txt, panel.name])
+
+
+var _reported := {}
 
 
 func _collect(n: Node, out: Array) -> void:

@@ -11,7 +11,7 @@ extends Control
 const PANEL_W := 560.0
 ## The list scrolls inside the plate above this share of the window height.
 const LIST_MAX_SHARE := 0.6
-const ROW_H := 42.0
+const ROW_H := 48.0
 ## The sync line's size (design review #94: 12 px or more, MUTED).
 const FOOT_FONT := 13
 
@@ -229,7 +229,7 @@ func _row(f: Dictionary, shaded: bool) -> Control:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(1, 1, 1, 0.035) if shaded else Color(0, 0, 0, 0)
 	sb.set_corner_radius_all(6)
-	UIStyle.pad(sb, "md", "xs")
+	UIStyle.pad(sb, "md", "md")   # D5: list-row padding, 12 px on every side (was 4 px top and bottom)
 	pc.add_theme_stylebox_override("panel", sb)
 	pc.custom_minimum_size = Vector2(0, ROW_H)
 	var h := HBoxContainer.new()
