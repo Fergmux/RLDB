@@ -122,6 +122,55 @@ func test_details_pane_has_no_add_or_remove_buttons() -> void:
 		assert_bool(t == "Add to deck" or t == "Remove one" or t == "Add one").is_false()
 
 
+## The ATK / DEF tile row of a details panel and its value labels (font sizes).
+func _stat_row(p: CardDetailsPanel) -> Array:
+	var row: HBoxContainer = null
+	for c in p.get_children():
+		if c is HBoxContainer and c.get_child_count() == 2 and c.get_child(0) is PanelContainer:
+			row = c
+	var sizes := []
+	for l in row.find_children("*", "Label", true, false):
+		sizes.append((l as Label).get_theme_font_size("font_size"))
+	return [row, sizes]
+
+
+## H24 (21 Oct, "atk/def section should be smaller, text is fine"): the deck builder's ATK / DEF
+## tiles are much shorter than the construction default, with the same text sizes.
+func test_stat_tiles_are_short_with_the_same_text() -> void:
+	var db := _builder()
+	var id := -1
+	for d in CardDB.all():
+		if d["race"] != null and d["atk"] != null:
+			id = int(d["id"])
+			break
+	db.show_preview(id)
+	var view := MatchView.summary_view(Series.card_summary(id))
+	var wide: CardDetailsPanel = auto_free(CardDetailsPanel.new())
+	wide.construction = true
+	add_child(wide)
+	wide.show_card(view)
+	await get_tree().process_frame
+	var slim := _stat_row(db._details)
+	var old := _stat_row(wide)
+	var slim_h: float = (slim[0] as Control).get_combined_minimum_size().y
+	var old_h: float = (old[0] as Control).get_combined_minimum_size().y
+	assert_float(slim_h).is_less_equal(old_h * 0.6)
+	assert_array(slim[1]).is_equal(old[1])
+
+
+## H26 (21 Oct): no "In your deck" / "Not in your deck" tag under the card image; the copy gems
+## below say how many copies the deck holds.
+func test_details_pane_has_no_in_your_deck_tag() -> void:
+	var db := _builder()
+	var id := _first(false)
+	db.show_preview(id)
+	assert_bool(_contains_text(db, "in your deck")).is_false()
+	assert_bool(_contains_text(db, "In your deck")).is_false()
+	db.ui_add()
+	assert_bool(_contains_text(db, "In your deck")).is_false()
+	assert_int(db._facts.copies_shown()).is_equal(1)
+
+
 ## F2: hovering a catalogue card shows it in the details pane without selecting or editing.
 func test_hovering_a_catalogue_card_shows_its_details() -> void:
 	var db := _builder()

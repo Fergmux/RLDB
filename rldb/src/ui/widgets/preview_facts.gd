@@ -5,12 +5,9 @@ extends VBoxContainer
 ##   - a Rules placeholder when the card has no rules text (a vanilla unit), so the Rules section
 ##     is always present: an italic dim line instead of an empty pane;
 ##   - "In your decks": how many copies the player's saved decks hold, across how many decks
-##     (catalogue), or the "Copies in this deck" gem sockets (deck builder, CopyGems);
+##     (catalogue), or the "In this deck" copy gems (deck builder, CopyGems: one empty socket, or one gem per copy);
 ##   - the card's kind and cost line ("Basic Unit · 1 AP", "Fusion Unit · Fusion summon").
 ## Pure presentation; reads CardDB and DeckStore only.
-
-## Sockets shown in the copies row (more copies show "+N" after them).
-const SOCKETS := 3
 
 var _rules: Control
 var _usage: Label
@@ -61,6 +58,11 @@ func show_card(id: int, has_rules: bool, copies: int = 0) -> void:
 	_kind.text = kind_text(CardDB.get_def(id) if CardDB.has(id) else {})
 
 
+## The copies gem row (deck builder; null without it).
+func gems() -> CopyGems:
+	return _gems
+
+
 ## Copies of the card shown in this deck now (deck builder; -1 without the gem row).
 func copies_shown() -> int:
 	return _gems.count if _gems != null else -1
@@ -98,37 +100,21 @@ static func kind_text(d: Dictionary) -> String:
 	return kind + ("  ·  " + cost if cost != "" else "")
 
 
-## Copies-in-deck gem sockets: SOCKETS bronze sockets that fill with gold gems as copies are added
-## ("+N" after them beyond SOCKETS). A gem pops in when the count rises (static under reduce motion).
-class CopyGems extends HBoxContainer:
+## Copies-in-deck gems (H27, owner 21 Oct: "show one empty, and fill it when one is in, and add more
+## filled gems when more are added", never "+2"), in the AP gem look: ApGemRow's bronze sockets and
+## faceted topaz. No copies: one empty socket waiting to be filled. N copies: N filled gems and no
+## empty one. Nothing caps the copies of one card but the deck caps (DeckStore: 99 cards, 15 Extra),
+## so past one row the gems shrink and wrap into up to ROWS rows inside the same ROW_H height: the
+## row never grows and the details pane never has to scroll. A gem pops in when the count rises
+## (static under reduce motion). Drawn only on a change (no per-frame work).
+class CopyGems extends ApGemRow:
+	## Most rows the gems wrap into, and the row's fixed height (one full-size AP socket).
+	const ROWS := 3
+	const ROW_H := SOCKET + 2.0
+	## Smallest gem scale (1 = the AP gem's 20 px socket); 99 copies still fit a 240 px row at it.
+	const MIN_K := 0.25
+	## Copies shown.
 	var count: int = 0
-	var _row: PreviewFacts.GemRow
-	var _more: Label
-
-	func _init() -> void:
-		name = "CopyGems"
-		add_theme_constant_override("separation", UIStyle.sp("sm"))
-		_row = PreviewFacts.GemRow.new()
-		add_child(_row)
-		_more = UIStyle.label("", 14, UIStyle.GOLD_HI)
-		_more.add_theme_font_override("font", UIStyle.font_display(700))
-		_more.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		add_child(_more)
-
-	## Shows `n` copies.
-	func set_count(n: int) -> void:
-		var rising := n > count
-		count = n
-		_row.filled = mini(n, PreviewFacts.SOCKETS)
-		_more.text = "+%d" % (n - PreviewFacts.SOCKETS) if n > PreviewFacts.SOCKETS else ""
-		_row.pop_at = mini(n, PreviewFacts.SOCKETS) - 1 if rising else -1
-		_row.restart()
-
-
-class GemRow extends Control:
-	const GEM := 18.0
-	const GAP := 8.0
-	var filled: int = 0
 	var pop_at: int = -1
 	var pop: float = 1.0:
 		set(v):
@@ -137,10 +123,48 @@ class GemRow extends Control:
 	var _tw: Tween
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(PreviewFacts.SOCKETS * GEM + (PreviewFacts.SOCKETS - 1) * GAP, GEM + 4.0)
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		name = "CopyGems"
+		custom_minimum_size = Vector2(0, ROW_H)
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mouse_filter = Control.MOUSE_FILTER_PASS   # for its tooltip
 
-	func restart() -> void:
+	func _ready() -> void:
+		set_process(false)   # ApGemRow animates per frame; these gems only redraw on a change
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	## Sockets drawn for `n` copies: one empty socket at 0, else exactly `n` (all filled).
+	static func sockets_for(n: int) -> int:
+		return maxi(1, n)
+
+	## Filled gems for `n` copies.
+	static func filled_for_count(n: int) -> int:
+		return maxi(0, n)
+
+	## How `n` sockets fit `width` px: {"k": gem scale, "per_row", "rows"}. The largest scale (1.0
+	## down to MIN_K) whose wrapped rows (at most ROWS) fit ROW_H.
+	static func layout(n: int, width: float) -> Dictionary:
+		var w := width if width > 1.0 else 240.0
+		var k := 1.0
+		while true:
+			var per_row := maxi(1, floori((w - 2.0 + GAP * k) / ((SOCKET + GAP) * k)))
+			var rows := ceili(float(maxi(1, n)) / float(per_row))
+			if (rows <= ROWS and block_h(rows, k) <= ROW_H) or k <= MIN_K:
+				return {"k": k, "per_row": per_row, "rows": rows}
+			k = maxf(MIN_K, k - 0.05)
+		return {}
+
+	## Height (px) of `rows` rows of sockets at scale `k` (rows half a gap apart).
+	static func block_h(rows: int, k: float) -> float:
+		return float(rows) * SOCKET * k + float(rows - 1) * GAP * k * 0.5
+
+	## Shows `n` copies; a rising count pops the newest gem in.
+	func set_count(n: int) -> void:
+		var rising := n > count
+		count = maxi(0, n)
+		pop_at = count - 1 if rising else -1
 		if _tw != null and _tw.is_valid():
 			_tw.kill()
 		if pop_at < 0 or UIStyle.reduce_motion or not is_inside_tree():
@@ -148,24 +172,31 @@ class GemRow extends Control:
 			return
 		pop = 0.0
 		_tw = create_tween()
-		_tw.tween_property(self, "pop", 1.0, UIStyle.dur(0.26)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_tw.tween_property(self, "pop", 1.0, UIStyle.dur(GAIN_T)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+	## Centre (local px) of socket `i` of `n` in this row's current size.
+	func gem_centre(i: int, n: int) -> Vector2:
+		var l := layout(n, size.x)
+		var k: float = l["k"]
+		var per_row: int = l["per_row"]
+		var top := (size.y - block_h(int(l["rows"]), k)) / 2.0
+		@warning_ignore("integer_division")
+		var row := i / per_row
+		var col := i % per_row
+		return Vector2(1.0 + SOCKET * k / 2.0 + float(col) * (SOCKET + GAP) * k,
+			top + SOCKET * k / 2.0 + float(row) * (SOCKET + GAP * 0.5) * k)
 
 	func _draw() -> void:
-		for i in PreviewFacts.SOCKETS:
-			var c := Vector2(GEM / 2.0 + i * (GEM + GAP), size.y / 2.0)
-			var r := GEM / 2.0
-			_diamond(c, r + 1.5, Color(0, 0, 0, 0.6))
-			_diamond(c, r, Color(UIStyle.BRONZE, 0.9))
-			_diamond(c, r - 2.0, UIStyle.PANEL_INK)
-			if i < filled:
-				var k := pop if i == pop_at else 1.0
-				var gr := (r - 2.5) * k
-				_diamond(c, gr + 3.0 * k, Color(UIStyle.GOLD_HI, 0.18 * k))
-				_diamond(c, gr, UIStyle.GOLD)
-				_diamond(c + Vector2(0, -gr * 0.25), gr * 0.6, UIStyle.GOLD_HI)
-				_diamond(c + Vector2(-gr * 0.3, -gr * 0.35), gr * 0.18, Color(1, 1, 1, 0.8))
-
-	func _diamond(c: Vector2, r: float, col: Color) -> void:
-		if r <= 0.0:
-			return
-		draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]), col)
+		var n := sockets_for(count)
+		var k: float = layout(n, size.x)["k"]
+		for i in n:
+			var c := gem_centre(i, n)
+			_draw_socket(c, k, false, true)
+			if count == 0:
+				# The waiting socket: a faint gold ring inside it reads as "a slot to fill".
+				draw_arc(c, SOCKET * k * 0.5 - 4.0 * k, 0.0, TAU, 24, Color(UIStyle.GOLD_HI, 0.4), 1.2, true)
+			if i < filled_for_count(count):
+				var g := pop if i == pop_at else 1.0
+				if g < 1.0:
+					draw_arc(c, SOCKET * k * (0.5 + 0.45 * clampf(g, 0.0, 1.0)), 0.0, TAU, 28, Color(UIStyle.GOLD_HI, 0.75 * (1.0 - clampf(g, 0.0, 1.0))), 1.5, true)
+				_draw_gem(c, GEM * k * 0.5 * clampf(g, 0.0, 1.2), 0.0, 1.0)
