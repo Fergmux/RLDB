@@ -10,6 +10,9 @@ const W := 128.0
 const H := 46.0
 ## The turn time warms from muted to amber after this long (a gentle nudge, not a timer limit).
 const LONG_TURN_MS := 120000
+## The running sand is redrawn in steps this long (ms); the change between two steps is a small
+## fraction of a pixel.
+const SAND_STEP_MS := 250
 
 ## The clock shown (null hides the plaque).
 var clock: DuelClock = null
@@ -45,6 +48,10 @@ func _process(delta: float) -> void:
 		return
 	var t := texts()
 	var sig := "%s|%s|%s" % [t[0], t[1], clock.stopped()]
+	if not UIStyle.reduce_motion:
+		# The sand falls ~10 px a minute: a redraw every SAND_STEP_MS looks the same as every frame
+		# (H7, 21 Oct: the plaque no longer redraws on every idle frame).
+		sig += "|%d" % (clock.turn_ms() / SAND_STEP_MS)
 	var minute := clock.turn_ms() / 60000
 	if minute != _last_min:
 		if _last_min != -1 and minute > _last_min and not UIStyle.reduce_motion:
@@ -53,7 +60,7 @@ func _process(delta: float) -> void:
 	if _flip_t > 0.0:
 		_flip_t = maxf(0.0, _flip_t - delta)
 		queue_redraw()
-	elif sig != _shown or not UIStyle.reduce_motion:
+	elif sig != _shown:
 		_shown = sig
 		queue_redraw()
 

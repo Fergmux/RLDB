@@ -57,6 +57,13 @@ func _on_focus_entered() -> void:
 	queue_redraw()
 
 
+func _notification(what: int) -> void:
+	# Godot turns processing on at ready because _process exists, undoing _init's set_process(false):
+	# without this every button redrew every frame (H7, 21 Oct: ~4 ms a frame on the deck choice).
+	if what == NOTIFICATION_READY:
+		set_process(focus_ring_shown() and not UIStyle.reduce_motion)
+
+
 func _process(_d: float) -> void:
 	queue_redraw()   # the ring breathes
 

@@ -21,6 +21,11 @@ func set_on(v: bool) -> void:
 	set_process(v and not UIStyle.reduce_motion)
 	queue_redraw()
 
+func _notification(what: int) -> void:
+	# Godot turns processing on at ready because _process exists: pulse only while shown (H7).
+	if what == NOTIFICATION_READY:
+		set_process(on and not UIStyle.reduce_motion)
+
 func _process(_d: float) -> void:
 	queue_redraw()
 

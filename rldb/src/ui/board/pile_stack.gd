@@ -125,6 +125,13 @@ func _update_process() -> void:
 	set_process((ready_mark or selected) and not UIStyle.reduce_motion)
 
 
+func _notification(what: int) -> void:
+	# Godot turns processing on at ready because _process exists, undoing _init's set_process(false):
+	# without this every pile redrew its whole stack every frame (H7, 21 Oct).
+	if what == NOTIFICATION_READY:
+		_update_process()
+
+
 func _process(_d: float) -> void:
 	queue_redraw()
 

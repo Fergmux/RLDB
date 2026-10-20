@@ -114,3 +114,27 @@ func test_plaque_shows_game_and_turn_time() -> void:
 	assert_bool(v.visible).is_true()
 	v.set_clock(null)
 	assert_bool(v.visible).is_false()
+
+
+func test_plaque_redraws_on_sand_steps_not_every_frame() -> void:
+	# H7 (21 Oct): the plaque redrew on every frame; the sand moves ~10 px a minute, so it only
+	# needs a redraw per SAND_STEP_MS (and per second for the numbers).
+	# Arrange: a running clock that does not advance between frames.
+	var c := _at(_view(1))
+	var view: DuelClockView = auto_free(DuelClockView.new())
+	add_child(view)
+	view.set_clock(c)
+	for i in 3:
+		await get_tree().process_frame
+	var n := [0]
+	view.draw.connect(func(): n[0] += 1)
+	# Act: idle frames, then one sand step.
+	for i in 6:
+		await get_tree().process_frame
+	var idle: int = n[0]
+	now[0] += DuelClockView.SAND_STEP_MS
+	for i in 3:
+		await get_tree().process_frame
+	# Assert
+	assert_int(idle).is_equal(0)
+	assert_int(n[0]).is_equal(1)

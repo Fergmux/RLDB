@@ -238,3 +238,15 @@ func test_plate_contract_flash_and_max_hp_fields() -> void:
 	v.max_hp = 0
 	assert_int(v.max_hp).is_equal(1)
 	assert_that(v.custom_minimum_size).is_equal(HpVial.VIAL_SIZE)
+
+
+func test_max_hp_is_in_the_tooltip_not_printed_on_the_vial() -> void:
+	# H3 (21 Oct): "remove the /60 hp bit at the end of the hp bar". The scale stays one hover away.
+	var v := _vial(45)
+	assert_str(v.tooltip_text).is_equal("Health: 45 of 60")
+	v.max_hp = 70
+	assert_str(v.tooltip_text).is_equal("Health: 45 of 70")
+	v.set_hp(30, true)
+	assert_str(v.tooltip_text).is_equal("Health: 30 of 70")
+	assert_int(v.mouse_filter).is_equal(Control.MOUSE_FILTER_PASS)   # the plate keeps its clicks
+	assert_bool(v.get_script().get_script_constant_map().has("SCALE_LABEL_MIN_W")).is_false()
