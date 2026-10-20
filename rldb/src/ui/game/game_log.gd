@@ -312,6 +312,33 @@ func render() -> void:
 		if bold:
 			body = "[b]%s[/b]" % body
 		label.append_text("%s[color=%s]%s[/color]%s\n" % [fresh_open, col, body, fresh_close])
+	if n_new > 0:
+		_settle_fresh_at(t0 + (n_new - 1) * LogFreshFx.STAGGER_MS + int(LogFreshFx.GLOW_S * 1000.0))
+
+
+# H7 (21 Oct): a [fresh] tag makes the RichTextLabel process and redraw every frame for as long
+# as the tag is in its text, i.e. for the rest of the game. Once the newest line has come to rest
+# (plain text from then on) its processing is switched off; the next fresh line turns it back on.
+var _fresh_until := 0
+
+
+func _settle_fresh_at(until_ms: int) -> void:
+	_fresh_until = maxi(_fresh_until, until_ms)
+	if not label.is_inside_tree():
+		return
+	var wait := float(_fresh_until - Time.get_ticks_msec()) / 1000.0 + 0.05
+	label.get_tree().create_timer(maxf(wait, 0.0)).timeout.connect(_settle_fresh)
+
+
+func _settle_fresh() -> void:
+	if not is_instance_valid(label):
+		return
+	if Time.get_ticks_msec() < _fresh_until:
+		# A later batch is still animating, or the (frame-time) timer ran ahead of the clock.
+		_settle_fresh_at(_fresh_until)
+		return
+	label.set_process_internal(false)
+	label.queue_redraw()
 
 
 static var _crown: Texture2D

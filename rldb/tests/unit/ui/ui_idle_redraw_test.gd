@@ -94,6 +94,31 @@ func test_series_medallion_breathes_without_redrawing_the_coin() -> void:
 		assert_int(bn[0]).is_greater_equal(FRAMES - 1)
 
 
+func test_game_log_stops_redrawing_once_fresh_lines_rest() -> void:
+	# H7: a [fresh] line kept the log's RichTextLabel redrawing every frame for the rest of the game.
+	# Arrange: a log label with one line arriving now.
+	var log := GameLog.new(null)
+	var label: RichTextLabel = auto_free(RichTextLabel.new())
+	label.bbcode_enabled = true
+	label.size = Vector2(300, 200)
+	label.install_effect(LogFreshFx.new())
+	add_child(label)
+	log.label = label
+	var t0 := Time.get_ticks_msec()
+	label.append_text("[fresh t=%d]A line[/fresh]\n" % t0)
+	# Act
+	log._settle_fresh_at(t0 + int(LogFreshFx.GLOW_S * 1000.0))
+	await get_tree().process_frame
+	var while_animating := label.is_processing_internal()
+	await await_millis(int(LogFreshFx.GLOW_S * 1000.0) + 200)
+	# Assert: it animated, then went still; a new fresh line animates again.
+	assert_bool(while_animating).is_true()
+	assert_bool(label.is_processing_internal()).is_false()
+	label.append_text("[fresh t=%d]Next[/fresh]\n" % Time.get_ticks_msec())
+	await get_tree().process_frame
+	assert_bool(label.is_processing_internal()).is_true()
+
+
 func test_idle_card_widget_does_not_process() -> void:
 	var w: CardWidget = auto_free(CardWidget.new())
 	await _settle(w)

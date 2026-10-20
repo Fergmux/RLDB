@@ -70,6 +70,8 @@ func _run() -> void:
 	if "--quick" in OS.get_cmdline_user_args():
 		quit()
 		return
+	if attribute:
+		_hook_draws(root)
 	var stats := _begin()
 	var sent := 0
 	while sent < PLAY_COMMANDS and host.series.stage == Series.STAGE_GAME:
@@ -82,6 +84,8 @@ func _run() -> void:
 			await process_frame
 			_sample(stats)
 	_report("duel_play", stats)
+	if attribute:
+		_attribution("duel_play", stats["n"])
 	quit()
 
 
@@ -146,7 +150,7 @@ func _freeze_motes(n: Node) -> void:
 	if n is AmbientMotes:
 		(n as AmbientMotes).clock = func() -> float: return MOTE_T
 		(n as AmbientMotes).queue_redraw()
-	for c in n.get_children():
+	for c in n.get_children(true):
 		_freeze_motes(c)
 
 
@@ -171,7 +175,7 @@ func _hook_draws(n: Node) -> void:
 			_names[id] = "%s (%s)" % [str(n.get_path()).replace("/root/", ""), _script_name(n)]
 			(n as CanvasItem).draw.connect(func(): _draws[id] = _draws.get(id, 0) + 1)
 		_draws[id] = 0
-	for c in n.get_children():
+	for c in n.get_children(true):
 		_hook_draws(c)
 
 
@@ -179,7 +183,7 @@ func _switch_off(n: Node) -> void:
 	if _script_name(n) in _off:
 		n.set_process(false)
 		n.set_physics_process(false)
-	for c in n.get_children():
+	for c in n.get_children(true):
 		_switch_off(c)
 
 
@@ -188,13 +192,13 @@ func _script_name(n: Node) -> String:
 	return sc.resource_path.get_file() if sc != null else n.get_class()
 
 
-func _attribution(label: String) -> void:
+func _attribution(label: String, frames: int = SAMPLE) -> void:
 	var hot: Array = []
 	for id in _draws:
-		if _draws[id] > SAMPLE / 4 and is_instance_id_valid(id):
+		if _draws[id] > frames / 4 and is_instance_id_valid(id):
 			hot.append([_draws[id], _names[id]])
 	hot.sort_custom(func(a, b): return a[0] > b[0])
-	print("PERF %s redraws (>25%% of %d frames): %d items" % [label, SAMPLE, hot.size()])
+	print("PERF %s redraws (>25%% of %d frames): %d items" % [label, frames, hot.size()])
 	for h in hot.slice(0, 40):
 		print("    %4d  %s" % h)
 	var procs: Dictionary = {}
@@ -207,7 +211,7 @@ func _collect_process(n: Node, out: Dictionary) -> void:
 	if n.is_processing() or n.is_physics_processing():
 		var k := _script_name(n)
 		out[k] = out.get(k, 0) + 1
-	for c in n.get_children():
+	for c in n.get_children(true):
 		_collect_process(c, out)
 
 
