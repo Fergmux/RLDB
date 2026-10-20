@@ -141,8 +141,8 @@ func _states() -> void:
 	await _wait(0.6)
 	# The game end: a lethal attack, then the log's winner line.
 	m.submit(a, {"t": "next_phase"})
-	for u in m.players[o]["units"]:
-		if u != null:
+	for u in (m.players[o]["units"] as Array).duplicate():
+		if u != null and int(u) >= 0:
 			TB.kill(m, int(u))
 	m.players[o]["hp"] = 4
 	host.broadcast()

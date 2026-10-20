@@ -271,6 +271,9 @@ func _build_subject(col: VBoxContainer) -> void:
 	subject_text = UIStyle.label("", 13, UIStyle.TEXT, true)
 	subject_text.max_lines_visible = SUBJECT_LINES
 	subject_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	# #33 / #36: the status-word ink (StatusHelp) draws its own paragraph over the label; clip it to
+	# the label so a long rules text can never run over the Confirm / Cancel row below.
+	subject_text.clip_contents = true
 	subject_text.mouse_filter = Control.MOUSE_FILTER_PASS
 	StatusHelp.watch_label(subject_text)
 	v.add_child(subject_text)
