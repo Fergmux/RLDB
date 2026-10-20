@@ -72,12 +72,12 @@ func test_protecting_false_for_a_diagonal_rear_unit() -> void:
 	assert_bool(MatchView.card_view(m, front, 0)["protecting"]).is_false()
 
 
-func test_protecting_tag_is_shown_and_follows_the_flag() -> void:
+func test_protection_tags_are_not_shown_in_the_details() -> void:
+	# J8 (owner, 22 Oct): no Protected / Protecting tags in the details pane (the flags stay in the view).
 	var p := _panel()
-	p.show_card(_unit_view({"protecting": true}))
-	assert_bool(p.all_text().contains("Protecting")).is_true()
-	p.show_card(_unit_view({"protecting": false}))
+	p.show_card(_unit_view({"protecting": true, "protected": true}))
 	assert_bool(p.all_text().contains("Protecting")).is_false()
+	assert_bool(p.all_text().contains("Protected")).is_false()
 
 
 func test_tags_with_and_without_icons_share_one_height() -> void:

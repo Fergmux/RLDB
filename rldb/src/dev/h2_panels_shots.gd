@@ -185,9 +185,20 @@ func _pile_rows() -> void:
 	await _crop("h6_02_extra_rows", side)
 	var rows := gs.details.pile_list.get_children()
 	if rows.size() > 1:
-		await _hover((rows[1] as Control).get_global_rect().position + Vector2(40, 30))
+		# J3 (owner, 22 Oct): hovering only highlights the row; a click opens it, a second click closes it.
+		var uid := int((rows[1] as Control).get_meta("uid"))
+		var at := (rows[1] as Control).get_global_transform() * Vector2(40, 30)
+		await _hover(at)
 		await _wait(0.3)
+		await _crop("h6_03a_extra_row_hover", side)
+		await _click(at)
+		await _wait(0.4)
 		await _crop("h6_03_extra_row_expanded", side)
+		var row := gs.details.pile_row(uid)
+		if row != null:
+			await _click(row.get_global_transform() * Vector2(40, 30))
+			await _wait(0.4)
+			await _crop("h6_03c_extra_row_closed_again", side)
 	gs.details.close_pile()
 	_move(_neutral())
 	await _wait(0.3)
@@ -361,6 +372,19 @@ func _move(pos: Vector2) -> void:
 	ev.global_position = pos
 	ev.relative = Vector2(4, 0)
 	root.push_input(ev, true)
+
+
+func _click(pos: Vector2) -> void:
+	_move(pos)
+	await process_frame
+	for pressed in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = pressed
+		ev.position = pos
+		ev.global_position = pos
+		root.push_input(ev, true)
+		await process_frame
 
 
 func _hover(pos: Vector2) -> void:

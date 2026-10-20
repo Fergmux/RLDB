@@ -53,7 +53,8 @@ func _d1_scroll_cue() -> void:
 	host.broadcast()
 	await _wait(0.4)
 	gs.details.details_view.custom_minimum_size = Vector2(0, 900)    # forced overflow so the panel scrolls
-	await _move(_slot_rect(a, "unit", 4).get_center())
+	await _click(_slot_rect(a, "unit", 4).get_center())    # J4: the details follow a click
+	await _move(Vector2(700, 520))
 	await _wait(0.6)
 	await _shot("d1_cue_top")
 	gs.details.details_scroll.scroll_vertical = 100000
@@ -65,13 +66,15 @@ func _d1_scroll_cue() -> void:
 	await _wait(0.6)
 	await _shot("d1_cue_back_at_top")
 	gs.details.details_view.custom_minimum_size = Vector2.ZERO
+	gs.selection.deselect()
 	await _move(Vector2(700, 520))
 	await _wait(0.4)
 
 
 ## D12: highlighted status words in the details panel, on a card, in the log; and the tooltip.
 func _d12_status_words() -> void:
-	await _move(_slot_rect(a, "unit", 4).get_center())
+	await _click(_slot_rect(a, "unit", 4).get_center())    # J4: the details follow a click
+	await _move(Vector2(700, 520))
 	await _wait(0.6)
 	await _shot("d12_details_status_word")
 	var lbl := _find_label(gs.details.details_view, "Pierce")
@@ -82,6 +85,7 @@ func _d12_status_words() -> void:
 		await _wait(0.5)
 		await _shot("d12_status_tooltip")
 	# Pointer on the big card text of a hovered hand card.
+	gs.selection.deselect()
 	await _move(_hand_rect(uids["h_anduras"]).get_center())
 	await _wait(0.6)
 	await _shot("d12_hand_card_text")

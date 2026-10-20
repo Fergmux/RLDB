@@ -1404,14 +1404,7 @@ func _render_tray() -> void:
 		w.set_meta("overpay", over)
 		w.order_no = gs.selection.order_no(idx)
 		w.pressed.connect(func(_w): gs.selection.pick_option(idx))
-		w.right_pressed.connect(gs.inspect.inspect_widget)
-		w.mouse_entered.connect(func():
-			gs.peek_uid = uid
-			gs.details.render())
-		w.mouse_exited.connect(func():
-			if gs.peek_uid == uid:
-				gs.peek_uid = -1
-				gs.details.render())
+		w.right_pressed.connect(gs.inspect.inspect_widget)   # J4: hover shows the tooltip, not the details
 		flow.add_child(w)
 	place_tray()
 	_fit_tray.call_deferred()

@@ -7,7 +7,7 @@ extends RefCounted
 var gs: GameScreen
 ## Root of the sidebar column.
 var side_root: Control
-## Whose turn it is.
+## The turn number (J7: not whose turn it is; the player plates mark that).
 var turn_title: Label
 ## Secondary turn text.
 var turn_note: Label
@@ -208,7 +208,9 @@ func render_turnbar() -> void:
 		turn_note.visible = false
 		return
 	var owner_name: String = gs.pv(mv["active"])["name"]
-	turn_title.text = "Turn %d · %s" % [mv["turn"], owner_name]
+	# J7 (owner, 22 Oct): the turn number only; the player plates already mark whose turn it is, and
+	# the name ran into the clock.
+	turn_title.text = "Turn %d" % mv["turn"]
 	pips.phase = mv["phase"]
 	pips.queue_redraw()
 	var pd := gs.pending()

@@ -130,7 +130,6 @@ func select(uid: int) -> void:
 		details.close_pile()
 	var prev := gs.selected_uid
 	gs.selected_uid = uid
-	gs.peek_uid = -1
 	gs.row_open = true
 	gs.keyboard.kb_uid = -1
 	Sfx.play("select")
@@ -147,7 +146,6 @@ func deselect() -> void:
 	var prev := gs.selected_uid
 	gs.selected_uid = -1
 	gs.row_open = false
-	gs.peek_uid = -1
 	_restyle_selection(prev)
 	gs.board.render()
 	gs.details.render()

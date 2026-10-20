@@ -1,8 +1,9 @@
 class_name GameDetails
 extends RefCounted
 ## Sidebar card-details panel (inspection only) and the own-pile list that replaces it while
-## a pile is open. Shows the hovered card, else the selected card, else a card opened from
-## the game log. While drafting it lists the cards picked so far, in the same layout.
+## a pile is open. Shows the clicked (selected) card, else a card opened from the game log; J4
+## (owner, 22 Oct): never the hovered card (hover shows the card's tooltip). While drafting it
+## lists the cards picked so far, in the same layout.
 
 ## pile_zone value of the draft list.
 const DRAFT_ZONE := "draft"
@@ -18,9 +19,12 @@ var gs: GameScreen
 var details_title: Label
 ## Scroll area holding the card details.
 var details_scroll: ScrollContainer
+## The plain frame holding the details scroll and its overlaid scroll cue (J5); it follows the
+## scroll's visibility.
+var details_frame: Control
 ## Card details widget.
 var details_view: CardDetailsPanel
-## Fade cue shown when the details have more to scroll.
+## Fade cue over the bottom of the details while they have more to scroll (an overlay, J5).
 var scroll_cue: ScrollCue
 ## Own pile shown as a scrollable list in the details panel (instead of a board overlay).
 var pile_scroll: ScrollContainer
@@ -34,7 +38,7 @@ var pile_hint: Label
 ## Signature of the details last rendered ("" forces a re-render).
 var details_sig: String = ""
 ## Card opened from the game log (a definition view, not a game instance); cleared by selecting
-## another card. Hovering still previews other cards over it.
+## another card.
 var log_card: Dictionary = {}
 ## Own pile listed in the panel ("" while the panel shows card details).
 var pile_zone: String = ""
@@ -72,7 +76,7 @@ static func art_crop_height(scroll_h: float) -> float:
 ## Shows the illustrated empty state (`on`) or the card details scroll.
 func _set_empty(on: bool) -> void:
 	empty_art.visible = on
-	details_scroll.size_flags_vertical = Control.SIZE_FILL if on else Control.SIZE_EXPAND_FILL
+	details_frame.size_flags_vertical = Control.SIZE_FILL if on else Control.SIZE_EXPAND_FILL
 
 
 ## Builds the details panel into the sidebar column and returns it.
@@ -106,18 +110,20 @@ func build(col: VBoxContainer) -> PanelContainer:
 	room.add_theme_constant_override("margin_right", UIStyle.CONTENT_FLOOR)
 	pile_scroll.add_child(room)
 	details_scroll = ScrollContainer.new()
+	details_scroll.name = "DetailsScroll"
 	details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dv.add_child(details_scroll)
 	details_view = CardDetailsPanel.new()
 	details_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	details_view.art_crop = true   # #43
 	details_scroll.add_child(details_view)
+	# J5: the cue lies over the bottom of the details (not under them), so nothing jumps as it fades.
+	scroll_cue = ScrollCue.new()
+	details_frame = scroll_cue.wrap(details_scroll)
+	dv.add_child(details_frame)
 	empty_art = DetailsEmptyArt.new()   # #42
 	empty_art.visible = false
 	dv.add_child(empty_art)
-	scroll_cue = ScrollCue.new()
-	dv.add_child(scroll_cue)
 	var vb := details_scroll.get_v_scroll_bar()
 	vb.changed.connect(_update_scroll_cue)
 	vb.value_changed.connect(func(_v): _update_scroll_cue())
@@ -132,7 +138,7 @@ func _update_scroll_cue() -> void:
 	# The cue follows the card details only: never over the illustrated empty state (#42), nor under
 	# a pile or draft list (the empty "Your draft (0)" list showed it).
 	scroll_cue.set_shown(more and details_scroll.visible and not empty_art.visible)
-	scroll_cue.queue_redraw()
+	scroll_cue.place()
 
 
 ## Visible card view by uid anywhere in the match (or offered in the pile tray), or {}.
@@ -174,30 +180,22 @@ func show_card_def(id: int) -> void:
 	render()
 
 
-## Card whose details are shown: the hovered (peeked) card, else the selected one.
+## Card whose details are shown: the clicked (selected) one (J4: never the hovered one), or -1.
 func details_uid() -> int:
-	return gs.peek_uid if gs.peek_uid != -1 else gs.selected_uid
+	return gs.selected_uid
 
 
 ## Shows the current card's details (with the reasons its actions are unavailable). An open pile
-## list holds the panel like a selected card (2026-10-18): hovering a card shows that card's
-## details over it, and the list comes back when the hover ends.
+## list holds the panel like a selected card (2026-10-18) until it is closed or another card is
+## clicked.
 func render() -> void:
 	if pile_zone != "":
-		if gs.peek_uid == -1 or pile_zone == DRAFT_ZONE:
-			if not pile_scroll.visible:
-				render_pile_list()
-			return
-		if pile_scroll.visible:
-			pile_scroll.visible = false
-			pile_head.visible = false
-			details_scroll.visible = true
-			empty_art.visible = false
-			details_title.text = "Card details"
-			details_sig = ""
+		if not pile_scroll.visible:
+			render_pile_list()
+		return
 	var duid := details_uid()
 	var c := find_card(duid)
-	if c.is_empty() and gs.peek_uid == -1 and not log_card.is_empty():
+	if c.is_empty() and not log_card.is_empty():
 		c = log_card                      # opened from the game log
 		duid = -7
 	var notes := []
@@ -325,7 +323,7 @@ func render_pile_list() -> void:
 		details_title.text = "Your draft (%d)" % cards.size()
 	else:
 		pile_hint.text = "Shown in a random order; the real order is unchanged." if pile_zone == "draw" else \
-			("" if pile_zone == "extra" else "Hover a card to read it; click to select it.")   # review: the Extra rows' buttons speak for themselves
+			("" if pile_zone == "extra" else "Click a card to open its details; click it again to close them.")   # review: the Extra rows' buttons speak for themselves
 		details_title.text = "Your %s (%d)" % [PILE_NAMES.get(pile_zone, pile_zone.capitalize()), cards.size()]
 	pile_hint.visible = pile_hint.text != ""
 	if sig == _pile_sig:
@@ -381,18 +379,15 @@ func _pile_row(c: Dictionary) -> Control:
 	row.tooltip_text = CardWidget.tooltip_for(c) + "\n\nRight-click to inspect"   # D15: no Inspect button
 	row.set_meta(&"tip_card", c)   # H8: the coloured card tooltip
 	var editable := pile_zone != DRAFT_ZONE   # draft picks are read-only (but can still be inspected)
-	if editable:
-		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var pick := func():
-		gs.selected_uid = uid
+		# Closing the row also drops its card's selection (the panel would show it again once the
+		# list closes); a card selected before the list opened is left alone.
+		if not sel:
+			gs.selected_uid = uid
+		elif gs.selected_uid == uid:
+			gs.selected_uid = -1
 		show_pile(pile_zone, -1 if sel else uid)
-	row.gui_input.connect(func(ev):
-		if ev is InputEventMouseButton and ev.pressed:
-			if ev.button_index == MOUSE_BUTTON_LEFT and editable:
-				pick.call()
-			elif ev.button_index == MOUSE_BUTTON_RIGHT:
-				row.accept_event()
-				gs.inspect.inspect_card(c))
 	# The card + details, then the action buttons across the row's full width (review: several
 	# summon buttons fit on one row instead of stacking in the text column).
 	var col := VBoxContainer.new()
@@ -401,7 +396,7 @@ func _pile_row(c: Dictionary) -> Control:
 	row.add_child(col)
 	# #91: a compact summary line (thumbnail, name, Type chip, "ATK / DEF" inline), so four Basic
 	# Mages no longer make a wall of identical stat boxes; the full compact details open under it
-	# while the row is hovered or selected.
+	# once the row is clicked (J3).
 	col.add_child(_pile_summary(c, can_act))
 	var more := VBoxContainer.new()
 	more.name = "RowDetails"
@@ -420,10 +415,33 @@ func _pile_row(c: Dictionary) -> Control:
 			GameUi.ignore_mouse(dp)
 			more.add_child(dp)
 		more.visible = on
+	# J3 (owner, 22 Oct): the details open on a click only, never on hover, and a second click closes
+	# them. In a pile the click selects the row (its actions show with the details); a draft pick is
+	# read-only, so there the click only opens or closes the row.
 	if sel:
 		expand.call(true)
-	row.mouse_entered.connect(func(): expand.call(true))
-	row.mouse_exited.connect(func(): expand.call(sel))
+	row.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed:
+			if ev.button_index == MOUSE_BUTTON_LEFT:
+				row.accept_event()
+				if editable:
+					pick.call()
+				else:
+					Sfx.play("select")
+					expand.call(not more.visible)
+			elif ev.button_index == MOUSE_BUTTON_RIGHT:
+				row.accept_event()
+				gs.inspect.inspect_card(c))
+	# Hovering highlights the row (a brighter rim and face); the layout never changes.
+	var rest_edge := sb.border_color
+	var rest_fill := sb.bg_color
+	var hover_edge: Color = UIStyle.GOLD_HI.lightened(0.15) if (sel or can_act) else Color(UIStyle.GOLD, 0.9)
+	row.mouse_entered.connect(func():
+		sb.border_color = hover_edge
+		sb.bg_color = rest_fill.lerp(UIStyle.PANEL_LIGHT, 0.55))
+	row.mouse_exited.connect(func():
+		sb.border_color = rest_edge
+		sb.bg_color = rest_fill)
 	# F04: Extra Deck rows always show their legal summons (no selection needed); other piles show
 	# the selected row's actions.
 	var buttons := extra_summons(uid) if pile_zone == "extra" else ([] if not sel else _row_actions(uid))
