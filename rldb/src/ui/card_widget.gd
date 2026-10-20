@@ -102,6 +102,8 @@ var _paint := CardPainter.new(self)
 var _overlay: Control
 ## Face redraws so far (tests: an animated overlay must not repaint the face).
 var face_draws := 0
+## J31 follow-up: the empty zone's static layers were drawn from a shared ZoneMesh by the last redraw.
+var _zone_merged := false
 
 
 func _init() -> void:
@@ -508,9 +510,10 @@ func _draw() -> void:
 		pt.cr = Rect2(Vector2.ZERO, ls)
 		pt.reset_transform()
 		pt.hover = pt.hover or (highlighted and _mouse_in)
-		CardLayouts.draw_empty(pt, ls, highlighted)
+		_draw_empty_zone(pt, ls)
 		_overlay.queue_redraw()
 		return
+	_zone_merged = false
 	pt.cr = _card_rect_in(ls)
 	pt.ps = Vector2(pt.cr.size.y, pt.cr.size.x) if rotated else pt.cr.size
 	pt.s = maxf(0.2, pt.ps.x / _base().x)
@@ -530,6 +533,28 @@ func _draw() -> void:
 			_: CardLayouts.draw_square(pt)
 	pt.reset_transform()
 	_overlay.queue_redraw()
+
+
+## An empty zone (J31 follow-up): the static recess and mark are one ZoneMesh triangle list (one draw
+## call, the same pixels as drawing them one by one); a zone pick draws its animated glow, border and
+## mote live over the recess, then its stronger mark. Without a mesh everything is drawn live.
+func _draw_empty_zone(pt: CardPainter, ls: Vector2) -> void:
+	var vp := get_viewport()
+	var os := vp.get_oversampling() if vp != null else 1.0
+	var base := ZoneMesh.for_zone(size_kind, ls, os, not highlighted)
+	_zone_merged = base != null
+	if base == null:
+		CardLayouts.draw_empty(pt, ls, highlighted)
+		return
+	base.emit(get_canvas_item())
+	if highlighted:
+		CardLayouts.draw_empty_pick(pt, ls)
+		CardLayouts.draw_empty_mark(pt, ls, true)
+
+
+## True when the last redraw drew this empty zone's static layers from a ZoneMesh (tests, probes).
+func is_zone_merged() -> bool:
+	return _zone_merged
 
 
 ## Draws the state overlays (CardOverlays) on the internal overlay item from the painter snapshot the

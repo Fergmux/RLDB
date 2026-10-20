@@ -214,9 +214,9 @@ static func draw_empty_base(pt: CardPainter, size: Vector2) -> void:
 	var rad := 8.0 * s
 	pt.round_rect(r, Color(0, 0, 0, ZONE_RECESS_A), rad)
 	pt.round_rect(r, Color(tint, ZONE_FILL_A), rad)
-	inner_shadow(pt.ci, r, rad, ZONE_SHADOW_PX * s, ZONE_SHADOW_A)
+	inner_shadow(pt.out(), r, rad, ZONE_SHADOW_PX * s, ZONE_SHADOW_A)
 	pt.ring(ZONE_RIM, 1.0, r, rad)
-	_lip(pt.ci, r, rad, ZONE_LIP)
+	_lip(pt.out(), r, rad, ZONE_LIP)
 
 
 ## The animated zone pick over the recess (#28): target fill, breathing inner glow, gold border and,
@@ -241,13 +241,14 @@ static func draw_empty_pick(pt: CardPainter, size: Vector2) -> void:
 ## The engraved kind mark of an empty zone, a little stronger on a zone pick.
 static func draw_empty_mark(pt: CardPainter, size: Vector2, highlighted: bool) -> void:
 	var r := Rect2(Vector2.ZERO, size)
-	engraved_mark(pt.ci, {"unit": "sword", "trap": "eye", "power": "crown"}[_empty_role(pt.size_kind)], r.get_center(),
+	engraved_mark(pt.out(), {"unit": "sword", "trap": "eye", "power": "crown"}[_empty_role(pt.size_kind)], r.get_center(),
 		minf(size.x, size.y) * MARK_K, 1.6 if highlighted else 1.0)
 
 
 ## D10: a kind mark engraved into the table: a dark cut 1 px above, a lit edge 1 px below and a faint
-## warm face (MARK_A). `k` scales every alpha (a zone pick shows it a little more).
-static func engraved_mark(ci: CanvasItem, kind: String, c: Vector2, r: float, k: float = 1.0) -> void:
+## warm face (MARK_A). `k` scales every alpha (a zone pick shows it a little more). `ci` is a
+## CanvasItem or a MeshPen.
+static func engraved_mark(ci: Object, kind: String, c: Vector2, r: float, k: float = 1.0) -> void:
 	CardArt.draw_glyph(ci, kind, c + Vector2(0, -1.0), r, Color(0, 0, 0, MARK_CUT_A * k))
 	CardArt.draw_glyph(ci, kind, c + Vector2(0, 1.0), r, Color(MARK_LIT, MARK_LIT.a * k))
 	CardArt.draw_glyph(ci, kind, c, r, Color(1.0, 0.93, 0.8, MARK_A * k))
@@ -255,7 +256,7 @@ static func engraved_mark(ci: CanvasItem, kind: String, c: Vector2, r: float, k:
 
 ## Inner shadow (or inner glow in `col`) `px` deep inside the rounded rect `r`: concentric 1 px rings
 ## fading inwards, each a little lower than the last so the top edge carries more of it.
-static func inner_shadow(ci: CanvasItem, r: Rect2, rad: float, px: float, a: float, col: Color = Color.BLACK) -> void:
+static func inner_shadow(ci: Object, r: Rect2, rad: float, px: float, a: float, col: Color = Color.BLACK) -> void:
 	var n := maxi(2, ceili(px))
 	var sb := StyleBoxFlat.new()
 	sb.draw_center = false
@@ -272,7 +273,7 @@ static func inner_shadow(ci: CanvasItem, r: Rect2, rad: float, px: float, a: flo
 
 
 ## The faint gold lip on the bottom and right edges of a recess (straight runs between the corners).
-static func _lip(ci: CanvasItem, r: Rect2, rad: float, col: Color) -> void:
+static func _lip(ci: Object, r: Rect2, rad: float, col: Color) -> void:
 	ci.draw_line(Vector2(r.position.x + rad, r.end.y - 0.5), Vector2(r.end.x - rad, r.end.y - 0.5), col, 1.0, true)
 	ci.draw_line(Vector2(r.end.x - 0.5, r.position.y + rad), Vector2(r.end.x - 0.5, r.end.y - rad), col, 1.0, true)
 
