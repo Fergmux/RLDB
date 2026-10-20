@@ -116,6 +116,23 @@ func test_serpent_strike_owns_its_damage_and_destructions_once() -> void:
 	gs.fx.finish_all()
 
 
+func test_lethal_serpent_strike_replaces_the_final_blow_flourish() -> void:
+	# the 30 damage ends the game: the strike plays and starts the victory look itself
+	var ev := _serpent_events()
+	ev.append({"k": "game_over", "winner": 0})
+	var gs := _screen()
+	await await_idle_frame()
+	gs.fx.expect_game_end(ev)
+	gs.fx.play(ev, {})
+	var plan: Array = gs.fx.last_plan
+	assert_int(_tags(plan, "serpent").size()).is_equal(1)
+	assert_array(_tags(plan, "flourish")).is_empty()
+	assert_array(_tags(plan, "game_end")).is_empty()
+	assert_bool(gs.fx.game_end_hold).is_true()
+	gs.fx.finish_all()
+	assert_bool(gs.fx.game_end_hold).is_false()
+
+
 func test_serpent_strike_restores_the_hp_bar_when_skipped() -> void:
 	var gs := _screen()
 	await await_idle_frame()

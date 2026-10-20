@@ -1,9 +1,9 @@
 class_name FxPileEffects
 extends FxPart
 ## Card-movement effects between zones and piles: destruction (crack, burn, drop toward Spent),
-## Exhaust (card shown front and centre, then pulled into the Exhaust pile in a void colour) and the
-## Fusion / Ritual / Arcane special-summon sequence (materials drawn to the summon, then sent to Spent
-## or Exhaust, and the unit arriving with a type-specific flourish). Presentation only: every effect
+## Exhaust (card shown front and centre, then pulled into the Exhaust pile in a void colour), the
+## sacrifice (D6), the B5 transient summon ghost and a lone special-summon material (one whose summon
+## failed; the Fusion / Ritual / Arcane set pieces themselves live in FxSummon). Presentation only: every effect
 ## is an overlay on the already-final board and is removed by FxPlayer.finish_all().
 ##
 ## Identity rule: a card is drawn face up only when the event carries `id` (core strips it for seats
@@ -14,7 +14,6 @@ extends FxPart
 const BURN := Color("ff8a3a")
 const VOID := Color("a47bff")
 const KIND_ACCENT := {"fusion": "fusion", "ritual": "ritual", "arcane": "arcane"}
-const KIND_SOUND := {"fusion": "fuse", "ritual": "ritual", "arcane": "arcane"}
 const BURN_SHADER := "res://assets/shaders/canvas_fx_burn.gdshader"
 
 ## Seconds the Exhaust card holds front and centre.
@@ -464,53 +463,3 @@ func material(e: Dictionary, prev_mv: Dictionary, gather: Vector2) -> void:
 		mt.tween_callback(func():
 			_fx.burst(FxBurst.Kind.SPARK, pile_g, (VOID if dest == "exhaust" else col).lightened(0.25), 8, 34.0, 0.3)
 			_fx.free_node(m)))
-
-
-## The special-summoned unit arrives in its slot from the Extra pile with a flourish of its kind:
-## Fusion swirl, Ritual light column with rune rings, Arcane hexagram sigil.
-func arrive_special(p: int, slot: int, kind: String) -> void:
-	var it: Dictionary = _fx.screen.fx_slot_item(p, "unit", slot)
-	if it.is_empty():
-		return
-	var w: CardWidget = it["widget"]
-	var holder: Control = it["holder"]
-	_fx.unhide(w)
-	var rect: Rect2 = holder.get_global_rect()
-	var col := kind_color(kind)
-	_fx.add_cleanup(_fx.reset_widget.bind(w, holder))
-	var tw := _fx.new_tween()
-	if UIStyle.reduce_motion:
-		w.modulate.a = 0.0
-		w.fx_glow = Color(col, 0.8)
-		tw.tween_property(w, "modulate:a", 1.0, 0.12)
-		tw.parallel().tween_property(w, "fx_glow", Color(col, 0.0), 0.3)
-		tw.tween_callback(_fx.reset_widget.bind(w, holder))
-		return
-	var centre := rect.get_center()
-	var reach := rect.size.length() * 0.7
-	_sigil(kind, col, reach, centre, 0.9 if kind != "arcane" else 1.0)
-	if kind == "ritual":
-		var ring := FxRuneRing.new()
-		ring.col = col
-		ring.radius = reach
-		ring.position = _fx.fx_pos(centre)
-		_fx.add_node(ring)
-		var rt := _fx.new_tween()
-		rt.tween_property(ring, "t", 1.0, UIStyle.dur(0.8))
-		rt.tween_callback(_fx.free_node.bind(ring))
-	w.fx_offset = _origin(p, "extra") - centre
-	w.scale = Vector2(0.4, 0.4)
-	w.modulate.a = 0.0
-	holder.z_index = UiLayers.FX_CARD
-	var wait := UIStyle.dur(0.25)
-	tw.set_parallel(true)
-	tw.tween_property(w, "modulate:a", 1.0, UIStyle.dur(0.12)).set_delay(wait)
-	tw.tween_property(w, "fx_offset", Vector2.ZERO, UIStyle.dur(0.4)).set_delay(wait).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.4)).set_delay(wait).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.chain().tween_callback(func():
-		_fx.burst(FxBurst.Kind.SPARK, centre, col.lightened(0.3), 16, reach, 0.5)
-		w.fx_flash = 0.7
-		w.fx_glow = Color(col, 0.95))
-	tw.tween_property(w, "fx_flash", 0.0, UIStyle.dur(0.25))
-	tw.parallel().tween_property(w, "fx_glow", Color(col, 0.0), UIStyle.dur(0.55))
-	tw.chain().tween_callback(_fx.reset_widget.bind(w, holder))
