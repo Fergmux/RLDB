@@ -348,8 +348,8 @@ func _pile_row(c: Dictionary) -> Control:
 			elif ev.button_index == MOUSE_BUTTON_RIGHT:
 				row.accept_event()
 				gs.inspect.inspect_card(c))
-	# The card + details, then the action buttons across the row's full width (review: Summon
-	# Attack and Summon Defense fit on one row instead of stacking in the text column).
+	# The card + details, then the action buttons across the row's full width (review: several
+	# summon buttons fit on one row instead of stacking in the text column).
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -148,7 +148,7 @@ func test_no_legal_choice_message_is_private() -> void:
 
 ## Feedback 04 bug: a Fusion summon through Tag Team - S asked "Choose a stance for Tag Team - S"
 ## (the effect's source) instead of naming the Fusion unit being summoned; the zone prompt too.
-func test_fusion_zone_and_stance_prompts_name_the_fusion_unit() -> void:
+func test_fusion_zone_prompt_names_the_fusion_unit() -> void:
 	var m := TB.make()
 	var beast := TB.unit(m, 0, 4, 3)                     # Basic Beast (Water)
 	var dragon := TB.unit(m, 0, 2, 1)                    # Basic Dragon (Water)
@@ -162,11 +162,24 @@ func test_fusion_zone_and_stance_prompts_name_the_fusion_unit() -> void:
 	assert_str(TB.pend_kind(m)).is_equal("slot")
 	assert_str(String(m.pending["prompt"])).contains(m.name_of(wyrm))
 	TB.choose(m, ["Front row, column 2"])                # the Dragon material's own zone
-	assert_str(TB.pend_kind(m)).is_equal("stance")
-	assert_str(String(m.pending["prompt"])).is_equal("Choose a stance for %s." % m.name_of(wyrm))
-	TB.choose(m, ["Defense"])
+	assert_str(TB.pend_kind(m)).is_not_equal("stance")   # B3: own Setup Phase, Attack stance
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
-	assert_str(m.cards[wyrm]["stance"]).is_equal("def")
+	assert_str(m.cards[wyrm]["stance"]).is_equal("atk")
+
+
+## The stance prompt, where B3 still asks it (an effect summon in the Battle Phase), names the
+## summoned unit rather than the effect's card.
+func test_stance_prompt_names_the_summoned_unit() -> void:
+	var m := TB.make()
+	TB.p1_battle(m)
+	var tt := TB.unit(m, 1, 12, 3)                       # Tag Team - X: summon from Spent in this column
+	var spent := TB.card(m, 1, TB.WATER, "spent")
+	assert_str(TB.ability(m, tt, 0)).is_empty()
+	TB.choose_uids(m, [spent])
+	if TB.pend_kind(m) == "slot":
+		TB.choose(m, [TB.slot_label(0)])
+	assert_str(TB.pend_kind(m)).is_equal("stance")
+	assert_str(String(m.pending["prompt"])).is_equal("Choose a stance for %s." % m.name_of(spent))
 
 
 ## Feedback 06: Fusion Ceremony cannot be cast without a Fusion unit it could summon.

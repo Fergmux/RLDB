@@ -65,6 +65,9 @@ const RESPONSE_NAME_PX := 14
 const MENTION_ARROW_W := 22.0
 ## Option labels that decline a choice: always the last button, below the accepting ones (G03).
 const DECLINE_LABELS := ["Pass", "No", "Skip"]
+## D13: tooltips of a Trap window's two declining answers.
+const SKIP_TIP := "Let this one go. You are asked again at the next chance to respond."
+const PASS_TURN_TIP := "Stop offering me Traps until this turn ends."
 ## Prompt kinds whose options are a vertical list (accept first, decline last) rather than a flow.
 const LIST_KINDS := ["trap_response", "confirm", "order"]
 ## G09: gap between a card and the toast about it, the toast pointer's length, its fade-in (s), and
@@ -356,9 +359,10 @@ static func mentions_for(pd: Dictionary) -> Array:
 	return out
 
 
-## True for an option that declines the choice (Pass, Pass (no Trap can respond), No, Skip).
+## True for an option that declines the choice (Skip, Skip (no Trap can respond), Pass for the rest
+## of this turn, No).
 static func is_decline(label: String) -> bool:
-	return label in DECLINE_LABELS or label.begins_with("Pass ")
+	return label in DECLINE_LABELS or label.begins_with("Pass ") or label.begins_with("Skip ")
 
 
 func _render_mentions(pd: Dictionary) -> void:
@@ -767,7 +771,7 @@ func _render_banner() -> void:
 	elif pd["kind"] == "trap_response":
 		# G03: with my responding cards shown under what they answer, the buttons say the rest.
 		var responders := mentions_for(pd).filter(func(e): return String(e.get("role", "")) == "response")
-		how = "" if not responders.is_empty() else ("Your opponent is waiting: activate a Trap or pass." if _has_activate(pd) else "Your opponent is waiting: pass to continue.")
+		how = "" if not responders.is_empty() else ("Your opponent is waiting: activate a Trap or skip." if _has_activate(pd) else "Your opponent is waiting: skip to continue.")
 	elif int(pd["max"]) > 1:
 		how = _multi_status(pd)
 	_banner_how = how
@@ -801,6 +805,8 @@ func _render_banner() -> void:
 			b.set_meta("type_choice", String(o["label"]))
 		elif pd["kind"] == "attack_target" or (not pick and not decline and (String(o["label"]).begins_with("Activate") or (pd["kind"] == "confirm" and String(o["label"]) == "Yes"))):
 			b = UIStyle.primary_button(label, 14)
+		elif String(o["label"]) == EffectEngine.TRAP_PASS_TURN:
+			b = UIStyle.wine_button(label, 14)        # D13: the third, "stand down" answer
 		else:
 			b = UIStyle.button(label, 14)
 		b.custom_minimum_size = Vector2(0, OPTION_H + (6 if type_choice else 0))
@@ -810,6 +816,11 @@ func _render_banner() -> void:
 		b.mouse_exited.connect(func(): if gs.targeting.hover_opt == idx: gs.targeting.hover_opt = -1)
 		if row == banner_list:
 			list_button(b, String(o["label"]))
+		if pd["kind"] == "trap_response":
+			if String(o["label"]) == EffectEngine.TRAP_PASS_TURN:
+				b.tooltip_text = PASS_TURN_TIP
+			elif String(o["label"]).begins_with(EffectEngine.TRAP_SKIP):
+				b.tooltip_text = SKIP_TIP
 		if decline:
 			b.set_meta("decline", true)
 			declines.append(b)
@@ -821,6 +832,20 @@ func _render_banner() -> void:
 		c.disabled = MatchView.multi_pick_error(pd, gs.multi) != ""   # count and exact Arcane total (F03-04)
 		c.pressed.connect(gs.selection.confirm_multi)
 		banner_btns.add_child(c)
+	if pd["kind"] == "trap_response" and row == banner_list and declines.size() == 2:
+		# D13: Skip and Pass for the rest of this turn share one row under the gold Activate, the
+		# declining pair side by side (it also keeps the panel short enough for the full layout).
+		var pair := HBoxContainer.new()
+		pair.add_theme_constant_override("separation", 6)
+		pair.set_meta("decline_pair", true)
+		row.add_child(pair)
+		declines[0].size_flags_stretch_ratio = 0.75
+		declines[1].size_flags_stretch_ratio = 1.25
+		declines[1].add_theme_font_size_override("font_size", 13)
+		for b in declines:
+			b.custom_minimum_size.y = OPTION_H + 10
+			pair.add_child(b)
+		declines.clear()
 	for b in declines:
 		row.add_child(b)
 	if not pick and row.get_child_count() > 0:

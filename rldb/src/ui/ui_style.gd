@@ -358,6 +358,42 @@ static func primary_button(text: String, size: int = 15) -> Button:
 	return b
 
 
+## Face of a "stand down" button (D13 Pass for the rest of this turn): deep wine leather.
+const WINE := Color("3b1d22")
+const WINE_EDGE := Color("8a4b4f")
+
+
+## A secondary, "stand down" button (D13): deep wine leather with a rose-bronze edge and muted
+## text, clearly apart from the gold primary and the slate standard button. Hover warms the edge
+## and brightens the text.
+static func wine_button(text: String, size: int = 14) -> Button:
+	var b := button(text, size)
+	var n := flat(WINE, WINE_EDGE.darkened(0.15), 1, 6)
+	var h := flat(WINE.lightened(0.1), WINE_EDGE.lightened(0.35), 1, 6)
+	var p := flat(WINE.darkened(0.2), WINE_EDGE, 1, 6)
+	var d := flat(PANEL, Color("2a2623"), 1, 6)
+	for s in [n, h, p, d]:
+		s.content_margin_left = 10
+		s.content_margin_right = 10
+		s.content_margin_top = 5
+		s.content_margin_bottom = 5
+	p.content_margin_top = 6
+	p.content_margin_bottom = 4
+	n.border_width_bottom = 2
+	lift_style(n, Color(0, 0, 0, 0.5), 4, 2)
+	lift_style(h, Color(WINE_EDGE, 0.4), 8, 0)
+	lift_style(p, Color(0, 0, 0, 0.45), 2, 1)
+	b.add_theme_stylebox_override("normal", UiSurface.box(n, UiSurface.LEATHER, PANEL_GRAIN, BUTTON_SHEEN))
+	b.add_theme_stylebox_override("hover", UiSurface.box(h, UiSurface.LEATHER, PANEL_GRAIN, BUTTON_SHEEN))
+	b.add_theme_stylebox_override("pressed", UiSurface.box(p, UiSurface.LEATHER, PANEL_GRAIN, BUTTON_SHEEN * 0.5))
+	b.add_theme_stylebox_override("disabled", d)
+	b.add_theme_color_override("font_color", Color("e2c9c3"))
+	b.add_theme_color_override("font_hover_color", TEXT)
+	b.add_theme_color_override("font_pressed_color", TEXT)
+	b.add_theme_color_override("font_disabled_color", DISABLED)
+	return b
+
+
 const BACKGROUND := "res://assets/art/background.jpg"   # full 4096x4096 original (a JPEG), kept for 4K screens
 
 

@@ -72,9 +72,13 @@ func test_stance_probe_on_opponents_hidden_card_returns_generic_hand_error() -> 
 	# Act: player 0 probes both hidden uids with a stance-carrying summon
 	var e_hidden := m.submit(0, {"t": "summon", "uid": hidden, "stance": "def"})
 	var e_normal := m.submit(0, {"t": "summon", "uid": hidden_normal, "stance": "def"})
-	# Assert: the reply must not depend on the hidden card's identity
+	# Assert: the reply must not depend on the hidden card's identity (B3: Defense is refused for
+	# every card alike, before the card is looked at)
 	assert_str(e_hidden).is_equal(e_normal)
-	assert_str(e_hidden).is_equal("Card is not in your Hand.")
+	assert_str(e_hidden).is_equal(MatchEngine.SUMMON_ATTACK_ONLY)
+	var a_hidden := m.submit(0, {"t": "summon", "uid": hidden, "stance": "atk"})
+	assert_str(a_hidden).is_equal(m.submit(0, {"t": "summon", "uid": hidden_normal, "stance": "atk"}))
+	assert_str(a_hidden).is_equal("Card is not in your Hand.")
 	assert_str(m.cards[mine]["zone"]).is_equal("hand")
 
 
@@ -100,25 +104,25 @@ func test_stance_summon_still_obeys_ap_and_bahatia_type_lock() -> void:
 	var m := TB.make()
 	var u := TB.card(m, 0, 115)                        # Basic Mage (Physical)
 	TB.unit(m, 1, BAHATIA, 0)
-	# Act / Assert: Bahatia locks Physical summons in either stance
-	assert_str(m.submit(0, {"t": "summon", "uid": u, "stance": "def"})).contains("Bahatia")
+	# Act / Assert: Bahatia locks Physical summons, with or without the (Attack) stance field
+	assert_str(m.submit(0, {"t": "summon", "uid": u})).contains("Bahatia")
 	assert_str(m.submit(0, {"t": "summon", "uid": u, "stance": "atk"})).contains("Bahatia")
 	var w := TB.card(m, 0, TB.WATER)
 	m.players[0]["ap"] = 0
-	assert_str(m.submit(0, {"t": "summon", "uid": w, "stance": "def"})).contains("AP")
+	assert_str(m.submit(0, {"t": "summon", "uid": w})).contains("AP")
 	assert_str(m.cards[w]["zone"]).is_equal("hand")
 
 
-func test_ritual_defense_needs_runes_and_places_in_defense_once() -> void:
+func test_ritual_needs_runes_and_places_in_attack_once() -> void:
 	# Arrange
 	var m := TB.make()
 	var r := TB.card(m, 0, RAGING_INFERNO, "extra")
 	# Act / Assert: no material
-	assert_str(m.submit(0, {"t": "ritual", "uid": r, "stance": "def"})).contains("Rune")
+	assert_str(m.submit(0, {"t": "ritual", "uid": r})).contains("Rune")
 	var mat := TB.unit(m, 0, TB.WATER, 0)
 	m.apply_status(mat, "rune", 1)
 	var ap0: int = m.players[0]["ap"]
-	assert_str(m.submit(0, {"t": "ritual", "uid": r, "stance": "def"})).is_empty()
+	assert_str(m.submit(0, {"t": "ritual", "uid": r})).is_empty()
 	TB.choose_uids(m, [mat])
 	TB.choose(m, [TB.slot_label(0)])
 	while TB.pend_kind(m) != "":
@@ -126,29 +130,29 @@ func test_ritual_defense_needs_runes_and_places_in_defense_once() -> void:
 		assert_str(pd["kind"]).is_not_equal("stance")
 		m.submit(pd["player"], {"t": "choose", "id": pd["id"], "indices": [0]})
 	assert_str(m.cards[r]["zone"]).is_equal("unit")
-	assert_str(m.cards[r]["stance"]).is_equal("def")
+	assert_str(m.cards[r]["stance"]).is_equal("atk")                 # B3: no stance prompt
 	assert_str(m.cards[mat]["zone"]).is_not_equal("unit")
 	assert_int(m.players[0]["ap"]).is_equal(ap0)
 
 
-func test_arcane_defense_exhausts_materials_and_cancel_keeps_everything() -> void:
+func test_arcane_exhausts_materials_and_cancel_keeps_everything() -> void:
 	# Arrange
 	var m := TB.make()
 	var k := TB.card(m, 0, KAYA, "extra")
 	var s := TB.card(m, 0, TB.WATER, "spent")
 	var before := _state(m)
 	# Act: cancel at the material choice changes nothing
-	assert_str(m.submit(0, {"t": "arcane", "uid": k, "stance": "def"})).is_empty()
+	assert_str(m.submit(0, {"t": "arcane", "uid": k})).is_empty()
 	assert_str(m.submit(0, {"t": "cancel", "id": m.pending["id"]})).is_empty()
 	assert_str(m.cards[k]["zone"]).is_equal("extra")
 	assert_str(m.cards[s]["zone"]).is_equal("spent")
 	assert_int(m.players[0]["ap"]).is_equal(str_to_var(before)[1][0]["ap"])
-	# Act: full Arcane Defense
-	assert_str(m.submit(0, {"t": "arcane", "uid": k, "stance": "def"})).is_empty()
+	# Act: full Arcane summon
+	assert_str(m.submit(0, {"t": "arcane", "uid": k})).is_empty()
 	TB.choose_uids(m, [s])
 	TB.choose(m, [TB.slot_label(1)])
-	# Assert
-	assert_str(m.cards[k]["stance"]).is_equal("def")
+	# Assert (B3: Attack stance, no prompt)
+	assert_str(m.cards[k]["stance"]).is_equal("atk")
 	assert_str(m.cards[s]["zone"]).is_equal("exhaust")
 
 

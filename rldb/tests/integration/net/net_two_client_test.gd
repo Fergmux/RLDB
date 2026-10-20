@@ -88,6 +88,15 @@ func _setup_battle() -> Dictionary:
 	return {"m": m, "atk": atk, "def": def, "trap": trap, "secret": secret}
 
 
+## Index of the pending Trap window's first "Activate ..." option (D13: Skip and Pass for the rest
+## of this turn come first).
+func _activate_i(m: MatchEngine) -> int:
+	for i in m.pending.get("options", []).size():
+		if String(m.pending["options"][i]["label"]).begins_with("Activate"):
+			return i
+	return -1
+
+
 func test_trap_prompt_suspends_remote_attacker_until_host_answers(timeout := 30000) -> void:
 	var s := await _setup_battle()
 	var m: MatchEngine = s["m"]
@@ -113,7 +122,7 @@ func test_trap_prompt_suspends_remote_attacker_until_host_answers(timeout := 300
 	# The waiting client's payload does not expose the trap's identity or options.
 	assert_bool(JSON.stringify(client.raw_received).contains("Magic Cylinder")).is_false()
 	# Host activates Magic Cylinder: HP loss first, then battle.
-	host.local_seat.send({"t": "choose", "id": m.pending["id"], "indices": [1]})
+	host.local_seat.send({"t": "choose", "id": m.pending["id"], "indices": [_activate_i(m)]})
 	assert_bool(await _wait(func(): return m.pending.is_empty() and m.stack.is_empty())).is_true()
 	assert_int(m.players[1]["hp"]).is_equal(50)
 	assert_int(m.players[0]["hp"]).is_equal(58)
@@ -170,7 +179,7 @@ func test_disconnect_pauses_and_reconnect_restores_pending_prompt_once(timeout :
 			idx = o["i"]
 	client.local_seat.send({"t": "choose", "id": pd["id"], "indices": [idx]})
 	assert_bool(await _wait(func(): return m.pending.get("kind", "") == "trap_response")).is_true()
-	host.local_seat.send({"t": "choose", "id": m.pending["id"], "indices": [0]})   # pass
+	host.local_seat.send({"t": "choose", "id": m.pending["id"], "indices": [0]})   # Skip
 	# Hidden response windows: the host still holds a face-down card, so later events
 	# (the destruction) ask again; pass each one.
 	for i in 5:
@@ -205,12 +214,12 @@ func test_drop_during_host_trap_prompt_blocks_host_until_client_returns(timeout 
 	var trap_prompt: int = m.pending["id"]
 	client.simulate_drop()
 	assert_bool(await _wait(func(): return host.paused)).is_true()
-	host.local_seat.send({"t": "choose", "id": trap_prompt, "indices": [1]})
+	host.local_seat.send({"t": "choose", "id": trap_prompt, "indices": [_activate_i(m)]})
 	assert_str(host_errors[-1]).contains("paused")
 	assert_int(m.players[1]["hp"]).is_equal(60)
 	assert_bool(await _wait(func(): return not host.paused, 900)).is_true()
 	assert_int(m.pending["id"]).is_equal(trap_prompt)
-	host.local_seat.send({"t": "choose", "id": trap_prompt, "indices": [1]})   # Magic Cylinder
+	host.local_seat.send({"t": "choose", "id": trap_prompt, "indices": [_activate_i(m)]})   # Magic Cylinder
 	assert_bool(await _wait(func(): return m.players[1]["hp"] == 50)).is_true()
 
 

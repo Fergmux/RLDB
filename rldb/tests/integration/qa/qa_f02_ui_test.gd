@@ -176,7 +176,7 @@ func test_stale_summon_click_after_card_left_hand_sends_nothing() -> void:
 	gs.skip_effects()
 	await await_idle_frame()
 	var acts: Array = gs.action_row.actions_for_card(uid)
-	assert_int(acts.size()).is_equal(2)
+	assert_int(acts.size()).is_equal(1)                    # B3: one Summon button
 	# Act: the card leaves the Hand before the click lands
 	m.players[first]["hand"].erase(uid)
 	m.cards[uid]["zone"] = "spent"

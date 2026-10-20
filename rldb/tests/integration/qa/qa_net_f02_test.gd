@@ -11,7 +11,9 @@ func port() -> int:
 	return 24797
 
 
-func test_client_summon_defense_keeps_both_views_consistent() -> void:
+## B3 (owner feedback 2026-10-20): the client summons (Attack stance, no prompt), then changes the
+## unit to Defense with the ordinary stance command.
+func test_client_summon_then_defense_keeps_both_views_consistent() -> void:
 	# Arrange
 	var m: MatchEngine = await _client_turn2()
 	var u := TB.card(m, 1, TB.WATER)
@@ -19,9 +21,13 @@ func test_client_summon_defense_keeps_both_views_consistent() -> void:
 	await _sync()
 	var ap0: int = m.players[1]["ap"]
 	# Act
-	client.local_seat.send({"t": "summon", "uid": u, "stance": "def"})
+	client.local_seat.send({"t": "summon", "uid": u})
 	assert_bool(await _await_pending(m, 1, "slot")).is_true()
 	_client_choose([TB.slot_label(4)])
+	assert_bool(await _await_idle(m)).is_true()
+	assert_str(m.cards[u]["stance"]).is_equal("atk")
+	client.local_seat.send({"t": "stance", "uid": u})
+	await _sync()
 	assert_bool(await _await_idle(m)).is_true()
 	await _sync()
 	# Assert: authority, client's own view and the host's view of the opponent all agree

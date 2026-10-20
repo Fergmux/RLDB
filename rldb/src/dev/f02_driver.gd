@@ -120,15 +120,15 @@ func _steps() -> void:
 	await _click(_hand_rect(uids["h_water"]).get_center())
 	await _wait(0.4)
 	_check("F02-01 click selects", gs.selected_uid == uids["h_water"])
-	_check("F02-02 Summon Attack + Summon Defense on the card", _row_labels() == ["Summon Attack", "Summon Defense"], str(_row_labels()))
+	_check("B3 one Summon button on the card", _row_labels() == ["Summon"], str(_row_labels()))
 	await _shot("03_click_selected_summon_actions")
 	await _click(_hand_rect(uids["h_anduras"]).get_center())
 	await _wait(0.4)
-	_check("F02-01 changing selection updates the row", gs.selected_uid == uids["h_anduras"] and _row_labels().has("Summon Defense"))
+	_check("F02-01 changing selection updates the row", gs.selected_uid == uids["h_anduras"] and _row_labels().has("Summon"))
 	await _click(_hand_rect(uids["h_water"]).get_center())
 	await _wait(0.3)
 	var ap_before: int = m.players[a]["ap"]
-	await _click_row("Summon Defense")
+	await _click_row("Summon")
 	await _wait(0.4)
 	_check("F02-02 summon goes straight to zone choice (no stance menu)", m.pending.get("kind", "") == "slot")
 	_check("F02-07 banner explains the choice", gs.prompt.ctx_banner.visible and gs.prompt.banner_title.text.contains("zone"), gs.prompt.banner_title.text)
@@ -136,7 +136,12 @@ func _steps() -> void:
 	await _shot("04_summon_zone_banner")
 	await _click(_zone_rect(a, "unit", 3).get_center())
 	await _wait(0.8)
-	_check("F02-02 unit entered Defense", m.cards[uids["h_water"]]["zone"] == "unit" and m.cards[uids["h_water"]]["stance"] == "def")
+	_check("B3 unit entered Attack (no stance prompt)", m.cards[uids["h_water"]]["zone"] == "unit" and m.cards[uids["h_water"]]["stance"] == "atk" and m.pending.is_empty())
+	await _click(_zone_rect(a, "unit", 3).get_center())
+	await _wait(0.3)
+	await _click_row("To Defense")
+	await _wait(0.6)
+	_check("B3 To Defense right after the summon", m.cards[uids["h_water"]]["stance"] == "def")
 	_check("F02-02 cost paid once", m.players[a]["ap"] == ap_before - m.current_cost(uids["h_water"]), "ap %d -> %d" % [ap_before, m.players[a]["ap"]])
 	var dw := _w_slot(a, "unit", 3)
 	_check("F02-03 Defense card rotated 3:2", dw.rotated and dw.size.x > dw.size.y, str(dw.size))
@@ -167,7 +172,7 @@ func _steps() -> void:
 	# F02-09 toast: Loak in column 3 (no opponent unit there).
 	await _click(_hand_rect(uids["h_loak"]).get_center())
 	await _wait(0.3)
-	await _click_row("Summon Attack")
+	await _click_row("Summon")
 	await _wait(0.3)
 	await _click(_zone_rect(a, "unit", 5).get_center())
 	await _wait(0.5)
@@ -182,7 +187,7 @@ func _steps() -> void:
 	# F02-10 single pick from a pile tray (Anduras: unit from Spent to Draw).
 	await _click(_hand_rect(uids["h_anduras"]).get_center())
 	await _wait(0.3)
-	await _click_row("Summon Attack")
+	await _click_row("Summon")
 	await _wait(0.3)
 	await _click(_zone_rect(a, "unit", 2).get_center())
 	await _wait(0.6)
@@ -217,8 +222,8 @@ func _steps() -> void:
 	await _shot("10_extra_pile_click_to_act")
 	# F04 (2026-10-17): every Extra Deck row now shows its own legal summons, so look in Tyde's row.
 	var tyde_row := gs.details.pile_row(uids["tyde"])
-	var arc_btn := _find_button(tyde_row, "Summon Defense") if tyde_row != null else null
-	_check("F02-02 Extra Deck card offers Summon Attack/Defense after click", arc_btn != null)
+	var arc_btn := _find_button(tyde_row, "Summon") if tyde_row != null else null
+	_check("B3 Extra Deck card offers its Summon button", arc_btn != null)
 	if arc_btn != null:
 		await _click(arc_btn.get_global_rect().get_center())
 		await _wait(0.5)
@@ -238,7 +243,7 @@ func _steps() -> void:
 			if m.pending.get("kind", "") == "slot":
 				await _click(_zone_rect(a, "unit", 4).get_center())
 				await _wait(0.8)
-			_check("F02-02 Arcane summon entered Defense", m.cards[uids["tyde"]]["zone"] == "unit" and m.cards[uids["tyde"]]["stance"] == "def")
+			_check("B3 Arcane summon entered Attack", m.cards[uids["tyde"]]["zone"] == "unit" and m.cards[uids["tyde"]]["stance"] == "atk")
 	await _shot("12_after_arcane")
 	# F02-12 combat preview.
 	await _click(gs.sidebar.phase_btn.get_global_rect().get_center())

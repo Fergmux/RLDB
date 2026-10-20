@@ -52,7 +52,7 @@ static func decline(m: MatchEngine) -> String:
 	if pd.is_empty():
 		return "no pending choice"
 	for o in pd["options"]:
-		if String(o["label"]) in ["Skip", "No", "Pass"] or String(o["label"]).begins_with("Pass"):
+		if String(o["label"]) in ["Skip", "No"] or String(o["label"]).begins_with("Skip "):
 			return TB.choose(m, [String(o["label"])])
 	return "no decline option in %s" % [pd["options"].map(func(o): return o["label"])]
 

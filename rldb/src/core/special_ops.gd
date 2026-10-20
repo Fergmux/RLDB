@@ -213,20 +213,34 @@ func _summon_blocked(p: int, t: String) -> bool:
 	return false
 
 
-## Ambush: summon as many Basic Units as possible from Hand and Draw (Attack stance).
-func _op_ambush(f: Dictionary, op: Dictionary) -> int:
-	var p: int = f["ctl"]
+## Basic Units player p could summon with Ambush now: Hand first, then Draw. A Type that Bahatia
+## locks uses no zone, so it is left out.
+func ambush_pool(p: int) -> Array:
 	var pool: Array = players[p]["hand"].filter(func(u): return category(u) == "basic_unit") \
 		+ players[p]["draw"].filter(func(u): return category(u) == "basic_unit")
-	pool = pool.filter(func(u): return not _summon_blocked(p, unit_type(u)))   # blocked cards use no zone
-	var ops := []
-	var free := free_unit_slots(p)
-	for i in mini(free.size(), pool.size()):
-		var u: int = pool[i]
-		ops.append({"op": "place", "target": u, "slot": free[i], "stance": "atk"})
-		ops += summon_tail(u, p)
-	if ops.is_empty():
-		add_log("Ambush: no Basic Units could be summoned.")
+	return pool.filter(func(u): return not _summon_blocked(p, unit_type(u)))
+
+
+## Ambush: "Summon as many Basic Units as possible from your Hand and Draw." B4 (owner feedback
+## 2026-10-20): one unit at a time, each with its own zone choice (the ordinary summon zone prompt)
+## and, where B3 asks it, its stance; its On Summon effects and summon-response window resolve
+## before the next unit is placed. The op re-splices itself until no unit or zone is left (bounded
+## by the number of unit zones).
+func _op_ambush(f: Dictionary, op: Dictionary) -> int:
+	var p: int = f["ctl"]
+	var done: int = int(f["vars"].get("ambush_n", 0))
+	var pool := ambush_pool(p)
+	if pool.is_empty() or free_unit_slots(p).is_empty() or done >= players[p]["units"].size():
+		if done == 0:
+			add_log("Ambush: no Basic Units could be summoned.")
+		return R.CONT
+	f["vars"]["ambush_n"] = done + 1
+	var u: int = pool[0]
+	var ops := [{"op": "pick_slot", "zone": "unit", "as": "sslot", "for": u},
+		{"op": "pick_stance", "as": "stance", "for": u},
+		{"op": "place", "target": u, "slot": "$sslot", "stance": "$stance"}]
+	ops += summon_tail(u, p)
+	ops.append({"op": "ambush"})
 	_splice(f, ops)
 	return R.CONT
 

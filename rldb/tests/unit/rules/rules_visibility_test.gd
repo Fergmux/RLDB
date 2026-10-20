@@ -84,9 +84,9 @@ func test_hidden_window_prompts_holder_of_face_down_card_even_without_eligible_t
 	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
 	TB.attack(m, a, -1)
 	assert_str(m.pending["kind"]).is_equal("trap_response")
-	assert_int(m.pending["options"].size()).is_equal(1)
+	assert_int(m.pending["options"].size()).is_equal(2)          # D13: Skip and Pass for the rest of this turn
 	assert_str(MatchView.build(m, 1)["pending"]["prompt"]).contains("deciding whether to respond")
-	TB.choose(m, ["Pass"])
+	TB.choose(m, ["Skip"])
 	assert_int(m.players[0]["hp"]).is_equal(50)
 
 

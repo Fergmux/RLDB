@@ -217,6 +217,8 @@ static func _player_view(m: MatchEngine, p: int, viewer: int) -> Dictionary:
 		"units": [], "backrow": [], "powers": [],
 		"ap_next": pl["ap_next"].duplicate(true) if p == viewer else [],
 	}
+	if p == viewer:
+		v["trap_pass"] = m.passing_traps(p)   # D13: own seat only (the opponent never learns it)
 	for z in ["units", "backrow", "powers"]:
 		for uid in pl[z]:
 			v[z].append(null if uid == -1 else card_view(m, uid, viewer))
@@ -446,6 +448,10 @@ static func redact_fx(events: Array, viewer: int) -> Array:
 	return out
 
 
+## Tooltip of a Summon button (B3): the unit enters in Attack stance, changed afterwards.
+const SUMMON_FULL := "Summon in Attack stance (change stance afterwards with To Defense)"
+
+
 ## Actions for each of the viewer's cards, with a reason when currently illegal.
 static func actions_for(m: MatchEngine, viewer: int) -> Array:
 	var out := []
@@ -466,9 +472,9 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 			"trap": cands.append({"t": "set", "uid": u, "label": "Set", "full": "Set face-down in a Trap/Spell zone"})
 			"power": cands.append({"t": "power", "uid": u, "label": "Play Power", "full": "Play this Power in a Power zone"})
 			_:
-				# F02-02: the stance is chosen by the button, not by a follow-up prompt.
-				cands.append({"t": "summon", "uid": u, "stance": "atk", "label": "Summon Attack", "full": "Summon in Attack stance"})
-				cands.append({"t": "summon", "uid": u, "stance": "def", "label": "Summon Defense", "full": "Summon in Defense stance"})
+				# B3 (owner feedback 2026-10-20): one Summon button; the unit enters in Attack stance
+				# and its stance is changed afterwards with To Defense.
+				cands.append({"t": "summon", "uid": u, "label": "Summon", "full": SUMMON_FULL})
 	for u in m.field_units(viewer):
 		if m.attack_targets(u) == [-1]:
 			cands.append({"t": "attack", "uid": u, "label": "Attack Direct", "full": "Attack the opponent directly"})
@@ -508,11 +514,9 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 	for u in pl["extra"]:
 		match m.category(u):
 			"ritual":
-				cands.append({"t": "ritual", "uid": u, "stance": "atk", "label": "Summon Attack", "full": "Ritual Summon in Attack stance"})
-				cands.append({"t": "ritual", "uid": u, "stance": "def", "label": "Summon Defense", "full": "Ritual Summon in Defense stance"})
+				cands.append({"t": "ritual", "uid": u, "label": "Summon", "full": "Ritual " + SUMMON_FULL})
 			"arcane":
-				cands.append({"t": "arcane", "uid": u, "stance": "atk", "label": "Summon Attack", "full": "Arcane Summon in Attack stance"})
-				cands.append({"t": "arcane", "uid": u, "stance": "def", "label": "Summon Defense", "full": "Arcane Summon in Defense stance"})
+				cands.append({"t": "arcane", "uid": u, "label": "Summon", "full": "Arcane " + SUMMON_FULL})
 	for c in cands:
 		var reason := m.validate(viewer, c)
 		c["ok"] = reason == ""

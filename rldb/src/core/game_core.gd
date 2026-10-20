@@ -76,6 +76,8 @@ func _new_player(index: int) -> Dictionary:
 	powers.fill(-1)
 	return {
 		"index": index, "hp": START_HP, "ap": 0, "ap_start": 0, "ap_peak": 0, "ap_next": [], "delayed": [],
+		# D13: turn on which this player chose "Pass for the rest of this turn" for Traps (-1: none).
+		"trap_pass_turn": -1,
 		"units": units, "backrow": backrow, "powers": powers,
 		"hand": [], "draw": [], "spent": [], "exhaust": [], "extra": [],
 		"name": "Player %d" % (index + 1),
@@ -92,7 +94,7 @@ func _create_instance(def_id: int, owner: int) -> int:
 		"uid": uid, "id": def_id, "owner": owner, "ctl": owner,
 		"zone": "draw", "slot": -1, "face_up": false, "stance": "atk",
 		"st": {}, "runes": 0, "mods": [], "cost_p": 0, "cost_t": [],
-		"summoned_turn": -1, "attacked_turn": -1, "moved_turn": -1, "opt": {},
+		"summoned_turn": -1, "summoned_phase": "", "attacked_turn": -1, "moved_turn": -1, "opt": {},
 		"type_o": null, "race_o": null, "base_atk": null, "base_def": null,
 		"orig_slot": -1, "control_until": -1, "set_turn": -1,
 	}
@@ -794,6 +796,9 @@ func place_unit(uid: int, p: int, slot: int, stance: String) -> void:
 	inst["stance"] = stance
 	inst["face_up"] = true
 	inst["summoned_turn"] = turn
+	# B3 (owner feedback 2026-10-20): a unit summoned in its controller's Recovery Phase may still
+	# change stance in that phase (it entered in Attack stance without a choice).
+	inst["summoned_phase"] = phase
 	players[p]["units"][slot] = uid
 
 

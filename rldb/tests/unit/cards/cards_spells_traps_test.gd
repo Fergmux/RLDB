@@ -38,6 +38,8 @@ func test_c041_delayed_gratification_retains_card_and_adds_ap_next_turn() -> voi
 func test_c042_ambush_summons_basic_units_from_hand_and_draw() -> void:
 	var m := TB.make()
 	TB.cast(m, 0, 42)
+	while TB.pend_kind(m) == "slot":                      # B4: one zone choice per unit
+		assert_str(m.submit(0, {"t": "choose", "id": m.pending["id"], "indices": [0]})).is_empty()
 	assert_int(m.field_units(0).size()).is_equal(6)
 	for u in m.field_units(0):
 		assert_str(m.category(u)).is_equal("basic_unit")

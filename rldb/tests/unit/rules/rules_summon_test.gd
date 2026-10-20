@@ -7,9 +7,9 @@ func test_normal_summon_pays_current_cost_and_places_in_chosen_zone() -> void:
 	var u := TB.card(m, 0, TB.FIRE)
 	assert_str(m.submit(0, {"t": "summon", "uid": u})).is_empty()
 	assert_str(TB.choose(m, ["Back row, column 3"])).is_empty()
-	assert_str(TB.choose(m, ["Defense"])).is_empty()
+	assert_bool(m.pending.is_empty()).is_true()          # B3: no stance prompt on your own turn
 	assert_int(m.cards[u]["slot"]).is_equal(5)
-	assert_str(m.cards[u]["stance"]).is_equal("def")
+	assert_str(m.cards[u]["stance"]).is_equal("atk")
 	assert_int(m.players[0]["ap"]).is_equal(1)
 
 
