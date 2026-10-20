@@ -69,8 +69,6 @@ var _preview_card: CardWidget
 var _details: CardDetailsPanel
 var _facts: PreviewFacts
 var _preview_note: Label
-var _preview_count: Label
-var _preview_chip: PanelContainer
 var _save_btn: Button
 var _rename_btn: Button
 var _delete_btn: Button
@@ -390,14 +388,14 @@ func ui_add(from: Rect2 = Rect2()) -> bool:
 		return false
 	if add_block_reason(_preview_id) != "":
 		Sfx.play("deny")
-		_shake(_preview_chip)
+		_shake(_facts.gems())
 		_say(add_block_reason(_preview_id))
 		return false
 	if from.size == Vector2.ZERO and _preview_card != null:
 		from = _preview_card.get_global_rect()
 	add_card(_preview_id)
 	Sfx.play("deck_add", 0.0, 0.04)   # F24 / F25: replaces the Add button's own click
-	_pop(_preview_chip, UIStyle.GOOD)
+	_pop(_facts.gems(), UIStyle.GOOD)
 	_pop(_cell_tag(_preview_id), UIStyle.GOOD)
 	_queue_fly(_preview_id, from, true)
 	return true
@@ -415,7 +413,7 @@ func ui_remove() -> bool:
 		from = ((tile.get_meta("rec") as Dictionary)["widget"] as Control).get_global_rect()
 	remove_card(id)
 	Sfx.play("deck_remove", 0.0, 0.04)
-	_pop(_preview_chip, UIStyle.BAD)
+	_pop(_facts.gems(), UIStyle.BAD)
 	if counts.has(id):
 		_pop(deck_tag(id), UIStyle.BAD)
 		_pop(_cell_tag(id), UIStyle.BAD)
@@ -735,17 +733,6 @@ func _build_preview(body: HBoxContainer) -> void:
 	_preview_holder = VBoxContainer.new()
 	_preview_holder.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(_preview_holder)
-	var mid := HBoxContainer.new()
-	mid.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_child(mid)
-	_preview_chip = PanelContainer.new()
-	_preview_chip.mouse_filter = Control.MOUSE_FILTER_PASS
-	_preview_chip.tooltip_text = "Shows the card under the pointer, or the last one you picked.\nClick a catalogue card to add a copy, a deck card to remove one.\nKeys: + or Enter adds, - removes. Right-click inspects."
-	_preview_count = UIStyle.label("", 14, UIStyle.TEXT_DIM)
-	_preview_count.add_theme_font_override("font", UIStyle.font_bold())
-	_preview_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_preview_chip.add_child(_preview_count)
-	mid.add_child(_preview_chip)
 	var sc := ScrollArea.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(sc)
@@ -759,6 +746,9 @@ func _build_preview(body: HBoxContainer) -> void:
 	# in this deck as gem sockets that fill on add, the kind and cost line.
 	_facts = PreviewFacts.new(true)
 	inner.add_child(_facts)
+	# H26 (21 Oct): the "In your deck: xN" tag under the card image is gone; the gems say it, and
+	# carry the pane's help.
+	_facts.gems().tooltip_text = "Copies of this card in the deck.\nThe pane shows the card under the pointer, or the last one you picked.\nClick a catalogue card to add a copy, a deck card to remove one.\nKeys: + or Enter adds, - removes. Right-click inspects."
 	_preview_note = UIStyle.label("", 13, UIStyle.BAD)
 	inner.add_child(_preview_note)
 
@@ -943,7 +933,6 @@ func _show(id: int) -> void:
 		_preview_note.visible = s["support"] != "full"
 		_preview_note.text = "Implementation: %s" % s["support"]
 	_mark_deck_selection()
-	_update_preview_count()
 	_update_facts()
 
 
@@ -969,21 +958,6 @@ func _mark_deck_selection() -> void:
 	for tid in _deck_tiles:
 		var w: CardWidget = (_deck_tiles[tid].get_meta("rec") as Dictionary)["widget"]
 		w.set_marks(false, int(tid) == _preview_id)
-
-
-func _update_preview_count() -> void:
-	if _preview_count == null:
-		return
-	var n := int(counts.get(_preview_id, 0))
-	_preview_count.text = ("In your deck: x%d" % n) if n > 0 else "Not in your deck"
-	_preview_count.add_theme_color_override("font_color", UIStyle.GOLD_HI if n > 0 else UIStyle.TEXT_DIM)
-	var sb := UIStyle.flat(Color(UIStyle.GOLD, 0.14) if n > 0 else Color(0, 0, 0, 0.3), UIStyle.GOLD if n > 0 else Color(UIStyle.BRONZE, 0.6), 1, 12)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 3
-	sb.content_margin_bottom = 3
-	_preview_chip.add_theme_stylebox_override("panel", sb)
-	_preview_chip.custom_minimum_size.x = ceilf(UIStyle.font_bold().get_string_size("In your deck: x99", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x) + 28.0
 
 
 func _cell_tag(id: int) -> Control:
@@ -1082,7 +1056,6 @@ func _refresh_deck() -> void:
 	_empty_note.visible = total == 0
 	_deck_scroll.visible = total > 0
 	_mark_deck_selection()
-	_update_preview_count()
 	_update_facts()
 	_update_actions()
 

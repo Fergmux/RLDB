@@ -122,6 +122,19 @@ func test_details_pane_has_no_add_or_remove_buttons() -> void:
 		assert_bool(t == "Add to deck" or t == "Remove one" or t == "Add one").is_false()
 
 
+## H26 (21 Oct): no "In your deck" / "Not in your deck" tag under the card image; the copy gems
+## below say how many copies the deck holds.
+func test_details_pane_has_no_in_your_deck_tag() -> void:
+	var db := _builder()
+	var id := _first(false)
+	db.show_preview(id)
+	assert_bool(_contains_text(db, "in your deck")).is_false()
+	assert_bool(_contains_text(db, "In your deck")).is_false()
+	db.ui_add()
+	assert_bool(_contains_text(db, "In your deck")).is_false()
+	assert_int(db._facts.copies_shown()).is_equal(1)
+
+
 ## F2: hovering a catalogue card shows it in the details pane without selecting or editing.
 func test_hovering_a_catalogue_card_shows_its_details() -> void:
 	var db := _builder()
