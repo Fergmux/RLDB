@@ -13,7 +13,11 @@ var count: int = 1
 ## STEPS: mark the current segment (off for a summary bar of completed steps).
 var highlight: bool = true
 var current: int = 0
+## STEPS: seconds a segment takes to fill when `current` moves (0 = the default quick ease). A
+## segment filling this way glows as it fills (review #102: "fills with light").
+var fill_time: float = 0.0
 var _shown: float = 0.0
+var _glow: float = 0.0
 
 
 ## Divider with a centred diamond, `height` px tall.
@@ -59,8 +63,16 @@ func set_current(n: int, cur: int) -> void:
 
 
 func _process(delta: float) -> void:
-	if kind == Kind.STEPS and not is_equal_approx(_shown, float(current)):
-		_shown = move_toward(_shown, float(current), delta * 6.0)
+	if kind != Kind.STEPS:
+		return
+	if not is_equal_approx(_shown, float(current)):
+		var rate := 1.0 / maxf(0.01, UIStyle.dur(fill_time)) if fill_time > 0.0 else 6.0
+		_shown = move_toward(_shown, float(current), delta * rate)
+		if fill_time > 0.0:
+			_glow = 1.0
+		queue_redraw()
+	elif _glow > 0.0:
+		_glow = maxf(0.0, _glow - delta * 2.0)
 		queue_redraw()
 
 
@@ -100,6 +112,12 @@ func _draw() -> void:
 				var fill := clampf(_shown - i + 0.0, 0.0, 1.0)
 				if fill > 0.0:
 					draw_rect(Rect2(r.position, Vector2(r.size.x * fill, r.size.y)), Color(color, 0.85))
+					# The segment being filled: a bright leading edge and a soft glow around it.
+					if _glow > 0.0 and fill < 1.0 or (_glow > 0.0 and i == int(ceilf(_shown)) - 1):
+						var lead := r.position.x + r.size.x * fill
+						draw_rect(Rect2(r.position, Vector2(r.size.x * fill, r.size.y)), Color(UIStyle.GOLD_HI, 0.5 * _glow))
+						draw_rect(r.grow(2.0), Color(UIStyle.GOLD_HI, 0.25 * _glow), false, 2.0)
+						draw_rect(Rect2(lead - 2.0, r.position.y - 2.0, 3.0, r.size.y + 4.0), Color(1, 0.97, 0.85, 0.9 * _glow))
 				if highlight and i == current:
 					draw_rect(r, Color(UIStyle.GOLD_HI, 0.9))
 					draw_rect(r.grow(1.0), Color(UIStyle.GOLD_HI, 0.25), false, 1.0)

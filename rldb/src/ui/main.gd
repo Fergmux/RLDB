@@ -79,6 +79,10 @@ func _ready() -> void:
 		print("telemetry: environment=%s target=%s enabled=%s" % [c.environment, c.target, c.enabled])
 		get_tree().quit()
 		return
+	# Finished tutorial lessons (review #97) are saved only in a normal run: never from a dev
+	# driver, a screenshot run or the test runner.
+	if not " ".join(args).contains("shots") and not TutorialProgress.scripted_main_loop():
+		TutorialProgress.enable_persistence()
 	Music.start()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if DEBUG_MARGINS_FLAG in args:

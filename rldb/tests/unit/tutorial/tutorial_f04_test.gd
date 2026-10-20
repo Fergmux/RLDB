@@ -60,12 +60,12 @@ func test_arrow_direction_prefers_above_when_it_fits() -> void:
 
 
 func test_arrow_direction_does_not_flip_for_small_movement_near_an_edge() -> void:
-	# Needs 4 + 6 + 10 + 8 + 26 = 54 px above. A card at y=56 fits; y=50 is within the hysteresis
-	# slack of an already decided "above", so the decided side stays.
+	# Needs 4 + 6 + 6 + 6 + 26 = 48 px above (review #101: a 6 px gap and a 6 px bob). A card at
+	# y=56 fits; y=44 is within the hysteresis slack of an already decided "above", so it stays.
 	var r := Rect2(300, 56, 100, 140)
 	var d := TutorialHighlight.choose_direction(r, H, false)
 	assert_int(d).is_equal(1)
-	var moved := Rect2(300, 50, 100, 140)
+	var moved := Rect2(300, 44, 100, 140)
 	assert_int(TutorialHighlight.choose_direction(moved, H, false, d, r)).is_equal(1)
 	# A new target at that position decides from scratch (does not fit above: below).
 	assert_int(TutorialHighlight.choose_direction(moved, H, false)).is_equal(-1)

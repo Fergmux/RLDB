@@ -37,17 +37,15 @@ func _init(title: String = "", sub: String = "", chips: Array = [], show_rune: b
 	super(12, 18)
 	arm = 16.0
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
+	v.add_theme_constant_override("separation", UIStyle.sp("sm"))
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(v)
 	if show_rune:
 		var rune := Rune.new()
 		rune.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		v.add_child(rune)
-	var t := UIStyle.label(title, 24, UIStyle.GOLD, true, true)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
-	v.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.6), true, 12.0))
+	# SCREEN-tier headline over the house rule (D3, OrnatePanel.add_headline).
+	add_headline(title, 26, true, v.get_child_count())
 	if sub != "":
 		var s := UIStyle.label(sub, 16, UIStyle.MUTED, true)
 		s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

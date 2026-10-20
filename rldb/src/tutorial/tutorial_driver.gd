@@ -51,10 +51,14 @@ func _run() -> void:
 	menu.pick("tutorial")
 	await _wait(0.6)
 	await _shot("menu_tutorial_panel")
-	var b := _find_button(main.menu, "Lesson 1")
+	TutorialProgress.reset_cache()
+	var b := _lesson_row(main.menu, 0)
 	_check("menu offers the tutorial lessons", b != null)
-	_check("F05-01 menu lists Ritual and Arcane lessons", _find_button(main.menu, "Lesson 6 · Extra Deck: Ritual") != null \
-		and _find_button(main.menu, "Lesson 7 · Extra Deck: Arcane") != null)
+	_check("F05-01 menu lists Ritual and Arcane lessons", _lesson_row(main.menu, 5) != null and _lesson_row(main.menu, 5).title_label.text == "Extra Deck: Ritual" \
+		and _lesson_row(main.menu, 6) != null and _lesson_row(main.menu, 6).title_label.text == "Extra Deck: Arcane")
+	_check("review #97: a fresh profile recommends lesson 1 and shows no ticks", b != null and b.recommended and not b.done \
+		and main.menu.find_children("DoneTick", "", true, false).is_empty())
+	_check("review #97: lesson rows are 52 px secondaries", b != null and b.custom_minimum_size.y >= TutorialMenu.ROW_H and String(b.get_meta(Sfx.FAMILY_META, "")) == "secondary")
 	await _click(_rect(b).get_center())
 	await _wait(1.6)
 	for li in TutorialLessons.count():
@@ -72,6 +76,19 @@ func _run() -> void:
 	print("saves before/after: %d / %d (dir %s)" % [saves_before, SeriesStore.list().size(), SeriesStore.DIR])
 	_check("tutorial wrote no save", SeriesStore.list().size() == saves_before)
 	await _shot("back_to_menu")
+	# Review #97: every finished lesson now carries its tick and none is recommended.
+	main.menu.pick("@play")
+	await _wait(0.4)
+	main.menu.pick("tutorial")
+	await _wait(0.6)
+	var all_done := true
+	for li in TutorialLessons.count():
+		var r := _lesson_row(main.menu, li)
+		all_done = all_done and r != null and r.done and not r.recommended
+	_check("review #97: every finished lesson shows its tick", all_done and main.menu.find_children("NextChip", "", true, false).is_empty())
+	_check("tutorial progress is not written in a scripted run", not TutorialProgress.persist)
+	await _shot("menu_tutorial_all_done")
+	TutorialProgress.reset_cache()
 	# Exit tutorial from inside a lesson.
 	main.menu.tutorial_requested.emit(2)
 	await _wait(1.6)
@@ -292,6 +309,14 @@ static func _rect(c: Control) -> Rect2:
 	if c == null:
 		return Rect2()
 	return c.get_global_transform() * Rect2(Vector2.ZERO, c.size)
+
+
+## The visible lesson row `i` of the main menu's tutorial panel (null when absent).
+func _lesson_row(n: Node, i: int) -> TutorialMenu.LessonRow:
+	for r in n.find_children("Lesson%d" % (i + 1), "", true, false):
+		if r is TutorialMenu.LessonRow and (r as Control).is_visible_in_tree():
+			return r
+	return null
 
 
 func _find_button(n: Node, prefix: String) -> Button:
