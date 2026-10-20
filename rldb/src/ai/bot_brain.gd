@@ -244,6 +244,8 @@ func series_command(s: Series) -> Dictionary:
 				# The bot keeps the default basic unit and drafts the open category each time.
 				s._ensure_offer(me)
 				return {"t": "draft_pick", "index": rng.randi_range(0, maxi(0, s.draft[me]["offer"].size() - 1))}
+			if s.bot_deck_pick():
+				return {}   # J24: the player chooses this seat's deck (LocalHost "bot_deck")
 			return {"t": "pick_starter", "index": rng.randi_range(0, s.starters.size() - 1)}   # random deck
 		Series.STAGE_REWARDS:
 			var r: Dictionary = s.rewards[me]

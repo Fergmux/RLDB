@@ -25,6 +25,9 @@ func handle_key(e: InputEventKey) -> bool:
 	var k: int = e.keycode
 	var overlays := gs.overlays
 	if k == KEY_ESCAPE:
+		if overlays.decks != null and overlays.decks.bot_stage() and overlays.overlay.visible and not gs.menu.settings_popup.visible and not gs.menu.game_menu.visible:
+			overlays.decks.back_to_own()   # J24: Esc on "Choose the bot's deck" goes back to your own
+			return true
 		if not gs.selection.cancel() and not overlays.pause_dim.visible:
 			gs.menu.toggle()   # nothing to close or cancel: Esc opens the game menu
 		return true

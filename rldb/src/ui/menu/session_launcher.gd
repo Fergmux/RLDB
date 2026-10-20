@@ -58,11 +58,13 @@ func start_local(cfg: Dictionary) -> void:
 		s.view_changed.connect(func(_v): _check_hotseat.call_deferred())
 
 
-## Series against the bot: you are seat 0, the BotPlayer drives seat 1 (random starter deck).
+## Series against the bot: you are seat 0, the BotPlayer drives seat 1 (a random Structure deck,
+## or J24: the deck you choose for it after yours when "Choose the bot's deck" is on).
 ## The screen never switches seats.
 func start_bot(cfg: Dictionary) -> void:
 	cfg["names"] = ["Player", "Bot"]
 	cfg["mode"] = "bot"
+	cfg["bot_deck_pick"] = _options.bot_deck_pick(cfg)
 	_start_local_host(cfg)
 	var bot := BotPlayer.new()
 	local_host.add_child(bot)

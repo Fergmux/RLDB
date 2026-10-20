@@ -285,6 +285,12 @@ func to_save() -> Dictionary:
 		"saved_at": Time.get_datetime_string_from_system()}
 
 
+## J24: true in a bot series (custom decks) whose player chooses the bot's deck. The bot then waits
+## at the deck stage instead of taking a random Structure deck; LocalHost locks the chosen deck in.
+func bot_deck_pick() -> bool:
+	return String(cfg.get("mode", "")) == "bot" and String(cfg.get("deck_mode", "")) == "starter" and bool(cfg.get("bot_deck_pick", false))
+
+
 ## True when the series sits at a between-game checkpoint that can be saved.
 func at_checkpoint() -> bool:
 	return stage in [STAGE_REWARDS, STAGE_FIRST, STAGE_OVER]
@@ -763,7 +769,7 @@ func view_for(p: int) -> Dictionary:
 		"history": history.duplicate(true), "last_loser": last_loser, "deck_mode": cfg["deck_mode"],
 		"deck_ready": deck_ready.duplicate(), "deck_name": deck_names[p], "forfeit_by": forfeit_by,
 		"save_id": save_id, "at_checkpoint": at_checkpoint(), "tel_ids": telemetry_ids.duplicate(),
-		"mode": String(cfg.get("mode", ""))}
+		"mode": String(cfg.get("mode", "")), "bot_deck_pick": bot_deck_pick()}
 	if game != null:
 		v["match"] = MatchView.build(game, p)
 	match stage:

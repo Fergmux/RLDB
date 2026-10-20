@@ -415,6 +415,7 @@ static func _center_panel(title: String, note: String = "", section: String = ""
 	v.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 10.0))
 	if note != "":
 		var n := UIStyle.label(note, 15, UIStyle.MUTED, true)
+		n.name = "Note"
 		n.add_theme_constant_override("line_spacing", 4)
 		v.add_child(n)
 	return [p, v]
@@ -621,6 +622,38 @@ func _close_row() -> Control:
 	return row
 
 
+## The Play vs Bot note: who chooses the bot's deck (J24).
+static func bot_note(player_picks: bool) -> String:
+	if player_picks:
+		return "A series against the computer. After choosing your deck, you choose the bot's."
+	return "A series against the computer. The bot picks a random Structure deck."
+
+
+## J24: the "Choose the bot's deck" toggle of Play vs Bot, shown while Custom decks is chosen (a
+## draft has no deck to choose) and remembered for this viewer (SessionOptions).
+func _bot_deck_box(v: VBoxContainer) -> CheckBox:
+	var note: Label = v.get_node_or_null("Note")
+	var cb := SettingsForm.HouseCheck.new("Choose the bot's deck", _options.choose_bot_deck)
+	cb.custom_minimum_size.y = 40
+	var sync := func():
+		if not is_instance_valid(cb):
+			return
+		cb.visible = String(_options.series.get("deck_mode", "starter")) == "starter"
+		if note != null and is_instance_valid(note):
+			note.text = bot_note(_options.bot_deck_pick(_options.series))
+	cb.toggled.connect(func(on: bool):
+		_options.set_choose_bot_deck(on)
+		sync.call())
+	cb.name = "ChooseBotDeck"
+	cb.tooltip_text = "After you choose your deck, a second deck screen lets you pick the deck the bot plays.\nOff: the bot plays a random Structure deck."
+	v.add_child(cb)
+	series_options_changed.connect(sync)
+	# A retired panel leaves the tree twice (it fades out where it stood): disconnect once.
+	cb.tree_exiting.connect(func(): if series_options_changed.is_connected(sync): series_options_changed.disconnect(sync))
+	sync.call()
+	return cb
+
+
 func _privacy_box(text: String) -> CheckBox:
 	return _check_box(text, _options.privacy, func(on): _options.privacy = on)
 
@@ -631,8 +664,9 @@ func _leaf_panel(target: String) -> Control:
 	_series_panel_active = false
 	match target:
 		"bot":
-			pv = _leaf(target, "Play vs Bot", "A series against the computer. The bot picks a random Structure deck.")
+			pv = _leaf(target, "Play vs Bot", bot_note(_options.bot_deck_pick(_options.series)))
 			_series_options(pv[1])
+			_bot_deck_box(pv[1])
 			_start_button(pv[1], "Start series", bot_requested.emit)
 		"hotseat":
 			pv = _leaf(target, "Hot-seat", "Two players take turns on this screen.")
