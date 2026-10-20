@@ -14,20 +14,25 @@ extends Node
 ## Storage roots; tests point these at a scratch folder so they never touch real player files.
 static var DIR := "user://telemetry"
 static var SETTINGS_PATH := "user://ui_settings.cfg"
-const PRIVACY_NOTE := "Sends anonymous match statistics (draft picks, decks, cards played and results) to help balance RLDB. No names, chat or Steam profile details are sent. Turning this off stops collection and deletes statistics not yet sent."
+const PRIVACY_NOTE := "Sends anonymous match statistics (draft picks, decks, cards played, game times and results) to help balance RLDB, and keeps your own statistics with a one-way code made from your Steam account so they follow you to other computers. No names, chat or Steam profile details are sent. Turning this off stops collection and syncing and deletes statistics not yet sent."
 
 ## The running service, or null.
 static var instance: Telemetry = null
 static var _share_loaded := false
 static var _share := true
 static var _share_path := ""
+## The Steam ID used for the statistics key (0 without Steam). Tests inject their own.
+static var steam_id_provider: Callable = func() -> int: return SteamBridge.my_id() if SteamBridge.available() else 0
 
 var config: TelemetryConfig
 var outbox: TelemetryOutbox
 var auth: TelemetryAuth
 var uploader: TelemetryUploader
 var collector: TelemetryCollector
+## Cloud copy of the player's own statistics (null without Steam or when inactive).
+var stats_sync: StatsSync
 var http: TelemetryHttp
+var _transport
 var content_hash: String = ""
 var session_id: String = ""
 var install_pid: String = ""
@@ -134,6 +139,7 @@ func setup(cfg: TelemetryConfig, transport = null) -> void:
 		http = TelemetryHttp.new()
 		add_child(http)
 		transport = http
+	_transport = transport
 	auth = TelemetryAuth.new(transport, config.signup_url(), config.refresh_url(), config.credential_path(DIR))
 	auth.timeout_s = float(config.upload["http_timeout_s"])
 	uploader = TelemetryUploader.new(outbox, auth, transport, config.firestore_base())
@@ -149,6 +155,7 @@ func setup(cfg: TelemetryConfig, transport = null) -> void:
 	collector.steam_hash = steam_hash
 	if not config.active():
 		_diag("inactive: target=%s enabled=%s %s" % [config.target, config.enabled, config.off_reason])
+		StatsSync.set_status("local", "")
 		return
 	outbox.load_all()
 	_recover_open_items()
@@ -163,6 +170,36 @@ func setup(cfg: TelemetryConfig, transport = null) -> void:
 				"ids": {"participant_id": install_pid}, "profile": {"participant_id": install_pid, "created_at": _now(),
 					"steam_hash": steam_hash, "steam_link": "unverified" if steam_hash != "" else "none"}})
 			_mark_profile_sent()
+	_maybe_start_sync()
+
+
+## Starts the cloud statistics copy once Steam is known (C1). Without Steam, with sharing off or
+## the kill switch set, statistics stay on this computer only.
+func _maybe_start_sync() -> void:
+	if stats_sync != null or config == null or not config.active() or not bool(config.stats_sync.get("enabled", true)):
+		return
+	if not share_enabled():
+		StatsSync.set_status("local", "statistics sharing is off")
+		return
+	if steam_hash == "":
+		steam_hash = _steam_hash()
+		collector.steam_hash = steam_hash
+	if steam_hash == "":
+		StatsSync.set_status("local", "Steam is not running")
+		return
+	stats_sync = StatsSync.new(_transport, auth, config.firestore_base(), steam_hash,
+		(DIR if config.target == "live" else DIR.path_join(config.target)).path_join("stats_sync.cfg"))
+	stats_sync.timeout_s = float(config.upload["http_timeout_s"])
+	stats_sync.backoff_base_s = float(config.upload["backoff_base_s"])
+	stats_sync.backoff_cap_s = float(config.upload["backoff_cap_s"])
+	stats_sync.debounce_ms = int(float(config.stats_sync.get("debounce_s", 4)) * 1000.0)
+	stats_sync.rng.randomize()
+
+
+## The Statistics dialog opened: fetch the cloud copy again if it is a minute old.
+static func refresh_stats() -> void:
+	if instance != null and is_instance_valid(instance) and instance.stats_sync != null:
+		instance.stats_sync.refresh()
 
 
 ## True when records are collected now (configured, not killed, and the player agrees).
@@ -177,12 +214,24 @@ func _process(delta: float) -> void:
 	if _tick_accum >= 1.0:
 		_tick_accum = 0.0
 		uploader.tick()
+		if stats_sync != null:
+			stats_sync.tick()
+		elif collecting() and steam_hash == "":
+			_maybe_start_sync()           # Steam came up after start-up
 
 
 func _apply_share() -> void:
 	var on := collecting()
 	if uploader != null:
 		uploader.enabled = on
+	if stats_sync != null:
+		stats_sync.enabled = on
+		if on:
+			stats_sync.reset()
+	if not on and config != null and config.active():
+		StatsSync.set_status("local", "statistics sharing is off")
+	elif on and stats_sync == null and outbox != null:
+		_maybe_start_sync()
 	if not share_enabled() and outbox != null:
 		if collector != null and collector.series != null:
 			collector.series.observer = null
@@ -286,9 +335,9 @@ func _mark_profile_sent() -> void:
 ## grouping only: it is NOT verified (a client could send any value) and, because SteamIDs are
 ## enumerable, it is reversible by anyone holding both the salt and the data.
 func _steam_hash() -> String:
-	if config.steam_hash_salt == "" or not SteamBridge.available():
+	if config.steam_hash_salt == "":
 		return ""
-	var id := SteamBridge.my_id()
+	var id: int = int(steam_id_provider.call())
 	if id == 0:
 		return ""
 	return hash_steam_id(id, config.steam_hash_salt)

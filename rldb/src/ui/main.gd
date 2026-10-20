@@ -76,12 +76,13 @@ func _ready() -> void:
 		get_tree().quit()
 		return
 	Music.start()
-	Telemetry.boot(self)   # background statistics; silent, never blocks (docs/telemetry)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if not ("--no-steam" in args):
 		SteamBridge.init()
 		if SteamBridge.available():
 			SteamBridge.steam().join_requested.connect(_on_steam_join_requested)
+	# After Steam, so the statistics key (salted Steam-ID hash) is known from the first record.
+	Telemetry.boot(self)   # background statistics; silent, never blocks (docs/telemetry)
 	_parse_cmdline()
 	var launch_lobby := SteamBridge.launch_lobby()
 	if launch_lobby != 0 and SteamBridge.available():

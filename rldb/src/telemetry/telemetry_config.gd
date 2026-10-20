@@ -15,7 +15,9 @@ extends RefCounted
 const PATH := "res://data/telemetry_config.json"
 const DEV_OVERRIDE := "user://telemetry/dev.cfg"
 const ENVIRONMENTS := ["dev", "playtest", "production", "test"]
-const SCHEMA_VERSION := 1
+## v2 (20 Oct 2026): game reports add turn_times / turn_ms and the structure-deck name.
+## Schema v1 records stay valid everywhere (rules, reconcile, metrics).
+const SCHEMA_VERSION := 2
 
 var enabled: bool = true
 var environment: String = "dev"
@@ -30,6 +32,8 @@ var steam_hash_salt: String = ""
 var outbox: Dictionary = {"max_items": 400, "max_bytes": 8388608, "quarantine_max": 25, "abandon_after_hours": 12}
 var upload: Dictionary = {"backoff_base_s": 5, "backoff_cap_s": 900, "idle_poll_s": 60, "http_timeout_s": 15}
 var collect: Dictionary = {"max_events_per_game": 3000}
+## Cloud copy of the player's own statistics (StatsSync): on/off and the write debounce.
+var stats_sync: Dictionary = {"enabled": true, "debounce_s": 4}
 ## Why telemetry is off ("" when active), for the developer tool only.
 var off_reason: String = ""
 
@@ -112,6 +116,7 @@ func apply_dict(d: Dictionary) -> void:
 	outbox.merge(d.get("outbox", {}), true)
 	upload.merge(d.get("upload", {}), true)
 	collect.merge(d.get("collect", {}), true)
+	stats_sync.merge(d.get("stats_sync", {}), true)
 
 
 ## Build label stamped on every record ("-editor" for editor runs).

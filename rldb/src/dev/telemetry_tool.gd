@@ -7,6 +7,10 @@ extends SceneTree
 ##   --test-upload   queue one synthetic probe report and upload it; exits 0 only when accepted
 ##   --purge         delete the local queue and quarantine (not the identity)
 ##   --sim-series    play one bot-vs-bot draft series (Bo3) through the real collector, then upload
+##   --stats-sync    cloud statistics round trip (C1) as one simulated computer: --machine=<a|b> keeps
+##                   that computer's identity, stats file and settings apart (user://telemetry_e2e_<m>),
+##                   --fake-steam=<id> stands in for the Steam ID, --duels=<n> records n duels first,
+##                   --wipe deletes that computer's files first. Prints "STATS SYNCED duels=<n>".
 ## target: --telemetry-emulator (local emulators) or --telemetry-live (real project). The
 ## environment defaults to "test" for --test-upload, so probes never mix with real statistics.
 
@@ -21,15 +25,17 @@ var _probe_id := ""
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	for a in args:
-		if a in ["--inspect", "--flush", "--test-upload", "--purge", "--sim-series"]:
+		if a in ["--inspect", "--flush", "--test-upload", "--purge", "--sim-series", "--stats-sync"]:
 			_cmd = a
 	if _cmd == "":
 		print("usage: -- --inspect | --flush | --test-upload | --purge  [--telemetry-emulator | --telemetry-live] [--telemetry-env=test]")
 		quit(2)
 		return
 	var cfg := TelemetryConfig.resolve(args, OS.get_cmdline_args())
-	if _cmd in ["--test-upload", "--sim-series"] and not " ".join(args).contains("--telemetry-env="):
+	if _cmd in ["--test-upload", "--sim-series", "--stats-sync"] and not " ".join(args).contains("--telemetry-env="):
 		cfg.environment = "test"
+	if _cmd == "--stats-sync":
+		_prepare_machine(args)
 	if cfg.environment == "test" and cfg.target == "none" and _cmd != "--inspect":
 		print("No target: add --telemetry-emulator or --telemetry-live.")
 		quit(2)
@@ -54,12 +60,28 @@ func _initialize() -> void:
 		"--sim-series":
 			_sim_series()
 			_t.uploader.reset_backoff()
+		"--stats-sync":
+			if _t.stats_sync == null:
+				print("STATS NOT STARTED (%s)" % StatsSync.describe()["detail"])
+				quit(1)
+				return
+			for i in _duels:
+				PlayerStats.record_duel({"mode": "bot", "won": i % 2 == 0, "turns": 6 + i, "ms": 300000 + i * 1000, "tms": 120000, "tn": 3,
+					"deck": "Moving Ocean", "cards": {"33": 2}, "plays": {"33": 1}})
 
 
 func _process(delta: float) -> bool:
 	if _t == null or _cmd in ["--inspect", "--purge"]:
 		return false
 	_elapsed += delta
+	if _cmd == "--stats-sync":
+		_t.stats_sync.tick()
+		var st := String(StatsSync.status["state"])
+		if (st == "synced" and _t.stats_sync.pulled and not _t.stats_sync.busy) or st == "error" or _elapsed > TIMEOUT_S:
+			print("sync: %s %s" % [st, JSON.stringify(_t.stats_sync.stats)])
+			print("STATS %s duels=%d" % ["SYNCED" if st == "synced" else "NOT SYNCED", PlayerStats.load_data()["duels"].size()])
+			quit(0 if st == "synced" else 1)
+		return false
 	var up := _t.uploader
 	if not up.busy and up.next_try_ms > 0 and up.failures == 0:
 		up.next_try_ms = 0
@@ -75,6 +97,40 @@ func _process(delta: float) -> bool:
 		else:
 			quit(0)
 	return false
+
+
+var _duels := 0
+
+
+## --stats-sync: isolates one simulated computer (identity, settings, stats file) and its Steam ID.
+func _prepare_machine(args: PackedStringArray) -> void:
+	var m := "a"
+	var steam := 76561198000000001
+	var wipe := false
+	for a in args:
+		if a.begins_with("--machine="):
+			m = a.split("=")[1].validate_filename()
+		elif a.begins_with("--fake-steam="):
+			steam = int(a.split("=")[1])
+		elif a.begins_with("--duels="):
+			_duels = int(a.split("=")[1])
+		elif a == "--wipe":
+			wipe = true
+	var dir := "user://telemetry_e2e_%s" % m
+	# Godot 4.6 runs a class's static initialisers at its first static call, overwriting any
+	# static var assigned before it: touch both classes first, then point them at this computer.
+	PlayerStats.reload()
+	Telemetry._live()
+	Telemetry.DIR = dir
+	Telemetry.SETTINGS_PATH = dir.path_join("ui_settings.cfg")
+	PlayerStats.PATH = "user://telemetry_e2e_%s_stats.json" % m
+	if wipe:
+		PlayerStats.clear()
+		for f in ["credential_emulator.cfg", "state.cfg", "emulator/stats_sync.cfg", "ui_settings.cfg"]:
+			if FileAccess.file_exists(dir.path_join(f)):
+				DirAccess.remove_absolute(ProjectSettings.globalize_path(dir.path_join(f)))
+	PlayerStats.reload()
+	Telemetry.steam_id_provider = func() -> int: return steam
 
 
 ## Bot-vs-bot draft series in "bot" mode through the real Series, rules engine and collector.

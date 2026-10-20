@@ -369,3 +369,79 @@ func test_network_client_reports_one_corroboration_per_duel_across_reconnects() 
 	assert_int(int(gc["first_player"])).is_equal(0)
 	assert_int(int(gc["deck"]["main"]["1"])).is_equal(2)
 	assert_str(String(items["gclient_g1"]["mode"])).is_equal("lan")
+
+
+
+# ------------------------------------------------------------------ schema v2: turn and game time (C2)
+
+## Ends the active seat's turn through real commands (next_phase until the turn number moves).
+func _end_turn(s: Series) -> bool:
+	var t := s.game.turn
+	for i in 12:
+		if s.game.turn != t or s.game.winner != -1:
+			break
+		var pd: Dictionary = s.game.pending
+		if not pd.is_empty():
+			return false
+		s.submit(s.game.active, {"t": "next_phase"})
+	return s.game.turn != t
+
+
+func test_turn_times_record_each_turn_per_seat_and_number() -> void:
+	var c := _collector()
+	var s := _series(c)
+	_start_starter_game(s)
+	var first: int = s.game.active
+	clock[0] += 42_000
+	assert_bool(_end_turn(s)).is_true()
+	clock[0] += 7_000
+	s.submit(s.game.active, {"t": "concede"})
+	var g: Dictionary = _game_item(s)["body"]["game"]
+	assert_array(g["turn_times"]).is_equal([[1, first, 42_000], [2, 1 - first, 7_000]])
+	var tms: Array = g["turn_ms"]
+	assert_int(int(tms[first])).is_equal(42_000)
+	assert_int(int(tms[1 - first])).is_equal(7_000)
+	assert_str(String(g["clock"])).is_equal("host_wall")
+	assert_int(int(g["turn_times_truncated"])).is_equal(0)
+
+
+func test_disconnect_pause_is_left_out_of_the_turn_it_happened_in() -> void:
+	var c := _collector()
+	var s := _series(c, "lan")
+	_start_starter_game(s)
+	clock[0] += 3_000
+	c.set_paused(true)
+	clock[0] += 50_000
+	c.set_paused(false)
+	clock[0] += 2_000
+	s.submit(1, {"t": "concede"})
+	var g: Dictionary = _game_item(s)["body"]["game"]
+	assert_int(int(g["turn_times"][0][2])).is_equal(5_000)
+	assert_int(int(g["active_ms"])).is_equal(5_000)
+
+
+func test_turn_times_are_bounded_and_counted_beyond_the_cap() -> void:
+	var c := _collector()
+	var s := _series(c)
+	_start_starter_game(s)
+	for i in TelemetryCollector.MAX_TURN_TIMES + 5:
+		clock[0] += 1_000
+		c.on_core_event(s.game, "turn", {"p": i % 2, "turn": i + 2})
+	s.submit(1, {"t": "concede"})
+	var g: Dictionary = _game_item(s)["body"]["game"]
+	assert_int((g["turn_times"] as Array).size()).is_equal(TelemetryCollector.MAX_TURN_TIMES)
+	assert_int(int(g["turn_times_truncated"])).is_equal(6)
+
+
+func test_structure_deck_name_is_sent_but_never_a_custom_deck_name() -> void:
+	var c := _collector()
+	var s := _series(c)
+	_start_starter_game(s)
+	var decks: Array = _game_item(s)["body"]["decks"]
+	assert_str(String(decks[0]["name"])).is_equal(String(Series.load_starters()[0]["name"]))
+	c.deck_src[0] = {"source": "custom", "name": "My secret deck"}
+	assert_str(String(c.deck_snapshot(0)["name"])).is_equal("")
+
+
+func test_records_are_stamped_with_schema_version_two() -> void:
+	assert_int(TelemetryConfig.SCHEMA_VERSION).is_equal(2)

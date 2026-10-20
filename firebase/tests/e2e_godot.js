@@ -37,6 +37,12 @@ const GODOT = process.env.GODOT || 'C:/Users/fergm/Downloads/Godot_v4.6.1-stable
   assert.equal(kinds.draft, 2);
   assert.ok(played > 0 && conv[1] > 0);
   assert.equal(Object.keys(res.rejected).length, 0, 'admin tool rejected client records');
+  // Schema v2: every duel carries its turn times (C2).
+  const t = m.timing;
+  console.log(`timing: games timed=${t.games_timed} with turn times=${t.games_with_turn_times} turns=${t.turn_observations} mean game=${Math.round(t.game_length.summary.mean_ms)} ms`);
+  assert.equal(t.games_with_turn_times, m.eligible_games);
+  assert.ok(t.turn_observations > 0);
+  assert.ok(raws.every((r) => r.data.schema_version === 2), 'records are schema v2');
   console.log('E2E OK');
   await admin.app().delete();
 })().catch((e) => { console.error(e.stack || e.message); process.exitCode = 1; });

@@ -18,11 +18,16 @@
 //        submissions, its anonymous Auth account, filtered aggregates naming it, then a rebuild of
 //        every environment's canonical games and default aggregate.
 //   node tools/rldb-admin.js --from-file=dump.json reconcile ...   offline run on exported raw docs.
+//   node tools/rldb-admin.js player-stats [<steam hash>] [--json]   players' own cloud statistics
+//        (C1; self-reported under an unverified Steam link): one summary line per player, or one
+//        player's decoded record. Reads one document per player.
+//   node tools/rldb-admin.js delete-stats <steam hash> [--confirm]   erase one player's cloud stats.
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
 const { reconcileAll } = require('./lib/reconcile');
 const { computeMetrics, DEFAULT_FILTER } = require('./lib/metrics');
+const { decodeStats, summarize, HASH_RE } = require('./lib/player_stats');
 
 const PROJECT = 'rldb-b5593';
 const CARDS = path.join(__dirname, '..', '..', 'rldb', 'data', 'cards.json');
@@ -117,6 +122,32 @@ async function deleteUid(firestore, uid, confirm) {
   return snap.size;
 }
 
+/** Summaries of every player's cloud statistics, or the decoded record of one hash. */
+async function playerStats(firestore, hash = null) {
+  if (hash) {
+    if (!HASH_RE.test(hash)) throw new Error('not a 32-hex Steam hash');
+    const d = await firestore.collection('player_stats').doc(hash).get();
+    if (!d.exists) return null;
+    const rec = decodeStats(d.data());
+    return { summary: summarize(hash, d.data(), rec), record: rec };
+  }
+  const snap = await firestore.collection('player_stats').get();
+  return snap.docs.map((d) => summarize(d.id, d.data(), decodeStats(d.data()))).sort((a, b) => b.duels - a.duels);
+}
+
+/** Erases one player's cloud statistics and every link that names it. Returns the counts. */
+async function deleteStats(firestore, hash) {
+  if (!HASH_RE.test(hash)) throw new Error('not a 32-hex Steam hash');
+  const links = await firestore.collection('stats_links').where('steam_hash', '==', hash).get();
+  const batch = firestore.batch();
+  for (const l of links.docs) batch.delete(l.ref);
+  const ref = firestore.collection('player_stats').doc(hash);
+  const had = (await ref.get()).exists;
+  batch.delete(ref);
+  await batch.commit();
+  return { stats_deleted: had, links_deleted: links.size };
+}
+
 /**
  * Complete erasure of one Firebase uid (privacy request): its submissions, its anonymous Auth
  * account (when `auth` is given), every filtered aggregate that names it, and then a rebuild of
@@ -125,7 +156,19 @@ async function deleteUid(firestore, uid, confirm) {
  */
 async function purgeUid(firestore, uid, { auth = null, cat = catalog() } = {}) {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(uid)) throw new Error('not a Firebase uid');
-  const out = { submissions: await deleteUid(firestore, uid, true), auth_deleted: false, aggregates_deleted: 0, rebuilt: [] };
+  const out = { submissions: await deleteUid(firestore, uid, true), auth_deleted: false, aggregates_deleted: 0, rebuilt: [],
+    stats_deleted: false, links_deleted: 0 };
+  // Cloud statistics (C1): the player record this uid's link names, and every link to it.
+  const link = await firestore.collection('stats_links').doc(uid).get();
+  if (link.exists && HASH_RE.test(String(link.data().steam_hash))) {
+    const r = await deleteStats(firestore, String(link.data().steam_hash));
+    out.stats_deleted = r.stats_deleted;
+    out.links_deleted = r.links_deleted;
+  }
+  if ((await firestore.collection('stats_links').doc(uid).get()).exists) {
+    await firestore.collection('stats_links').doc(uid).delete();
+    out.links_deleted++;
+  }
   if (auth) {
     try { await auth.deleteUser(uid); out.auth_deleted = true; } catch (e) { if (e.code !== 'auth/user-not-found') throw e; }
   }
@@ -187,13 +230,26 @@ async function main() {
     if (!uid) throw new Error('usage: delete-uid <uid> [--confirm]');
     if (!o.confirm) { console.log(`${await deleteUid(firestore, uid, false)} submission(s) of ${uid} (add --confirm to erase everything for this uid)`); return; }
     const r = await purgeUid(firestore, uid, { auth: require('firebase-admin').auth() });
-    console.log(`deleted ${r.submissions} submission(s), auth account ${r.auth_deleted ? 'deleted' : 'not found'}, ${r.aggregates_deleted} filtered aggregate(s); rebuilt ${r.rebuilt.join(', ') || 'nothing'}. Also delete local tools/out/*.json copies.`);
+    console.log(`deleted ${r.submissions} submission(s), auth account ${r.auth_deleted ? 'deleted' : 'not found'}, ${r.aggregates_deleted} filtered aggregate(s), cloud statistics ${r.stats_deleted ? 'deleted' : 'none'} (${r.links_deleted} link(s)); rebuilt ${r.rebuilt.join(', ') || 'nothing'}. Also delete local tools/out/*.json copies.`);
+  } else if (cmd === 'player-stats') {
+    const r = await playerStats(firestore, o._[1] || null);
+    if (o.json || o._[1]) { console.log(JSON.stringify(r, null, 1)); return; }
+    const t = (ms) => (ms == null ? '-' : `${Math.floor(ms / 60000)}:${String(Math.round(ms / 1000) % 60).padStart(2, '0')}`);
+    console.log(`${r.length} player(s) with cloud statistics (self-reported, unverified Steam link)`);
+    for (const p of r) {
+      console.log(`  ${p.steam_hash}  duels=${p.duels} W-L=${p.wins}-${p.losses} avg duel ${t(p.avg_duel_ms)} avg turn ${t(p.avg_own_turn_ms)} rev=${p.rev}${p.decodable ? '' : ' (undecodable)'}`);
+    }
+  } else if (cmd === 'delete-stats') {
+    const hash = o._[1];
+    if (!hash) throw new Error('usage: delete-stats <steam hash> [--confirm]');
+    if (!o.confirm) { console.log(JSON.stringify(await playerStats(firestore, hash) && (await playerStats(firestore, hash)).summary)); console.log('add --confirm to erase it'); return; }
+    console.log(JSON.stringify(await deleteStats(firestore, hash)));
   } else {
-    console.log(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 22).join('\n'));
+    console.log(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 27).join('\n'));
     process.exitCode = 2;
   }
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exitCode = 1; });
 
-module.exports = { runReconcile, deleteUid, purgeUid, loadSubmissions, catalog };
+module.exports = { runReconcile, deleteUid, purgeUid, loadSubmissions, catalog, playerStats, deleteStats };

@@ -7,7 +7,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8180';
 const admin = require('firebase-admin');
-const { runReconcile, deleteUid, purgeUid, loadSubmissions } = require('../tools/rldb-admin');
+const { runReconcile, deleteUid, purgeUid, loadSubmissions, playerStats, deleteStats } = require('../tools/rldb-admin');
+const zlib = require('node:zlib');
 const fx = require('../tools/fixtures/basic');
 
 admin.initializeApp({ projectId: 'rldb-b5593' }, 'admin-test');
@@ -84,4 +85,51 @@ test('purge-uid erases submissions, the auth account, filtered aggregates and re
   assert.ok(!agg.body.includes('u:uC'));
   assert.ok((await db.collection('users').doc('uA').collection('submissions').get()).size > 0);
   await assert.rejects(purgeUid(db, '../x', { cat: fx.catalog }));
+});
+
+
+// ------------------------------------------------------------------ cloud statistics (C1)
+
+const SH = '0123456789abcdef0123456789abcdef';
+
+async function seedStats(uid, hash, duels) {
+  const rec = { version: 2, duels, series: [], devices: {} };
+  const body = zlib.gzipSync(Buffer.from(JSON.stringify(rec))).toString('base64');
+  await db.collection('stats_links').doc(uid).set({ steam_hash: hash, linked_at: admin.firestore.Timestamp.now() });
+  await db.collection('player_stats').doc(hash).set({ schema_version: 1, steam_hash: hash, uid, rev: 1, enc: 'gzip64',
+    raw_len: body.length, updated_at: admin.firestore.Timestamp.now(), body });
+}
+
+test('player-stats lists and decodes the players\' cloud statistics', async () => {
+  await seedStats('uS', SH, [{ id: 'a', t: 1, won: true, ms: 600000, tms: 200000, tn: 5 }, { id: 'b', t: 2, won: false, ms: 300000 }]);
+  const list = await playerStats(db);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].duels, 2);
+  assert.equal(list[0].win_rate, 0.5);
+  assert.equal(list[0].avg_duel_ms, 450000);
+  assert.equal(list[0].avg_own_turn_ms, 40000);
+  const one = await playerStats(db, SH);
+  assert.equal(one.record.duels.length, 2);
+  assert.equal(await playerStats(db, 'f'.repeat(32)), null);
+  await assert.rejects(playerStats(db, '../x'));
+});
+
+test('an undecodable cloud copy is reported, not thrown', async () => {
+  await db.collection('player_stats').doc(SH).set({ uid: 'u', rev: 1, enc: 'gzip64', body: 'bm90IGd6aXA=' });
+  const list = await playerStats(db);
+  assert.equal(list[0].decodable, false);
+});
+
+test('delete-stats erases the record and every link to it; purge-uid includes them', async () => {
+  await seedStats('uS', SH, [{ id: 'a', t: 1, won: true }]);
+  await db.collection('stats_links').doc('uT').set({ steam_hash: SH, linked_at: admin.firestore.Timestamp.now() });
+  assert.deepEqual(await deleteStats(db, SH), { stats_deleted: true, links_deleted: 2 });
+  assert.equal((await db.collection('player_stats').doc(SH).get()).exists, false);
+  await seedStats('uC', SH, [{ id: 'a', t: 1, won: true }]);
+  await seed(fx.submissions);
+  const r = await purgeUid(db, 'uC', { cat: fx.catalog });
+  assert.equal(r.stats_deleted, true);
+  assert.equal(r.links_deleted, 1);
+  assert.equal((await db.collection('stats_links').doc('uC').get()).exists, false);
+  assert.equal((await db.collection('player_stats').doc(SH).get()).exists, false);
 });

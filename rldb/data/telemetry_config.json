@@ -1,6 +1,6 @@
 {
 	"_doc": "Gameplay telemetry configuration (docs/telemetry/README.md). enabled=false is the developer kill switch. environment: auto | dev | playtest | production | test (auto: editor=dev, exported=playtest, GdUnit/driver runs=test). Set production only for the public release build. The Firebase web API key identifies the app and is public by design; it grants no database access.",
-	"schema_version": 1,
+	"schema_version": 2,
 	"enabled": true,
 	"environment": "auto",
 	"build": "0.9.1",
@@ -28,5 +28,9 @@
 	},
 	"collect": {
 		"max_events_per_game": 3000
+	},
+	"stats_sync": {
+		"enabled": true,
+		"debounce_s": 4
 	}
 }

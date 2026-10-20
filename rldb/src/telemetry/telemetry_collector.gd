@@ -13,6 +13,9 @@ extends RefCounted
 ## only sends a small corroborating "gclient" report per duel (from its own views), which the
 ## admin tool compares with the host's report (verified / provisional / conflicted).
 
+## Turn durations kept per duel (schema v2); longer duels count the rest in turn_times_truncated.
+const MAX_TURN_TIMES := 600
+
 const PLAY_KINDS := ["normal_summon", "cast_spell", "set_spell", "set_trap", "power",
 	"special_ritual", "special_arcane", "special_fusion", "special_effect"]
 
@@ -234,7 +237,8 @@ func _game_start() -> void:
 		"decks": [deck_snapshot(0), deck_snapshot(1)], "events": [], "events_truncated": 0, "seq": 0,
 		"opps": {}, "open_by_uid": {}, "next_opp": 1, "counters": [{}, {}],
 		"totals": [_new_totals(), _new_totals()], "turn_draw": false, "last_paid": -1, "pending_play": -1,
-		"pending_special": -1, "pending_mat": -1, "mats": [], "hint": "", "done": false, "turn": 0, "active": -1}
+		"pending_special": -1, "pending_mat": -1, "mats": [], "hint": "", "done": false, "turn": 0, "active": -1,
+		"turn_times": [], "turn_times_truncated": 0, "turn_ms": [0, 0], "turn_started": 0, "turn_paused": 0}
 	paused = false
 	m.observer = self
 	_checkpoint()
@@ -267,7 +271,10 @@ func deck_snapshot(p: int) -> Dictionary:
 	return {"snapshot_id": "%s_s%d" % [String(series.telemetry_ids.get("game", "")), p], "seat": p,
 		"participant": participant(p), "source": source, "base_source": String(src.get("source", "unknown")),
 		"main": ms, "extra": ex, "basic_units": multiset(basics), "main_size": main.size(), "extra_size": extra.size(),
-		"size": main.size() + extra.size(), "fingerprint": fingerprint(ms, ex), "duel_index": series.game_no}
+		"size": main.size() + extra.size(), "fingerprint": fingerprint(ms, ex), "duel_index": series.game_no,
+		# Structure-deck name (fixed game content) for "by deck" metrics; custom deck names are the
+		# player's own free text and are never sent.
+		"name": String(src.get("name", "")).substr(0, 40) if String(src.get("source", "")) == "prebuilt" else ""}
 
 
 ## {"<card id>": copies}.
@@ -356,6 +363,9 @@ func on_core_event(m: Object, kind: String, data: Dictionary) -> void:
 
 
 func _on_turn(m: MatchEngine, p: int, turn: int) -> void:
+	_close_turn()
+	g["turn_started"] = now_ms.call()
+	g["turn_paused"] = 0
 	if g["active"] != -1:
 		var prev: int = g["active"]
 		g["totals"][prev]["ap_granted"] += int(m.players[prev].get("ap_start", 0))
@@ -367,6 +377,21 @@ func _on_turn(m: MatchEngine, p: int, turn: int) -> void:
 	_ev(["turn", p])
 	if turn > 1:
 		_checkpoint()
+
+
+## Ends the running turn's clock (schema v2): [turn, seat, active ms], paused time excluded.
+func _close_turn() -> void:
+	if g["active"] == -1 or int(g["turn"]) < 1:
+		return
+	var end: int = now_ms.call()
+	var paused_now: int = (end - _pause_started) if paused else 0
+	var ms: int = maxi(0, end - int(g["turn_started"]) - int(g["turn_paused"]) - paused_now)
+	var seat: int = g["active"]
+	g["turn_ms"][seat] += ms
+	if g["turn_times"].size() < MAX_TURN_TIMES:
+		g["turn_times"].append([int(g["turn"]), seat, ms])
+	else:
+		g["turn_times_truncated"] += 1
 
 
 func _open_opp(m: MatchEngine, uid: int, reason: String) -> void:
@@ -523,6 +548,7 @@ func set_paused(on: bool) -> void:
 		_pause_started = now_ms.call()
 	else:
 		g["paused_ms"] += now_ms.call() - _pause_started
+		g["turn_paused"] += now_ms.call() - _pause_started
 	_ev(["pause", 1 if on else 0])
 
 
@@ -542,6 +568,7 @@ func _finish(m: MatchEngine, winner: int) -> void:
 		var o: Array = g["opps"][g["open_by_uid"][uid]]
 		o[6] = "in_hand_at_end"
 	g["open_by_uid"].clear()
+	_close_turn()
 	if g["active"] != -1:
 		var prev: int = g["active"]
 		g["totals"][prev]["ap_granted"] += int(m.players[prev].get("ap_start", 0))
@@ -584,7 +611,9 @@ func _game_body(outcome: String, winner: int, reason: String, turns: int, hp: Ar
 			"active_ms": end - int(g["started_at"]) - int(g["paused_ms"]) - pause_extra, "paused_ms": int(g["paused_ms"]) + pause_extra,
 			"turns": turns, "first_player": g["first_player"], "start_hp": g["start_hp"], "base_ap": GameCore.BASE_AP,
 			"base_draw": GameCore.BASE_DRAW, "outcome": outcome, "decisive": decisive, "winner": winner,
-			"loser": (1 - winner) if decisive else -1, "reason": reason, "final_hp": hp, "draws_supported": false},
+			"loser": (1 - winner) if decisive else -1, "reason": reason, "final_hp": hp, "draws_supported": false,
+			"turn_times": g["turn_times"].duplicate(true), "turn_ms": g["turn_ms"].duplicate(),
+			"turn_times_truncated": int(g["turn_times_truncated"]), "clock": "host_wall"},
 		"participants": [participant(0), participant(1)],
 		"decks": g["decks"], "counters": g["counters"], "totals": g["totals"], "opportunities": opps,
 		"events": g["events"],
