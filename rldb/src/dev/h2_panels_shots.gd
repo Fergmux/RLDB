@@ -136,10 +136,11 @@ func _action_rows() -> void:
 	var st := gs.action_row.stack
 	if st != null and is_instance_valid(st) and st.get_child_count() > 0:
 		var bs := st.get_children()
-		await _hover((bs[0] as Control).get_global_rect().get_center())
+		var rr := _row_rect(st)
+		await _hover(rr.position + Vector2(rr.size.x / 2.0, GameActionRow.BUTTON_H / 2.0))
 		await _wait(0.3)
 		await _snap("h2_02_action_row_hover")
-		await _crop("h2_02b_action_row_zoom", _grow_rect(st.get_global_rect(), Vector2(60, 50)))
+		await _crop("h2_02b_action_row_zoom", _grow_rect(_row_rect(st), Vector2(60, 50)))
 	gs.selection.deselect()
 	_move(_neutral())
 	await _wait(0.3)
@@ -148,7 +149,7 @@ func _action_rows() -> void:
 	await _snap("h2_03_action_row_field")
 	st = gs.action_row.stack
 	if st != null and is_instance_valid(st):
-		await _crop("h2_03b_action_row_field_zoom", _grow_rect(st.get_global_rect(), Vector2(60, 50)))
+		await _crop("h2_03b_action_row_field_zoom", _grow_rect(_row_rect(st), Vector2(60, 50)))
 
 
 # ---------------------------------------------------------------- H11
@@ -302,6 +303,10 @@ func _neutral() -> Vector2:
 	return gs.get_global_transform() * Vector2(gs.board._ux - 320.0, gs.board._y0 + 520.0)
 
 
+func _row_rect(st: Control) -> Rect2:
+	return st.get_meta("rect_global", st.get_global_rect())
+
+
 func _grow_rect(r: Rect2, by: Vector2) -> Rect2:
 	return r.grow_individual(by.x, by.y, by.x, by.y)
 
@@ -325,6 +330,8 @@ func _snap(name: String) -> void:
 func _crop(name: String, r: Rect2) -> void:
 	await RenderingServer.frame_post_draw
 	var img := root.get_texture().get_image()
+	var k := Vector2(img.get_size()) / root.get_visible_rect().size
+	r = Rect2(r.position * k, r.size * k)
 	var ri := Rect2i(r.intersection(Rect2(Vector2.ZERO, Vector2(img.get_size()))))
 	if ri.size.x < 4 or ri.size.y < 4:
 		return
