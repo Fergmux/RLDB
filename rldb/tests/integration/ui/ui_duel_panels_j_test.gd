@@ -87,6 +87,24 @@ func test_j3_draft_rows_open_and_close_on_click() -> void:
 	gs.details.pile_zone = ""
 
 
+func test_j3_a_pile_row_closed_again_is_no_longer_the_selected_card() -> void:
+	# Regression: closing a row with a second click left its card selected, so closing the pile
+	# showed that card's details although nothing was selected any more.
+	var uid := TB.card(m, m.active, TB.WATER, "spent")
+	host.broadcast()
+	await await_idle_frame()
+	gs.details.show_pile("spent")
+	await await_idle_frame()
+	_left_click(gs.details.pile_row(uid))
+	await await_idle_frame()
+	assert_int(gs.selected_uid).is_equal(uid)
+	_left_click(gs.details.pile_row(uid))
+	await await_idle_frame()
+	gs.details.close_pile()
+	assert_int(gs.selected_uid).is_equal(-1)
+	assert_bool(gs.details.empty_art.visible).is_true()
+
+
 func test_j4_hovering_a_card_leaves_the_details_empty() -> void:
 	# Arrange
 	var uid: int = gs.hand.order[0]

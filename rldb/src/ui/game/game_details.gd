@@ -381,7 +381,12 @@ func _pile_row(c: Dictionary) -> Control:
 	var editable := pile_zone != DRAFT_ZONE   # draft picks are read-only (but can still be inspected)
 	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var pick := func():
-		gs.selected_uid = uid
+		# Closing the row also drops its card's selection (the panel would show it again once the
+		# list closes); a card selected before the list opened is left alone.
+		if not sel:
+			gs.selected_uid = uid
+		elif gs.selected_uid == uid:
+			gs.selected_uid = -1
 		show_pile(pile_zone, -1 if sel else uid)
 	# The card + details, then the action buttons across the row's full width (review: several
 	# summon buttons fit on one row instead of stacking in the text column).
