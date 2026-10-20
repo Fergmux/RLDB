@@ -19,6 +19,10 @@ const SHOCKWAVE_SHADER := "res://assets/shaders/canvas_fx_shockwave.gdshader"
 ## Absolute z of the set-piece vignette and distortion: above the board, below UiLayers.FX_CARD.
 const VIGNETTE_Z := 12
 const DISTORT_Z := 16
+## H23: the z a struck plate is raised to so it reads above its own blast (FxStrike / FxSerpent), and the
+## absolute z of every floating damage / HP / AP number, above that plate (a raised plate once hid them).
+const STRUCK_PLATE_Z := UiLayers.FX + 1
+const NUMBER_Z := UiLayers.FX + 2
 ## A batch is compressed to fit this many seconds (spotlight holds are added afterwards).
 const MAX_BATCH_TIME := 3.0
 ## B5: seconds a unit summoned and removed in the same batch stands (as a ghost) before it can be removed.
@@ -624,6 +628,13 @@ func add_node(n: Control, layer: Control = null) -> void:
 	_nodes.append(n)
 
 
+## Adds a floating number or caption to the fx layer above every struck plate (H23); finish_all() frees it.
+func add_text(n: Control) -> void:
+	n.z_as_relative = false
+	n.z_index = NUMBER_Z
+	add_node(n)
+
+
 ## Frees an overlay node added with add_node().
 func free_node(n: Node) -> void:
 	_nodes.erase(n)
@@ -646,7 +657,7 @@ func float_text(text: String, col: Color, global_pos: Vector2, fs: int, rise: fl
 	l.pivot_offset = l.size / 2.0
 	var p0 := fx_pos(global_pos) - l.size / 2.0
 	l.position = p0
-	add_node(l)
+	add_text(l)
 	var reduced := UIStyle.reduce_motion
 	if not reduced and pop:
 		l.scale = Vector2(1.3, 1.3)
