@@ -1,8 +1,9 @@
 class_name GameDetails
 extends RefCounted
 ## Sidebar card-details panel (inspection only) and the own-pile list that replaces it while
-## a pile is open. Shows the hovered card, else the selected card, else a card opened from
-## the game log. While drafting it lists the cards picked so far, in the same layout.
+## a pile is open. Shows the clicked (selected) card, else a card opened from the game log; J4
+## (owner, 22 Oct): never the hovered card (hover shows the card's tooltip). While drafting it
+## lists the cards picked so far, in the same layout.
 
 ## pile_zone value of the draft list.
 const DRAFT_ZONE := "draft"
@@ -37,7 +38,7 @@ var pile_hint: Label
 ## Signature of the details last rendered ("" forces a re-render).
 var details_sig: String = ""
 ## Card opened from the game log (a definition view, not a game instance); cleared by selecting
-## another card. Hovering still previews other cards over it.
+## another card.
 var log_card: Dictionary = {}
 ## Own pile listed in the panel ("" while the panel shows card details).
 var pile_zone: String = ""
@@ -179,30 +180,22 @@ func show_card_def(id: int) -> void:
 	render()
 
 
-## Card whose details are shown: the hovered (peeked) card, else the selected one.
+## Card whose details are shown: the clicked (selected) one (J4: never the hovered one), or -1.
 func details_uid() -> int:
-	return gs.peek_uid if gs.peek_uid != -1 else gs.selected_uid
+	return gs.selected_uid
 
 
 ## Shows the current card's details (with the reasons its actions are unavailable). An open pile
-## list holds the panel like a selected card (2026-10-18): hovering a card shows that card's
-## details over it, and the list comes back when the hover ends.
+## list holds the panel like a selected card (2026-10-18) until it is closed or another card is
+## clicked.
 func render() -> void:
 	if pile_zone != "":
-		if gs.peek_uid == -1 or pile_zone == DRAFT_ZONE:
-			if not pile_scroll.visible:
-				render_pile_list()
-			return
-		if pile_scroll.visible:
-			pile_scroll.visible = false
-			pile_head.visible = false
-			details_scroll.visible = true
-			empty_art.visible = false
-			details_title.text = "Card details"
-			details_sig = ""
+		if not pile_scroll.visible:
+			render_pile_list()
+		return
 	var duid := details_uid()
 	var c := find_card(duid)
-	if c.is_empty() and gs.peek_uid == -1 and not log_card.is_empty():
+	if c.is_empty() and not log_card.is_empty():
 		c = log_card                      # opened from the game log
 		duid = -7
 	var notes := []

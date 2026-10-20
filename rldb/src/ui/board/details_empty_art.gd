@@ -14,8 +14,8 @@ const SUB_PX := 12
 const GAP := 18.0
 
 ## The hint lines.
-var hint: String = "Hover a card to read it"
-var sub: String = "Click it to select it: its actions appear on the card."
+var hint: String = "Click a card to read it"
+var sub: String = "Your own cards show their actions too."
 
 
 func _init() -> void:

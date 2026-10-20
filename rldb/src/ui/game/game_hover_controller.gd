@@ -1,8 +1,9 @@
 class_name GameHoverController
 extends RefCounted
-## Hover is inspection only (F02-01): the card under the pointer lifts and its details show;
-## it never shows action buttons and never sends anything. Over the selected card's action
-## row, the tray or the banner nothing else hovers.
+## Hover is inspection only (F02-01): the card under the pointer lifts (and shows its tooltip);
+## it never shows action buttons and never sends anything. J4 (owner, 22 Oct): it no longer
+## shows the card in the details panel, which follows clicks only. Over the selected card's
+## action row, the tray or the banner nothing else hovers.
 
 ## Owner feedback 2026-10-18: a hovered hand card grows enough to read its whole text (hand cards
 ## carry no tooltip). 1.75 x 120x180 = 210x315.
@@ -178,7 +179,7 @@ func lift(it: Dictionary) -> void:
 		tw.tween_property(holder, "rotation", 0.0, d)
 
 
-## Makes `it` the hovered item: lifts it and shows its details at once.
+## Makes `it` the hovered item: lifts it (the details panel keeps the clicked card, J4).
 func set_hover(it: Dictionary) -> void:
 	if not hv.is_empty():
 		unlift(hv)
@@ -189,10 +190,6 @@ func set_hover(it: Dictionary) -> void:
 	# #32: a hand card lifting makes the soft paper-slide cue (rate-limited with every hover cue).
 	if it["kind"] == "hand" and it.get("own", true):
 		Sfx.hover_card()
-	# Details follow the pointer immediately (user feedback: no delay).
-	if it["uid"] != -1 and it["uid"] != gs.peek_uid:
-		gs.peek_uid = it["uid"]
-		gs.details.render()
 	var stack := gs.action_row.stack
 	if stack != null:
 		gs.hover_layer.move_child(stack, -1)
@@ -236,16 +233,13 @@ func unlift(it: Dictionary) -> void:
 				idx += 1
 
 
-## Ends any hover (and its details peek).
+## Ends any hover.
 func clear() -> void:
 	if not hv.is_empty():
 		unlift(hv)
 	hv = {}
 	forced = false
 	_close_at = -1.0
-	if gs.peek_uid != -1:
-		gs.peek_uid = -1
-		gs.details.render()
 
 
 ## Dev/test API: force the hover state on a hand card (index).
@@ -258,8 +252,6 @@ func debug_hover_hand(index: int) -> void:
 	forced = false
 	set_hover(make_item("h:%d" % uid, it["widget"], it["holder"], uid, "hand", true))
 	forced = true
-	gs.peek_uid = uid
-	gs.details.render()
 
 
 ## Dev/test API: force the hover state on player p's field slot.
@@ -272,8 +264,6 @@ func debug_hover_slot(p: int, zone: String, slot: int) -> void:
 	forced = false
 	set_hover(make_item(GameBoardView.key(board.side_of(p), zone, slot), w, it["holder"], int(w.view.get("uid", -1)), Zones.KIND[zone], p == gs.me()))
 	forced = true
-	gs.peek_uid = w.view.get("uid", -1)
-	gs.details.render()
 
 
 ## Dev/test API: release a forced hover.

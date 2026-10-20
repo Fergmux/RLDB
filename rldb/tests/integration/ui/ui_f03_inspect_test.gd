@@ -282,9 +282,9 @@ func test_inspector_refuses_empty_and_hidden_views() -> void:
 
 
 ## Owner feedback 2026-10-18: the pile list is held like a selected card. No Close button; the
-## pile shows the selected brackets; hovering a card shows its details over the list, which comes
-## back when the hover ends; an empty-space click closes it and drops the brackets.
-func test_open_pile_is_selected_hover_overrides_it_and_empty_space_closes_it() -> void:
+## pile shows the selected brackets; an empty-space click closes it and drops the brackets.
+## J4 (owner, 22 Oct): hovering a card no longer shows its details over the list.
+func test_open_pile_is_selected_hover_keeps_it_and_empty_space_closes_it() -> void:
 	TB.card(m, me, TB.WATER, "spent")
 	var u := _unit_on_field()
 	await await_idle_frame()
@@ -295,9 +295,9 @@ func test_open_pile_is_selected_hover_overrides_it_and_empty_space_closes_it() -
 	var buttons := gs.details.pile_head.find_children("*", "Button", true, false)
 	assert_array(buttons).is_empty()
 	gs.hover.debug_hover_slot(me, "unit", 0)
-	assert_bool(gs.details.pile_scroll.visible).is_false()
-	assert_bool(gs.details.details_scroll.visible).is_true()
-	assert_int(gs.details.details_uid()).is_equal(u)
+	assert_bool(gs.details.pile_scroll.visible).is_true()
+	assert_bool(gs.details.details_scroll.visible).is_false()
+	assert_int(gs.details.details_uid()).is_not_equal(u)
 	gs.hover.debug_clear()
 	assert_bool(gs.details.pile_scroll.visible).is_true()
 	assert_str(gs.details.pile_zone).is_equal("spent")

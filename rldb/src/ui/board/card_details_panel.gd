@@ -157,7 +157,7 @@ func show_empty(hint: String) -> void:
 ## actions are unavailable, e.g. "Cannot attack: ..." (accepted for callers, not displayed).
 func show_card(c: Dictionary, _notes: Array = []) -> void:
 	if c.is_empty():
-		show_empty("Hover a card to read it, or click it to pin it here.")
+		show_empty("Click a card to read it here.")
 		return
 	_reset()
 	if art_crop and not c.get("hidden", false):

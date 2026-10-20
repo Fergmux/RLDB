@@ -51,8 +51,6 @@ var debug_sent: int = 0
 var selected_uid: int = -1
 ## Selected option indices for a multi-select prompt.
 var multi: Array = []
-## Hovered card whose details are shown.
-var peek_uid: int = -1
 ## Action row shown for the click-selected card (F02-01).
 var row_open: bool = false
 ## Card whose action opened the current choice (arrow source).
@@ -188,7 +186,6 @@ func attach(c: SeatClient) -> void:
 	spectate.attach(c)
 	inspect.close_all()
 	selected_uid = -1
-	peek_uid = -1
 	keyboard.kb_uid = -1
 	row_open = false
 	acting_uid = -1

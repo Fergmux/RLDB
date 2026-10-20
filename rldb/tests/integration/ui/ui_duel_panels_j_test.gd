@@ -87,6 +87,53 @@ func test_j3_draft_rows_open_and_close_on_click() -> void:
 	gs.details.pile_zone = ""
 
 
+func test_j4_hovering_a_card_leaves_the_details_empty() -> void:
+	# Arrange
+	var uid: int = gs.hand.order[0]
+	# Act
+	gs.hover.debug_hover_hand(0)
+	await await_millis(200)
+	# Assert: the hover lifts the card, but the panel keeps its empty state
+	assert_bool(gs.hover.hv.is_empty()).is_false()
+	assert_int(gs.details.details_uid()).is_equal(-1)
+	assert_bool(gs.details.empty_art.visible).is_true()
+	assert_str(gs.details.details_view.all_text()).not_contains(String(gs.details.find_card(uid)["name"]))
+	gs.hover.debug_clear()
+
+
+func test_j4_clicking_a_card_shows_it_and_hovering_another_keeps_it() -> void:
+	# Arrange
+	var first: int = gs.hand.order[0]
+	var w: CardWidget = gs.hand.items[first]["widget"]
+	# Act: click it, then hover another card
+	gs.selection.on_widget_pressed(w)
+	await await_idle_frame()
+	gs.hover.debug_hover_hand(gs.hand.order.size() - 1)
+	await await_millis(200)
+	# Assert
+	assert_int(gs.details.details_uid()).is_equal(first)
+	assert_bool(gs.details.empty_art.visible).is_false()
+	assert_str(gs.details.details_view.all_text()).contains(String(gs.details.find_card(first)["name"]))
+	gs.hover.debug_clear()
+	assert_int(gs.details.details_uid()).is_equal(first)
+
+
+func test_j4_clicking_the_selected_card_again_returns_to_the_empty_state() -> void:
+	var first: int = gs.hand.order[0]
+	var w: CardWidget = gs.hand.items[first]["widget"]
+	gs.selection.on_widget_pressed(w)
+	await await_idle_frame()
+	gs.selection.on_widget_pressed(w)
+	await await_idle_frame()
+	assert_int(gs.details.details_uid()).is_equal(-1)
+	assert_bool(gs.details.empty_art.visible).is_true()
+
+
+func test_j4_the_empty_state_asks_for_a_click() -> void:
+	assert_str(gs.details.empty_art.hint).contains("Click")
+	assert_str(gs.details.empty_art.hint).not_contains("Hover")
+
+
 static func _left_click(c: Control) -> void:
 	var ev := InputEventMouseButton.new()
 	ev.button_index = MOUSE_BUTTON_LEFT
