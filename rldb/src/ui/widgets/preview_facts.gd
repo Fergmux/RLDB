@@ -192,6 +192,9 @@ class CopyGems extends ApGemRow:
 		for i in n:
 			var c := gem_centre(i, n)
 			_draw_socket(c, k, false, true)
+			if count == 0:
+				# The waiting socket: a faint gold ring inside it reads as "a slot to fill".
+				draw_arc(c, SOCKET * k * 0.5 - 4.0 * k, 0.0, TAU, 24, Color(UIStyle.GOLD_HI, 0.4), 1.2, true)
 			if i < filled_for_count(count):
 				var g := pop if i == pop_at else 1.0
 				if g < 1.0:
