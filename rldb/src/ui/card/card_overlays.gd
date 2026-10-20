@@ -49,7 +49,9 @@ static func draw(pt: CardPainter, w: CardWidget) -> void:
 		var ph := 0.0
 		if not UIStyle.reduce_motion:
 			ph = sin(float(Time.get_ticks_msec()) / SELECT_PERIOD_MS * TAU)
-		_corner_brackets(pt.ci, rect.grow((6.0 + 2.2 * ph) * s), maxf(8.0, 9.0 * s), UIStyle.SELECT.lightened(0.3), maxf(2.2, 2.4 * s))
+		var grow := (6.0 + 2.2 * ph) * s
+		# J12: each bracket turns on an arc concentric with the card's rounded corner.
+		_corner_brackets(pt.ci, rect.grow(grow), maxf(8.0, 9.0 * s), UIStyle.SELECT.lightened(0.3), maxf(2.2, 2.4 * s), rad + grow)
 	if w.highlighted and not empty:
 		target_frame(pt.ci, rect, rad, s, target_glow(), true)
 	elif w.preview_target:
@@ -95,7 +97,7 @@ static func target_frame(ci: CanvasItem, rect: Rect2, rad: float, s: float, glow
 		return
 	var ph := 0.0 if UIStyle.reduce_motion else fmod(float(Time.get_ticks_msec()) / DASH_PERIOD_MS, 1.0)
 	_dashes(ci, rect.grow(-1.0), ph, Color(1.0, 0.97, 0.82, 0.75))
-	_plain_brackets(ci, rect.grow(4.0 * s), maxf(7.0, 8.0 * s), UIStyle.GOLD_HI, maxf(1.6, 1.8 * s))
+	_plain_brackets(ci, rect.grow(4.0 * s), maxf(7.0, 8.0 * s), UIStyle.GOLD_HI, maxf(1.6, 1.8 * s), rad + 4.0 * s)
 
 
 # Short light dashes along the straight runs of `r`'s edges, shifted by `ph` (0..1) of one dash
@@ -118,14 +120,15 @@ static func _dashes(ci: CanvasItem, r: Rect2, ph: float, col: Color) -> void:
 			x += step
 
 
-# Gold L brackets on the four corners of `r` (no diamonds: those mark a selection).
-static func _plain_brackets(ci: CanvasItem, r: Rect2, len_px: float, col: Color, w: float) -> void:
+# Gold L brackets on the four corners of `r` (no diamonds: those mark a selection). `radius`: the
+# rounded corner they wrap (J12: each elbow is an arc concentric with it; 0 keeps square elbows).
+static func _plain_brackets(ci: CanvasItem, r: Rect2, len_px: float, col: Color, w: float, radius: float = 0.0) -> void:
 	for i in 2:
 		for j in 2:
 			var p := Vector2([r.position.x, r.end.x][i], [r.position.y, r.end.y][j])
-			var dx := len_px if i == 0 else -len_px
-			var dy := len_px if j == 0 else -len_px
-			var arm := PackedVector2Array([p + Vector2(dx, 0), p, p + Vector2(0, dy)])
+			var ax := Vector2(1.0 if i == 0 else -1.0, 0.0)
+			var ay := Vector2(0.0, 1.0 if j == 0 else -1.0)
+			var arm := Ornate.bracket_points(p, ax, ay, len_px, radius)
 			ci.draw_polyline(arm, Color(0, 0, 0, 0.45), w + 2.0, true)
 			ci.draw_polyline(arm, col, w, true)
 
@@ -213,18 +216,20 @@ static func _ready_badge(ci: CanvasItem, rect: Rect2, s: float, glow: float) -> 
 ## a small diamond set on the corner.
 ## H12: every part glows the same way: the arms AND the corner diamond each get the two soft halo
 ## passes (BRACKET_GLOW wide / near), then the solid part and a bright core line.
-static func _corner_brackets(ci: CanvasItem, r: Rect2, len_px: float, col: Color, w: float) -> void:
+## J12 (owner, 22 Oct): `radius` is the rounded corner the brackets wrap (the card's, grown to `r`); each
+## elbow is then an arc concentric with it and the diamond sits on the arc's middle. 0: square elbows.
+static func _corner_brackets(ci: CanvasItem, r: Rect2, len_px: float, col: Color, w: float, radius: float = 0.0) -> void:
 	var xs := [r.position.x, r.end.x]
 	var ys := [r.position.y, r.end.y]
 	var hot := col.lightened(0.55)
 	for i in 2:
 		for j in 2:
 			var p := Vector2(xs[i], ys[j])
-			var dx := len_px if i == 0 else -len_px
-			var dy := len_px if j == 0 else -len_px
-			var arm := PackedVector2Array([p + Vector2(dx, 0), p, p + Vector2(0, dy)])
+			var ax := Vector2(1.0 if i == 0 else -1.0, 0.0)
+			var ay := Vector2(0.0, 1.0 if j == 0 else -1.0)
+			var arm := Ornate.bracket_points(p, ax, ay, len_px, radius)
 			var d := w * 1.25 + 0.5
-			var q := p - Vector2(signf(dx), signf(dy)) * (w * 0.9)
+			var q := Ornate.bracket_apex(p, ax, ay, radius, len_px) - (ax + ay) * (w * 0.9)
 			var dia := CardGeometry.poly(q, d, 4, 0.0)
 			# Halo passes first, under every solid part, so the arms and the diamond glow as one shape.
 			for g in BRACKET_GLOW:

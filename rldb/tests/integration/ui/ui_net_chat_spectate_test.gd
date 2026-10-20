@@ -78,7 +78,9 @@ func test_offline_screen_has_no_chat_or_spectator_controls() -> void:
 	assert_bool(gs.spectate.badge.visible).is_false()
 	assert_bool(gs.spectate.lobby_button.visible).is_false()
 	assert_bool((gs.menu.items["spectators"] as Button).visible).is_false()
-	assert_bool((gs.menu.items["concede"] as Button).visible).is_true()
+	assert_bool((gs.menu.items["return"] as Button).visible).is_true()
+	# J13 follow-up: Concede game only shows during a game (this is the deck choice).
+	assert_bool((gs.menu.items["concede"] as Button).visible).is_false()
 	assert_bool((gs.menu.items["stop"] as Button).visible).is_false()
 
 

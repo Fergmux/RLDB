@@ -53,6 +53,14 @@ static func hide_for(owner: Object) -> void:
 		_tip._owner_id = 0
 
 
+## Hides the tip whoever shows it (J10: a full-screen modal such as the rewards screen opening over the
+## board; the tip's canvas layer would otherwise draw over it).
+static func hide_all() -> void:
+	if _tip != null and is_instance_valid(_tip):
+		_tip._panel.visible = false
+		_tip._owner_id = 0
+
+
 ## The text shown, or "" while hidden (tests).
 static func shown_text() -> String:
 	if _tip == null or not is_instance_valid(_tip) or not _tip._panel.visible:

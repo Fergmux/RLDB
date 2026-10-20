@@ -1,7 +1,7 @@
 class_name GameMenu
 extends RefCounted
 ## Top strip of the match screen (connection state + Menu button), the in-game menu (Settings,
-## Concede, Return to menu, Quit to desktop), the interface settings popup and the
+## Return to menu, Concede game, Quit to desktop), the interface settings popup and the
 ## confirmation dialogs for leaving or conceding.
 
 const SETTINGS_W := 400.0
@@ -48,7 +48,7 @@ func _init(screen: GameScreen) -> void:
 func build_top_strip() -> void:
 	top_strip = Control.new()
 	top_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top_strip.z_index = UiLayers.FX + 1     # UI review F12: the Menu button is never under a burst
+	top_strip.z_index = UiLayers.TOP_STRIP     # UI review F12: the Menu button is never under a burst
 	gs.add_child(top_strip)
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -79,11 +79,29 @@ func build_top_strip() -> void:
 	gs.spectate.build(row, gs.chat.button)
 
 
+## J15 (owner, 22 Oct): while the series modal is up the top strip (Menu, Chat, spectator badge) draws
+## above its full-window dim, where it is; `false` returns it to its in-game layer.
+func raise_top_strip(on: bool) -> void:
+	if top_strip != null:
+		top_strip.z_index = UiLayers.SERIES_TOP_STRIP if on else UiLayers.TOP_STRIP
+
+
+## True when global point `at` is over one of the top strip's visible buttons (Menu, Chat, Watch...).
+func over_top_button(at: Vector2) -> bool:
+	if top_strip == null or not top_strip.is_visible_in_tree():
+		return false
+	for b in top_strip.find_children("*", "BaseButton", true, false):
+		if (b as Control).is_visible_in_tree() and (b as Control).get_global_rect().has_point(at):
+			return true
+	return false
+
+
 ## Builds the in-game menu and the settings popup (hidden).
 func build_popups() -> void:
-	# In-game menu (Menu button / Esc): Settings, Concede, Return to menu, Quit to desktop.
+	# In-game menu (Menu button / Esc): Settings, Return to menu, then the destructive group.
 	# Design review #14: 16 px inset, 12 px between items, a divider before the destructive group,
-	# which uses the Danger family (Concede game, Quit to desktop).
+	# which uses the Danger family (Concede game, Quit to desktop). J13 (owner, 22 Oct): Concede game
+	# comes below Return to menu.
 	var menu_plate := HousePanel.new("Menu", "Esc", Vector2(UIStyle.sp("lg"), UIStyle.sp("lg")), UIStyle.sp("md"))
 	game_menu = menu_plate
 	game_menu.visible = false
@@ -94,9 +112,9 @@ func build_popups() -> void:
 	# spectator (refresh_items shows the right set for the current view).
 	for it in [["settings", "Settings", func(): game_menu.visible = false; _show_popup(settings_popup)],
 			["spectators", "Spectators", func(): game_menu.visible = false; gs.spectate.toggle_list()],
-			["concede", "Concede game", func(): game_menu.visible = false; _confirm_concede()],
 			["return", "Return to menu", func(): confirm_forfeit(false)],
 			["stop", "Stop watching", func(): confirm_forfeit(false)],
+			["concede", "Concede game", func(): game_menu.visible = false; _confirm_concede()],
 			["quit", "Quit to desktop", func(): confirm_forfeit(true)]]:
 		var key := String(it[0])
 		if key == "concede":
@@ -182,7 +200,8 @@ func update_conn() -> void:
 
 
 ## Shows the in-game menu buttons that fit this screen: a spectator gets Settings, Stop watching and
-## Quit; everyone online also gets View lobby (J22, with the spectator count).
+## Quit; everyone online also gets View lobby (J22, with the spectator count). Concede game shows only while a game
+## is being played (between duels there is nothing to concede; the host would refuse it).
 func refresh_items() -> void:
 	if items.is_empty():
 		return
@@ -190,7 +209,8 @@ func refresh_items() -> void:
 	var n: int = gs.spectate.watchers().size()
 	(items["spectators"] as Button).visible = gs.is_network()
 	(items["spectators"] as Button).text = "View lobby (%d watching)" % n if n > 0 else "View lobby"
-	(items["concede"] as Button).visible = not spec
+	(items["concede"] as Button).visible = (not spec and String(gs.view.get("stage", "")) == "game"
+			and not gs.mv.is_empty() and int(gs.mv.get("winner", -1)) == -1)
 	(items["return"] as Button).visible = not spec
 	(items["stop"] as Button).visible = spec
 
@@ -216,6 +236,7 @@ func toggle() -> void:
 	if game_menu.visible:
 		game_menu.visible = false
 	else:
+		refresh_items()
 		_show_popup(game_menu)
 		gs.hover.clear()
 

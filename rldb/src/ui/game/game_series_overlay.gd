@@ -30,8 +30,8 @@ var pause_dim: ColorRect
 var pause_panel: PanelContainer
 ## Content of the pause panel.
 var pause_box: VBoxContainer
-## Dim behind the series overlay.
-var overlay_dim: ColorRect
+## Dim behind the series overlay (the whole window; clicks on the top strip's buttons pass through).
+var overlay_dim: ModalDim
 ## Series-stage modal (rewards, decks, results).
 var overlay: PanelContainer
 ## Content of the series modal.
@@ -66,9 +66,9 @@ func build_pause() -> void:
 	pause_dim.color = Color(0, 0, 0, 0.6)
 	pause_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	pause_dim.visible = false
-	# Above the series modal (built later, layer 0), which used to hide the veil between duels;
-	# below the in-game menu so Menu still works while paused.
-	pause_dim.z_index = UiLayers.GAME_END + 1
+	# Above the series modal, which used to hide the veil between duels; below the in-game menu so
+	# Menu still works while paused.
+	pause_dim.z_index = UiLayers.PAUSE
 	gs.add_child(pause_dim)
 	var pp := HousePanel.new("Match paused", "Network", Vector2(22, 18), 8)
 	pause_panel = pp
@@ -79,16 +79,25 @@ func build_pause() -> void:
 
 ## Builds the stage modal (dim + scrolling panel) and the deck popup.
 func build_modals() -> void:
-	overlay_dim = ColorRect.new()
+	overlay_dim = ModalDim.new()
+	overlay_dim.pass_through = gs.menu.over_top_button
 	overlay_dim.color = Color(0, 0, 0, 0.6)
 	overlay_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	overlay_dim.visible = false
+	overlay_dim.z_index = UiLayers.SERIES_MODAL   # J10: above every board layer of the finished game
 	gs.add_child(overlay_dim)
 	var op := HousePanel.new("Series", "", Vector2(10, 10), 4)
 	op.arm = 22.0
 	overlay = op
 	overlay.visible = false
+	overlay.z_index = UiLayers.SERIES_MODAL
 	gs.add_child(overlay)
+	# Controls take clicks in tree order, not z order: the pause veil and the top strip's popovers (Chat,
+	# Spectators), built earlier but drawn above the modal, must also come after it in the tree, or the
+	# modal and its dim under them would take their clicks.
+	for late in [pause_dim, gs.chat.panel, gs.spectate.panel]:
+		if late != null and (late as Node).get_parent() == gs:
+			gs.move_child(late, -1)
 	var sc := SmoothScroll.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	op.body.add_child(sc)
@@ -120,11 +129,14 @@ func layout_pause(w: float, h: float) -> void:
 	pause_panel.position = (pause_dim.size - Vector2(PAUSE_W, 160)) / 2.0
 
 
-## Centres the stage modal (and the pile popup) in the left-hand play area.
+## Centres the stage modal (and the pile popup) in the left-hand play area. J15 (owner, 22 Oct): its dim
+## fills the window from the top edge (the top strip's buttons are raised above it in place) and, after a
+## game (rewards, next game, series over), the sidebar too. During the deck choice the sidebar stays live:
+## it holds the draft's "Your draft" list.
 func place_modals() -> void:
 	var region := Rect2(0, GameScreen.TOP_H, gs.size.x - gs.sidebar_w, gs.size.y - GameScreen.TOP_H)
-	overlay_dim.position = region.position
-	overlay_dim.size = region.size
+	overlay_dim.position = Vector2.ZERO
+	overlay_dim.size = Vector2(gs.size.x - gs.sidebar_w, gs.size.y) if String(gs.view.get("stage", "")) == "decks" else gs.size
 	var sz := Vector2(minf(_overlay_want.x, region.size.x - 40.0), minf(_overlay_want.y, region.size.y - 24.0))
 	# F01: the content's minimum width follows the window, so a small window never forces the
 	# modal wider than the play area (it would clip); the content scrolls inside instead.
@@ -223,6 +235,19 @@ func render_pause() -> void:
 	leave.pressed.connect(func(): gs.menu.confirm_forfeit(false))
 	foot.add_child(leave)
 	pause_panel.set_deferred("size", Vector2(PAUSE_W, 0))
+
+
+## J15: the series modal's full-window dim. It takes every click (the finished board stays out of reach)
+## except those over the top strip's buttons, which sit above it: Controls take clicks in tree order,
+## not by z_index, so the dim lets those points through itself.
+class ModalDim extends ColorRect:
+	## Callable(global point: Vector2) -> bool: true where a click must reach what is under the dim.
+	var pass_through: Callable
+
+	func _has_point(point: Vector2) -> bool:
+		if not Rect2(Vector2.ZERO, size).has_point(point):
+			return false
+		return not (pass_through.is_valid() and bool(pass_through.call(get_global_transform() * point)))
 
 
 ## "Waiting m:ss" since the pause began (#67), counting up once a second.
@@ -335,12 +360,16 @@ func render() -> void:
 	if stage == "game" or stage == "":
 		overlay.visible = false
 		overlay_dim.visible = false
+		gs.menu.raise_top_strip(false)
 		_overlay_stage = ""
 		rewards.mode = ""
 		return
 	var opening := not overlay.visible
+	if opening:
+		clear_board_interactions()
 	overlay.visible = true
 	overlay_dim.visible = true
+	gs.menu.raise_top_strip(true)
 	var house := overlay as HousePanel
 	house.set_title("Series · %s" % String({"decks": "deck choice", "rewards": "rewards", "first_player": "next game", "over": "final result"}.get(stage, stage)))
 	house.set_tag("Best of %d" % int(view.get("best_of", 3)))
@@ -380,6 +409,19 @@ func render() -> void:
 		overlay_box.add_child(see)
 	place_modals()
 	_fit_overlay()
+
+
+## J9 / J10 (owner, 22 Oct): drops everything the finished game left in hand: the click-selection and its
+## action row, a hover lift, an open card inspector or pile browser, the Fusion-method picker and a status
+## tip. Called when the killing blow's view arrives and again when the series modal opens.
+func clear_board_interactions() -> void:
+	gs.selection.deselect()
+	gs.keyboard.kb_uid = -1
+	gs.action_row.clear()
+	gs.hover.clear()
+	gs.inspect.close_all()
+	gs.details.close_method_picker()
+	StatusTip.hide_all()
 
 
 ## Shared stage header: Cinzel title between flourished rules, then seat plates around the score.

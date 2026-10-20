@@ -201,7 +201,7 @@ func _draw() -> void:
 	var ay := maxf(14.0, b + ir + 2.0)
 	if size.y - 2.0 * ay > 4.0:
 		Ornate.vgradient(self, Rect2(b, ay, ACCENT_W, size.y - 2.0 * ay), Color(UIStyle.GOLD_HI, 0.95), Color(UIStyle.GOLD.darkened(0.3), 0.8))
-	Ornate.corners(self, Rect2(Vector2.ZERO, size), Color(UIStyle.GOLD_HI, 0.85), arm, 6.0, 1.5)
+	Ornate.corners(self, Rect2(Vector2.ZERO, size), Color(UIStyle.GOLD_HI, 0.85), arm, 6.0, 1.5, float(_box.corner_radius_top_left))   # J12
 
 
 func _draw_weave(inset: Rect2, y: float) -> void:

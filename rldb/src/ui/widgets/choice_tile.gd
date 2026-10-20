@@ -162,18 +162,18 @@ func _draw() -> void:
 	var inset := Rect2(Vector2(2, 2), size - Vector2(4, 4))
 	var top := Color(accent.darkened(0.72), 1.0).lerp(Color(accent.darkened(0.55), 1.0), _hover)
 	var bot := Color(accent.darkened(0.88), 1.0).lerp(Color(accent.darkened(0.78), 1.0), _hover)
-	Ornate.vgradient(self, Rect2(inset.position + Vector2(0, rad), inset.size - Vector2(0, rad * 2.0)), top, bot)
-	draw_rect(Rect2(inset.position + Vector2(rad, 0), Vector2(inset.size.x - rad * 2.0, rad)), top)
-	draw_rect(Rect2(inset.position + Vector2(rad, inset.size.y - rad), Vector2(inset.size.x - rad * 2.0, rad)), bot)
-	Ornate.vgradient(self, Rect2(inset.position + Vector2(rad, 1), Vector2(inset.size.x - rad * 2.0, 22)), Color(1, 1, 1, 0.07 + 0.05 * _hover), Color(1, 1, 1, 0))
+	# J12: the body follows the rim's inner corner (its old bands left a dark square in each corner).
+	Ornate.rounded_gradient(self, inset, rad - 1.0, rad - 1.0, top, bot)
+	# The top sheen runs into the rounded corners too (it used to stop short of them with square ends).
+	Ornate.rounded_gradient(self, Rect2(inset.position, Vector2(inset.size.x, 22)), rad - 1.0, 0.0, Color(1, 1, 1, 0.07 + 0.05 * _hover), Color(1, 1, 1, 0))
 	if not _compact:
-		Ornate.corners(self, Rect2(Vector2.ZERO, size), Color(accent.lightened(0.2), 0.45 + 0.45 * _hover), 11.0, 5.0, 1.3)
+		Ornate.corners(self, Rect2(Vector2.ZERO, size), Color(accent.lightened(0.2), 0.45 + 0.45 * _hover), 11.0, 5.0, 1.3, float(_box.corner_radius_top_left))   # J12
 	if selected:
-		draw_rect(Rect2(Vector2(4, 4), size - Vector2(8, 8)), Color(UIStyle.GOLD, 0.5), false, 1.0)
+		Ornate.round_frame(self, Rect2(Vector2(4, 4), size - Vector2(8, 8)), rad - 3.0, Color(UIStyle.GOLD, 0.5))   # J12: concentric
 	if has_focus():
-		draw_rect(Rect2(Vector2(5, 5), size - Vector2(10, 10)), Color(UIStyle.GOLD_HI, 0.9), false, 1.5)
+		Ornate.round_frame(self, Rect2(Vector2(5, 5), size - Vector2(10, 10)), rad - 4.0, Color(UIStyle.GOLD_HI, 0.9), 1.5)
 	if _flash > 0.001:
-		draw_rect(inset, Color(accent.lightened(0.6), 0.32 * _flash))
+		draw_colored_polygon(Ornate.rounded_points(inset, rad - 1.0, rad - 1.0), Color(accent.lightened(0.6), 0.32 * _flash))   # inside the rim
 
 
 ## The drawn icon.

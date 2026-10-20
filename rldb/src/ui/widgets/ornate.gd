@@ -43,6 +43,16 @@ static func rounded_points(rect: Rect2, rt: float, rb: float, seg: int = 6) -> P
 	return pts
 
 
+## Outlines `rect` with its corners rounded to `radius` (a hairline frame, selection or focus ring inside a
+## rounded shape: pass the shape's radius less the inset so the frame stays concentric with its rim).
+static func round_frame(ci: CanvasItem, rect: Rect2, radius: float, col: Color, width: float = 1.0) -> void:
+	if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+		return
+	var ring := rounded_points(rect, maxf(radius, 0.0), maxf(radius, 0.0))
+	ring.append(ring[0])
+	ci.draw_polyline(ring, col, width, true)
+
+
 ## Fills a rounded rectangle (see `rounded_points`) with a gradient from `from` to `to`: top to
 ## bottom, or left to right when `horizontal`. The colour is set per outline point, so the
 ## gradient stays exact across the rounded corners.
@@ -63,20 +73,61 @@ static func diamond(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
 	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]), col)
 
 
-## Four double-line corner brackets with a diamond and end dots, `inset` px inside `rect`.
-static func corners(ci: CanvasItem, rect: Rect2, col: Color, arm: float = 22.0, inset: float = 5.0, w: float = 2.0) -> void:
+## Four double-line corner brackets with a diamond and end dots, `inset` px inside `rect`. J12 (owner,
+## 22 Oct): on a rounded shape pass its outer corner `radius`; each bracket then turns its corner on a
+## quarter arc concentric with the rim (radius - inset) instead of a square elbow, so it fits the shape.
+static func corners(ci: CanvasItem, rect: Rect2, col: Color, arm: float = 22.0, inset: float = 5.0, w: float = 2.0, radius: float = 0.0) -> void:
 	var inner := Color(col, col.a * 0.55)
+	var rc := maxf(radius - inset, 0.0)
 	for sx in [-1.0, 1.0]:
 		for sy in [-1.0, 1.0]:
 			var p := Vector2(rect.position.x + inset if sx < 0 else rect.end.x - inset, rect.position.y + inset if sy < 0 else rect.end.y - inset)
 			var ax := Vector2(-sx, 0.0)   # unit vectors pointing into the rect
 			var ay := Vector2(0.0, -sy)
-			ci.draw_polyline(PackedVector2Array([p + ay * arm, p, p + ax * arm]), col, w, true)
-			var q := p + ax * 5.0 + ay * 5.0
-			ci.draw_polyline(PackedVector2Array([q + ay * arm * 0.55, q, q + ax * arm * 0.55]), inner, maxf(1.0, w * 0.5), true)
-			diamond(ci, p + ax * 2.5 + ay * 2.5, 3.2, col)
+			ci.draw_polyline(bracket_points(p, ax, ay, arm, rc), col, w, true)
+			# The inner echo line: dropped on a short rounded bracket (a small plate), where it only clutters
+			# the arc into a square-looking blob; rounded too (never sharper than about half the outer arc).
+			if rc < ROUND_MIN or arm >= SMALL_ARM:
+				var q := p + ax * 5.0 + ay * 5.0
+				var ri := 0.0 if rc < ROUND_MIN else maxf(rc - 5.0, rc * 0.55)
+				ci.draw_polyline(bracket_points(q, ax, ay, arm * 0.55, ri), inner, maxf(1.0, w * 0.5), true)
+			var small := rc >= ROUND_MIN and arm < SMALL_ARM
+			diamond(ci, bracket_apex(p, ax, ay, rc, arm) + (ax + ay) * (1.8 if small else 2.5), 2.4 if small else 3.2, col)
 			ci.draw_circle(p + ay * arm, 1.7, col, true, -1.0, true)
 			ci.draw_circle(p + ax * arm, 1.7, col, true, -1.0, true)
+
+
+## Radius below which a bracket corner is drawn square (an arc that small reads as a point).
+const ROUND_MIN := 0.75
+## Rounded corner brackets shorter than this (px) are drawn without the inner echo line, with a smaller diamond.
+const SMALL_ARM := 14.0
+
+
+## The polyline of one corner bracket: from `arm` px along `ay` to the corner `p`, then `arm` px along `ax`
+## (`ax`, `ay`: unit vectors from the corner along its two edges, into the shape). With `r` > 0 the elbow
+## is a quarter arc of radius `r` (capped below the arm) touching both edges, so a bracket on a rounded
+## shape follows its corner (J12). Shared by the panel flourishes and the card selection brackets.
+static func bracket_points(p: Vector2, ax: Vector2, ay: Vector2, arm: float, r: float = 0.0, seg: int = 8) -> PackedVector2Array:
+	var pts := PackedVector2Array([p + ay * arm])
+	var rr := minf(r, arm * 0.85)
+	if rr < ROUND_MIN:
+		pts.append(p)
+	else:
+		var c := p + (ax + ay) * rr
+		for i in seg + 1:
+			var t := PI * 0.5 * float(i) / float(seg)
+			pts.append(c - ax * (rr * cos(t)) - ay * (rr * sin(t)))
+	pts.append(p + ax * arm)
+	return pts
+
+
+## The outermost point of a bracket's elbow (bracket_points): the corner `p` itself when square, else the
+## middle of its arc. Corner diamonds sit here.
+static func bracket_apex(p: Vector2, ax: Vector2, ay: Vector2, r: float, arm: float = INF) -> Vector2:
+	var rr := minf(r, arm * 0.85)
+	if rr < ROUND_MIN:
+		return p
+	return p + (ax + ay) * (rr * (1.0 - sqrt(0.5)))
 
 
 ## Horizontal rule that fades out at both ends, with a centre diamond (and two small side ones).

@@ -225,7 +225,7 @@ func _draw() -> void:
 		var ph := 0.0
 		if not UIStyle.reduce_motion:
 			ph = sin(float(Time.get_ticks_msec()) / CardOverlays.SELECT_PERIOD_MS * TAU)
-		CardOverlays._corner_brackets(self, top.grow(6.0 + 2.2 * ph), 9.0, UIStyle.SELECT.lightened(0.3), 2.4)
+		CardOverlays._corner_brackets(self, top.grow(6.0 + 2.2 * ph), 9.0, UIStyle.SELECT.lightened(0.3), 2.4, RADIUS + 6.0 + 2.2 * ph)
 	if ready_mark:
 		# Same animated glow and breathing badge as a ready CardWidget (F03-21, #25).
 		CardOverlays.ready_glow(self, top, 9.0, 1.0, CardOverlays.ready_pulse())
