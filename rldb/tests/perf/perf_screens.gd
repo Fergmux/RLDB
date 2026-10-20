@@ -72,16 +72,11 @@ func _run() -> void:
 	var host: LocalHost = main.get("local_host")
 	host.handle(0, {"t": "pick_starter", "index": 0})
 	# coin flip, deal and opening animations
-	var guard := 0
-	while host.series.stage != Series.STAGE_GAME and guard < 600:
-		await process_frame
-		guard += 1
+	# Waits are time-based (the bot thinks in real time; frame counts vary with the fps).
+	await _until(func() -> bool: return host.series.stage == Series.STAGE_GAME, 20.0)
 	await _frames(400)
 	# wait until it is seat 0's open turn with no prompt
-	guard = 0
-	while guard < 3000 and not _my_idle_turn(host):
-		await process_frame
-		guard += 1
+	await _until(func() -> bool: return _my_idle_turn(host), 30.0)
 	await _frames(240)
 	await _measure("duel_idle")
 	if "--quick" in OS.get_cmdline_user_args():
@@ -106,10 +101,7 @@ func _run() -> void:
 	# J31: the rewards modal between games (the bot concedes game 1).
 	if host.series.stage == Series.STAGE_GAME:
 		host.handle(1, {"t": "concede"})
-	guard = 0
-	while host.series.stage != Series.STAGE_REWARDS and guard < 600:
-		await process_frame
-		guard += 1
+	await _until(func() -> bool: return host.series.stage == Series.STAGE_REWARDS, 20.0)
 	await _frames(240)
 	await _measure("rewards")
 	# J31: the draft picks (a hot-seat draft series, seat 0's view).
@@ -124,6 +116,16 @@ func _on_frame_start() -> void:
 	if _t_proc > 0 and _t_pre >= _t_proc and _t_post >= _t_pre:
 		_phase = [(_t_pre - _t_proc) / 1000.0, (_t_post - _t_pre) / 1000.0, (now - _t_post) / 1000.0]
 	_t_proc = now
+
+
+## Waits until `ok` holds or `limit_s` seconds pass (prints a note on a timeout).
+func _until(ok: Callable, limit_s: float) -> void:
+	var end := Time.get_ticks_msec() + int(limit_s * 1000.0)
+	while not ok.call():
+		if Time.get_ticks_msec() > end:
+			print("PERF wait timed out after %.0f s" % limit_s)
+			return
+		await process_frame
 
 
 func _frames(n: int) -> void:
