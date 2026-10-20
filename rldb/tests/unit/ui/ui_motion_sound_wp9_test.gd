@@ -203,11 +203,22 @@ func test_inspector_counts_closed_at_once_and_frees_after_its_motion() -> void:
 func test_table_dust_is_sparse_round_and_deterministic() -> void:
 	var a: AmbientMotes = auto_free(AmbientMotes.dust())
 	var b: AmbientMotes = auto_free(AmbientMotes.dust())
-	assert_int(a.count()).is_equal(16)   # H1 release check: 10 read as two or three pinpricks
+	# H1 release check: 10 read as two or three pinpricks; H5 (21 Oct): 16 was a little distracting.
+	assert_int(a.count()).is_equal(14)
 	for m in a._motes:
 		assert_bool(m["petal"]).is_false()
 		assert_float(float(m["size"])).is_less_equal(AmbientMotes.DUST["size"].y)
 	assert_that(a._motes).is_equal(b._motes)
+
+
+func test_table_dust_is_fainter_than_the_h1_pass() -> void:
+	# H5 (21 Oct): "a little more faint". The H1 pass drew alpha 0.6..0.85 with a 0.3 halo.
+	var d: AmbientMotes = auto_free(AmbientMotes.dust())
+	assert_float(AmbientMotes.DUST["alpha"].y).is_less(0.85)
+	assert_float(d.halo_a).is_less(0.3)
+	for m in d._motes:
+		assert_float(float(m["alpha"])).is_less_equal(AmbientMotes.DUST["alpha"].y)
+		assert_float(float(m["alpha"])).is_greater(0.3)   # still seen, not removed
 
 
 func test_menu_motes_keep_their_petals() -> void:

@@ -50,11 +50,12 @@ var halo_a := 0.18
 
 ## Table dust (design review #23): sparse, small, slow warm motes in the duel table's light. Tuned in
 ## the H1 release check to be noticed at a glance (the first pass read as two or three pinpricks)
-## while staying under the cards: a brighter core and a wider, warmer halo.
-const DUST := {"size": Vector2(4.0, 7.0), "life": Vector2(10.0, 16.0), "alpha": Vector2(0.6, 0.85),
-	"rise": Vector2(3.0, 9.0), "sway": 14.0, "petals": false, "core": 0.55, "halo": 3.0, "halo_a": 0.3}
+## while staying under the cards: a brighter core and a wider, warmer halo. H5 (21 Oct, "a little more
+## faint, slightly too distracting"): ~20% lower alpha, a fainter halo, a little smaller, two fewer.
+const DUST := {"size": Vector2(4.0, 6.5), "life": Vector2(10.0, 16.0), "alpha": Vector2(0.48, 0.68),
+	"rise": Vector2(3.0, 9.0), "sway": 14.0, "petals": false, "core": 0.55, "halo": 3.0, "halo_a": 0.24}
 ## Motes of the duel table.
-const DUST_COUNT := 16
+const DUST_COUNT := 14
 const DUST_COLOR := Color("ffd9a0")
 
 
