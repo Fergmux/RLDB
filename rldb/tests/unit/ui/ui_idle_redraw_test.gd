@@ -142,6 +142,26 @@ func test_draft_slots_breathe_without_redrawing_the_grid() -> void:
 		assert_int(rn[0]).is_greater_equal(FRAMES - 1)
 
 
+func test_details_empty_art_breathes_without_redrawing() -> void:
+	# J31: the engraving breathes by its layer's alpha (modulate), so nothing is repainted per frame.
+	# Arrange
+	var art: DetailsEmptyArt = auto_free(DetailsEmptyArt.new())
+	art.size = Vector2(300, 400)
+	await _settle(art)
+	var layer: Control = art.get_child(0, true)
+	var ln := [0]
+	layer.draw.connect(func(): ln[0] += 1)
+	var a0 := layer.modulate.a
+	# Act
+	var draws: int = await _idle_draws(art)
+	await await_millis(300)
+	# Assert
+	assert_int(draws).is_equal(0)
+	assert_int(ln[0]).is_equal(0)
+	if not UIStyle.reduce_motion:
+		assert_bool(absf(layer.modulate.a - a0) > 0.0001).is_true()
+
+
 func test_draft_pips_breathe_without_redrawing_the_row() -> void:
 	# J31: only the current pip breathes; it redraws on its own layer, not the row of 12.
 	var p: Control = auto_free(DeckSelectView.DraftPips.new(3, 12))
