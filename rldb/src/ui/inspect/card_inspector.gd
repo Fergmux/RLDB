@@ -276,10 +276,15 @@ func _appear() -> void:
 	UIStyle.tween_token(create_tween(), _dim, "modulate:a", 1.0, "hover")
 	if _from.size.x < 4.0:
 		return
-	# The card flies from its place on the board once the panel is laid out (next frame).
+	# The card flies from its place on the board once the panel is laid out (next frame; a one-shot
+	# signal rather than an await, so nothing stays suspended if the inspector is freed first).
 	_card_widget.modulate.a = 0.0
-	await get_tree().process_frame
-	if not is_instance_valid(self) or _closing:
+	get_tree().process_frame.connect(_fly_in, CONNECT_ONE_SHOT)
+
+
+## The opening flight, one frame after the panel appeared.
+func _fly_in() -> void:
+	if _closing or not is_inside_tree():
 		return
 	var ps := _panel.scale
 	_panel.scale = Vector2.ONE     # the card's resting rect, not the one inside the panel's pop

@@ -119,9 +119,16 @@ func appear(sound: bool = true) -> void:
 	# The tween needs the laid-out size for its pivot: wait one frame inside a container.
 	if size == Vector2.ZERO:
 		modulate.a = 0.0
-		await get_tree().process_frame
-		if not is_instance_valid(self) or dismissing:
-			return
+		# A one-shot signal, not an await: nothing is left suspended if the panel is freed first.
+		get_tree().process_frame.connect(_appear_motion, CONNECT_ONE_SHOT)
+		return
+	_motion = UIStyle.tween_in(self)
+
+
+## The appear tween, started once the panel has a laid-out size.
+func _appear_motion() -> void:
+	if dismissing or not is_inside_tree():
+		return
 	_motion = UIStyle.tween_in(self)
 
 

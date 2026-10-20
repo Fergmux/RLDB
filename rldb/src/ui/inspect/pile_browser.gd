@@ -65,8 +65,10 @@ static func open(parent: Node, title: String, cards: Array, hint: String = "", o
 
 ## The opening deal (design review #90): the cards appear one after another (`stagger` 30 ms), each
 ## gliding from `from` (the pile on the board, a global point; default: a short rise) to its place
-## and growing from 0.4, with one soft card_draw. Under reduce motion they fade in together. Waits
-## one frame for the grid to place them. Returns false when there is nothing to deal.
+## and growing from 0.4, with one soft card_draw. Under reduce motion they fade in together. Deals on
+## the next frame, once the grid has placed them (a one-shot signal, not an await: a coroutine left
+## suspended on a browser freed before that frame crashed the engine at exit). Returns false when
+## there is nothing to deal.
 func deal_in(from: Vector2 = Vector2.INF) -> bool:
 	var ws := _grid.get_children()
 	if ws.is_empty() or not is_inside_tree():
@@ -78,9 +80,15 @@ func deal_in(from: Vector2 = Vector2.INF) -> bool:
 		for w in ws:
 			tr.tween_property(w, "modulate:a", 1.0, UIStyle.motion("reduced"))
 		return true
-	await get_tree().process_frame
-	if not is_instance_valid(self) or _closing:
-		return false
+	get_tree().process_frame.connect(_deal_now.bind(from), CONNECT_ONE_SHOT)
+	return true
+
+
+## The deal itself, one frame after deal_in (the grid has laid the cards out by then).
+func _deal_now(from: Vector2) -> void:
+	if _closing or not is_inside_tree():
+		return
+	var ws := _grid.get_children()
 	Sfx.play("card_draw", DEAL_DB)
 	var tw := create_tween().set_parallel(true)
 	var d := UIStyle.motion("card_move")
@@ -100,7 +108,6 @@ func deal_in(from: Vector2 = Vector2.INF) -> bool:
 				w.modulate.a = 1.0).set_delay(UIStyle.dur(at))
 		tw.tween_property(w, "fx_offset", Vector2.ZERO, d).from(off).set_delay(UIStyle.dur(at)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		tw.tween_property(w, "scale", Vector2.ONE, d).from(Vector2(DEAL_SCALE, DEAL_SCALE)).set_delay(UIStyle.dur(at)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	return true
 
 
 ## Best grid for `n` cards of 2:3 shape in `avail` px: returns {"cols", "w", "scroll"}. Prefers the
