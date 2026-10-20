@@ -105,7 +105,9 @@ func _build() -> void:
 	var fill := Control.new()
 	fill.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(fill)
-	status_label = UIStyle.label(SteamBridge.describe(), 13, UIStyle.TEXT_DIM, true)
+	col.add_child(identity_block())
+	# Notices from Main (a failed Steam action, an unreadable save) appear under the identity lines.
+	status_label = UIStyle.label("", 13, UIStyle.BAD.lightened(0.15), true)
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	col.add_child(status_label)
 	# Content panels sit in the centre of the whole screen.
@@ -114,6 +116,48 @@ func _build() -> void:
 	_menu_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_menu_center)
 	_build_menu_level(false)
+
+
+## F1 (owner feedback 20 Oct): the status lines at the foot of the menu column. "Logged in as
+## <Persona>" (the name in gold Cinzel) when Steam is up, or why Steam is unavailable, then
+## "Build version <application/config/version>". The persona is read live, never stored.
+static func identity_block() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.name = "IdentityBlock"
+	box.add_theme_constant_override("separation", 3)
+	var rule := Ornate.Rule.new(Color(UIStyle.GOLD, 0.45), true, 12.0)
+	rule.custom_minimum_size.x = 260.0
+	rule.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	box.add_child(rule)
+	var shadow := func(l: Label) -> void:
+		l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
+		l.add_theme_constant_override("shadow_offset_x", 1)
+		l.add_theme_constant_override("shadow_offset_y", 2)
+	if SteamBridge.available():
+		var row := HBoxContainer.new()
+		row.name = "LoggedIn"
+		row.add_theme_constant_override("separation", 7)
+		var pre := UIStyle.label("Logged in as", 16, UIStyle.MUTED)
+		pre.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		shadow.call(pre)
+		row.add_child(pre)
+		var nm := UIStyle.label(SteamBridge.persona(), 19, UIStyle.GOLD_HI, false, true)
+		nm.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		nm.add_theme_color_override("font_outline_color", Color(0.1, 0.06, 0.02, 0.9))
+		nm.add_theme_constant_override("outline_size", 3)
+		shadow.call(nm)
+		row.add_child(nm)
+		box.add_child(row)
+	else:
+		var msg := UIStyle.label(SteamBridge.describe(), 13, UIStyle.TEXT_DIM, true)
+		msg.name = "SteamState"
+		shadow.call(msg)
+		box.add_child(msg)
+	var ver := UIStyle.label("Build version %s" % SteamBridge.build_version(), 13, UIStyle.TEXT_DIM, false, true)
+	ver.name = "BuildVersion"
+	shadow.call(ver)
+	box.add_child(ver)
+	return box
 
 
 ## Darkened band on the left, fading out toward the right edge.

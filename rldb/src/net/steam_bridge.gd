@@ -17,7 +17,7 @@ const APP_ID_SETTING := "steam/initialization/app_data/app_id"
 
 static var _tried := false
 static var _ok := false
-static var _message := "Steam not initialised yet."
+static var _message := "Steam is off for this session. Hot-seat, bot and LAN play still work."
 static var app_id: int = 480
 
 
@@ -45,10 +45,12 @@ static func init() -> void:
 	_ok = int(r.get("status", -1)) == INIT_OK
 	if _ok:
 		(Engine.get_main_loop() as SceneTree).process_frame.connect(s.run_callbacks)
-		_message = "Steam ready as %s (App ID %d%s)." % [s.getPersonaName(), s.getAppID(), " — Spacewar dev ID" if app_id == 480 else ""]
+		_message = ""
+		# The persona name is never printed: stdout is also written to the log file on disk.
+		print("Steam ready (App ID %d%s)." % [s.getAppID(), ", Spacewar dev ID" if app_id == 480 else ""])
 	else:
 		_message = "Steam unavailable (%s). Start the Steam client and log in, then restart the game. LAN/hot-seat modes still work." % r.get("verbal", "unknown error")
-	print(_message)
+		print(_message)
 	if _ok:
 		_log_overlay()
 
@@ -63,8 +65,30 @@ static func available() -> bool:
 	return _ok
 
 
+## Player-facing Steam state: "Logged in as <Persona>" when Steam is up, otherwise why it is not.
+## The persona name is read from Steam each time and never kept or written anywhere.
 static func describe() -> String:
+	if _ok:
+		return "Logged in as %s" % persona()
 	return _message
+
+
+## The local player's Steam persona name with its first letter capitalised ("" without Steam).
+## For on-screen display only: never store it, log it or send it to telemetry.
+static func persona() -> String:
+	if not _ok:
+		return ""
+	return display_name(String(steam().getPersonaName()))
+
+
+## `n` with its first letter in upper case ("fergmux" -> "Fergmux"); the rest is unchanged.
+static func display_name(n: String) -> String:
+	return n.substr(0, 1).to_upper() + n.substr(1) if n != "" else n
+
+
+## The build version from the project settings (application/config/version), e.g. "0.3.6".
+static func build_version() -> String:
+	return String(ProjectSettings.get_setting("application/config/version", ""))
 
 
 static func my_id() -> int:
