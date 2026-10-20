@@ -53,6 +53,19 @@ func test_segmented_choice_joins_inner_corners() -> void:
 	assert_int(right.border_width_left).is_equal(0)
 
 
+func test_segmented_choice_with_a_gap_stands_the_answers_apart() -> void:
+	# Arrange / Act: H22, the go-first answers SPLIT_GAP apart
+	var seg: SegmentedChoice = auto_free(SegmentedChoice.new(["I go first", "My opponent goes first"], 0, 17, SegmentedChoice.SPLIT_GAP))
+	var left := UiSurface.flat_of(seg.buttons[0].get_theme_stylebox("normal"))
+	var right := UiSurface.flat_of(seg.buttons[1].get_theme_stylebox("normal"))
+	# Assert: a real gap, and each answer is a whole rounded button with its full border
+	assert_int(seg.get_theme_constant("separation")).is_equal(SegmentedChoice.SPLIT_GAP)
+	assert_int(SegmentedChoice.SPLIT_GAP).is_greater_equal(UIStyle.sp("lg"))
+	assert_int(left.corner_radius_top_right).is_equal(SegmentedChoice.RADIUS)
+	assert_int(right.corner_radius_top_left).is_equal(SegmentedChoice.RADIUS)
+	assert_int(right.border_width_left).is_greater(0)
+
+
 func test_segmented_choice_emits_the_pressed_index() -> void:
 	var seg: SegmentedChoice = auto_free(SegmentedChoice.new(["A", "B"], -1))
 	var got := []

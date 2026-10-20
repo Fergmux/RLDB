@@ -253,6 +253,9 @@ func _go_first() -> void:
 	m.submit(a, {"t": "attack", "uid": uids["fire"]})
 	host.broadcast()
 	_auto_answer()
+	if m.winner != -1 and host.series.stage == Series.STAGE_GAME:
+		host.series._on_game_over()   # the commands went straight to the engine, not through the series
+		host.broadcast()
 	await _wait(5.5)
 	var t0 := Time.get_ticks_msec()
 	while host.series.stage != Series.STAGE_REWARDS and Time.get_ticks_msec() - t0 < 20000:
