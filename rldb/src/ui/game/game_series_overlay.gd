@@ -4,6 +4,12 @@ extends RefCounted
 ## the "your deck" popup and the network pause veil. Built on the GameScreen node; it renders
 ## from the screen's series view and sends commands through it.
 
+## Series-over screen (design review #65): the score size, the loser's score opacity and the
+## width of the hero Back to main menu button.
+const SCORE_SIZE := 44
+const LOSER_SCORE_ALPHA := 0.6
+const HERO_CTA_W := 240.0
+
 const DECK_SORT := ["basic_unit", "unit", "spell", "trap", "power", "fusion", "ritual", "arcane"]
 const PAUSE_W := 440.0
 ## Draft offer: scale of a hovered card, and the row height that leaves room for it.
@@ -288,7 +294,7 @@ func render() -> void:
 		"first_player": _render_first()
 		"over": _render_over()
 	if stage == "first_player" and view.has("deck"):
-		var see := UIStyle.button("View your deck", 15)
+		var see := UIStyle.size_button(UIStyle.secondary_button("View your deck", 14), "small")
 		see.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		see.pressed.connect(_show_deck)
 		overlay_box.add_child(see)
@@ -496,21 +502,19 @@ func _render_first() -> void:
 	var chooser: bool = int(view["last_loser"]) == me
 	if chooser:
 		overlay_box.add_child(_centred("You lost the last game, so you choose who goes first in game %d." % next_no, 18, UIStyle.ACCENT))
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 12)
-		overlay_box.add_child(row)
-		for who in [me, 1 - me]:
-			var txt: String = "I go first" if who == me else "My opponent goes first"
-			var picked: bool = chosen and first == who
-			var b := UIStyle.primary_button(txt, 17) if picked else UIStyle.button(txt, 17)
-			b.custom_minimum_size = Vector2(220, 46)
-			b.toggle_mode = false
-			b.disabled = you_ready
-			b.tooltip_text = "Chosen" if picked else "Choose this"
-			var w: int = who
-			b.pressed.connect(func(): gs.send({"t": "first_player", "who": w}))
-			row.add_child(b)
+		# Design review #60: the two answers are one segmented choice (the chosen one fills gold with a
+		# check mark); Start next duel below is the screen's primary, disabled until a choice is made.
+		var whos := [me, 1 - me]
+		var sel := -1
+		if chosen:
+			sel = whos.find(first)
+		var seg := SegmentedChoice.new(["I go first", "My opponent goes first"], sel, 17)
+		seg.name = "FirstPlayerChoice"
+		seg.set_disabled(you_ready)
+		for i in seg.buttons.size():
+			seg.buttons[i].tooltip_text = "Chosen" if i == sel else "Choose this"
+		seg.chosen.connect(func(i: int): gs.send({"t": "first_player", "who": int(whos[i])}))
+		overlay_box.add_child(seg)
 	elif chosen:
 		overlay_box.add_child(_centred(("%s chose you to go first in game %d." if first == me else "%s chose to go first in game %d.") % [opp, next_no], 18, UIStyle.ACCENT))
 	else:
@@ -633,8 +637,13 @@ func _render_over() -> void:
 		var ff := UIStyle.label("%s left and forfeited the series." % view["names"][forfeit], 16, UIStyle.BAD, true)
 		ff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		overlay_box.add_child(ff)
-	overlay_box.add_child(score_row(UIStyle.label(view["names"][0], 20, UIStyle.TEXT, false, true), UIStyle.label(view["names"][1], 20, UIStyle.TEXT, false, true),
-		view["scores"], func(t: String) -> Label: return UIStyle.label(t, 40, UIStyle.GOLD, false, true), 18))
+	# Design review #65: the score is the headline number (44 px), the loser's at 60% opacity.
+	var srow := score_row(UIStyle.label(view["names"][0], 20, UIStyle.TEXT, false, true), UIStyle.label(view["names"][1], 20, UIStyle.TEXT, false, true),
+		view["scores"], func(t: String) -> Label: return UIStyle.label(t, SCORE_SIZE, UIStyle.GOLD, false, true), 18)
+	srow.name = "ScoreRow"
+	var nums := [srow.get_child(0).get_child(1), srow.get_child(2).get_child(0)]
+	(nums[1 - w] as Control).modulate.a = LOSER_SCORE_ALPHA
+	overlay_box.add_child(srow)
 	overlay_box.add_child(UIStyle.label("Game history", 16, UIStyle.GOLD, false, true))
 	for h in view["history"]:
 		var hw: bool = h["winner"] == gs.me()
@@ -649,7 +658,10 @@ func _render_over() -> void:
 		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hb.add_child(t)
 		hb.add_child(UIStyle.label("Turn %d · HP %d–%d" % [h["turns"], h["hp"][0], h["hp"][1]], 14, UIStyle.MUTED))
-	var b := UIStyle.primary_button("Back to main menu", 17)
+	# Design review #65: the final call to action is a hero CTA (52 px high, 240 px wide).
+	var b := UIStyle.size_button(UIStyle.primary_button("Back to main menu", 18), "hero")
+	b.name = "BackToMenu"
+	b.custom_minimum_size.x = maxf(b.custom_minimum_size.x, HERO_CTA_W)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	b.pressed.connect(func(): gs.back_to_menu.emit())
 	overlay_box.add_child(b)

@@ -167,15 +167,19 @@ func _build() -> void:
 	head.add_theme_constant_override("separation", 16)
 	head.custom_minimum_size.y = HEADER_H - 20.0
 	v.add_child(head)
+	# Design review #89: the hint sits under the title (13 px MUTED) and Close is a secondary, like
+	# every other Close in the app.
+	var titles := VBoxContainer.new()
+	titles.add_theme_constant_override("separation", UIStyle.sp("xs"))
+	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	titles.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(titles)
 	_title_label = UIStyle.label("", 30, UIStyle.GOLD, false, true)
-	_title_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(_title_label)
-	_hint_label = UIStyle.label("", 15, UIStyle.MUTED)
-	_hint_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_hint_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(_hint_label)
-	var x := UIStyle.primary_button("Close", 16)
-	x.custom_minimum_size = Vector2(120, 40)
+	titles.add_child(_title_label)
+	_hint_label = UIStyle.label("", 13, UIStyle.MUTED)
+	titles.add_child(_hint_label)
+	var x := UIStyle.size_button(UIStyle.secondary_button("Close", 15), "standard")
+	x.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	x.pressed.connect(close)
 	head.add_child(x)
 	var rule := ColorRect.new()

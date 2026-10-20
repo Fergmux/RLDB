@@ -131,15 +131,24 @@ static func _ready_badge(ci: CanvasItem, rect: Rect2, s: float, bounce: float) -
 
 
 ## Four L-shaped corner brackets on `r`, each arm `len_px` long.
+## Selection brackets (#29): a gold filigree L at each corner of `r` with a soft glow under it and
+## a small diamond set on the corner.
 static func _corner_brackets(ci: CanvasItem, r: Rect2, len_px: float, col: Color, w: float) -> void:
 	var xs := [r.position.x, r.end.x]
 	var ys := [r.position.y, r.end.y]
+	var glow := Color(col, col.a * 0.16)
 	for i in 2:
 		for j in 2:
 			var p := Vector2(xs[i], ys[j])
 			var dx := len_px if i == 0 else -len_px
 			var dy := len_px if j == 0 else -len_px
-			ci.draw_polyline(PackedVector2Array([p + Vector2(dx, 0), p, p + Vector2(0, dy)]), col, w, true)
+			var arm := PackedVector2Array([p + Vector2(dx, 0), p, p + Vector2(0, dy)])
+			ci.draw_polyline(arm, glow, w + 6.0, true)
+			ci.draw_polyline(arm, Color(col, col.a * 0.3), w + 2.5, true)
+			ci.draw_polyline(arm, col, w, true)
+			var d := w * 1.25 + 0.5
+			var q := p - Vector2(signf(dx), signf(dy)) * (w * 0.9)
+			ci.draw_colored_polygon(PackedVector2Array([q + Vector2(0, -d), q + Vector2(d, 0), q + Vector2(0, d), q + Vector2(-d, 0)]), col)
 
 
 ## Numbered circle (`order_no`) on the top-right corner for ordered multi-select.
@@ -150,5 +159,5 @@ static func _order_badge(pt: CardPainter, rect: Rect2, order_no: int) -> void:
 	var c := Vector2(rect.end.x - 3.0 * s, rect.position.y + 3.0 * s)
 	ci.draw_circle(c, rr + 1.8 * s, BADGE_SHADOW_ORDER, true, -1.0, true)
 	ci.draw_circle(c, rr, UIStyle.SELECT.darkened(0.1), true, -1.0, true)
-	ci.draw_arc(c, rr, 0.0, TAU, 24, Color.WHITE, maxf(1.3, 1.5 * s), true)
-	pt.text_c(UIStyle.font_display(700), str(order_no), c, maxi(10 if order_no < 10 else 8, roundi(rr * (1.1 if order_no < 10 else 0.85))), Color.WHITE, 1.0)
+	ci.draw_arc(c, rr, 0.0, TAU, 24, UIStyle.ON_GOLD, maxf(1.3, 1.5 * s), true)
+	pt.text_c(UIStyle.font_display(700), str(order_no), c, maxi(10 if order_no < 10 else 8, roundi(rr * (1.1 if order_no < 10 else 0.85))), UIStyle.ON_GOLD, 0.0)

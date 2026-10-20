@@ -211,10 +211,12 @@ func _go(fn: Callable) -> void:
 # ---------------------------------------------------------------- confirmations
 
 ## Asks before leaving the current series (or another destructive step); `on_yes` runs on confirm.
+## `style` is the confirm's button family: "danger" (the default: leaving or deleting a series
+## cannot be undone, so the cancel holds the focus) or "primary".
 func _confirm_leave(title: String, text: String, on_yes: Callable, confirm: String = "Leave and continue",
-		cancel: String = "Stay") -> void:
+		cancel: String = "Stay", style: String = "danger") -> void:
 	_close_confirm()
-	_confirm_panel = ConfirmDialog.open(self, title, text, confirm, on_yes, cancel, "Leave series")
+	_confirm_panel = ConfirmDialog.open(self, title, text, confirm, on_yes, cancel, "Leave series", style)
 
 
 func _close_confirm() -> void:

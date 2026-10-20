@@ -1458,8 +1458,10 @@ func _ask_delete(which: String = "") -> void:
 		_say("Deleted \"%s\". The cards are still in the editor; Save to keep them under a name." % n))
 
 
-## Asks `text` in the shared ConfirmDialog; `on_yes` runs when `yes_text` is pressed.
+## Asks `text` in the shared ConfirmDialog; `on_yes` runs when `yes_text` is pressed. Every
+## question asked here (replace, discard, delete) loses work if confirmed, so the confirm is the
+## danger family and Cancel holds the focus (design review #70).
 func _confirm(title: String, text: String, yes_text: String, on_yes: Callable) -> void:
 	if _overlay != null and is_instance_valid(_overlay):
 		_overlay.queue_free()
-	_overlay = ConfirmDialog.open(self, title, text, yes_text, on_yes, "Cancel", "Deck builder")
+	_overlay = ConfirmDialog.open(self, title, text, yes_text, on_yes, "Cancel", "Deck builder", "danger")

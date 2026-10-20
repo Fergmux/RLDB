@@ -274,21 +274,25 @@ func _footer(with_finish: bool, r: Dictionary = {}) -> Control:
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 12)
 	v.add_child(h)
+	# Design review #61: the reward tiles are the screen's primary interaction, so the footer has no
+	# gold button: Finish / Skip is a secondary and View your deck a text link with its tome glyph.
 	if gs.view.has("deck"):
-		var see := UIStyle.button("View your deck", 15)
-		see.custom_minimum_size = Vector2(190, 40)
+		var see := TextLink.make("View your deck", 15)
+		see.name = "ViewDeckLink"
+		see.custom_minimum_size = Vector2(0, 40)
+		see.set_lead(34)
 		var g := DeckSelectView.TabGlyph.new("tome", UIStyle.GOLD)
 		g.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT)
-		g.offset_left = 12
-		g.offset_right = 34
-		g.offset_top = -12
-		g.offset_bottom = 12
+		g.offset_left = 6
+		g.offset_right = 28
+		g.offset_top = -11
+		g.offset_bottom = 11
 		see.add_child(g)
 		see.pressed.connect(gs.overlays._show_deck)
 		h.add_child(see)
 	if with_finish:
-		var fin := UIStyle.primary_button("Finish rewards" if not r["taken"].is_empty() else "Skip remaining rewards", 16)
-		fin.custom_minimum_size = Vector2(230, 40)
+		var fin := UIStyle.secondary_button("Finish rewards" if not r["taken"].is_empty() else "Skip remaining rewards", 16)
+		fin.custom_minimum_size = Vector2(230, 44)
 		fin.pressed.connect(func(): gs.send({"t": "reward_finish"}))
 		h.add_child(fin)
 	return v

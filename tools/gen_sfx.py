@@ -686,6 +686,87 @@ def s_ap_loss(r):
     return finish(lowpass(mix(x, scale(y, 0.25)), 2600), tail_kw=dict(wet=0.22, extra_s=0.12))
 
 
+# ---------------------------------------------------------------- UI feedback (H1 WP-1, design review 1.4.6)
+# The same warm wood, brass and leather family as the clicks, but quieter and shorter: hover and
+# toggles sit far under the music, the panel cues are a parchment movement with a faint brass ring.
+def s_ui_hover(r):
+    """Button / menu-item hover: a very soft brass brush with a faint wooden tick, about 40 ms."""
+    n = n_samples(0.04)
+    brush = mul(bandpass_sweep(noise(r, 0.04), 2400, 4200, q=1.3), [math.sin(math.pi * i / n) ** 2 for i in range(n)])
+    tick = tone(2350, 0.03, 0.006, ((1, 1), (2.6, 0.2)), 0.0006)
+    knock = _thock(520, 380, 0.03, 0.006)
+    return finish(lowpass(mix(scale(brush, 0.7), scale(tick, 0.35), scale(knock, 0.25)), 6500), tail_kw=dict(wet=0.06, extra_s=0.03))
+
+
+def _parchment(r, sec, f0, f1):
+    """A paper movement: band-passed noise swept f0 -> f1 with a fine crinkle (random grain bursts)."""
+    n = n_samples(sec)
+    body = mul(bandpass_sweep(noise(r, sec), f0, f1, q=1.2), [math.sin(math.pi * i / n) ** 1.3 for i in range(n)])
+    crinkle = []
+    for _ in range(int(sec * 70)):
+        off = r.uniform(0.0, sec * 0.85)
+        d = r.uniform(0.002, 0.006)
+        crinkle.append((off, scale(mul(highpass(noise(r, d), 2500), env_exp(n_samples(d), d * 0.3, 0.0003)), r.uniform(0.15, 0.45))))
+    return mix(body, scale(mix(*crinkle), 0.35))
+
+
+def s_panel_open(r):
+    """Modal open: a parchment unfurl rising in pitch under a low, slow brass shimmer, about 250 ms."""
+    paper = _parchment(r, 0.22, 600, 2800)
+    n = n_samples(0.42)
+    swell_env = [min(1.0, (i / (n * 0.35))) ** 1.6 * math.exp(-max(0.0, i / SR - 0.15) / 0.12) for i in range(n)]
+    brass = mul(mix(tone(392.0, 0.42, 10.0, ((1, 1), (2, 0.4), (3, 0.18), (4.01, 0.08)), 0.01),
+                    scale(tone(587.3, 0.42, 10.0, ((1, 1), (2, 0.3)), 0.01), 0.6)), swell_env)
+    shimmer = mul(highpass(noise(r, 0.3), 6500), [math.sin(math.pi * i / n_samples(0.3)) ** 2 * 0.5 for i in range(n_samples(0.3))])
+    return finish(mix(scale(paper, 0.8), (0.03, scale(lowpass(brass, 3000), 0.32)), (0.06, scale(shimmer, 0.06))), tail_kw=dict(wet=0.22, extra_s=0.12))
+
+
+def s_panel_close(r):
+    """Modal close: the unfurl reversed and shorter (falling paper, a lower brass touch), about 160 ms."""
+    paper = _parchment(r, 0.14, 2600, 650)
+    n = n_samples(0.26)
+    env = [min(1.0, i / (n * 0.08)) * math.exp(-i / SR / 0.07) for i in range(n)]
+    brass = mul(tone(329.6, 0.26, 10.0, ((1, 1), (2, 0.35), (3, 0.12)), 0.004), env)
+    return finish(mix(scale(paper, 0.8), (0.02, scale(lowpass(brass, 2400), 0.28))), tail_kw=dict(wet=0.16, extra_s=0.08))
+
+
+def s_tab(r):
+    """Tab switch: a leather-flap thump, about 90 ms."""
+    flap = mul(lowpass(noise(r, 0.05), 1400), env_exp(n_samples(0.05), 0.012, 0.001))
+    thump = _thock(170, 85, 0.09, 0.026)
+    slap = mul(bandpass_sweep(noise(r, 0.02), 1800, 900, q=1.5), env_exp(n_samples(0.02), 0.004, 0.0005))
+    return finish(lowpass(mix(scale(flap, 0.6), thump, scale(slap, 0.3)), 3500), tail_kw=dict(wet=0.08, extra_s=0.04))
+
+
+def _latch(r, f_a, f_b):
+    """A small brass latch: two clicks a few ms apart at pitches f_a then f_b."""
+    def click(f):
+        t = mul(highpass(noise(r, 0.008), 3000), env_exp(n_samples(0.008), 0.0012, 0.0002))
+        b = tone(f, 0.05, 0.008, ((1, 1), (2.7, 0.3)), 0.0005)
+        return mix(scale(t, 0.6), b)
+    return mix(click(f_a), (0.028, scale(click(f_b), 0.85)), scale(_thock(380, 260, 0.04, 0.008), 0.3))
+
+
+def s_toggle_on(r):
+    """Check box / toggle on: a latch closing, stepping up."""
+    return finish(lowpass(_latch(r, 1700, 2300), 7000), tail_kw=dict(wet=0.08, extra_s=0.04))
+
+
+def s_toggle_off(r):
+    """Check box / toggle off: the same latch, stepping down."""
+    return finish(lowpass(_latch(r, 1900, 1350), 6000), tail_kw=dict(wet=0.08, extra_s=0.04))
+
+
+def s_hp_low_heartbeat(r):
+    """Low HP (D4): a soft, warm lub-dub felt more than heard: two low thumps with a body knock."""
+    def beat(f0, f1, amp):
+        sub = mul(sweep(f0, f1, 0.2), env_exp(n_samples(0.2), 0.06, 0.004))
+        body = mul(lowpass(noise(r, 0.05), 300), env_exp(n_samples(0.05), 0.012, 0.002))
+        return scale(mix(sub, scale(body, 0.4)), amp)
+    x = mix(beat(78.0, 46.0, 1.0), (0.21, beat(70.0, 42.0, 0.72)))
+    return finish(lowpass(softclip(x, 1.3), 900), tail_kw=dict(wet=0.12, extra_s=0.15, damp=900.0))
+
+
 SOUNDS = [
     ("card_draw", s_card_draw), ("card_play", s_card_play), ("card_set", s_card_set),
     ("summon", s_summon), ("select", s_select), ("confirm", s_confirm),
@@ -704,18 +785,24 @@ SOUNDS = [
     ("arcane_shimmer", s_arcane_shimmer), ("arcane_impact", s_arcane_impact),
     ("card_slam", s_card_slam), ("serpent_coil", s_serpent_coil), ("serpent_strike", s_serpent_strike),
     ("sacrifice", s_sacrifice), ("ap_gain", s_ap_gain), ("ap_loss", s_ap_loss),
+    ("ui_hover", s_ui_hover), ("panel_open", s_panel_open), ("panel_close", s_panel_close), ("tab", s_tab),
+    ("toggle_on", s_toggle_on), ("toggle_off", s_toggle_off), ("hp_low_heartbeat", s_hp_low_heartbeat),
 ]
 
 # Per-sound peak level (dBFS); default PEAK_DBFS. UI clicks sit well under the game sounds.
 PEAK = {"chat": -12.0, "click_primary": -11.0, "click_secondary": -12.0, "back": -10.5, "deck_add": -10.0, "deck_remove": -10.5,
-        "ap_gain": -10.0, "ap_loss": -11.0, "card_slam": -7.5, "sacrifice": -8.0}
+        "ap_gain": -10.0, "ap_loss": -11.0, "card_slam": -7.5, "sacrifice": -8.0,
+        "ui_hover": -21.0, "panel_open": -13.5, "panel_close": -14.5, "tab": -13.0,
+        "toggle_on": -14.0, "toggle_off": -14.5, "hp_low_heartbeat": -7.0}
 
 
 # Hard duration caps (seconds); longer renders are trimmed and re-faded.
 MAX_LEN = {"boom": 1.6, "charge": 1.4, "victory_big": 2.6, "exhaust": 1.3, "fuse": 1.3, "ritual": 1.4, "arcane": 1.3, "victory": 1.4, "defeat": 1.4, "turn": 0.9, "heal": 0.9, "summon": 0.8,
            "fusion_vortex": 1.0, "fusion_impact": 1.8, "ritual_choir": 1.7, "ritual_impact": 2.0, "arcane_shimmer": 1.4,
            "arcane_impact": 1.8, "card_slam": 0.6, "serpent_coil": 1.6, "serpent_strike": 1.6, "sacrifice": 1.2,
-           "ap_gain": 0.6, "ap_loss": 0.45}
+           "ap_gain": 0.6, "ap_loss": 0.45,
+           "ui_hover": 0.12, "panel_open": 0.55, "panel_close": 0.35, "tab": 0.2, "toggle_on": 0.16, "toggle_off": 0.16,
+           "hp_low_heartbeat": 0.75}
 
 
 def write_wav(path, x):

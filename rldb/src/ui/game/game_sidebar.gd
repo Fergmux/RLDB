@@ -19,6 +19,8 @@ var pips: PhasePips
 var brow: HBoxContainer
 ## Advance-phase button.
 var phase_btn: Button
+## The status line's arrow towards the prompt pane (shown while the choice is this player's).
+var state_arrow: Control
 ## Chip showing the game state.
 var state_chip: PanelContainer
 ## Text of the state chip.
@@ -79,22 +81,33 @@ func build() -> void:
 	phase_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	phase_btn.pressed.connect(func(): gs.send({"t": "next_phase"}))
 	brow.add_child(phase_btn)
-	# Status chip (NOT a button): shown instead of the phase button while a choice is pending.
+	# Status line (NOT a button, design review #40): shown instead of the phase button while a choice
+	# is pending or it is not this player's move. An engraved F3 inset with italic MUTED text, so a
+	# status never shares the call-to-action's look; when the choice is the player's, a gold arrow
+	# bobs towards the prompt pane on the left of the board.
 	state_chip = PanelContainer.new()
-	var cs := UIStyle.flat(Color(UIStyle.GOLD, 0.1), Color(UIStyle.GOLD, 0.55), 1, 6)
-	cs.border_width_left = 6
-	cs.content_margin_left = 10
-	cs.content_margin_right = 8
+	var cs := UIStyle.inset_style(Color(UIStyle.PANEL_INK, 0.92))
+	UIStyle.pad(cs, "md", "sm")
 	state_chip.add_theme_stylebox_override("panel", cs)
 	state_chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	state_chip.custom_minimum_size = Vector2(0, 44)
 	state_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	state_chip.visible = false
-	state_label = UIStyle.label("", 15, UIStyle.GOLD_HI, false, true)
+	var srow := HBoxContainer.new()
+	UIStyle.pad(srow, "sm")
+	srow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	state_chip.add_child(srow)
+	state_arrow = PromptArrow.new()
+	state_arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	srow.add_child(state_arrow)
+	state_label = UIStyle.label("", 14, UIStyle.MUTED)
+	state_label.add_theme_font_override("font", UIStyle.font_italic())
 	state_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	state_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	state_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	state_chip.add_child(state_label)
+	state_label.clip_text = true
+	state_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	srow.add_child(state_label)
 	brow.add_child(state_chip)
 	turn_note = UIStyle.label("", 13, Color("ff9ff3"), true)
 	turn_note.visible = false
@@ -174,6 +187,7 @@ func render_turnbar() -> void:
 		phase_btn.visible = false
 		state_label.text = chip
 		state_label.add_theme_color_override("font_color", UIStyle.MUTED)
+		state_arrow.visible = false
 		var waiting_s: bool = not pd.is_empty() and mv["winner"] == -1
 		gs.prompt.show_wait(chip if waiting_s else "")
 		turn_note.text = "SNEAKY SNUNDAY: card-effect gains/losses reversed (not Damage or Healing)" if mv["reversal"] else ""
@@ -201,7 +215,8 @@ func render_turnbar() -> void:
 	var waiting: bool = not pd.is_empty() and not pd["mine"] and mv["winner"] == -1
 	gs.prompt.show_wait((("Opponent is responding…" if pd["kind"] == "trap_response" else "Opponent is choosing…") if waiting else ""))
 	state_label.text = chip
-	state_label.add_theme_color_override("font_color", UIStyle.GOLD_HI if chip_mine else UIStyle.MUTED)
+	state_label.add_theme_color_override("font_color", UIStyle.TEXT if chip_mine else UIStyle.MUTED)
+	state_arrow.visible = chip_mine
 	phase_btn.text = label
 	phase_btn.disabled = not ok
 	phase_btn.tooltip_text = tip
@@ -238,3 +253,30 @@ func render_series() -> void:
 	series_box.add_child(UIStyle.label("Best of %d" % view["best_of"], 14, UIStyle.MUTED))
 	for h in view.get("history", []):
 		series_box.add_child(UIStyle.label("Game %d: %s won (turn %d)" % [h["game"], names[h["winner"]], h["turns"]], 14, UIStyle.TEXT, true))
+
+
+## Gold chevron pointing left (towards the prompt pane), bobbing 4 px on a 1.2 s loop; still under
+## reduce motion. Design review #40.
+class PromptArrow extends Control:
+	const BOB_PX := 4.0
+	const PERIOD := 1.2
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(18, 18)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_VISIBILITY_CHANGED:
+			set_process(is_visible_in_tree() and not UIStyle.reduce_motion)
+
+	func _process(_d: float) -> void:
+		queue_redraw()
+
+	func _draw() -> void:
+		var off := 0.0
+		if not UIStyle.reduce_motion:
+			off = -BOB_PX * (0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 1000.0 / PERIOD * TAU))
+		var c := size / 2.0 + Vector2(off + 2.0, 0)
+		var pts := PackedVector2Array([c + Vector2(4, -7), c + Vector2(-5, 0), c + Vector2(4, 7)])
+		draw_polyline(pts, Color(UIStyle.GOLD, 0.3), 6.0, true)
+		draw_polyline(pts, UIStyle.GOLD_HI, 2.4, true)

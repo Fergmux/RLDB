@@ -108,23 +108,8 @@ class Rule extends Control:
 		Ornate.divider(self, size.y / 2.0, 0.0, size.x, col, gem)
 
 
-## A themed scroll bar set: dark inset track with a bronze rim, gold grabber that brightens on
-## hover and press. Assign to a ScrollContainer's `theme`.
+## The house scroll bar set (UIStyle.apply_scrollbar_theme: an 8 px engraved ink track, a 6 px gold
+## thumb that brightens on hover and press, 12 px between the content and the track). Assign to a
+## ScrollContainer's `theme`.
 static func scroll_theme() -> Theme:
-	var th := Theme.new()
-	var track := UIStyle.flat(Color(0.02, 0.016, 0.012, 0.75), Color(UIStyle.BRONZE, 0.45), 1, 6)
-	track.content_margin_left = 3
-	track.content_margin_right = 3
-	var grab := UIStyle.flat(Color(UIStyle.GOLD, 0.62), Color(UIStyle.GOLD_HI, 0.35), 1, 5)
-	var hi := UIStyle.flat(Color(UIStyle.GOLD, 0.95), UIStyle.GOLD_HI, 1, 5)
-	var down := UIStyle.flat(UIStyle.GOLD_HI, Color.WHITE, 1, 5)
-	for sb in [grab, hi, down]:
-		sb.content_margin_left = 6
-		sb.content_margin_right = 6
-		sb.content_margin_top = 12
-		sb.content_margin_bottom = 12
-	th.set_stylebox("scroll", "VScrollBar", track)
-	th.set_stylebox("grabber", "VScrollBar", grab)
-	th.set_stylebox("grabber_highlight", "VScrollBar", hi)
-	th.set_stylebox("grabber_pressed", "VScrollBar", down)
-	return th
+	return UIStyle.apply_scrollbar_theme(Theme.new())
