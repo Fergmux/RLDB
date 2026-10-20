@@ -340,7 +340,7 @@ func _overflow(ctx: Dictionary, reach: float) -> void:
 		pl.release_hp(false, true)   # D4: the overflow that ends the game shatters the vial
 		# UI review F12: the struck plate reads above its own blast (the HP drop is the point).
 		var z0 := pl.z_index
-		pl.z_index = UiLayers.FX + 1
+		pl.z_index = FxPlayer.STRUCK_PLATE_Z
 		_fx.add_cleanup(func(): if is_instance_valid(pl): pl.z_index = z0)
 		_fx.screen.get_tree().create_timer(UIStyle.dur(1.6)).timeout.connect(func(): if is_instance_valid(pl): pl.z_index = z0)
 	Sfx.play("boom", 0.0, 0.0)
@@ -458,7 +458,7 @@ func _damage_number(global_c: Vector2, dmg: int, col: Color, fs: int) -> void:
 	l.pivot_offset = l.size / 2.0
 	var p0 := _fx.fx_pos(global_c) - l.size / 2.0
 	l.position = p0
-	_fx.add_node(l)
+	_fx.add_text(l)   # H23: above the struck plate
 	if UIStyle.reduce_motion:
 		var tr := _fx.new_tween()
 		tr.tween_interval(0.8)

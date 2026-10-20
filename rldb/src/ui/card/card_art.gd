@@ -46,7 +46,6 @@ static func draw(pt: CardPainter, rect: Rect2) -> void:
 
 ## Kind glyph centred on `c` with radius `r`: "sword" (units), "star" (spells), "eye" (traps), "crown" (powers).
 static func draw_glyph(ci: CanvasItem, kind: String, c: Vector2, r: float, col: Color) -> void:
-	var w := maxf(1.5, 0.12 * r)
 	match kind:
 		"sword":
 			_draw_sword(ci, c, r, col)
@@ -58,19 +57,9 @@ static func draw_glyph(ci: CanvasItem, kind: String, c: Vector2, r: float, col: 
 				pts.append(c + Vector2(cos(a), sin(a)) * rr)
 			ci.draw_colored_polygon(pts, col)
 		"eye":
-			var top := PackedVector2Array()
-			for i in 13:
-				var x := lerpf(-1.0, 1.0, float(i) / 12.0)
-				top.append(c + Vector2(x * r, -0.5 * r * (1.0 - x * x)))
-			var lens := PackedVector2Array(top)
-			for i in range(12, -1, -1):
-				var x := lerpf(-1.0, 1.0, float(i) / 12.0)
-				lens.append(c + Vector2(x * r, 0.5 * r * (1.0 - x * x)))
-			ci.draw_colored_polygon(lens, col)
-			ci.draw_circle(c, r * 0.26, Color(0, 0, 0, col.a * 1.2), true, -1.0, true)
+			_draw_eye(ci, c, r, col)
 		"crown":
-			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r * 0.8, 0), c + Vector2(0, r), c + Vector2(-r * 0.8, 0)]), col)
-			ci.draw_circle(c, r * 0.3, Color(0, 0, 0, col.a * 1.2), true, -1.0, true)
+			_draw_crown(ci, c, r, col)
 
 
 ## A pointed blade with a fuller, a curved cross-guard, a grip and a round pommel, `2 r` tall and centred
@@ -102,6 +91,76 @@ static func _draw_sword(ci: CanvasItem, c: Vector2, r: float, col: Color) -> voi
 	# The fuller: a fine groove down the blade.
 	ci.draw_line(c + Vector2(0, -r * 0.72), c + Vector2(0, r * 0.10), Color(0, 0, 0, minf(0.4, col.a * 2.0)), maxf(1.0, r * 0.035), true)
 
+
+
+## H13 (owner feedback 2026-10-21): the Trap mark in the sword's style. A pointed almond eye (`1.84 r`
+## wide), an iris ring around a cut slit pupil with a glint, and a fine brow line above it. Each part is a
+## filled polygon with a hairline rim of the same colour and a faint halo, as in _draw_sword.
+static func _draw_eye(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
+	var rim_w := maxf(1.0, r * 0.035)
+	var rim := Color(col, minf(1.0, col.a * 1.9))
+	var cut := Color(0, 0, 0, minf(0.4, col.a * 2.0))
+	var lens := PackedVector2Array()
+	var steps := 14
+	for i in steps + 1:
+		var x := lerpf(-1.0, 1.0, float(i) / float(steps))
+		lens.append(Vector2(x * 0.92, -0.40 * pow(1.0 - x * x, 0.8)))
+	for i in range(steps - 1, 0, -1):
+		var x := lerpf(-1.0, 1.0, float(i) / float(steps))
+		lens.append(Vector2(x * 0.92, 0.40 * pow(1.0 - x * x, 0.8)))
+	var brow := PackedVector2Array()
+	for i in 11:
+		var x := lerpf(-0.62, 0.62, float(i) / 10.0)
+		brow.append(Vector2(x, -0.56 - 0.12 * (1.0 - x * x / 0.3844)))
+	var halo := _xf(lens, c, r * 1.07)
+	halo.append(halo[0])
+	ci.draw_polyline(halo, Color(col, col.a * 0.5), maxf(2.0, r * 0.12), true)
+	ci.draw_polyline(_xf(brow, c, r), Color(col, col.a * 0.5), maxf(2.0, r * 0.12), true)
+	var pts := _xf(lens, c, r)
+	ci.draw_colored_polygon(pts, col)
+	pts.append(pts[0])
+	ci.draw_polyline(pts, rim, rim_w, true)
+	ci.draw_polyline(_xf(brow, c, r), rim, maxf(1.0, r * 0.05), true)
+	# The iris: a cut disc inside a lit ring, the slit pupil in it and a glint.
+	ci.draw_circle(c, r * 0.27, cut, true, -1.0, true)
+	ci.draw_arc(c, r * 0.27, 0.0, TAU, 28, rim, maxf(1.0, r * 0.05), true)
+	var slit := PackedVector2Array([Vector2(0, -0.22), Vector2(0.065, -0.08), Vector2(0.075, 0.0), Vector2(0.065, 0.08),
+		Vector2(0, 0.22), Vector2(-0.065, 0.08), Vector2(-0.075, 0.0), Vector2(-0.065, -0.08)])
+	var sp := _xf(slit, c, r)
+	ci.draw_colored_polygon(sp, col)
+	sp.append(sp[0])
+	ci.draw_polyline(sp, rim, rim_w, true)
+	ci.draw_circle(c + Vector2(r * 0.12, -r * 0.11), r * 0.045, rim, true, -1.0, true)
+
+
+## H13: the Power mark in the sword's style. A three-pointed crown (`1.4 r` wide) on a band split from
+## the points by a fine groove, a pearl on every point and a cut jewel in the band. Filled parts with a
+## hairline rim and a faint halo, as in _draw_sword.
+static func _draw_crown(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
+	var rim_w := maxf(1.0, r * 0.035)
+	var rim := Color(col, minf(1.0, col.a * 1.9))
+	var cut := Color(0, 0, 0, minf(0.4, col.a * 2.0))
+	var body := PackedVector2Array([Vector2(-0.58, 0.62), Vector2(0.58, 0.62), Vector2(0.62, 0.30), Vector2(0.72, -0.34),
+		Vector2(0.30, 0.02), Vector2(0.0, -0.52), Vector2(-0.30, 0.02), Vector2(-0.72, -0.34), Vector2(-0.62, 0.30)])
+	var pearls := [[Vector2(-0.72, -0.45), 0.095], [Vector2(0.0, -0.64), 0.11], [Vector2(0.72, -0.45), 0.095]]
+	var halo := _xf(body, c, r * 1.07)
+	halo.append(halo[0])
+	ci.draw_polyline(halo, Color(col, col.a * 0.5), maxf(2.0, r * 0.12), true)
+	var pts := _xf(body, c, r)
+	ci.draw_colored_polygon(pts, col)
+	pts.append(pts[0])
+	ci.draw_polyline(pts, rim, rim_w, true)
+	for pe in pearls:
+		var pc: Vector2 = c + (pe[0] as Vector2) * r
+		var pr: float = float(pe[1]) * r
+		ci.draw_circle(pc, pr, col, true, -1.0, true)
+		ci.draw_arc(pc, pr, 0.0, TAU, 20, rim, rim_w, true)
+	# The groove between the band and the points, and the band's cut jewel (a small lozenge).
+	ci.draw_line(c + Vector2(-0.6, 0.34) * r, c + Vector2(0.6, 0.34) * r, cut, maxf(1.0, r * 0.035), true)
+	var gem := _xf(PackedVector2Array([Vector2(0, 0.38), Vector2(0.11, 0.48), Vector2(0, 0.58), Vector2(-0.11, 0.48)]), c, r)
+	ci.draw_colored_polygon(gem, cut)
+	gem.append(gem[0])
+	ci.draw_polyline(gem, rim, rim_w, true)
 
 static func _xf(pts: PackedVector2Array, c: Vector2, r: float) -> PackedVector2Array:
 	var out := PackedVector2Array()
