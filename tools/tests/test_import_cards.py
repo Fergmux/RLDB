@@ -143,11 +143,22 @@ class ImportRegressionTest(unittest.TestCase):
         self.assertEqual(self.by_id[90]["on_field"], "Once per turn: you can apply 1 Paralyse to a Unit.")
         self.assertEqual(self.by_id[183]["on_field"], "At the start of your turn: your opponent takes -6 HP Damage.")
 
+    def test_mirror_force_keeps_counting_cards_in_the_new_sentence_shape(self):
+        # 2026-10-20 export says "4 or more Units"; wording-only batch, the rule counts cards.
+        self.assertEqual(self.by_id[46]["condition"], "If your opponent Controls 4 or more cards and declares an Attack:")
+        self.assertIn("condition", self.by_id[46]["source"]["raw"])
+
+    def test_rules_texts_and_their_sections_start_with_a_capital(self):
+        self.assertEqual(ic.sentence_case("change the Stance."), "Change the Stance.")
+        self.assertEqual(ic.sentence_case("On Destroy: change it. Once per turn: you can"), "On Destroy: Change it. Once per turn: you can")
+        self.assertTrue(self.by_id[104]["on_summon"].startswith("Change the Stance"))
+        self.assertIn("On Destroy: Change the Stance of all Units.", self.by_id[147]["description"])
+
     def test_standardised_export_needs_no_typo_corrections(self):
         for cid in (12, 40, 73, 102, 141, 162, 184, 186, 187, 188):
             self.assertNotIn("raw", self.by_id[cid]["source"], cid)
         self.assertIn("Unit's", self.by_id[102]["on_field"])
-        self.assertEqual(sorted(ic.TEXT_CORRECTIONS), [45, 47, 48, 147])
+        self.assertEqual(sorted(ic.TEXT_CORRECTIONS), [45, 46, 47, 48, 147])
         self.assertIn("and can attack this Unit: that Unit must attack this Unit", self.by_id[147]["on_field"])
 
     def test_no_orphan_card_or_note(self):

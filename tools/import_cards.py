@@ -22,6 +22,7 @@ rldb/src/core/card_scripts.gd. --adopt flags effect-text changes and new IDs for
 """
 import csv
 import hashlib
+import re
 import json
 import os
 import sys
@@ -74,7 +75,11 @@ LEGACY_CONDITION_TO_SUMMON = {63, 97}
 #         Infiltrate attacker is forced even while it is Protected (raw text: "is Unprotected").
 # Dropped as obsolete (the standardised export fixed them): the possessive and typo fixes on 12,
 # 40, 73, 102, 141, 162, 184, 186, 187 and 188, and earlier 169, 90 and 183.
+#   46 (owner, 2026-10-20: wording only, no effect changes): the 2026-10-20 export says "Controls 4 or
+#         more Units"; the rule (and every earlier export) counts cards, so the new sentence shape is
+#         kept with "cards". Raised with the owner for a ruling.
 TEXT_CORRECTIONS = {
+    46: {"condition": "If your opponent Controls 4 or more cards and declares an Attack:"},
     45: {"condition": "If your opponent declares an Attack on one of your Units in this Column:"},
     47: {"condition": "If your opponent declares an Attack on one of your Units in this Column:"},
     48: {"on_summon": "Choose one of your opponent's Units, it Permanently loses -20 ATK."},
@@ -89,6 +94,15 @@ AMBIGUOUS_ARCANE = "equivilant"
 
 # F03-09: basic-unit display names drop the redundant "(Type)" suffix; Type stays in `type`.
 BASIC_TYPE_SUFFIX = " ("
+
+
+# 2026-10-20 export: a find-and-replace left some rules texts starting "change the Stance". A text
+# (or a section after its "On Summon:" / "On Play:" / "On Destroy:" label) starts with a capital.
+SECTION_START = re.compile(r"(^|(?:On Summon|On Play|On Destroy): )([a-z])")
+
+
+def sentence_case(text):
+    return SECTION_START.sub(lambda m: m.group(1) + m.group(2).upper(), text)
 
 
 def sha256(path):
@@ -195,6 +209,12 @@ def build(card_csv=None):
                 if AMBIGUOUS_ARCANE in c[key].lower() or not c[key]:
                     raw[col] = row[col]
                     c[key] = ARCANE_REQUIREMENT
+        for field, col in (("condition", "condition"), ("on_summon", "On Summon/Play"), ("on_field", "On Field"),
+                           ("on_destruction", "On Destruction"), ("description", "description")):
+            fixed = sentence_case(c[field])
+            if fixed != c[field]:
+                raw[col] = row[col]
+                c[field] = fixed
         for field, text in TEXT_CORRECTIONS.get(cid, {}).items():
             col = {"on_summon": "On Summon/Play", "on_field": "On Field", "on_destruction": "On Destruction"}.get(field, field)
             if c[field] != text:
