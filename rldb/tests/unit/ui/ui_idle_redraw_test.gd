@@ -68,6 +68,18 @@ func test_off_cta_cue_does_not_process_or_redraw() -> void:
 	assert_int(draws).is_equal(0)
 
 
+func test_motes_share_one_antialiased_disc_texture() -> void:
+	# H7: motes are textured quads of one cached disc, not circles tessellated every frame.
+	var a := AmbientMotes.disc_texture()
+	var b := AmbientMotes.disc_texture()
+	var img := a.get_image()
+	var mid := AmbientMotes.DISC_TEX / 2
+	assert_object(a).is_same(b)
+	assert_float(img.get_pixel(mid, mid).a).is_equal(1.0)
+	assert_float(img.get_pixel(0, 0).a).is_equal(0.0)
+	assert_bool(img.has_mipmaps()).is_true()
+
+
 func test_idle_card_widget_does_not_process() -> void:
 	var w: CardWidget = auto_free(CardWidget.new())
 	await _settle(w)

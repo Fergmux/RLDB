@@ -8,6 +8,7 @@ extends SceneTree
 ##   duel_play   the duel with commands and animations (seat 0 is driven like tests/perf/perf_run.gd)
 ## For each it prints the average / p95 frame time, fps, CPU process time, GPU and CPU render time.
 ## `--quick` stops after duel_idle; `--off=a.gd,b.gd` stops _process of those scripts (bisect).
+## `--perf-out=<dir>` saves a JPG of each screen with every AmbientMotes frozen at MOTE_T s.
 ## `--attribute` also lists which CanvasItems redraw (`draw` signal) on most idle frames, the
 ## nodes that run _process, and the live tweens: the usual sources of an idle frame cost.
 ## "--perf-shots" only makes main.gd use the dev save folders (no real saves are touched).
@@ -21,6 +22,8 @@ var rng := RandomNumberGenerator.new()
 var attribute := false
 var _draws: Dictionary = {}   # instance id -> count of draw emissions
 var _names: Dictionary = {}   # instance id -> path label
+var _shots := ""   # `--perf-out=<dir>`: a JPG of each screen with the motes frozen at MOTE_T
+const MOTE_T := 37.0
 var _off: PackedStringArray = []   # `--off=a.gd,b.gd`: bisect, stop _process of these scripts
 
 
@@ -30,6 +33,8 @@ func _initialize() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--off="):
 			_off = a.split("=", true, 1)[1].split(",")
+		if a.begins_with("--perf-out="):
+			_shots = a.split("=", true, 1)[1]
 	main = (load("res://main.tscn") as PackedScene).instantiate()
 	root.add_child(main)
 	_run.call_deferred()
@@ -98,6 +103,7 @@ func _begin() -> Dictionary:
 
 
 func _sample(s: Dictionary) -> void:
+	Engine.max_fps = 0   # main.gd caps an unfocused window at 30 fps; measure the foreground cost
 	var now := Time.get_ticks_usec()
 	s["dt"].append((now - s["last"]) / 1000.0)
 	s["last"] = now
@@ -123,6 +129,25 @@ func _measure(label: String) -> void:
 	_report(label, s)
 	if attribute:
 		_attribution(label)
+	if _shots != "":
+		await _shot(label)
+
+
+func _shot(label: String) -> void:
+	_freeze_motes(root)
+	await _frames(3)
+	DirAccess.make_dir_recursive_absolute(_shots)
+	var path := _shots.path_join("%s.jpg" % label)
+	root.get_texture().get_image().save_jpg(path, 0.88)
+	print("PERF shot ", path)
+
+
+func _freeze_motes(n: Node) -> void:
+	if n is AmbientMotes:
+		(n as AmbientMotes).clock = func() -> float: return MOTE_T
+		(n as AmbientMotes).queue_redraw()
+	for c in n.get_children():
+		_freeze_motes(c)
 
 
 func _report(label: String, s: Dictionary) -> void:

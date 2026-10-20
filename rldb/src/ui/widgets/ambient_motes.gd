@@ -2,7 +2,8 @@ class_name AmbientMotes
 extends Control
 ## Ambient life for an idle screen (design review #6, 1.4.5 "Ambient"): drifting petal and gold
 ## motes and, optionally, a soft light shaft that pulses on a slow sine. Click-through; drawn on one
-## Control with an additive material, so it is cheap. Deterministic (seeded): the same seed gives
+## Control with an additive material, every mote a quad of one cached disc texture (H7: tessellating
+## AA circles per frame cost ~1.2 ms), so it is cheap. Deterministic (seeded): the same seed gives
 ## the same field. Reduce motion: the motes rest where they are (a static, faint field) and the
 ## shaft holds its mid brightness.
 ##
@@ -35,6 +36,11 @@ var shaft_color: Color = Color("ffd9a0")
 var clock: Callable = func() -> float: return float(Time.get_ticks_msec()) / 1000.0
 
 var _motes: Array = []
+## The shared anti-aliased unit disc every mote is drawn with (built once, mipmapped).
+static var _disc: Texture2D
+## Disc texture size (px) and its disc radius inside it (px): a 1 px soft rim.
+const DISC_TEX := 64
+const DISC_R := 31.0
 ## Round mote core and halo radii, as multiples of the mote size.
 var core_k := 0.32
 var halo_k := 1.6
@@ -69,6 +75,7 @@ func _init(count: int = 26, cols: Array = [], seed_value: int = 1606, profile: D
 	var mat := CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	material = mat
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var sz: Vector2 = profile.get("size", Vector2(SIZE_MIN, SIZE_MAX))
@@ -124,6 +131,7 @@ func _draw() -> void:
 	var t := float(clock.call())
 	if shaft.size.x > 0.0 and shaft.size.y > 0.0:
 		_draw_shaft(t)
+	var disc := disc_texture()
 	for i in _motes.size():
 		var m: Dictionary = _motes[i]
 		var st := mote_state(i, t)
@@ -133,16 +141,35 @@ func _draw() -> void:
 			continue
 		var p: Vector2 = st["pos"]
 		var s := float(m["size"])
-		draw_circle(p, s * halo_k, Color(col, a * halo_a), true, -1.0, true)
+		_disc_at(disc, p, s * halo_k, Color(col, a * halo_a))
 		if bool(m["petal"]):
-			# A petal: a soft ellipse turned by its spin.
-			var pts := PackedVector2Array()
-			for j in 12:
-				var ang := TAU * float(j) / 12.0
-				pts.append(p + Vector2(cos(ang) * s * 0.55, sin(ang) * s * 0.3).rotated(float(st["rot"])))
-			draw_colored_polygon(pts, Color(col, a))
+			# A petal: a soft ellipse (0.55 x 0.3 of the size) turned by its spin.
+			draw_set_transform(p, float(st["rot"]), Vector2(0.55, 0.3))
+			_disc_at(disc, Vector2.ZERO, s, Color(col, a))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
-			draw_circle(p, s * core_k, Color(col, a), true, -1.0, true)
+			_disc_at(disc, p, s * core_k, Color(col, a))
+
+
+# A filled disc of radius `r` at `c`: one textured quad (batched with the others, no tessellation).
+func _disc_at(disc: Texture2D, c: Vector2, r: float, col: Color) -> void:
+	var half := r * (DISC_TEX * 0.5) / DISC_R
+	draw_texture_rect(disc, Rect2(c - Vector2(half, half), Vector2(half, half) * 2.0), false, col)
+
+
+## The shared white anti-aliased disc (alpha 1 inside DISC_R, a 1 px rim, 0 outside), mipmapped so
+## small motes stay smooth.
+static func disc_texture() -> Texture2D:
+	if _disc == null:
+		var img := Image.create(DISC_TEX, DISC_TEX, false, Image.FORMAT_RGBA8)
+		var c := Vector2(DISC_TEX, DISC_TEX) * 0.5
+		for y in DISC_TEX:
+			for x in DISC_TEX:
+				var d := (Vector2(x, y) + Vector2(0.5, 0.5)).distance_to(c)
+				img.set_pixel(x, y, Color(1, 1, 1, clampf(DISC_R + 0.5 - d, 0.0, 1.0)))
+		img.generate_mipmaps()
+		_disc = ImageTexture.create_from_image(img)
+	return _disc
 
 
 func _draw_shaft(t: float) -> void:
