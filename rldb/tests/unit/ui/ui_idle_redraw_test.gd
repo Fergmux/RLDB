@@ -80,6 +80,20 @@ func test_motes_share_one_antialiased_disc_texture() -> void:
 	assert_bool(img.has_mipmaps()).is_true()
 
 
+func test_series_medallion_breathes_without_redrawing_the_coin() -> void:
+	# H7: only the next socket's rings redraw each frame, on their own small overlay.
+	var m: SeriesMedallion = auto_free(SeriesMedallion.new().setup(3, [0], 1))
+	m.custom_minimum_size.x = 200
+	await _settle(m)
+	var breath: Control = m.get_child(0, true)
+	var bn := [0]
+	breath.draw.connect(func(): bn[0] += 1)
+	var coin: int = await _idle_draws(m)
+	assert_int(coin).is_equal(0)
+	if not UIStyle.reduce_motion:
+		assert_int(bn[0]).is_greater_equal(FRAMES - 1)
+
+
 func test_idle_card_widget_does_not_process() -> void:
 	var w: CardWidget = auto_free(CardWidget.new())
 	await _settle(w)

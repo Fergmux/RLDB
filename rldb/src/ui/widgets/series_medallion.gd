@@ -28,9 +28,38 @@ var current: int = -1
 var clock: Callable = func() -> float: return float(Time.get_ticks_msec()) / 1000.0
 
 
+var _breath: Breath
+
+
+## The breathing rings of the next game's socket, on their own small canvas item: only they redraw
+## every frame, not the whole coin (H7, 21 Oct). Drawn over the medallion, as the rings were.
+class Breath extends Control:
+	var m: SeriesMedallion
+
+	func _init(owner_medallion: SeriesMedallion) -> void:
+		m = owner_medallion
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	func _process(_d: float) -> void:
+		if m.current >= 0 and is_visible_in_tree() and not UIStyle.reduce_motion:
+			queue_redraw()
+
+	func _draw() -> void:
+		if m.current < 0 or m.current >= m.best_of or m.socket_state(m.current) != "next":
+			return
+		var p := m.socket_pos(m.current)
+		var t := float(m.clock.call())
+		var k := 0.75 if UIStyle.reduce_motion else 0.55 + 0.35 * (0.5 + 0.5 * sin(t / 2.4 * TAU))
+		draw_arc(p, SOCKET_R + 4.0, 0.0, TAU, 32, Color(UIStyle.GOLD_HI, 0.55 * k), 2.0, true)
+		draw_arc(p, SOCKET_R + 7.0, 0.0, TAU, 32, Color(UIStyle.GOLD, 0.18 * k), 3.0, true)
+
+
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	custom_minimum_size = Vector2(0, COIN_R * 2.0 + 16.0 + ROW_GAP + ROW_H)
+	_breath = Breath.new(self)
+	add_child(_breath, false, Node.INTERNAL_MODE_BACK)
 
 
 ## Sets the series shown: `n` games, the finished `res` (0 mine, 1 theirs) and the next game `cur`.
@@ -41,6 +70,7 @@ func setup(n: int, res: Array, cur: int) -> SeriesMedallion:
 	tooltip_text = "Best of %d: first to %d wins the series" % [best_of, best_of / 2 + 1]
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	queue_redraw()
+	_breath.queue_redraw()
 	return self
 
 
@@ -51,32 +81,26 @@ func socket_state(i: int) -> String:
 	return "next" if i == current else "empty"
 
 
-func _process(_d: float) -> void:
-	if current >= 0 and is_visible_in_tree() and not UIStyle.reduce_motion:
-		queue_redraw()
+## Centre of socket `i` in the medallion's space.
+func socket_pos(i: int) -> Vector2:
+	var c := Vector2(size.x / 2.0, COIN_R + 8.0)
+	var y := c.y + COIN_R + ROW_GAP + ROW_H / 2.0 - 6.0
+	var x0 := size.x / 2.0 - SOCKET_STEP * float(best_of - 1) / 2.0
+	return Vector2(x0 + SOCKET_STEP * i, y)
 
 
 func _draw() -> void:
-	var c := Vector2(size.x / 2.0, COIN_R + 8.0)
-	_draw_coin(c)
-	var y := c.y + COIN_R + ROW_GAP + ROW_H / 2.0 - 6.0
-	var x0 := size.x / 2.0 - SOCKET_STEP * float(best_of - 1) / 2.0
+	_draw_coin(Vector2(size.x / 2.0, COIN_R + 8.0))
 	var amber: Color = UIStyle.GOLD
-	var t := float(clock.call())
 	for i in best_of:
-		var p := Vector2(x0 + SOCKET_STEP * i, y)
+		var p := socket_pos(i)
 		match socket_state(i):
 			"won":
 				PickPips.draw_gem(self, p, SOCKET_R, amber)
 			"lost":
 				PickPips.draw_gem(self, p, SOCKET_R, EMBER)
-			"next":
-				PickPips.draw_socket(self, p, SOCKET_R)
-				var k := 0.75 if UIStyle.reduce_motion else 0.55 + 0.35 * (0.5 + 0.5 * sin(t / 2.4 * TAU))
-				draw_arc(p, SOCKET_R + 4.0, 0.0, TAU, 32, Color(UIStyle.GOLD_HI, 0.55 * k), 2.0, true)
-				draw_arc(p, SOCKET_R + 7.0, 0.0, TAU, 32, Color(UIStyle.GOLD, 0.18 * k), 3.0, true)
 			_:
-				PickPips.draw_socket(self, p, SOCKET_R)
+				PickPips.draw_socket(self, p, SOCKET_R)   # "next" breathes on the Breath overlay
 
 
 ## The coin: a soft gold halo, a gilded rim (light top, dark foot), a dark tooled field with an
