@@ -34,7 +34,7 @@ and have a few more things for you to change". Standing instructions from the 20
 | H26 | "also remove the 'in your deck' tag under the card image" | E deck builder | done |
 | H27 | "the in this deck section at the bottom should not have three empty by default, it should show one empty, and fill it when one is in, and add more filled gems when more are added, not this +2 or whatever after the three have been filled" | E deck builder | done |
 | H28 | "ALSO THE ARCAN SUMMON COMPLETE SOUND EFFECT IS A BIT JARRING CAN ME MAKE IT MORE MYSTICAL AND COOL" | F audio | done |
-| H29 | "i like the new arcane sound effect, update ritual and fusion to have better mroe unique and fantasy esque epic sound effects" | F audio | open |
+| H29 | "i like the new arcane sound effect, update ritual and fusion to have better mroe unique and fantasy esque epic sound effects" | F audio | done |
 | H30 | "also we don't need attack/defense stance tag in the right details panel" | integrator | done |
 | H31 | "also remove the ap 1/2 text next to your ap gems, the gems are enough" | integrator | done |
 
@@ -62,6 +62,7 @@ and have a few more things for you to change". Standing instructions from the 20
 - H27: literal reading: 0 copies = one empty socket; N copies = N filled gems, no trailing empty. No per-card copy limit exists, so gems shrink/wrap up to the 99 cap.
 - H28: new Arcane completion is a swelling Dsus2 glass chord with sparkle and a long tail, 2.35 s (runs ~0.6 s past the visual), peak -4.5 dBFS to match Fusion's loudness. Needs the owner's ears.
 - H31: the count moved to a hover tooltip on the gems ("Action Points: 1 of 2"), like the HP vial's max HP.
+- H29: Fusion = low brass in C major (two tones converge, heroic bloom); Ritual = choir, heartbeat drums and an A1 gong in A minor. Climaxes run 2.4 / 2.85 s (quiet reverb tail past the visual); peaks up to -3.5 dBFS to match the Arcane loudness.
 
 ## Blockers and workarounds
 
@@ -69,3 +70,4 @@ and have a few more things for you to change". Standing instructions from the 20
 - No in-duel "before" shots for the card face (no stash allowed); the card gallery covers every kind before/after.
 - The perf baseline (18 Oct) played duel is not like-for-like (older rules and lighter screens).
 - RLDB-dev was running at export time: the new dev build is in build/windows-next-dev/ (build/windows-dev untouched). build/windows and build/RLDB-friends.zip are updated.
+- The card-shots driver now opens at 3840x2160 on this machine and its synthetic hover misses one status icon ("Defense unit's icon tip"). The same failure reproduces on e6d12db, where it passed earlier, so it is the environment (display), not the code.
