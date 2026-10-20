@@ -56,6 +56,8 @@ const BACK_GAP := 16
 ## Hero logo and subtitle (D3, review #1 / #2), and the width of the divider under them.
 const LOGO_SIZE := 88
 const SUBTITLE_SIZE := 14
+## Logo baseline to the subtitle's cap tops (review #2).
+const SUBTITLE_GAP := 16.0
 const LOGO_RULE_W := 300.0
 ## Ambient motes, the light shaft in the arch (fractions of the screen) and the Ken Burns drift.
 const MOTE_COUNT := 26
@@ -130,8 +132,13 @@ func _build() -> void:
 	logo = TitleText.make("RLDB", TitleText.Tier.HERO, LOGO_SIZE)
 	logo.name = "Logo"
 	col.add_child(logo)
-	col.add_child(_gap(UIStyle.sp("sm")))
-	# Subtitle (review #2): 13 px Cinzel 600, +2 px tracking, MUTED with a hard shadow.
+	# Subtitle (review #2): Cinzel 600, +2 px tracking, MUTED with a hard shadow, its cap tops
+	# SUBTITLE_GAP below the logo's baseline (measured from the fonts, not from the line boxes:
+	# the logo's descender room alone is deeper than the gap). The margin may be negative.
+	var sub_m := MarginContainer.new()
+	sub_m.name = "SubtitleRow"
+	sub_m.add_theme_constant_override("margin_top", roundi(subtitle_offset()))
+	col.add_child(sub_m)
 	var sub := UIStyle.label("A TWO-PLAYER ROGUELIKE DECK BATTLER", SUBTITLE_SIZE, UIStyle.MUTED)
 	sub.name = "Subtitle"
 	sub.add_theme_font_override("font", _subtitle_font())
@@ -140,7 +147,7 @@ func _build() -> void:
 	sub.add_theme_constant_override("shadow_offset_y", 1)
 	sub.add_theme_constant_override("shadow_outline_size", 2)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	col.add_child(sub)
+	sub_m.add_child(sub)
 	col.add_child(_gap(UIStyle.sp("lg")))
 	# The house divider under the title block.
 	var rule := Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 12.0)
@@ -182,6 +189,16 @@ func _ken_burns() -> void:
 
 
 static var _sub_font: FontVariation
+
+
+## Space (px) between the logo's line box and the subtitle's that puts the subtitle's cap tops
+## SUBTITLE_GAP below the logo's baseline: minus the logo's descent and the subtitle's room above
+## its caps. Negative when the descent is deeper than the gap.
+static func subtitle_offset() -> float:
+	var lf := TitleText.tier_font(TitleText.Tier.HERO)
+	var sf := _subtitle_font()
+	var above_caps := sf.get_ascent(SUBTITLE_SIZE) - TitleText.cap_height(UIStyle.font_display(600), SUBTITLE_SIZE)
+	return SUBTITLE_GAP - lf.get_descent(LOGO_SIZE) - above_caps
 
 
 ## Cinzel 600 with +2 px tracking (the menu subtitle).
