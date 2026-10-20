@@ -407,17 +407,16 @@ func _render_controls(have: bool) -> void:
 	controls.prompts_btn.visible = not tut
 	if tut:
 		return
-	var on := DuelControls.load_prompts(prompts_pref_key())
-	if on != controls.prompts_on():
-		controls.set_prompts(on)
-	_sync_prompts(on)
+	var mode := DuelControls.load_prompts(prompts_pref_key())
+	if mode != controls.prompts_mode():
+		controls.set_prompts(mode)
+	_sync_prompts(mode)
 
 
 ## J6: sends the seat's Trap prompts setting when the authority's (own-seat only) differs from the
 ## viewer's choice: at the start of every game, after a resume or reconnect, and on a toggle. Sent
 ## once per seat, game and value, so a refused command is not repeated every frame.
-func _sync_prompts(on: bool) -> void:
-	var want := DuelControls.mode_for(on)
+func _sync_prompts(want: String) -> void:
 	var have := String(gs.pv(gs.me()).get("trap_prompts", ""))
 	if have == want:
 		return
@@ -430,10 +429,10 @@ func _sync_prompts(on: bool) -> void:
 		gs.client.send({"t": "trap_prompts", "mode": want})
 
 
-func _on_prompts_toggled(on: bool) -> void:
-	DuelControls.store_prompts(prompts_pref_key(), on)
+func _on_prompts_toggled(mode: String) -> void:
+	DuelControls.store_prompts(prompts_pref_key(), mode)
 	if not gs.mv.is_empty():
-		_sync_prompts(on)
+		_sync_prompts(mode)
 
 
 ## J11: the Sacrifice Unit button: the engine asks which unit (board pick), then to confirm.

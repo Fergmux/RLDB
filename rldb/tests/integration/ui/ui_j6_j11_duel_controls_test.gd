@@ -13,7 +13,7 @@ var me: int
 
 func before_test() -> void:
 	SeriesStore.DIR = "user://test_saves"
-	DuelControls.store_prompts(DuelControls.PREF_KEY, true)      # the default: prompts on
+	DuelControls.store_prompts(DuelControls.PREF_KEY, EffectEngine.TRAP_PROMPT_ELIGIBLE)   # the default: Usable
 	host = auto_free(LocalHost.new())
 	add_child(host)
 	host.start({"seed": 11, "best_of": 1, "deck_mode": "starter", "names": ["A", "B"], "mode": "bot"})
@@ -30,7 +30,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	DuelControls.store_prompts(DuelControls.PREF_KEY, true)
+	DuelControls.store_prompts(DuelControls.PREF_KEY, EffectEngine.TRAP_PROMPT_ELIGIBLE)
 	DuelControls.reset_cache()
 
 
@@ -115,24 +115,29 @@ func test_prompts_toggle_starts_on_and_sets_the_seat() -> void:
 	assert_str(m.trap_prompt_mode(1 - me)).is_equal(EffectEngine.TRAP_PROMPT_ELIGIBLE)   # the bot's own
 
 
-func test_prompts_toggle_off_is_saved_and_sent() -> void:
+func test_prompts_button_cycles_usable_always_off_saved_and_sent() -> void:
 	await await_idle_frame()
 	var c := _controls()
-	c.prompts_btn.pressed.emit()
+	c.prompts_btn.pressed.emit()                                 # Usable -> Always
+	await await_idle_frame()
+	assert_str(c.prompts_btn.text).is_equal(DuelControls.PROMPTS_ALWAYS_LABEL)
+	assert_int(c.prompts_btn.lamp).is_equal(1)
+	assert_str(m.trap_prompt_mode(me)).is_equal(EffectEngine.TRAP_PROMPT_ALWAYS)
+	c.prompts_btn.pressed.emit()                                 # Always -> Off
 	await await_idle_frame()
 	assert_bool(c.prompts_on()).is_false()
 	assert_str(c.prompts_btn.text).is_equal(DuelControls.PROMPTS_OFF_LABEL)
 	assert_int(c.prompts_btn.lamp).is_equal(0)
 	assert_str(m.trap_prompt_mode(me)).is_equal(EffectEngine.TRAP_PROMPT_OFF)
 	DuelControls.reset_cache()
-	assert_bool(DuelControls.load_prompts(DuelControls.PREF_KEY)).is_false()   # read back from the file
-	c.prompts_btn.pressed.emit()
+	assert_str(DuelControls.load_prompts(DuelControls.PREF_KEY)).is_equal(EffectEngine.TRAP_PROMPT_OFF)   # read back from the file
+	c.prompts_btn.pressed.emit()                                 # Off -> Usable
 	await await_idle_frame()
 	assert_str(m.trap_prompt_mode(me)).is_equal(EffectEngine.TRAP_PROMPT_ELIGIBLE)
 
 
 func test_a_saved_off_choice_is_sent_for_a_new_screen() -> void:
-	DuelControls.store_prompts(DuelControls.PREF_KEY, false)
+	DuelControls.store_prompts(DuelControls.PREF_KEY, EffectEngine.TRAP_PROMPT_OFF)
 	var gs2: GameScreen = auto_free(GameScreen.new())
 	gs2.size = Vector2(1600, 1000)
 	add_child(gs2)
@@ -175,3 +180,24 @@ func test_sacrifice_button_stays_lit_during_its_flow_and_a_second_click_cancels(
 	assert_bool(m.pending.is_empty()).is_true()
 	assert_bool(c.sacrifice_engaged()).is_false()
 	assert_bool(c.sacrifice_btn.keyboard_pick).is_false()
+
+
+## A 0.3.8 settings file saved the toggle as a bool: true reads as Usable, false as Off.
+func test_a_saved_bool_from_0_3_8_reads_as_usable_or_off() -> void:
+	var cf := ConfigFile.new()
+	cf.load(DuelControls.settings_path())
+	cf.set_value(DuelControls.PREF_SECTION, DuelControls.PREF_KEY, false)
+	cf.save(DuelControls.settings_path())
+	DuelControls.reset_cache()
+	assert_str(DuelControls.load_prompts(DuelControls.PREF_KEY)).is_equal(EffectEngine.TRAP_PROMPT_OFF)
+	cf.set_value(DuelControls.PREF_SECTION, DuelControls.PREF_KEY, true)
+	cf.save(DuelControls.settings_path())
+	DuelControls.reset_cache()
+	assert_str(DuelControls.load_prompts(DuelControls.PREF_KEY)).is_equal(EffectEngine.TRAP_PROMPT_ELIGIBLE)
+
+
+func test_next_mode_cycles_and_recovers_from_an_unknown_value() -> void:
+	assert_str(DuelControls.next_mode(EffectEngine.TRAP_PROMPT_ELIGIBLE)).is_equal(EffectEngine.TRAP_PROMPT_ALWAYS)
+	assert_str(DuelControls.next_mode(EffectEngine.TRAP_PROMPT_ALWAYS)).is_equal(EffectEngine.TRAP_PROMPT_OFF)
+	assert_str(DuelControls.next_mode(EffectEngine.TRAP_PROMPT_OFF)).is_equal(EffectEngine.TRAP_PROMPT_ELIGIBLE)
+	assert_str(DuelControls.next_mode("sometimes")).is_equal(EffectEngine.TRAP_PROMPT_ELIGIBLE)

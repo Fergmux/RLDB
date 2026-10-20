@@ -17,11 +17,11 @@ const TRAP_PASS_TURN := "Skip for the rest of this turn"
 const TRAP_V_SKIP := -1
 const TRAP_V_PASS_TURN := -2
 ## J6 (owner feedback 2026-10-22): a seat's Trap response prompts (players[p]["trap_prompts"]).
-## "eligible" (the default, and the player's toggle on): asked only when one of their Traps can
-## respond (P-27; the owner accepts that the pause shows an eligible Trap exists). "off" (the toggle
-## off): never asked, so their Traps never respond. "always": asked whenever they hold a face-down
-## card set before this turn that some Trap could answer from, whether or not one of theirs can, so
-## the pause reveals nothing; kept as an engine option, not used by the toggle (owner, 22 Oct).
+## The player picks one with the Trap Prompts button (it cycles Usable, Always, Off). "eligible"
+## (Usable, the default): asked only when one of their Traps can respond (P-27; the pause shows an
+## eligible Trap exists). "always": asked whenever they hold a face-down card set before this turn
+## that some Trap could answer from, whether or not one of theirs can, so the pause reveals nothing.
+## "off": never asked, so their Traps never respond.
 const TRAP_PROMPT_ELIGIBLE := "eligible"
 const TRAP_PROMPT_ALWAYS := "always"
 const TRAP_PROMPT_OFF := "off"

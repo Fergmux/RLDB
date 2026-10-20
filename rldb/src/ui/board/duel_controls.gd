@@ -6,9 +6,10 @@ extends Control
 ## - J11 "Sacrifice Unit" (ember flame medallion): starts a sacrifice (pick a unit, confirm). Enabled
 ##   only while a sacrifice is legal; the tooltip says why it is not. The card action row no longer
 ##   offers Sacrifice, so a misclick on a card cannot spend a unit.
-## - J6 "Trap Prompts" toggle (bell medallion, struck through when off, and a topaz state lamp): on,
-##   the player is asked to respond only when one of their Traps can (the pause shows that one can);
-##   off, they are never asked, their Traps stay down and the opponent never sees a pause. The choice is the viewer's own: saved in the UI settings file (per seat in hot-seat
+## - J6 "Trap Prompts" (bell medallion, struck through when off, and a topaz state lamp): each click
+##   cycles Usable -> Always -> Off. Usable (the default): asked only when one of their Traps can
+##   respond (the pause shows that one can). Always: asked whenever they hold a face-down card some
+##   Trap could answer from, so a pause gives nothing away. Off: never asked, their Traps stay down. The choice is the viewer's own: saved in the UI settings file (per seat in hot-seat
 ##   play) and sent to the authority as the seat's setting, never shown to the opponent.
 
 ## The Sacrifice Unit button was pressed (it is enabled: a sacrifice is legal).
@@ -16,13 +17,17 @@ signal sacrifice_pressed
 ## The Sacrifice Unit button was pressed while its own pick / confirmation is open (cancel it).
 signal sacrifice_cancel_pressed
 ## The viewer switched their Trap response prompts on or off.
-signal prompts_toggled(on: bool)
+signal prompts_toggled(mode: String)
 
 const SACRIFICE_LABEL := "Sacrifice Unit"
-const PROMPTS_ON_LABEL := "Trap Prompts: On"
+const PROMPTS_ON_LABEL := "Trap Prompts: Usable"
+const PROMPTS_ALWAYS_LABEL := "Trap Prompts: Always"
 const PROMPTS_OFF_LABEL := "Trap Prompts: Off"
-const PROMPTS_ON_TIP := "Trap response prompts are on: you are asked to respond whenever one of your Traps can. Your opponent sees you deciding."
-const PROMPTS_OFF_TIP := "Trap response prompts are off: you are never asked to respond, your Traps stay down, and your opponent never sees you pause."
+const PROMPTS_ON_TIP := "Trap prompts: Usable. You are asked to respond only when one of your Traps can, so your opponent sees you deciding.\n\nClick to change: Usable, Always, Off."
+const PROMPTS_ALWAYS_TIP := "Trap prompts: Always. You are asked whenever you hold a face-down card a Trap could answer from, even if none of yours can, so a pause gives nothing away.\n\nClick to change: Usable, Always, Off."
+const PROMPTS_OFF_TIP := "Trap prompts: Off. You are never asked to respond and your Traps stay down; your opponent never sees you pause.\n\nClick to change: Usable, Always, Off."
+## The order a click cycles the settings in (EffectEngine.TRAP_PROMPT_*).
+const PROMPT_CYCLE := [EffectEngine.TRAP_PROMPT_ELIGIBLE, EffectEngine.TRAP_PROMPT_ALWAYS, EffectEngine.TRAP_PROMPT_OFF]
 ## Gap (px) under the plate and between the two plates, and their height.
 const TOP_GAP := 8.0
 const GAP := 7.0
@@ -38,7 +43,7 @@ const TEST_SETTINGS_PATH := "user://test_ui_duel.cfg"
 
 var sacrifice_btn: GameActionRow.ActionButton
 var prompts_btn: GameActionRow.ActionButton
-var _prompts_on := true
+var _prompts_mode: String = EffectEngine.TRAP_PROMPT_ELIGIBLE
 
 
 func _init() -> void:
@@ -55,7 +60,7 @@ func _init() -> void:
 
 ## Width (px) of the plates: the longest label whole.
 static func plate_width() -> float:
-	return maxf(MIN_W, GameActionRow.label_fit_width([SACRIFICE_LABEL, PROMPTS_ON_LABEL, PROMPTS_OFF_LABEL]) + GameActionRow.ActionButton.LAMP_W)
+	return maxf(MIN_W, GameActionRow.label_fit_width([SACRIFICE_LABEL, PROMPTS_ON_LABEL, PROMPTS_ALWAYS_LABEL, PROMPTS_OFF_LABEL]) + GameActionRow.ActionButton.LAMP_W)
 
 
 ## Size (px) of the whole block (both plates).
@@ -109,26 +114,48 @@ func _on_sacrifice_pressed() -> void:
 	sacrifice_pressed.emit()
 
 
-## Shows the Trap prompts toggle on or off (no signal, no sound).
-func set_prompts(on: bool) -> void:
-	_prompts_on = on
-	prompts_btn.text = PROMPTS_ON_LABEL if on else PROMPTS_OFF_LABEL
-	prompts_btn.to_stance = "on" if on else "off"
-	prompts_btn.lamp = 1 if on else 0
-	prompts_btn.tooltip_text = PROMPTS_ON_TIP if on else PROMPTS_OFF_TIP
+## Shows the Trap prompts setting `mode` (EffectEngine.TRAP_PROMPT_*; no signal, no sound).
+func set_prompts(mode: String) -> void:
+	if not (mode in PROMPT_CYCLE):
+		mode = EffectEngine.TRAP_PROMPT_ELIGIBLE
+	_prompts_mode = mode
+	var off := mode == EffectEngine.TRAP_PROMPT_OFF
+	match mode:
+		EffectEngine.TRAP_PROMPT_ALWAYS:
+			prompts_btn.text = PROMPTS_ALWAYS_LABEL
+			prompts_btn.tooltip_text = PROMPTS_ALWAYS_TIP
+		EffectEngine.TRAP_PROMPT_OFF:
+			prompts_btn.text = PROMPTS_OFF_LABEL
+			prompts_btn.tooltip_text = PROMPTS_OFF_TIP
+		_:
+			prompts_btn.text = PROMPTS_ON_LABEL
+			prompts_btn.tooltip_text = PROMPTS_ON_TIP
+	prompts_btn.to_stance = "off" if off else "on"
+	prompts_btn.lamp = 0 if off else 1
 	prompts_btn.queue_redraw()
 
 
-## True while the toggle shows prompts on.
+## The setting the button shows (EffectEngine.TRAP_PROMPT_*).
+func prompts_mode() -> String:
+	return _prompts_mode
+
+
+## True unless the button shows prompts off.
 func prompts_on() -> bool:
-	return _prompts_on
+	return _prompts_mode != EffectEngine.TRAP_PROMPT_OFF
+
+
+## The setting after `mode` in the click cycle (Usable -> Always -> Off -> Usable).
+static func next_mode(mode: String) -> String:
+	var i := PROMPT_CYCLE.find(mode)
+	return PROMPT_CYCLE[(i + 1) % PROMPT_CYCLE.size()] if i != -1 else EffectEngine.TRAP_PROMPT_ELIGIBLE
 
 
 func _on_prompts_pressed() -> void:
-	var on := not _prompts_on
-	set_prompts(on)
-	Sfx.play("toggle_on" if on else "toggle_off")
-	prompts_toggled.emit(on)
+	var mode := next_mode(_prompts_mode)
+	set_prompts(mode)
+	Sfx.play("toggle_off" if mode == EffectEngine.TRAP_PROMPT_OFF else "toggle_on")
+	prompts_toggled.emit(mode)
 
 
 # ---------------------------------------------------------------- the saved choice
@@ -144,38 +171,38 @@ static func pref_key(hotseat: bool, seat: int) -> String:
 	return "%s_seat%d" % [PREF_KEY, seat] if hotseat else PREF_KEY
 
 
-## Choices read or saved this session (settings path + key -> bool): the board asks on every
+## Choices read or saved this session (settings path + key -> mode): the board asks on every
 ## render, so the file is read once per key.
 static var _cache: Dictionary = {}
 
 
-## The viewer's saved Trap prompts choice (on when never chosen).
-static func load_prompts(key: String) -> bool:
+## The viewer's saved Trap prompts setting (EffectEngine.TRAP_PROMPT_*; Usable when never chosen).
+## Build 0.3.8 saved a bool (true: on, read as Usable; false: off).
+static func load_prompts(key: String) -> String:
 	var ck := settings_path() + "#" + key
 	if _cache.has(ck):
 		return _cache[ck]
-	var on := true
+	var mode: String = EffectEngine.TRAP_PROMPT_ELIGIBLE
 	var cf := ConfigFile.new()
 	if cf.load(settings_path()) == OK:
-		on = bool(cf.get_value(PREF_SECTION, key, true))
-	_cache[ck] = on
-	return on
+		var v: Variant = cf.get_value(PREF_SECTION, key, EffectEngine.TRAP_PROMPT_ELIGIBLE)
+		if v is bool:
+			mode = EffectEngine.TRAP_PROMPT_ELIGIBLE if v else EffectEngine.TRAP_PROMPT_OFF
+		elif String(v) in PROMPT_CYCLE:
+			mode = String(v)
+	_cache[ck] = mode
+	return mode
 
 
-## Saves the viewer's Trap prompts choice, keeping the file's other sections.
-static func store_prompts(key: String, on: bool) -> void:
-	_cache[settings_path() + "#" + key] = on
+## Saves the viewer's Trap prompts setting, keeping the file's other sections.
+static func store_prompts(key: String, mode: String) -> void:
+	_cache[settings_path() + "#" + key] = mode
 	var cf := ConfigFile.new()
 	cf.load(settings_path())
-	cf.set_value(PREF_SECTION, key, on)
+	cf.set_value(PREF_SECTION, key, mode)
 	cf.save(settings_path())
 
 
 ## Test hook: forgets the session cache (the next load rereads the file).
 static func reset_cache() -> void:
 	_cache.clear()
-
-
-## The authority's setting for a toggle state (EffectEngine.TRAP_PROMPT_*).
-static func mode_for(on: bool) -> String:
-	return EffectEngine.TRAP_PROMPT_ELIGIBLE if on else EffectEngine.TRAP_PROMPT_OFF
