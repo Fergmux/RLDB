@@ -81,6 +81,8 @@ var _lift_rest_pos := Vector2.ZERO
 var _lift_applied_pos := Vector2.ZERO
 var _lift_applying := false
 var _self_hover := false
+## The pointer is over this widget (whatever `auto_hover` says): an empty zone being picked lifts its glow.
+var _mouse_in := false
 ## Quantised on-screen scale the face text was last rasterised for (1.0 = the viewport's own).
 var _text_k := 1.0
 var _is_ready := false
@@ -104,8 +106,8 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	mouse_entered.connect(func(): _self_hover = auto_hover; queue_redraw())
-	mouse_exited.connect(func(): _self_hover = false; StatusTip.hide_for(self); queue_redraw())
+	mouse_entered.connect(func(): _self_hover = auto_hover; _mouse_in = true; queue_redraw())
+	mouse_exited.connect(func(): _self_hover = false; _mouse_in = false; StatusTip.hide_for(self); queue_redraw())
 	# Godot turns processing on at ready because _process exists: only redraw per frame while animating.
 	_update_process()
 
@@ -451,6 +453,7 @@ func _draw() -> void:
 		pt.s = clampf(minf(ls.x, ls.y) / 85.0, 0.5, 1.3)
 		pt.cr = Rect2(Vector2.ZERO, ls)
 		pt.reset_transform()
+		pt.hover = pt.hover or (highlighted and _mouse_in)
 		CardLayouts.draw_empty(pt, ls, highlighted)
 		CardOverlays.draw(pt, self)
 		return

@@ -6,11 +6,18 @@ extends RefCounted
 
 const SPAN_MAX := 1000.0
 const CARD_GAP := 8.0
+## #31: the hand's ground, a dark-wood rail along the bottom of the play area: its height, its darkest
+## alpha at the screen edge and its gold top line.
+const RAIL_H := 64.0
+const RAIL_A := 0.45
+const RAIL_LINE := Color(0.831, 0.651, 0.29, 0.15)
 
 ## The host screen this component works on.
 var gs: GameScreen
 ## Layer the cards of this view live on.
 var layer: Control
+## The rail behind the hand (#31).
+var rail: HandRail
 ## uid -> {holder, widget, hash, placed}
 var items: Dictionary = {}
 ## Hand uids in display order.
@@ -27,6 +34,8 @@ func _init(screen: GameScreen) -> void:
 
 ## Builds the hand layer (an empty hand shows nothing, F03-12).
 func build() -> void:
+	rail = HandRail.new()
+	gs.add_child(rail)
 	layer = gs.passive_layer()
 
 
@@ -53,6 +62,9 @@ func layout(new_ids: Array, instant: bool) -> void:
 	var n := order.size()
 	var area := gs.play_area
 	var sy := gs.size.y
+	if rail != null:
+		rail.position = Vector2(0, sy - RAIL_H)
+		rail.size = Vector2(area.size.x, RAIL_H)
 	if n == 0:
 		return
 	var hv := gs.hover.hv
@@ -165,3 +177,21 @@ func render(targeting: bool) -> void:
 	if anim.size() > draws_me:
 		anim = anim.slice(anim.size() - draws_me)
 	layout(anim, false)
+	rail.visible = not mv.is_empty()
+
+
+## The hand's ground (#31): a dark-wood gradient rising from the bottom edge (#000 at RAIL_A to clear)
+## with a faint gold line along its top. Click-through, behind the cards.
+class HandRail extends Control:
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		visible = false
+
+	func _draw() -> void:
+		var clear := Color(0, 0, 0, 0)
+		var dark := Color(0.03, 0.02, 0.01, RAIL_A)
+		draw_polygon(PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), size, Vector2(0, size.y)]),
+			PackedColorArray([clear, clear, dark, dark]))
+		# The gold line fades out towards both ends so the rail has no hard corners.
+		var line := PackedVector2Array([Vector2(0, 0.5), Vector2(size.x * 0.2, 0.5), Vector2(size.x * 0.8, 0.5), Vector2(size.x, 0.5)])
+		draw_polyline_colors(line, PackedColorArray([Color(RAIL_LINE, 0.0), RAIL_LINE, RAIL_LINE, Color(RAIL_LINE, 0.0)]), 1.0, true)

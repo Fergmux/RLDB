@@ -21,6 +21,9 @@ func before_test() -> void:
 	add_child(gs)
 	await gs.attach(host.seats[m.active])
 	await await_idle_frame()
+	# Intent change (H1 #42): with no card the panel shows the illustrated empty state and no cue;
+	# the forced overflow stands for a long card's details.
+	gs.details._set_empty(false)
 	gs.details.details_view.custom_minimum_size = Vector2(0, 2400)   # taller than the panel
 	await await_millis(400)
 
@@ -54,6 +57,15 @@ func test_cue_comes_back_when_scrolled_up_again() -> void:
 	assert_bool(cue.shown).is_true()
 	assert_bool(cue.visible).is_true()
 	assert_float(cue.modulate.a).is_equal(1.0)
+
+
+func test_pile_list_hides_the_details_cue() -> void:
+	# The cue belongs to the card details: an open pile or draft list (the empty "Your draft (0)" list
+	# showed it) never carries it, whatever the hidden details scroll would say.
+	var cue: ScrollCue = gs.details.scroll_cue
+	gs.details.show_pile("spent")
+	await await_idle_frame()
+	assert_bool(cue.shown).is_false()
 
 
 func test_reduced_motion_changes_the_cue_at_once() -> void:

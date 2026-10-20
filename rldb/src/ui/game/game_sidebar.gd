@@ -19,6 +19,8 @@ var pips: PhasePips
 var brow: HBoxContainer
 ## Advance-phase button.
 var phase_btn: Button
+## #41: its "do this next" cue (breathing rim and sweep) while nothing else is left to do.
+var cta: CtaCue
 ## The status line's arrow towards the prompt pane (shown while the choice is this player's).
 var state_arrow: Control
 ## Chip showing the game state.
@@ -48,11 +50,12 @@ func build() -> void:
 	gs.add_child(side_root)
 	var col := VBoxContainer.new()
 	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	col.offset_left = 4
-	col.offset_right = -8
-	col.offset_top = 8
-	col.offset_bottom = -8
-	col.add_theme_constant_override("separation", 8)
+	# D5 / #109: the HUD safe margin on the screen edge (right), lg top and bottom, md between panels.
+	col.offset_left = UIStyle.sp("xs")
+	col.offset_right = -UIStyle.SAFE_HUD
+	col.offset_top = UIStyle.sp("lg")
+	col.offset_bottom = -UIStyle.sp("lg")
+	UIStyle.pad(col, "md")
 	side_root.add_child(col)
 	# Turn bar
 	var tp := GameUi.side_panel()
@@ -81,6 +84,8 @@ func build() -> void:
 	phase_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	phase_btn.pressed.connect(func(): gs.send({"t": "next_phase"}))
 	brow.add_child(phase_btn)
+	cta = CtaCue.new()
+	phase_btn.add_child(cta)
 	# Status line (NOT a button, design review #40): shown instead of the phase button while a choice
 	# is pending or it is not this player's move. An engraved F3 inset with italic MUTED text, so a
 	# status never shares the call-to-action's look; when the choice is the player's, a gold arrow
@@ -131,6 +136,18 @@ func layout(w: float, h: float) -> void:
 	side_root.scale = Vector2(gs.side_k, gs.side_k)
 	side_root.position = Vector2(w - gs.sidebar_w, 0)
 	side_root.size = Vector2(GameScreen.SIDEBAR_W, h / gs.side_k)
+	log_panel.custom_minimum_size.y = log_height(h / gs.side_k)
+
+
+## #48: the game log takes LOG_SHARE of the sidebar's height (at least LOG_MIN_H); the card details
+## below it get the rest.
+const LOG_SHARE := 0.28
+const LOG_MIN_H := 180.0
+
+
+## Height of the log panel in a sidebar `col_h` tall (layout px).
+static func log_height(col_h: float) -> float:
+	return maxf(LOG_MIN_H, roundf(col_h * LOG_SHARE))
 
 
 ## Turn panel: whose turn, phase pips and the phase button (or the state chip while a choice is
@@ -219,12 +236,22 @@ func render_turnbar() -> void:
 	state_arrow.visible = chip_mine
 	phase_btn.text = label
 	phase_btn.disabled = not ok
+	cta.set_on(chip == "" and ok and nothing_left(mv.get("actions", [])))
 	phase_btn.tooltip_text = tip
 	var note := ""
 	if mv["reversal"]:
 		note = "SNEAKY SNUNDAY: card-effect gains/losses reversed (not Damage or Healing)"
 	turn_note.text = note
 	turn_note.visible = note != ""
+
+
+## #41: true when none of `actions` is a legal play other than moving on (stance changes and
+## sacrifices are always open in Main 1 and do not count, as for the ready marks).
+static func nothing_left(actions: Array) -> bool:
+	for a in actions:
+		if bool(a.get("ok", false)) and String(a.get("t", "")) in GameBoardView.READY_KINDS:
+			return false
+	return true
 
 
 ## Sidebar summary shown instead of the turn/log panels while no game is being played.

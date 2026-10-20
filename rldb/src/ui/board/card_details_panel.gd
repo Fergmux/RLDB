@@ -38,6 +38,60 @@ var text_scale: float = 1.0
 var construction: bool = false
 ## Section ids in the order they were built by the last show_* call (used by tests).
 var sections: Array[String] = []
+## #43: open with a wide crop of the card's art (the match sidebar). Off in the other panels.
+var art_crop: bool = false
+## Height (px) of that crop (the owner sets `art_crop_h` to fit its panel).
+const ART_CROP_H := 150.0
+var art_crop_h: float = ART_CROP_H
+
+
+## #43: a wide crop of the card art across the panel: rounded, framed in gold, with a soft vignette into
+## the leather at the bottom. The crop keeps the art's upper middle (faces sit there).
+class ArtCrop extends Control:
+	var tex: Texture2D
+
+	func _init(t: Texture2D, h: float) -> void:
+		tex = t
+		custom_minimum_size = Vector2(0, h)
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	## The texture region shown in a `sz` box: the full width of the (square) art, a band of the box's
+	## aspect taken from the upper middle.
+	static func region(tex_size: Vector2, sz: Vector2) -> Rect2:
+		var w := tex_size.x
+		var h := minf(tex_size.y, w * sz.y / maxf(sz.x, 1.0))
+		var y := clampf(tex_size.y * 0.3 - h * 0.35, 0.0, tex_size.y - h)
+		return Rect2(0, y, w, h)
+
+	func _draw() -> void:
+		if tex == null or size.x < 8.0:
+			return
+		var r := Rect2(Vector2.ZERO, size)
+		var rg := region(tex.get_size(), size)
+		var pts := UiSurface.round_rect_points(r, 6.0)
+		var uvs := PackedVector2Array()
+		for p in pts:
+			uvs.append((rg.position + Vector2(p.x / size.x * rg.size.x, p.y / size.y * rg.size.y)) / tex.get_size())
+		draw_colored_polygon(pts, Color.WHITE, uvs, tex)
+		# Vignette: the lower third fades into the panel's leather, a light shade along the sides.
+		var clear := Color(UIStyle.PANEL, 0.0)
+		var dark := Color(UIStyle.PANEL, 0.92)
+		var y0 := size.y * 0.55
+		draw_polygon(PackedVector2Array([Vector2(1, y0), Vector2(size.x - 1, y0), Vector2(size.x - 1, size.y - 1), Vector2(1, size.y - 1)]),
+			PackedColorArray([clear, clear, dark, dark]))
+		var side := Color(0, 0, 0, 0.3)
+		var sw := minf(28.0, size.x * 0.12)
+		draw_polygon(PackedVector2Array([Vector2(1, 1), Vector2(sw, 1), Vector2(sw, size.y - 1), Vector2(1, size.y - 1)]), PackedColorArray([side, clear, clear, side]))
+		draw_polygon(PackedVector2Array([Vector2(size.x - sw, 1), Vector2(size.x - 1, 1), Vector2(size.x - 1, size.y - 1), Vector2(size.x - sw, size.y - 1)]), PackedColorArray([clear, side, side, clear]))
+		var ring := StyleBoxFlat.new()
+		ring.draw_center = false
+		ring.set_border_width_all(1)
+		ring.set_corner_radius_all(6)
+		ring.anti_aliasing = true
+		ring.border_color = Color(UIStyle.GOLD, 0.55)
+		draw_style_box(ring, r)
+		draw_line(Vector2(8, 1.5), Vector2(size.x - 8, 1.5), Color(UIStyle.GOLD_HI, 0.25), 1.0, true)
 
 
 ## Shape marker drawn with primitives so it never depends on font glyph coverage.
@@ -97,6 +151,11 @@ func show_card(c: Dictionary, _notes: Array = []) -> void:
 		show_empty("Hover a card to read it, or click it to pin it here.")
 		return
 	_reset()
+	if art_crop and not c.get("hidden", false):
+		var tex := CardArt.texture_for(c)
+		if tex != null:
+			sections.append("art")
+			add_child(ArtCrop.new(tex, art_crop_h))
 	_build_identity(c)
 	if is_unit_view(c):
 		_build_stats(c)
@@ -229,15 +288,22 @@ static func modifier_parts(c: Dictionary) -> Array:
 	return out
 
 
-## One stat tile: caption + trend line on the left, large current value on the right.
+## #45: the stat tiles' edges echo the card badges (ATK red, DEF blue) at STAT_EDGE_A.
+const STAT_EDGE := {"ATK": Color("e8605a"), "DEF": Color("5aa2ff")}
+const STAT_EDGE_A := 0.4
+const BASE_PX := 11
+
+
+## One stat tile (#45): an F3 inset with an ATK-red / DEF-blue edge; the caption sits on the big
+## number's baseline (both bottom-aligned in one row) and "Base: N" sits under the number in 11 px.
 func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	var pc := PanelContainer.new()
 	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sb := UIStyle.flat(UIStyle.PANEL_INK, Color(UIStyle.BRONZE, 0.8), 1, 6)
-	sb.content_margin_left = 8
-	sb.content_margin_right = 8
-	sb.content_margin_top = 3
-	sb.content_margin_bottom = 3
+	var sb := UIStyle.inset_style(UIStyle.PANEL_INK, 6)
+	sb.base.border_color = Color(STAT_EDGE.get(cap, UIStyle.BRONZE), STAT_EDGE_A)
+	sb.base.set_border_width_all(1)
+	UIStyle.pad(sb, "sm", "xs")
+	sb.base = sb.base
 	pc.add_theme_stylebox_override("panel", sb)
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 6)
@@ -254,20 +320,42 @@ func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	var trend_mark: Mark = null
 	if construction:
 		return _plain_stat_tile(pc, hb, left, trend, cap, printed if printed != null or cur == null else cur)
-	trend.add_child(_lbl("Base: %s" % ("?" if printed == null else str(printed)), SMALL, UIStyle.MUTED, false, false, false))
+	# The caption moves down onto the number's baseline; the trend row is not needed in this layout.
+	left.remove_child(trend)
+	trend.free()
+	var cap_l := left.get_child(0) as Label
+	cap_l.add_theme_font_override("font", UIStyle.font_display(700))
+	cap_l.add_theme_font_size_override("font_size", _fs(15))
+	left.alignment = BoxContainer.ALIGNMENT_END
 	if cur != null and printed != null and cur != printed:
 		var up: bool = cur > printed
 		col = UIStyle.GOOD if up else UIStyle.BAD
 		trend_mark = Mark.new("up" if up else "down", col, 12)   # beside the resulting value
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", -4)
+	var nrow := HBoxContainer.new()
+	nrow.add_theme_constant_override("separation", 4)
+	nrow.alignment = BoxContainer.ALIGNMENT_END
+	right.add_child(nrow)
 	if trend_mark != null:
-		hb.add_child(trend_mark)
+		nrow.add_child(trend_mark)
 	var num := Label.new()
 	num.text = "?" if cur == null else str(cur)
 	num.add_theme_font_override("font", UIStyle.font_display(700))
 	num.add_theme_font_size_override("font_size", _fs(30) if not compact else 22)
 	num.add_theme_color_override("font_color", col)
-	num.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	hb.add_child(num)
+	num.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+	num.add_theme_constant_override("outline_size", 3)
+	nrow.add_child(num)
+	var base_l := _lbl("Base: %s" % ("?" if printed == null else str(printed)), BASE_PX, UIStyle.MUTED, false, false, false)
+	base_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	right.add_child(base_l)
+	hb.add_child(right)
+	# Bottom-align the caption with the number's foot (the base line hangs under the number).
+	left.add_theme_constant_override("separation", 0)
+	var foot := Control.new()
+	foot.custom_minimum_size.y = base_l.get_combined_minimum_size().y - 4.0
+	left.add_child(foot)
 	return pc
 
 
@@ -292,10 +380,10 @@ func _plain_stat_tile(pc: PanelContainer, hb: HBoxContainer, left: VBoxContainer
 	num.add_theme_constant_override("outline_size", 4)
 	num.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hb.add_child(num)
-	var sb := pc.get_theme_stylebox("panel") as StyleBoxFlat
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
-	sb.border_color = Color(UIStyle.GOLD, 0.7)
+	var sb := pc.get_theme_stylebox("panel") as DepthBox
+	sb.base.content_margin_top = 6
+	sb.base.content_margin_bottom = 6
+	sb.base = sb.base
 	return pc
 
 

@@ -21,10 +21,11 @@ static func glow_room(inner: Control, px: int) -> MarginContainer:
 	return mc
 
 
-## A sidebar panel with the standard panel style.
+## A sidebar panel: the F2 frame (FrameBox: a gilded bevel, rivets, leather and a vignette, design
+## review #109) with the lg (16 px) inner padding.
 static func side_panel(color: Color = Color(UIStyle.PANEL, 0.96)) -> PanelContainer:
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UiSurface.box(UIStyle.panel_style(color), UiSurface.LEATHER, UIStyle.PANEL_GRAIN))
+	p.add_theme_stylebox_override("panel", FrameBox.make(color, "lg"))
 	return p
 
 

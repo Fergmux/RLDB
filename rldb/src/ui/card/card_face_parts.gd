@@ -36,7 +36,9 @@ static func frame(pt: CardPainter, radius: float) -> void:
 ## Name plate. One line when the name fits at a legible size, otherwise two lines (split before a
 ## trailing "(Type)") so "Basic Mage (Water)" and "(Fire)" stay distinguishable (D9). `stripe` is
 ## the colour of the kind stripe along the plate's foot.
-static func name_plate(pt: CardPainter, rect: Rect2, fs_max: float, reserve_l: float, reserve_r: float, stripe: Color, fs_min: float = 9.0) -> void:
+## `one_line` (field cards, #26): never split the name over two lines; below `fs_min` it is ellipsised
+## (the full name is in the hover details and the inspector).
+static func name_plate(pt: CardPainter, rect: Rect2, fs_max: float, reserve_l: float, reserve_r: float, stripe: Color, fs_min: float = 9.0, one_line: bool = false) -> void:
 	var ci := pt.ci
 	var s := pt.s
 	pt.round_rect(rect, PLATE, 4.0 * s, Color(UIStyle.GOLD, 0.65), maxf(1.0, s))
@@ -51,7 +53,7 @@ static func name_plate(pt: CardPainter, rect: Rect2, fs_max: float, reserve_l: f
 	if font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= avail:
 		pt.text_at(font, nm, Vector2(x, rect.position.y), fs, UIStyle.TEXT, avail, HORIZONTAL_ALIGNMENT_CENTER, rect.size.y - 3.0 * s)
 		return
-	var parts := CardTextLayout.split_name(nm)
+	var parts := CardTextLayout.split_name(nm) if not one_line else PackedStringArray([nm])
 	var inner_h := rect.size.y - 3.0 * s
 	var fs2 := mini(roundi(fs_max * s), floori(inner_h / 2.0 / 1.05))
 	if parts.size() == 2 and fs2 >= 7:

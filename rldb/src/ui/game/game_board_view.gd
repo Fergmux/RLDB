@@ -14,6 +14,8 @@ const PILE_GAP := 24.0
 const BOARD_H := 730.0
 const PLATE_W := PlayerPlate.PLATE_W
 const OPP_HAND_MAX := 10
+## Top of the opponent's face-down fan (#16: on the HUD safe margin, with no caption above it).
+const OPP_HAND_Y := 24.0
 ## Slots per zone, in render order.
 const ZONE_SLOTS := {"unit": 6, "backrow": 3, "power": 4}
 ## Action kinds that mark a card as able to act now (F02-11).
@@ -37,8 +39,10 @@ var piles: Array = [{}, {}]
 var slots: Dictionary = {}
 ## Row of face-down cards for the opponent hand.
 var opp_hand_box: Control
-## Opponent hand size label.
+## Opponent hand size label (inside opp_hand_chip).
 var opp_hand_count_label: Label
+## The count chip beside the opponent's fan (#16).
+var opp_hand_chip: PanelContainer
 ## Number of opponent hand cards currently shown (-1 until first render).
 var opp_hand_n: int = -1
 ## uid -> true for my cards that can act now (F02-11).
@@ -106,8 +110,12 @@ func build() -> void:
 	opp_hand_box = Control.new()
 	opp_hand_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(opp_hand_box)
-	opp_hand_count_label = UIStyle.label("", 13, UIStyle.MUTED, false, true)
-	layer.add_child(opp_hand_count_label)
+	# #16: no debug-like caption over the fan; an F4 count chip beside it (a child of the fan, so it
+	# fades in and out with it).
+	opp_hand_chip = UIStyle.chip("", UIStyle.GOLD, 13)
+	opp_hand_count_label = opp_hand_chip.get_child(0)
+	opp_hand_count_label.add_theme_font_override("font", UIStyle.font_display(600))
+	opp_hand_box.add_child(opp_hand_chip)
 
 
 ## A board zone: `zone_node` covers the zone rect (square unit slot, landscape Trap/Spell
@@ -225,13 +233,13 @@ func layout(w: float, h: float) -> void:
 			var ps: PileStack = piles[side][PILE_ZONES[i][0]]
 			ps.position = Vector2(px + (i % 2) * (POWER_W + SLOT_GAP), _y0 + rows[int(i / 2)])
 			ps.size = Vector2(POWER_W, UNIT_SIZE)
-	(plates[0] as Control).position = Vector2(area.end.x - PLATE_W - 14.0, _y0 - 10.0)
+	# D5: the plates keep the HUD safe margin from the screen's left edge and from the sidebar.
+	(plates[0] as Control).position = Vector2(area.end.x - PLATE_W - UIStyle.SAFE_HUD, _y0 - 10.0)
 	(plates[0] as Control).size = Vector2(PLATE_W, 0)
 	var ph := (plates[1] as Control).get_combined_minimum_size().y
-	(plates[1] as Control).position = Vector2(14.0, _y0 + BOARD_H - ph + 8.0)
+	(plates[1] as Control).position = Vector2(UIStyle.SAFE_HUD, _y0 + BOARD_H - ph + 8.0)
 	(plates[1] as Control).size = Vector2(PLATE_W, 0)
-	opp_hand_count_label.position = Vector2(14.0, GameScreen.TOP_H + 4.0)
-	opp_hand_box.position = Vector2(14.0, GameScreen.TOP_H + 26.0)
+	opp_hand_box.position = Vector2(UIStyle.SAFE_HUD, OPP_HAND_Y)
 	deco.mid_y = _y0 + 365.0
 	deco.x0 = _ux - 30.0
 	deco.x1 = _ux + 3.0 * UNIT_SIZE + 2.0 * SLOT_GAP + 30.0
@@ -243,7 +251,8 @@ func layout(w: float, h: float) -> void:
 ## Rebuilds the opponent's face-down hand fan (up to OPP_HAND_MAX backs).
 func place_opp_hand() -> void:
 	for ch in opp_hand_box.get_children():
-		ch.queue_free()
+		if ch != opp_hand_chip:
+			ch.queue_free()
 	var n := maxi(opp_hand_n, 0)
 	var shown := mini(n, OPP_HAND_MAX)
 	var step := 0.0
@@ -256,8 +265,28 @@ func place_opp_hand() -> void:
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.position = Vector2(i * step, 0)
 		opp_hand_box.add_child(b)
-	opp_hand_count_label.text = "" if gs.mv.is_empty() else ("%s's hand" % String(gs.pv(1 - gs.me())["name"]) if gs.is_spectator() else "Opponent hand")
-	opp_hand_count_label.reset_size()
+	opp_hand_box.move_child(opp_hand_chip, -1)
+	_place_opp_chip(n, shown, step)
+
+
+## The count chip beside the fan, vertically centred on it: "5 cards" ("Ben's hand · 5" for a spectator).
+func _place_opp_chip(n: int, shown: int, step: float) -> void:
+	var have := not gs.mv.is_empty()
+	opp_hand_chip.visible = have
+	if not have:
+		return
+	opp_hand_count_label.text = opp_hand_text(n, String(gs.pv(1 - gs.me())["name"]), gs.is_spectator())
+	opp_hand_chip.reset_size()
+	var span: float = (step * float(shown - 1) + CardWidget.SIZES["back"].x) if shown > 0 else 0.0
+	var csz := opp_hand_chip.get_combined_minimum_size()
+	opp_hand_chip.position = Vector2(span + (UIStyle.sp("md") if shown > 0 else 0.0), (CardWidget.SIZES["back"].y - csz.y) / 2.0)
+
+
+## Text of the opponent hand chip.
+static func opp_hand_text(n: int, name: String, spectator: bool) -> String:
+	if spectator:
+		return "%s's hand · %d" % [name, n]
+	return "%d card%s" % [n, "" if n == 1 else "s"]
 
 
 ## Renders both halves of the board, the plates, piles, my hand and the opponent hand count.
@@ -295,8 +324,6 @@ func render() -> void:
 	if on != opp_hand_n:
 		opp_hand_n = on
 		place_opp_hand()
-	if have:
-		opp_hand_count_label.text = "%s's hand" % String(gs.pv(o)["name"]) if gs.is_spectator() else "Opponent hand"
 	_render_hidden_own_hand(have)
 
 

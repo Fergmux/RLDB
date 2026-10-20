@@ -52,11 +52,30 @@ func _init(screen: GameScreen) -> void:
 	gs = screen
 
 
+## #42: the illustrated empty state; it takes the panel's height while no card is shown.
+var empty_art: DetailsEmptyArt
+
+
+## #43: the art crop's height in a details scroll `scroll_h` tall: about a third of it, between
+## ART_MIN_H and ART_MAX_H, so the rules stay above the fold on a short sidebar.
+const ART_MIN_H := 84.0
+const ART_MAX_H := 160.0
+
+
+static func art_crop_height(scroll_h: float) -> float:
+	return clampf(roundf(scroll_h * 0.3), ART_MIN_H, ART_MAX_H)
+
+
+## Shows the illustrated empty state (`on`) or the card details scroll.
+func _set_empty(on: bool) -> void:
+	empty_art.visible = on
+	details_scroll.size_flags_vertical = Control.SIZE_FILL if on else Control.SIZE_EXPAND_FILL
+
+
 ## Builds the details panel into the sidebar column and returns it.
 func build(col: VBoxContainer) -> PanelContainer:
 	var panel := GameUi.side_panel()
-	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.size_flags_stretch_ratio = 1.75   # F02-05: details get most of the height
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL   # F02-05 / #48: the details take the rest
 	col.add_child(panel)
 	var dv := VBoxContainer.new()
 	dv.add_theme_constant_override("separation", 4)
@@ -86,7 +105,11 @@ func build(col: VBoxContainer) -> PanelContainer:
 	dv.add_child(details_scroll)
 	details_view = CardDetailsPanel.new()
 	details_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	details_view.art_crop = true   # #43
 	details_scroll.add_child(details_view)
+	empty_art = DetailsEmptyArt.new()   # #42
+	empty_art.visible = false
+	dv.add_child(empty_art)
 	scroll_cue = ScrollCue.new()
 	dv.add_child(scroll_cue)
 	var vb := details_scroll.get_v_scroll_bar()
@@ -100,7 +123,9 @@ func _update_scroll_cue() -> void:
 		return
 	var vb := details_scroll.get_v_scroll_bar()
 	var more := vb.max_value - vb.page > 3.0 and vb.value + vb.page < vb.max_value - 3.0
-	scroll_cue.set_shown(more)
+	# The cue follows the card details only: never over the illustrated empty state (#42), nor under
+	# a pile or draft list (the empty "Your draft (0)" list showed it).
+	scroll_cue.set_shown(more and details_scroll.visible and not empty_art.visible)
 	scroll_cue.queue_redraw()
 
 
@@ -161,6 +186,7 @@ func render() -> void:
 			pile_scroll.visible = false
 			pile_head.visible = false
 			details_scroll.visible = true
+			empty_art.visible = false
 			details_title.text = "Card details"
 			details_sig = ""
 	var duid := details_uid()
@@ -180,9 +206,11 @@ func render() -> void:
 	var same_card: bool = details_sig.begins_with("%d|" % uid_key)
 	details_sig = sig
 	var keep: int = details_scroll.scroll_vertical if same_card else 0
+	_set_empty(c.is_empty())
 	if c.is_empty():
-		details_view.show_empty("Hover a card to read it, or click it to select it (its actions appear on the card).")
+		details_view.show_empty("")   # #42: the illustrated empty state carries the hint
 	else:
+		details_view.art_crop_h = art_crop_height(details_scroll.size.y)
 		details_view.show_card(c, notes)
 	details_scroll.set_deferred("scroll_vertical", keep)
 	_update_scroll_cue.call_deferred()
@@ -282,6 +310,8 @@ func render_pile_list() -> void:
 	var sig := hash([pile_zone, _pile_sel, cards, acts, gs.board.ready_uids.keys(), gs.mv.get("actions", []), gs.mv.get("extra_avail", {}), gs.locked()])
 	_sync_method_picker()
 	details_scroll.visible = false
+	empty_art.visible = false
+	_update_scroll_cue()
 	pile_scroll.visible = true
 	pile_head.visible = true
 	if drafting:

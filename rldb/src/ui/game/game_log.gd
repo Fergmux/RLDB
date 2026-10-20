@@ -5,6 +5,12 @@ extends RefCounted
 
 ## Entries shown when (re)attaching; the full history is one click away.
 const LOG_BACKFILL := 100
+## #46: the log well's leather grain and padding (px).
+const LOG_GRAIN := 0.25
+const LOG_PAD := 14
+## #47: the winner line: GOLD_HI bold after a small crown.
+const WIN_COLOR := "#f0cf7a"
+const CROWN_PX := 15
 
 ## The host screen this component works on.
 var gs: GameScreen
@@ -30,18 +36,29 @@ func _init(screen: GameScreen) -> void:
 ## Builds the log panel into the sidebar column and returns it.
 func build(col: VBoxContainer) -> PanelContainer:
 	panel = GameUi.side_panel()
-	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.size_flags_stretch_ratio = 0.8
+	panel.size_flags_vertical = Control.SIZE_FILL   # #48: a fixed share of the sidebar (GameSidebar.log_height)
 	col.add_child(panel)
 	var lv := VBoxContainer.new()
-	lv.add_theme_constant_override("separation", 4)
+	UIStyle.pad(lv, "sm")
 	panel.add_child(lv)
 	lv.add_child(GameUi.header("Game log"))
+	# #46: an F3 ink well with leather grain (not a terminal-black box), 14 px padding and md between
+	# the text and its scrollbar.
 	var lbg := PanelContainer.new()
-	lbg.add_theme_stylebox_override("panel", UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(UIStyle.BRONZE, 0.4), 1, 6))
+	var lsb := UIStyle.inset_style(UIStyle.PANEL_INK, 6, LOG_GRAIN)
+	lsb.base.content_margin_left = LOG_PAD
+	lsb.base.content_margin_top = LOG_PAD - 4
+	lsb.base.content_margin_bottom = LOG_PAD - 4
+	lsb.base.content_margin_right = UIStyle.sp("xs")
+	lsb.base = lsb.base
+	lbg.add_theme_stylebox_override("panel", lsb)
 	lbg.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lv.add_child(lbg)
 	label = RichTextLabel.new()
+	var tsb := StyleBoxEmpty.new()
+	tsb.content_margin_right = UIStyle.SCROLL_CONTENT_GAP
+	label.add_theme_stylebox_override("normal", tsb)
+	label.install_effect(LogFreshFx.new())
 	label.bbcode_enabled = true
 	label.meta_clicked.connect(_on_meta)
 	label.scroll_following = true
@@ -55,12 +72,6 @@ func build(col: VBoxContainer) -> PanelContainer:
 	label.meta_hover_started.connect(func(m): if str(m).begins_with("card:"): label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND)
 	label.meta_hover_ended.connect(func(_m): label.mouse_default_cursor_shape = Control.CURSOR_ARROW)
 	StatusHelp.watch_rich(label)
-	var lsb := UIStyle.flat(Color(0.045, 0.04, 0.035, 0.92), Color(UIStyle.BRONZE, 0.45), 1, 8)
-	lsb.content_margin_left = 10
-	lsb.content_margin_right = 6
-	lsb.content_margin_top = 6
-	lsb.content_margin_bottom = 6
-	lbg.add_theme_stylebox_override("panel", lsb)
 	lbg.add_child(label)
 	return panel
 
@@ -108,6 +119,10 @@ func render() -> void:
 	var start := entries.size()
 	while start > 0 and int(entries[start - 1]["seq"]) > _seq_shown:
 		start -= 1
+	# #46: lines arriving during play rise in, staggered (not a backfill on a new game or attach).
+	var animate := not fresh_game and not UIStyle.reduce_motion
+	var t0 := Time.get_ticks_msec()
+	var n_new := 0
 	for i in range(start, entries.size()):
 		var e: Dictionary = entries[i]
 		_seq_shown = e["seq"]
@@ -116,10 +131,21 @@ func render() -> void:
 			continue
 		var col := "#ddd4c0"
 		var bold := false
+		var fresh_open := ""
+		var fresh_close := ""
+		if animate:
+			fresh_open = "[fresh t=%d]" % (t0 + n_new * LogFreshFx.STAGGER_MS)
+			fresh_close = "[/fresh]"
+			n_new += 1
 		if t.begins_with("—"):
 			# Turn header: a centred divider ("TURN 2 · BEN") with breathing room above it.
 			var head := t.trim_prefix("—").trim_suffix("—").strip_edges().replace(": ", " · ").to_upper()
-			label.append_text("\n[center][color=#8a7350]━━━  [/color][color=#f0cf7a][b]%s[/b][/color][color=#8a7350]  ━━━[/color][/center]\n" % head.replace("[", "("))
+			label.append_text("\n[center]%s[color=#8a7350]━━━  [/color][color=#f0cf7a][b]%s[/b][/color][color=#8a7350]  ━━━[/color]%s[/center]\n" % [fresh_open, head.replace("[", "("), fresh_close])
+			continue
+		if t.begins_with("GAME OVER"):
+			# #47: the winner line in gold after a crown (no off-palette magenta).
+			label.add_image(crown_texture(), CROWN_PX, CROWN_PX, Color.WHITE, INLINE_ALIGNMENT_CENTER)
+			label.append_text(" %s[color=%s][b]%s[/b][/color]%s\n" % [fresh_open, WIN_COLOR, StatusHelp.linkify(_tint_names(t.replace("[", "(").replace("]", ")"), WIN_COLOR)), fresh_close])
 			continue
 		elif t.contains(" Damage") and t.contains("(HP "):
 			col = "#ff8a8a"
@@ -133,14 +159,33 @@ func render() -> void:
 			bold = true
 		elif t.begins_with("Battle:"):
 			col = "#ffd84a"
-		elif t.begins_with("GAME OVER"):
-			col = "#ff9ff3"
-			bold = true
 		# Card names link to the card; status names show their effect on hover (2026-10-18).
 		var body := StatusHelp.linkify(_tint_names(t.replace("[", "(").replace("]", ")"), col))
 		if bold:
 			body = "[b]%s[/b]" % body
-		label.append_text("[color=%s]%s[/color]\n" % [col, body])
+		label.append_text("%s[color=%s]%s[/color]%s\n" % [fresh_open, col, body, fresh_close])
+
+
+static var _crown: Texture2D
+
+
+## #47: a small gilded crown for the log's winner line (an SVG rasterised once at 2x for crisp edges).
+static func crown_texture() -> Texture2D:
+	if _crown != null:
+		return _crown
+	var svg := "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'>" \
+		+ "<defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#fff1c4'/>" \
+		+ "<stop offset='0.5' stop-color='#f0cf7a'/><stop offset='1' stop-color='#a97c34'/></linearGradient></defs>" \
+		+ "<path d='M4 24 L3 9 L10.5 15.5 L16 5 L21.5 15.5 L29 9 L28 24 Z' fill='url(#g)' stroke='#2a1a08' stroke-width='1.6' stroke-linejoin='round'/>" \
+		+ "<rect x='4' y='24.5' width='24' height='4' rx='1' fill='url(#g)' stroke='#2a1a08' stroke-width='1.4'/>" \
+		+ "<circle cx='16' cy='17' r='2.2' fill='#e8605a' stroke='#2a1a08' stroke-width='0.8'/></svg>"
+	var img := Image.new()
+	if img.load_svg_from_string(svg, 1.0) != OK:
+		img = Image.create(32, 32, false, Image.FORMAT_RGBA8)
+		img.fill(Color(UIStyle.GOLD_HI, 1.0))
+	img.generate_mipmaps()
+	_crown = ImageTexture.create_from_image(img)
+	return _crown
 
 
 ## Wraps every card name in a log line in its card-kind colour (Trap red, Spell green, ...).
