@@ -335,7 +335,7 @@ func _series_options(v: VBoxContainer) -> void:
 	bo.item_selected.connect(func(i): opts["best_of"] = bo.get_item_id(i))
 	_labelled(v, "Best of", bo)
 	var dm := OptionButton.new()
-	dm.add_item("Starter decks")
+	dm.add_item("Custom decks")
 	dm.add_item("Draft")
 	dm.select(0 if opts["deck_mode"] == "starter" else 1)
 	_labelled(v, "Decks", dm)
@@ -418,7 +418,7 @@ func _leaf_panel(target: String) -> Control:
 	_series_panel_active = false
 	match target:
 		"bot":
-			pv = _center_panel("Play vs Bot", "A series against the computer. The bot picks a random starter deck.", "Play · local")
+			pv = _center_panel("Play vs Bot", "A series against the computer. The bot picks a random Structure deck.", "Play · local")
 			_series_options(pv[1])
 			_start_button(pv[1], "Start series", bot_requested.emit)
 		"hotseat":

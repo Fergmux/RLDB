@@ -9,7 +9,7 @@ var out_dir: String
 var host: LocalHost
 var _fail := 0
 var _pass := 0
-## F01: the deck modal's rect on the first (Structured) tab; every tab must keep it.
+## F01: the deck modal's rect on the first (Structure) tab; every tab must keep it.
 var _f01_rect := Rect2()
 
 

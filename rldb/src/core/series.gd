@@ -421,7 +421,7 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 			_log("%s locks in a custom deck." % names[p])
 		"draft_category", "draft_pick", "draft_basic":
 			if cfg["deck_mode"] != "draft":
-				return "This series uses starter decks."
+				return "This series uses custom decks, not a draft."
 			var e := _draft_command(p, cmd)
 			if e != "":
 				return e

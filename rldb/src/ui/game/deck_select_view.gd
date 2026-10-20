@@ -1,12 +1,12 @@
 class_name DeckSelectView
 extends RefCounted
-## "Choose your deck" stage of the series modal (F04-02): lobby bar, Structured / Custom tabs,
+## "Choose your deck" stage of the series modal (F04-02): lobby bar, Structure / Custom tabs,
 ## uniform deck tiles in a smooth scrolling plate, the locked-in waiting state and the draft
 ## (category tabs drafted in any order, the basic unit changeable at any time, the offer).
 ## Renders into the overlay's content box; sends commands through the host screen.
 
 
-## Which tab is open: "structured" (starter decks) or "custom" (saved decks).
+## Which tab is open: "structured" (Structure decks) or "custom" (saved decks).
 var tab: String = "structured"
 ## The ScrollArea holding the tiles (null when this stage shows no list); the overlay sizes to it.
 var list_area: ScrollArea
@@ -100,10 +100,10 @@ func _tabs_and_list(box: VBoxContainer) -> void:
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 6)
 	box.add_child(tabs)
-	tabs.add_child(_tab_button("structured", "Structured", starters.size(), "shield"))
+	tabs.add_child(_tab_button("structured", "Structure", starters.size(), "shield"))
 	if custom_ok:
 		tabs.add_child(_tab_button("custom", "Custom", saved.size(), "tome"))
-	var hint := UIStyle.label("Starter decks, ready to play" if tab == "structured" else "Decks you built and saved", 14, UIStyle.TEXT_DIM)
+	var hint := UIStyle.label("Structure decks, ready to play" if tab == "structured" else "Decks you built and saved", 14, UIStyle.TEXT_DIM)
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hint.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -235,10 +235,10 @@ func _empty_custom() -> Control:
 	var t := UIStyle.label("No saved decks yet", 22, UIStyle.GOLD, false, true)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
-	var s := UIStyle.label("Decks you build and save in the Deck Builder appear here, ready to play. Until then, pick a Structured deck.", 15, UIStyle.MUTED, true)
+	var s := UIStyle.label("Decks you build and save in the Deck Builder appear here, ready to play. Until then, pick a Structure deck.", 15, UIStyle.MUTED, true)
 	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(s)
-	var go := UIStyle.button("Show Structured decks", 14)
+	var go := UIStyle.button("Show Structure decks", 14)
 	go.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	go.pressed.connect(func():
 		tab = "structured"
@@ -500,7 +500,7 @@ class DraftPips extends Control:
 				Ornate.diamond(self, c, 3.5, Color(0.05, 0.04, 0.03, 1.0))
 
 
-## Small vector glyph for the tabs: "shield" (Structured) or "tome" (Custom).
+## Small vector glyph for the tabs: "shield" (Structure) or "tome" (Custom).
 class TabGlyph extends Control:
 	var kind := "shield"
 	var col := UIStyle.GOLD
