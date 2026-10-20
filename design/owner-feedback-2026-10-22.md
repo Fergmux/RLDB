@@ -42,7 +42,7 @@ no pausing).
 | J28 | "on the draft screen the list on the right should match the pile viewer list styling/information" | B draft | done |
 | J29 | "the cards you have drafted so far grid is nice but should show the actual cards, with the nice formatted hover tootlip - like in game" | B draft | done |
 | J30 | "when drafting cards, instead of automatically going to the deck locked in screen we should show a 'confirm selections' button first, I want to allow changing basics even after all cards are drafted" | B draft | done |
-| J31 | Performance review after the batch: "make sure there are no functions/logic that is noticably slowing down the game ... any free wins we should take" | G perf | in progress |
+| J31 | Performance review after the batch: "make sure there are no functions/logic that is noticably slowing down the game ... any free wins we should take" | G perf | done |
 
 ## Decisions for review
 
@@ -89,4 +89,25 @@ no pausing).
 **Integrator**
 - Nearby: the CTA sheen on the turn button dropped corner slivers that failed to triangulate (console error in the tutorial); blocked stance notes read "Cannot change to defense".
 
+**Performance (J31)** (1600x1000, vsync off; evidence in `production/qa/evidence/2026-10-22-batch/perf/`)
+
+| Screen | Before batch | After | Draw calls |
+|---|---|---|---|
+| Idle duel | ~167 fps | 199-224 fps | 4043 -> 1331 |
+| Played duel | ~136-187 fps | 266-324 fps | ~4150 -> 1460-1682 |
+| Deck choice | ~253 fps | 362-403 fps | 4182 -> 1832 |
+| Rewards | ~183 fps | 230-255 fps | ~5200 -> 2159-2717 |
+| Draft | ~170 fps | 454-477 fps | 4034 -> 1686 |
+
+- Fixes: the seat view reuses settled log rows (a command in a long game ~1.8 ms cheaper; the cost used to grow with the log); the draft grid and pips repaint only the breathing piece; the empty details engraving breathes by alpha; card overlay rings share one style box; each empty board zone is drawn as one cached triangle list (Godot's own tessellation, same blend order) instead of ~92 draw calls.
+- Deviation: a texture bake was tried for the zones and rejected (it shifted 28% of zone pixels and badly wrong under a dim); the merged geometry differs on under 0.05% of zone pixels by at most 2/255 at four window sizes.
+- A zone being picked still draws the old way (~100 extra draw calls while a pick is open), because the old drawing is not frame-stable there under MSAA.
+- Guards: draw-call budget (`perf_screens --budget`, idle duel <= 2000), no-idle-redraw tests for the new widgets, a cached-log vs rebuilt-log equality test.
+- Not done (next headroom): pile stacks are now most of the remaining idle draw calls (~1200 of 1331); the pulsing ready-card overlays and the plate rim / phase pips cost ~0.9 / 0.5 / 0.3 ms but an exact split needs more layers. The slowest 5% of idle frames above ~220 fps are unexplained (possibly the compositor); not felt at normal refresh rates.
+
 ## Blockers and workarounds
+
+- Specialist agents stopped every 20 turns (`maxTurns` in `.claude/agents/*.md`); raised to 150 at the owner's request.
+- Parallel test runs share `user://test_player_stats.json`, so one stats test failed once while two suites ran at once; it passes alone (3/3).
+- `data/status_source.json` (from the owner's sheet) still has the old Paralyse wording; the game text is updated.
+- Series driver: the known "F06 field hover returns after cancel" real-mouse flake.
