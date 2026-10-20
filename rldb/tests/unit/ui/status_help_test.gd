@@ -106,3 +106,21 @@ func test_hovering_a_status_word_in_a_label_shows_its_effect() -> void:
 	StatusHelp._label_hover(l, l.get_character_bounds(1).get_center())
 	assert_str(StatusTip.shown_detail()).is_equal("")
 	assert_int(l.mouse_filter).is_equal(Control.MOUSE_FILTER_PASS)
+
+
+func test_status_ink_stops_at_the_labels_line_limit() -> void:
+	# Arrange: a narrow two-line label whose text (naming statuses) wraps to many more lines.
+	var l: Label = auto_free(UIStyle.label("On Summon: Apply 2 Poison to a Unit. Then Burn it twice, Blind it and Paralyse the rest of the row until your next turn.", 13, UIStyle.TEXT, true))
+	l.max_lines_visible = 2
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.custom_minimum_size = Vector2(120, 0)
+	add_child(l)
+	l.size = Vector2(120, 40)
+	StatusHelp.watch_label(l)
+	var ink: StatusHelp.Ink = l.get_child(l.get_child_count() - 1)
+	# Act
+	ink.queue_redraw()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	# Assert: the ink draws no line the label itself hides (it once ran past the limit).
+	assert_int(ink.drawn_lines).is_equal(2)

@@ -224,6 +224,13 @@ static func draw_marked_line(ci: CanvasItem, tp: TextParagraph, i: int, pos: Vec
 	return srv.shaped_text_get_size(rid).y
 
 
+## Lines of `tp` that show: all of them, or at most its max_lines_visible (the paragraph still
+## shapes every line; drawing them all ran a trimmed label's status-word ink past its last line).
+static func visible_lines(tp: TextParagraph) -> int:
+	var n := tp.get_line_count()
+	return mini(n, tp.max_lines_visible) if tp.max_lines_visible > 0 else n
+
+
 ## D12: child of a watched Label. It draws the label's text itself with the status words highlighted
 ## and underlined, and keeps the label's own text transparent (the label still sizes, wraps, trims
 ## and answers hover as before). A label naming no status is left alone.
@@ -231,6 +238,8 @@ class Ink extends Control:
 	var _label: Label
 	var _ink: Color = Color.WHITE
 	var _hidden: bool = false
+	## Lines drawn by the last redraw (tests).
+	var drawn_lines: int = 0
 
 	func _init(label: Label) -> void:
 		_label = label
@@ -281,7 +290,8 @@ class Ink extends Control:
 		var sp := StatusHelp.spans(text)
 		var srv := TextServerManager.get_primary_interface()
 		var y := pos.y
-		for i in tp.get_line_count():
+		drawn_lines = StatusHelp.visible_lines(tp)
+		for i in drawn_lines:
 			var lw := srv.shaped_text_get_size(tp.get_line_rid(i)).x
 			var dx := 0.0
 			match _label.horizontal_alignment:
