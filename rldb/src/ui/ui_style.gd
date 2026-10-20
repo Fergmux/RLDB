@@ -25,6 +25,10 @@ const BAD := Color("e8605a")
 const TARGET := Color("ffd84a")
 const SELECT := Color("63b3ff")
 const HOVER := Color("f0cf7a")
+## D12: hoverable status words (StatusHelp) are drawn in this lavender and underlined, on dark panels.
+const STATUS_LINK := Color("c3a2ff")
+## The same hue, darkened for light (parchment) surfaces.
+const STATUS_LINK_ON_LIGHT := Color("5e3aa8")
 const RUNE_BLUE := Color("5aa2ff")
 ## "This card can act now" highlight (user feedback 2026-10-16: warm yellow with a soft glow, not green).
 ## Distinct from TARGET by behaviour: TARGET pulses with a fill, READY is a steady outer glow + chevron badge.

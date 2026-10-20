@@ -98,14 +98,6 @@ func _build_preview(body: HBoxContainer) -> void:
 	v.add_child(_preview_body)
 	_preview_holder = CenterContainer.new()
 	_preview_body.add_child(_preview_holder)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_preview_body.add_child(row)
-	var ins := UIStyle.button("Inspect", 14)
-	ins.custom_minimum_size = Vector2(120, 32)
-	ins.tooltip_text = "Open the large card view (right-click or Enter)"
-	ins.pressed.connect(func(): if _shown_id >= 0: inspect_card(_shown_id))
-	row.add_child(ins)
 	var sc := ScrollArea.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_preview_body.add_child(sc)
@@ -141,7 +133,7 @@ func show_card(id: int) -> void:
 	var s := _summary(id)
 	_preview_card = CardWidget.new().setup(MatchView.summary_view(s), "big")
 	_preview_card.show_tooltip = false
-	_preview_card.tooltip_text = ""
+	_preview_card.tooltip_text = "Right-click to inspect"      # D15: no Inspect button; right-click is enough
 	_preview_card.right_pressed.connect(func(_w): inspect_card(id))
 	_preview_card.pressed.connect(func(_w): inspect_card(id))
 	_preview_holder.add_child(_preview_card)

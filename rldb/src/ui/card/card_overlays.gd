@@ -53,6 +53,11 @@ static func draw(pt: CardPainter, w: CardWidget) -> void:
 		pt.round_rect(rect, Color(UIStyle.TARGET, 0.07 + 0.12 * a), rad)
 		pt.ring(Color(UIStyle.TARGET, 0.35 * a), 5.0 * s, rect.grow(3.5 * s), rad + 3.0 * s)
 		pt.ring(Color(UIStyle.TARGET, a), 3.5 * s, rect, rad)
+	if w.preview_target:
+		# D9: the hover preview of an effect's targets, a quiet cousin of the target ring: a steady thin
+		# yellow border with a faint halo, no fill and no pulse.
+		pt.ring(Color(UIStyle.TARGET, 0.16), 3.0 * s, rect.grow(3.0 * s), rad + 3.0 * s)
+		pt.ring(Color(UIStyle.TARGET, 0.8), maxf(1.5, 2.0 * s), rect, rad)
 	# Badges last so combined states (ready + selected, etc.) stay legible.
 	if ready:
 		_ready_badge(pt.ci, rect, s, ready_bounce())

@@ -127,6 +127,8 @@ func show_card(c: Dictionary) -> void:
 	_panel.set_tag(String(c.get("category", "")).replace("_", " "))
 	_layout_card()
 	var keep := _scroll.scroll_vertical
+	# D14: a Spell / Trap / Power has no stats section, so its rules read larger and fill the column.
+	_details.text_scale = DETAILS_TEXT_SCALE if CardDetailsPanel.is_unit_view(c) else DETAILS_TEXT_SCALE * 1.3
 	_details.show_card(c)
 	_scroll.set_deferred("scroll_vertical", keep if same_card else 0)
 

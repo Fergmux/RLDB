@@ -246,7 +246,6 @@ func _build_subject(col: VBoxContainer) -> void:
 	subject_card.auto_hover = false
 	subject_card.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	subject_card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # centred when the strip stacks
-	subject_card.tooltip_text = "Right-click to inspect"
 	subject_card.right_pressed.connect(func(w): gs.inspect.inspect_widget(w))
 	h.add_child(subject_card)
 	var v := VBoxContainer.new()
@@ -301,13 +300,24 @@ func subject_for(pd: Dictionary) -> Dictionary:
 	return best if not best.is_empty() else src
 
 
+## D11: a card shown in this pane is never drawn face down to its owner. A card this seat may see
+## (redaction gives it a name; an opponent's hidden card arrives as {"hidden": true}) is drawn face up,
+## so my face-down Traps read as the cards they are; an opponent's hidden card stays hidden.
+static func pane_view(c: Dictionary) -> Dictionary:
+	if c.is_empty() or bool(c.get("hidden", false)) or not c.has("name"):
+		return c
+	var v := c.duplicate()
+	v["face_up"] = true
+	return v
+
+
 func _render_subject(pd: Dictionary) -> void:
 	var c := subject_for(pd)
 	_has_subject = not c.is_empty()
 	subject_box.visible = _has_subject and not _in_top_strip
 	if c.is_empty():
 		return
-	subject_card.setup(c, "mini")
+	subject_card.setup(pane_view(c), "mini")      # D11: shown face up, tooltip lists the effect
 	GameUi.resize_card(subject_card, SUBJECT_CARD)
 	subject_name.text = String(c.get("name", ""))
 	var txt := String(c.get("text", "")).strip_edges()
@@ -434,7 +444,7 @@ func _mention_figure(e: Dictionary) -> Control:
 		fig.add_child(tok)
 		nm = "Direct attack"
 	else:
-		var w := CardWidget.new().setup(c, "mini")
+		var w := CardWidget.new().setup(pane_view(c), "mini")
 		w.auto_hover = false
 		w.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		w.set_meta("mention", true)
@@ -443,7 +453,9 @@ func _mention_figure(e: Dictionary) -> Control:
 		w.right_pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
 		var hidden := bool(c.get("hidden", false)) or not c.has("name")
 		nm = ("Set Spell/Trap" if String(c.get("zone", "")) == "backrow" else "Hidden card") if hidden else String(c.get("name", ""))
-		w.tooltip_text = "%s: %s" % [ROLE_CAPTIONS.get(role, role.capitalize()), nm] + ("" if hidden else "\nRight-click to inspect")
+		# D11: the card's effect (the rich tooltip), headed by its role; a hidden card names only its role.
+		w.tooltip_text = ("%s: %s" % [ROLE_CAPTIONS.get(role, role.capitalize()), nm]) if hidden \
+			else "%s\n%s" % [ROLE_CAPTIONS.get(role, role.capitalize()), CardWidget.tooltip_for(c)]
 		fig.add_child(w)
 	var cap := "TARGET" if role == "direct" else String(ROLE_CAPTIONS.get(role, role.capitalize())).to_upper()
 	var role_l := UIStyle.label(cap, 10, UIStyle.MUTED)
@@ -470,12 +482,11 @@ func _response_row(e: Dictionary) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var w := CardWidget.new().setup(c, "mini")
+	var w := CardWidget.new().setup(pane_view(c), "mini")
 	w.auto_hover = false
 	w.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	w.set_meta("mention", true)
 	w.set_meta("response", true)
-	w.tooltip_text = "Right-click to inspect"
 	w.right_pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
 	row.add_child(w)
 	var v := VBoxContainer.new()
@@ -1243,12 +1254,12 @@ func _render_tray() -> void:
 		var uid: int = int(cv.get("uid", -1))
 		tray_cards[uid] = cv
 		var idx: int = o["i"]
-		var w := CardWidget.new().setup(cv, "mini")
+		var w := CardWidget.new().setup(pane_view(cv), "mini")
 		# F08: a material that would pay more than what remains is visibly unavailable.
 		var over := would_overpay(pd, gs.multi, idx)
 		w.set_marks(not over, idx in gs.multi, over)
 		if over:
-			w.tooltip_text = "Cannot overpay"
+			w.tooltip_text = "Cannot overpay\n\n" + CardWidget.tooltip_for(cv)
 			w.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN
 		w.set_meta("overpay", over)
 		w.order_no = gs.selection.order_no(idx)

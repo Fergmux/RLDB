@@ -98,7 +98,7 @@ func show_card(c: Dictionary, _notes: Array = []) -> void:
 		return
 	_reset()
 	_build_identity(c)
-	if c.has("race"):
+	if is_unit_view(c):
 		_build_stats(c)
 	_build_rules(c)
 	if not c.get("abilities", []).is_empty():
@@ -129,6 +129,12 @@ func _reset() -> void:
 		ch.free()   # children are passive display nodes; freeing now keeps min-size and tests exact
 
 
+## True when `c` is a unit (it has Race / Type and ATK / DEF). Spells, Traps and Powers carry no such
+## section at all (D14: no "No race" / "?" placeholders).
+static func is_unit_view(c: Dictionary) -> bool:
+	return c.has("race") and CardDB.is_unit_category(String(c.get("category", "unit")))
+
+
 func _build_identity(c: Dictionary) -> void:
 	sections.append("identity")
 	var cat: String = c.get("category", "unit")
@@ -139,7 +145,7 @@ func _build_identity(c: Dictionary) -> void:
 	badges.add_child(_chip(String(UIStyle.CATEGORY_NAMES.get(cat, cat)), cat_col, "", true))
 	if String(c.get("cost_kind", "ap")) != "fusion":   # "Fusion Unit" already says how it is summoned
 		badges.add_child(_cost_chip(c))
-	if c.has("race"):
+	if is_unit_view(c):
 		var race: String = String(c.get("race", ""))
 		badges.add_child(_chip(race if race != "" else "No race", UIStyle.BRONZE.lightened(0.25)))
 		var ty = c.get("type", "")
@@ -403,12 +409,12 @@ func _build_statuses(c: Dictionary) -> void:
 
 # ---------------------------------------------------------------- helpers
 
-## "Burn (debuff): when this ..." -> "When this ..." (the name is already the row title).
+## "Burn: when this ..." -> "When this ..." (the name is already the row title).
 static func _strip_status_prefix(help: String) -> String:
-	var i := help.find("): ")
+	var i := help.find(": ")
 	if i < 0:
 		return help
-	var body := help.substr(i + 3)
+	var body := help.substr(i + 2)
 	return body.substr(0, 1).to_upper() + body.substr(1)
 
 

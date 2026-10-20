@@ -18,21 +18,21 @@ const ELEMENTS := ["Water", "Fire", "Earth", "Lightning", "Light", "Dark", "Phys
 const RACES := ["Mage", "Dragon", "Warrior", "Beast", "Monster", "God"]
 
 const STATUS_HELP := {
-	"rune": "Rune (counter, not a buff): a unit with enough Runes can be tributed for a Ritual summon. Unaffected by Curse.",
-	"retain": "Retain (buff): not discarded at end of turn. One stack is consumed each time it prevents a discard.",
-	"reveal": "Reveal (debuff): this card is face up. No duration.",
-	"eternal": "Eternal (buff): prevents the next destruction of this unit (one stack consumed). Battle HP damage still applies.",
-	"burn": "Burn (debuff): when this unit attacks, its controller takes Damage equal to Burn, then all Burn is removed.",
-	"pierce": "Pierce (buff): attacking a Defense-stance unit, excess ATK damages the opponent. One stack consumed.",
-	"cleanse": "Cleanse (buff): removes all existing debuffs or prevents an incoming debuff. One stack consumed per use.",
-	"paralyse": "Paralyse (debuff): cannot declare an attack or move zones. -1 at the end of its controller's turn.",
-	"medic": "Medic (buff): at the start of its controller's turn they Heal HP equal to Medic, then -1.",
-	"curse": "Curse (debuff): removes all buffs or prevents an incoming buff (not Runes). One stack consumed per use.",
-	"poison": "Poison (debuff): at the end of its controller's turn they take Damage equal to Poison, then -1.",
-	"infiltrate": "Infiltrate (buff): may attack protected units. One stack consumed when it does.",
-	"blind": "Blind (debuff): attack target is chosen at random among legal targets. One stack consumed when it attacks.",
-	"nimble": "Nimble (buff): once per turn move to an adjacent empty zone (diagonals count). One stack consumed per move.",
-	"debilitate": "Debilitate (debuff): cannot be sacrificed or tributed; all its effects are suppressed. -1 at the end of its controller's turn.",
+	"rune": "Rune: a unit with enough Runes can be tributed for a Ritual summon. Unaffected by Curse.",
+	"retain": "Retain: not discarded at end of turn. One stack is consumed each time it prevents a discard.",
+	"reveal": "Reveal: this card is face up. No duration.",
+	"eternal": "Eternal: prevents the next destruction of this unit (one stack consumed). Battle HP damage still applies.",
+	"burn": "Burn: when this unit attacks, its controller takes Damage equal to Burn, then all Burn is removed.",
+	"pierce": "Pierce: attacking a Defense-stance unit, excess ATK damages the opponent. One stack consumed.",
+	"cleanse": "Cleanse: removes all existing debuffs or prevents an incoming debuff. One stack consumed per use.",
+	"paralyse": "Paralyse: cannot declare an attack or move zones. -1 at the end of its controller's turn.",
+	"medic": "Medic: at the start of its controller's turn they Heal HP equal to Medic, then -1.",
+	"curse": "Curse: removes all buffs or prevents an incoming buff (not Runes). One stack consumed per use.",
+	"poison": "Poison: at the end of its controller's turn they take Damage equal to Poison, then -1.",
+	"infiltrate": "Infiltrate: may attack protected units. One stack consumed when it does.",
+	"blind": "Blind: attack target is chosen at random among legal targets. One stack consumed when it attacks.",
+	"nimble": "Nimble: once per turn move to an adjacent empty zone (diagonals count). One stack consumed per move.",
+	"debilitate": "Debilitate: cannot be sacrificed or tributed; all its effects are suppressed. -1 at the end of its controller's turn.",
 }
 
 static var _defs: Dictionary = {}

@@ -21,6 +21,8 @@ func _init(screen: GameScreen) -> void:
 
 ## Removes the row.
 func clear() -> void:
+	if gs.board != null:
+		gs.board.set_preview([])
 	if stack != null and is_instance_valid(stack):
 		stack.queue_free()
 	stack = null
@@ -126,6 +128,11 @@ func rebuild() -> void:
 		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		b.tooltip_text = String(a.get("full", a["label"])) + ("" if a["ok"] else "\n" + String(a["reason"]))
 		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if a["ok"] else Control.CURSOR_ARROW
+		# D9: hovering an effect that targets field cards previews the valid targets until the pointer leaves.
+		var tg: Array = a.get("targets", [])
+		if a["ok"] and not tg.is_empty():
+			b.mouse_entered.connect(func(): gs.board.set_preview(tg, uid))
+			b.mouse_exited.connect(func(): gs.board.set_preview([]))
 		# Every action button looks the same (user feedback: no special first button).
 		var kbf: bool = uid == kb.kb_uid and i == kb.kb_idx
 		var nrm := UIStyle.flat(Color(UIStyle.PANEL_LIGHT, 0.98), UIStyle.SELECT if kbf else Color(UIStyle.GOLD, 0.75), 3 if kbf else 1, 6)
@@ -185,7 +192,9 @@ func run_action(uid: int, a: Dictionary) -> void:
 	clear()
 	var it := gs.selection.item_for_uid(uid)
 	var hv := gs.hover.hv
-	if not it.is_empty() and not (not hv.is_empty() and hv["uid"] == uid):
+	if not it.is_empty() and it["kind"] == "hand":
+		gs.hover.release_hand(uid)          # D2: back to normal size at once, off the trap zones
+	elif not it.is_empty() and not (not hv.is_empty() and hv["uid"] == uid):
 		gs.hover.unlift(it)
 	Sfx.play("confirm")
 	gs.send(cmd)

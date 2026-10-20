@@ -691,7 +691,7 @@ func end_game(win: int, reason: String) -> void:
 	winner = win
 	phase = PHASE_OVER
 	note("game_over", {"winner": win, "reason": reason})
-	add_log("GAME OVER: %s wins (%s)." % [pname(win), reason])
+	add_log("GAME OVER: %s Wins" % pname(win))   # D7: no reason in the log; the event keeps it
 	add_fx({"k": "game_over", "winner": win})
 	_on_game_over()
 

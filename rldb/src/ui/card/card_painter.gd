@@ -146,9 +146,15 @@ func text_c(font: Font, text: String, centre: Vector2, fsz: int, col: Color, out
 ## A shaped paragraph (CardTextLayout) with its top-left at `pos`, rasterised at `text_os`.
 ## Draws `tp` and records it for status-word hovering when `text` (its string) names a status.
 func para_text(tp: TextParagraph, pos: Vector2, col: Color, text: String) -> void:
-	para(tp, pos, col)
-	if not StatusHelp.spans(text).is_empty():
-		text_hits.append({"para": tp, "pos": pos, "text": text, "inv": face_xform().affine_inverse()})
+	if StatusHelp.spans(text).is_empty():
+		para(tp, pos, col)
+		return
+	# D12: status words are drawn in the link colour and underlined so they read as hoverable.
+	if tracing:
+		para(tp, pos, col)
+	else:
+		StatusHelp.draw_marked(ci, tp, pos, col, text, UIStyle.STATUS_LINK, text_os)
+	text_hits.append({"para": tp, "pos": pos, "text": text, "inv": face_xform().affine_inverse()})
 
 
 func para(tp: TextParagraph, pos: Vector2, col: Color) -> void:
