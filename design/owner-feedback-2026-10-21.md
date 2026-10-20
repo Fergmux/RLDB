@@ -29,6 +29,10 @@ and have a few more things for you to change". Standing instructions from the 20
 | H21 | "the power trap inidcators on card should stay on the left not the center" | A card face | done |
 | H22 | "the I go first and my opponent goes first buttons are too close together, give them some margin" | C panels | done |
 | H23 | "when i killing blow an opponent the hitpoints lost appears underneath their player card" | B board | done |
+| H24 | (deck builder, middle pane) "the atk/def should be smaller" | E deck builder | open |
+| H25 | "the rules should ben split out into sections like in the game right preview pane, I don't want to have to scroll that middle pane ever" | E deck builder | open |
+| H26 | "also remove the 'in your deck' tag under the card image" | E deck builder | open |
+| H27 | "the in this deck section at the bottom should not have three empty by default, it should show one empty, and fill it when one is in, and add more filled gems when more are added, not this +2 or whatever after the three have been filled" | E deck builder | open |
 
 ## Decisions for review
 
