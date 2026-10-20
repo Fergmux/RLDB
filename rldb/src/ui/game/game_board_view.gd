@@ -58,6 +58,9 @@ var src_uid: int = -1
 var controls: DuelControls
 ## J6: the Trap prompts setting last sent for this seat and game ("" none), so it is sent once.
 var _prompts_sent := ""
+## J6: false only in dev drivers whose scripted flows expect the P-27 prompts (the seats keep the
+## engine default and the toggle sends nothing).
+static var prompts_sync := true
 ## J11: the Sacrifice Unit button started the choice now pending (kept until nothing is pending).
 var _sac_flow := false
 ## A2: face-down hand of the bottom player on a spectator's screen (and its caption).
@@ -417,6 +420,8 @@ func _render_controls(have: bool) -> void:
 ## viewer's choice: at the start of every game, after a resume or reconnect, and on a toggle. Sent
 ## once per seat, game and value, so a refused command is not repeated every frame.
 func _sync_prompts(on: bool) -> void:
+	if not prompts_sync:
+		return
 	var want := DuelControls.mode_for(on)
 	var have := String(gs.pv(gs.me()).get("trap_prompts", ""))
 	if have == want:
