@@ -239,7 +239,7 @@ func test_f02_12_preview_flags_hidden_traps_and_matches_real_battle() -> void:
 	assert_int(m.atk_of(t)).is_equal(10)
 	TB.choose_uids(m, [t])
 	if TB.pend_kind(m) == "trap_response":
-		TB.choose(m, ["Pass"])
+		TB.choose(m, ["Skip"])
 	assert_int(m.players[0]["hp"]).is_equal(60 - pv["dmg_opp"])
 	assert_str(m.cards[t]["zone"]).is_not_equal("unit")
 

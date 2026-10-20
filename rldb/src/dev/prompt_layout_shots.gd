@@ -4,6 +4,8 @@ extends SceneTree
 ## Run NOT headless:
 ##   godot --path rldb -s res://src/dev/prompt_layout_shots.gd -- <absolute output dir> [WxH] [--fullscreen]
 ## Prints PASS / FAIL for "the settled panel covers no zone, pile or plate".
+## Release batch 2026-10-20: D13 (the three-button Trap dialog) and B4 (Ambush zone per unit,
+## with the Battle Phase stance prompt of B3) are shot too.
 
 var out_dir: String = ""
 var tag: String = ""
@@ -71,14 +73,18 @@ func _feedback08_shots() -> void:
 	var figs := pr.mention_row.get_children().filter(func(n): return n.has_meta("role"))
 	_ok("G03 response shows attacker and target", figs.size() == 2 and String(m.pending.get("kind", "")) == "trap_response", str(m.pending.get("prompt", "")))
 	_ok("G03 response shows the responding Trap", pr.respond_col.visible and pr.respond_col.get_child_count() >= 2)
-	var btns := pr.banner_list.get_children()
-	_ok("G03 Pass is the last button, below Activate", btns.size() == 2 and String((btns[1] as Button).text) == "Pass" \
-		and (btns[1] as Control).get_global_rect().position.y > (btns[0] as Control).get_global_rect().end.y - 1.0, str(btns.map(func(b): return b.text)))
-	await _shot("g03_trap_response")
+	var btns := pr.banner_list.find_children("*", "Button", true, false)
+	var texts := btns.map(func(b): return (b as Button).text)
+	_ok("D13 Activate on top, then Skip | Pass for the rest of this turn side by side", texts == ["Activate Damage Conversion", "Skip", "Pass for the rest of this turn"] \
+		and (btns[1] as Control).get_global_rect().position.y > (btns[0] as Control).get_global_rect().end.y - 1.0 \
+		and absf((btns[2] as Control).global_position.y - (btns[1] as Control).global_position.y) < 1.0 \
+		and (btns[2] as Control).global_position.x > (btns[1] as Control).get_global_rect().end.x - 1.0, str(texts))
+	_ok("D13 the responding Trap's rules text is shown (full layout, not compact)", pr.respond_col.find_children("*", "Label", true, false).any(func(l): return l.has_meta("rules") and l.is_visible_in_tree()))
+	await _shot("d13_trap_dialog")
 	_check_clear("trap response")
 	var pass_i := -1
 	for i in m.pending["options"].size():
-		if String(m.pending["options"][i]["label"]) == "Pass":
+		if String(m.pending["options"][i]["label"]) == EffectEngine.TRAP_SKIP:
 			pass_i = i
 	host.handle(opp, {"t": "choose", "id": m.pending["id"], "indices": [pass_i]})
 	await _frames(6)
@@ -121,6 +127,52 @@ func _feedback08_shots() -> void:
 			and (absf(tr.end.y - r.position.y) < 20.0 or absf(tr.position.y - r.end.y) < 20.0), "toast %s card %s" % [tr, r])
 		await _shot(String(s[0]))
 		pr.hide_toast()
+
+
+## B4: a set Ambush activated in the Battle Phase asks a zone for each Basic Unit and, being the
+## Battle Phase (B3), a stance for each.
+## Waits until the board's animations (spotlights, summons) have finished, then a few frames, so
+## the input panel is shown (it waits for them) before a screenshot.
+func _settle_fx() -> void:
+	await _frames(4)
+	var t := 0
+	while gs.fx != null and gs.fx.busy() and t < 80:
+		await create_timer(0.1).timeout
+		t += 1
+	await _frames(12)
+
+
+func _ambush_shots() -> void:
+	if m.phase != "battle" or m.active != me:
+		_ok("B4 Ambush shot needs my Battle Phase", false, "%s active %d" % [m.phase, m.active])
+		return
+	main._shown_seat = me
+	gs.attach(host.seats[me])
+	TB.card(m, me, 4, "hand")                          # a Basic Beast to summon from the Hand
+	var sc := TB.set_card(m, me, 42, 2)
+	host.broadcast()
+	await _frames(6)
+	host.handle(me, {"t": "activate_set", "uid": sc})
+	await _settle_fx()
+	_ok("B4 Ambush asks a zone for its first unit", String(m.pending.get("kind", "")) == "slot" and int(m.pending.get("placing", -1)) != -1, str(m.pending.get("prompt", "")))
+	await _shot("b4_ambush_zone")
+	_check_clear("ambush zone")
+	host.handle(me, {"t": "choose", "id": m.pending["id"], "indices": [m.pending["options"].size() - 1]})
+	await _settle_fx()
+	_ok("B3 Battle Phase effect summon asks the stance", String(m.pending.get("kind", "")) == "stance")
+	await _shot("b4_ambush_stance_battle_phase")
+	host.handle(me, {"t": "choose", "id": m.pending["id"], "indices": [1]})   # Defense
+	await _settle_fx()
+	_ok("B4 the next unit gets its own zone prompt", String(m.pending.get("kind", "")) == "slot")
+	await _shot("b4_ambush_zone_next_unit")
+	var guard := 0
+	while not m.pending.is_empty() and guard < 30:
+		guard += 1
+		host.handle(int(m.pending["player"]), {"t": "choose", "id": m.pending["id"], "indices": [0]})
+		await _frames(2)
+	host.broadcast()
+	await _settle_fx()
+	await _shot("b4_ambush_done")
 
 
 ## The settled panel must not cover any zone, pile or plate.
@@ -179,7 +231,7 @@ func run() -> void:
 	for u in m.players[me]["hand"]:
 		if m.is_unit(u) and m.validate(me, {"t": "summon", "uid": u}) == "":
 			hu = u
-	host.handle(me, {"t": "summon", "uid": hu, "stance": "atk"})
+	host.handle(me, {"t": "summon", "uid": hu})
 	await _frames(12)
 	await _shot("prompt_zone")
 	_check_clear("zone pick")
@@ -214,5 +266,6 @@ func run() -> void:
 		host.handle(me, {"t": "cancel", "id": m.pending["id"]})
 		await _frames(4)
 	await _feedback08_shots()
+	await _ambush_shots()
 	print("prompt layout: %d failures" % fails)
 	quit(1 if fails > 0 else 0)

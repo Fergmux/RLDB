@@ -244,9 +244,9 @@ func test_f04_22_material_lost_in_response_window_fails_cleanly() -> void:
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
 	assert_int(m.players[0]["ap"]).is_equal(4)
 	m.destroy(dr, "effect", -1, 1)                       # stands in for an opponent's response
-	assert_str(TB.choose(m, ["Pass"])).is_empty()
+	assert_str(TB.choose(m, ["Skip"])).is_empty()
 	while not m.pending.is_empty() and TB.pend_kind(m) == "trap_response":
-		TB.choose(m, ["Pass"])
+		TB.choose(m, ["Skip"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("extra")
 	assert_str(m.cards[b]["zone"]).is_equal("unit")
 	assert_str(TB.log_text(m)).contains("no longer available")
@@ -270,7 +270,7 @@ func test_f04_22_self_cost_is_paid_before_the_response_window() -> void:
 		var paid_zone := "spent" if method == "sepukku" else "exhaust"
 		assert_str(m.cards[src]["zone"]).override_failure_message("%s: cost not paid before the window" % method).is_equal(paid_zone)
 		while not m.pending.is_empty() and TB.pend_kind(m) == "trap_response":
-			TB.choose(m, ["Pass"])
+			TB.choose(m, ["Skip"])
 		assert_str(m.cards[d["wyrm"]]["zone"]).override_failure_message(method).is_equal("unit")
 		assert_str(m.cards[src]["zone"]).override_failure_message(method).is_equal(paid_zone)
 

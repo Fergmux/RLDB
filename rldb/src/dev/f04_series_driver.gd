@@ -127,7 +127,7 @@ func run(main_node: Node, dir: String) -> void:
 	await _fake(gs, "prompt_02_type", base.merged({"kind": "mode", "prompt": "Choose a Type for Waang until end of turn.", "options": [
 		{"i": 0, "label": "Water"}, {"i": 1, "label": "Fire"}, {"i": 2, "label": "Earth"}, {"i": 3, "label": "Lightning"}, {"i": 4, "label": "Light"}, {"i": 5, "label": "Dark"}, {"i": 6, "label": "Physical"}]}, true))
 	await _fake(gs, "prompt_03_trap", base.merged({"kind": "trap_response", "prompt": "Rushed Recklessly can be activated in response to the attack on Dante.", "options": [
-		{"i": 0, "label": "Activate Rushed Recklessly (Trap)"}, {"i": 1, "label": "Pass"}]}, true))
+		{"i": 0, "label": "Activate Rushed Recklessly (Trap)"}, {"i": 1, "label": "Skip"}, {"i": 2, "label": "Pass for the rest of this turn"}]}, true))
 	await _fake(gs, "prompt_04_multi", base.merged({"kind": "select", "prompt": "Choose up to 3 cards in your Spent pile to return to your Draw pile in the order you want", "max": 3, "min": 2, "options": [
 		{"i": 0, "label": "Dragon of the Cave"}, {"i": 1, "label": "Basic Warrior"}, {"i": 2, "label": "The Sweeper"}, {"i": 3, "label": "Krakeshin"}]}, true))
 	await _fake(gs, "prompt_05_short", base.merged({"kind": "mode", "prompt": "Stance?", "options": [{"i": 0, "label": "Attack"}, {"i": 1, "label": "Defense"}]}, true))

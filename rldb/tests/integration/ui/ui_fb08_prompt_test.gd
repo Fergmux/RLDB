@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
 ## Playtest feedback 08 (agent B): G04 exact-payment panel without a status line, G03 every card
-## a response prompt mentions with Pass below Activate, G09 card-anchored toasts.
+## a response prompt mentions with Skip and Pass for the rest of this turn below Activate (D13),
+## G09 card-anchored toasts.
 
 
 func _screen() -> Array:
@@ -82,7 +83,7 @@ func _widget_in(n: Node) -> CardWidget:
 
 
 func _list_texts(gs: GameScreen) -> Array:
-	return gs.prompt.banner_list.get_children().map(func(b): return String((b as Button).text))
+	return gs.prompt.banner_list.find_children("*", "Button", true, false).map(func(b): return String((b as Button).text))
 
 
 func test_g03_trap_response_shows_attacker_target_and_responding_trap() -> void:
@@ -104,16 +105,26 @@ func test_g03_trap_response_shows_attacker_target_and_responding_trap() -> void:
 	assert_array(resp).is_equal([r[6]])
 
 
-func test_g03_pass_sits_below_activate() -> void:
+## D13 (owner feedback 2026-10-20): Activate, Skip, then Pass for the rest of this turn, one per
+## row, each with its own look (gold primary, slate standard, wine leather).
+func test_d13_activate_then_skip_then_pass_for_the_turn() -> void:
 	var r := await _attack_window()
 	var gs: GameScreen = r[0]
 	var m: MatchEngine = r[2]
-	assert_str(String(m.pending["options"][0]["label"])).is_equal("Pass")    # the engine lists Pass first
-	assert_array(_list_texts(gs)).is_equal(["Activate Damage Conversion", "Pass"])
+	assert_str(String(m.pending["options"][0]["label"])).is_equal("Skip")    # the engine lists Skip first
+	assert_array(_list_texts(gs)).is_equal(["Activate Damage Conversion", "Skip", "Pass for the rest of this turn"])
 	await await_idle_frame()
-	var btns := gs.prompt.banner_list.get_children()
-	assert_float((btns[1] as Control).position.y).is_greater((btns[0] as Control).position.y)
+	var btns := gs.prompt.banner_list.find_children("*", "Button", true, false)
+	# Activate on top; Skip and Pass for the rest of this turn side by side below it.
+	assert_float((btns[1] as Control).global_position.y).is_greater((btns[0] as Control).global_position.y)
+	assert_float((btns[2] as Control).global_position.y).is_equal_approx((btns[1] as Control).global_position.y, 0.5)
+	assert_float((btns[2] as Control).global_position.x).is_greater((btns[1] as Control).global_position.x)
 	assert_bool(gs.prompt.banner_flow.visible).is_false()
+	# Three distinct faces: the overrides of the three normal styles all differ.
+	var faces := btns.map(func(b): return UiSurface.flat_of((b as Button).get_theme_stylebox("normal")).bg_color)
+	assert_bool(faces[0] != faces[1] and faces[1] != faces[2] and faces[0] != faces[2]).override_failure_message(str(faces)).is_true()
+	assert_str((btns[1] as Button).tooltip_text).is_equal(GamePromptBanner.SKIP_TIP)
+	assert_str((btns[2] as Button).tooltip_text).is_equal(GamePromptBanner.PASS_TURN_TIP)
 	# Pressing the list buttons answers the right options.
 	(btns[1] as Button).pressed.emit()
 	await await_idle_frame()
@@ -130,7 +141,7 @@ func test_g03_direct_attack_shows_the_attacked_player() -> void:
 	var ms := MatchView.event_cards(m, ev, a)
 	assert_int(int(ms[1]["p"])).is_equal(a)
 	var pd := {"id": 884, "mine": true, "player": a, "kind": "trap_response", "prompt": "Respond to: Radablast attacks directly",
-		"options": [{"i": 0, "label": "Pass"}], "min": 1, "max": 1, "cancellable": false, "mentions": ms}
+		"options": [{"i": 0, "label": "Skip"}], "min": 1, "max": 1, "cancellable": false, "mentions": ms}
 	await _render(gs, pd)
 	var figs := _figures(gs)
 	assert_array(figs.map(func(f): return String(f.get_meta("role")))).is_equal(["attacker", "direct"])
@@ -174,7 +185,7 @@ func test_g03_hidden_mention_shows_a_back_and_no_name() -> void:
 	var gs: GameScreen = r[0]
 	var a: int = r[3]
 	var pd := {"id": 880, "mine": true, "player": a, "kind": "trap_response", "prompt": "Respond to: a set Spell/Trap destroyed",
-		"options": [{"i": 0, "label": "Pass (no Trap can respond)"}], "min": 1, "max": 1, "cancellable": false,
+		"options": [{"i": 0, "label": "Skip (no Trap can respond)"}], "min": 1, "max": 1, "cancellable": false,
 		"mentions": [{"role": "destroyed", "card": {"hidden": true, "zone": "backrow", "slot": 1, "ctl": 1 - a}}]}
 	await _render(gs, pd)
 	var figs := _figures(gs)
@@ -185,7 +196,7 @@ func test_g03_hidden_mention_shows_a_back_and_no_name() -> void:
 		if n is Label:
 			names.append((n as Label).text)
 	assert_array(names).contains(["Set Spell/Trap"])
-	assert_array(_list_texts(gs)).is_equal(["Pass (no Trap can respond)"])
+	assert_array(_list_texts(gs)).is_equal(["Skip (no Trap can respond)"])
 
 
 func test_g03_yes_no_prompt_stacks_yes_above_no_and_shows_the_source() -> void:

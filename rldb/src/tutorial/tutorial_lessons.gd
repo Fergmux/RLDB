@@ -246,7 +246,7 @@ static func _spells_traps() -> Dictionary:
 			_do("Same column", "[card]Magic Cylinder[/card] guards units in its column.\n\nSet it in the middle Trap/Spell zone, behind your Warrior.", [{"t": "choose", "opt": {"slot": 1}}]),
 			_do("End your turn", "Click the phase button until your turn ends:\n[btn]Go to Battle Phase[/btn], [btn]Go to Recovery[/btn], then [btn]End turn[/btn].", [{"t": "next_phase"}], THEIR_TURN),
 			_wait("The Rival attacks", "Watch: the Rival's [type]Fire[/type] Warrior attacks your Warrior.", {"pending_kind": "trap_response", "pending_player": PLAYER}),
-			_do("Spring the Trap", "Your Trap's condition is met.\n\nClick [btn]Activate Magic Cylinder[/btn].", [{"t": "choose", "opt": {"card": "p_cyl"}}]),
+			_do("Spring the Trap", "Your Trap's condition is met.\n\n[btn]Skip[/btn] would let this attack through; [btn]Pass for the rest of this turn[/btn] stops Trap offers until the turn ends.\n\nClick [btn]Activate Magic Cylinder[/btn].", [{"t": "choose", "opt": {"card": "p_cyl"}}]),
 			_wait("The battle goes on", "[card]Magic Cylinder[/card] makes the Rival take [stat]Damage[/stat] equal to the attacker's [stat]ATK[/stat] (8); then the attack continues.", MY_TURN),
 			_read("Lesson complete", "Your Warrior defended with [stat]8 DEF[/stat] +6 ([type]Water[/type] is effective against [type]Fire[/type]) = 14.\nThe attacker's controller took the difference as Damage: [stat]6 more Damage[/stat].\n\nThe used Trap went to [zone]Spent[/zone].", [{"plate": "opp"}, {"pile": ["me", "spent"]}]),
 		],

@@ -528,8 +528,9 @@ func _option_button_rect(i: int) -> Rect2:
 	for box in [gs.prompt.banner_btns, gs.prompt.banner_flow, gs.prompt.banner_list]:
 		if box == null:
 			continue
-		for b in (box as Node).get_children():
-			if b is Button and String((b as Button).text).contains(label):
+		# find_children: a Trap window's Skip / Pass pair sits in a row of its own (D13).
+		for b in (box as Node).find_children("*", "Button", true, false):
+			if String((b as Button).text).contains(label):
 				return _rect_of(b)
 	return Rect2()
 

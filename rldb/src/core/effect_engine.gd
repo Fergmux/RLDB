@@ -8,6 +8,14 @@ extends GameCore
 enum R { CONT, WAIT, STAY, END }
 
 const HIDDEN_PILES := ["hand", "draw", "spent", "exhaust", "extra"]
+## D13 (owner feedback 2026-10-20): the three answers of a Trap response window. "Skip" declines
+## this window only; "Pass for the rest of this turn" declines every window until the turn ends.
+const TRAP_SKIP := "Skip"
+const TRAP_SKIP_NONE := "Skip (no Trap can respond)"
+const TRAP_PASS_TURN := "Pass for the rest of this turn"
+## Option values of the two declining answers (an Activate option's value is the Trap's uid).
+const TRAP_V_SKIP := -1
+const TRAP_V_PASS_TURN := -2
 
 ## Frames; back() is resolving.
 var stack: Array = []
@@ -629,6 +637,8 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 		return R.CONT
 	if ev.get("player", -1) == responder:
 		return R.CONT
+	if passing_traps(responder):
+		return R.CONT                     # D13: they passed for the rest of this turn
 	var eligible := []
 	var concealed := false   # any face-down card that could plausibly be a Trap
 	for uid in backrow_cards(responder):
@@ -649,17 +659,30 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 		return R.CONT
 	var ans: Variant = take_answer(f)
 	if ans == null:
-		var opts := [{"v": -1, "label": "Pass" if not eligible.is_empty() else "Pass (no Trap can respond)"}]
+		# Skip stays the first option: the default answer of simulations and automatic recovery.
+		var opts := [{"v": TRAP_V_SKIP, "label": TRAP_SKIP if not eligible.is_empty() else TRAP_SKIP_NONE},
+			{"v": TRAP_V_PASS_TURN, "label": TRAP_PASS_TURN}]
 		for uid in eligible:
 			opts.append(card_option(uid, "Activate " + name_of(uid)))
 		return ask(f, responder, "trap_response", "Respond to: %s" % ev.get("text", ev["name"]), opts, 1, 1, false, {"event": ev})
 	var choice: int = ans[0]
-	if choice == -1:
+	if choice == TRAP_V_PASS_TURN:
+		players[responder]["trap_pass_turn"] = turn
+		add_log("", {responder: "You pass on Traps for the rest of this turn."})
+		f["vars"]["passed"] = true
+		return R.CONT
+	if choice == TRAP_V_SKIP:
 		f["vars"]["passed"] = true
 		return R.CONT
 	used.append(choice)
 	activate_trap(choice, responder, ev)
 	return R.STAY
+
+
+## D13: true while player p has chosen "Pass for the rest of this turn" (no Trap window is opened
+## for them until the turn ends).
+func passing_traps(p: int) -> bool:
+	return int(players[p].get("trap_pass_turn", -1)) == turn
 
 
 func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:

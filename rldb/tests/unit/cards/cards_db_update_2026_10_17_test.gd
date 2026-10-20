@@ -634,6 +634,6 @@ func test_c161_neva_destroyed_in_response_window_is_not_exhausted_from_spent() -
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
 	m.destroy(neva, "effect", -1, 1)                           # stands in for an opponent's response
 	while not m.pending.is_empty() and TB.pend_kind(m) == "trap_response":
-		TB.choose(m, ["Pass"])
+		TB.choose(m, ["Skip"])
 	assert_str(m.cards[neva]["zone"]).is_equal("spent")
 	assert_int(m.players[1]["hp"]).is_equal(hp1)

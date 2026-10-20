@@ -183,6 +183,8 @@ static func _player_view(m: MatchEngine, p: int, viewer: int) -> Dictionary:
 		"units": [], "backrow": [], "powers": [],
 		"ap_next": pl["ap_next"].duplicate(true) if p == viewer else [],
 	}
+	if p == viewer:
+		v["trap_pass"] = m.passing_traps(p)   # D13: own seat only (the opponent never learns it)
 	for z in ["units", "backrow", "powers"]:
 		for uid in pl[z]:
 			v[z].append(null if uid == -1 else card_view(m, uid, viewer))

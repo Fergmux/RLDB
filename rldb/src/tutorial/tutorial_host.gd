@@ -272,7 +272,7 @@ func _run_opponent_now() -> void:
 
 
 ## Plays the opponent's next scripted command. When the script is exhausted (or a command does
-## not apply), the opponent passes: a pending choice gets its "Pass"/first option, otherwise it
+## not apply), the opponent passes: a pending choice gets its "Skip"/first option, otherwise it
 ## advances the phase, so a lesson can never stall on the opponent.
 func opponent_step() -> void:
 	var m := game()
@@ -287,7 +287,7 @@ func opponent_step() -> void:
 		if _submit(opp, cmd):
 			return
 	if not m.pending.is_empty():
-		var pass_i := TutorialScript.option_index(m, keys, {"label": "Pass"})
+		var pass_i := TutorialScript.option_index(m, keys, {"label": EffectEngine.TRAP_SKIP})   # D13: one window only
 		_submit(opp, {"t": "choose", "id": int(m.pending["id"]), "indices": [maxi(pass_i, 0)]})
 	else:
 		_submit(opp, {"t": "next_phase"})

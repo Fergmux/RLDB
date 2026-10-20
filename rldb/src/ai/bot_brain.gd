@@ -120,6 +120,9 @@ func choose(m: MatchEngine, depth: int) -> Dictionary:
 	var best_i := 0
 	var best_s := -INF
 	for i in mini(n, MAX_OPTIONS):
+		# D13: the bot never stops responding for the rest of a turn; Skip covers one window.
+		if pd["kind"] == "trap_response" and int(opts[i]["v"]) == EffectEngine.TRAP_V_PASS_TURN:
+			continue
 		var sim := m.clone_for_sim()
 		if sim.submit(me, {"t": "choose", "id": pd["id"], "indices": [i]}) != "":
 			continue
