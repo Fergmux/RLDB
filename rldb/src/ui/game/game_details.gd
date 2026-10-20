@@ -323,7 +323,7 @@ func _pile_row(c: Dictionary) -> Control:
 	var uid: int = int(c["uid"])
 	var sel := uid == _pile_sel
 	var can_act: bool = gs.board.ready_uids.has(uid)
-	var row := PanelContainer.new()
+	var row := StatusHelp.TipPanel.new()
 	row.set_meta("uid", uid)
 	var sb := UIStyle.flat(Color(UIStyle.PANEL_LIGHT, 0.95) if sel else Color(UIStyle.PANEL_INK, 0.9),
 		UIStyle.SELECT if sel else (UIStyle.READY if can_act else Color(UIStyle.BRONZE, 0.6)), 2 if (sel or can_act) else 1, 8)
@@ -333,7 +333,7 @@ func _pile_row(c: Dictionary) -> Control:
 	sb.content_margin_bottom = 6
 	row.add_theme_stylebox_override("panel", sb)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.tooltip_text = CardWidget.tooltip_for(c)
+	row.tooltip_text = CardWidget.tooltip_for(c) + "\n\nRight-click to inspect"   # D15: no Inspect button
 	var editable := pile_zone != DRAFT_ZONE   # draft picks are read-only (but can still be inspected)
 	if editable:
 		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND

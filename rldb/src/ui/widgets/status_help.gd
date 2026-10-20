@@ -59,7 +59,7 @@ static func key_at(text: String, idx: int) -> String:
 	return ""
 
 
-## The effect of status `key` ("Poison (debuff): ..."), or "".
+## The effect of status `key` ("Poison: at the end of its controller's turn ..."), or "".
 static func describe(key: String) -> String:
 	return String(CardDB.STATUS_HELP.get(key, ""))
 
@@ -94,7 +94,7 @@ static func _link_plain(text: String) -> String:
 	var at := 0
 	for sp in spans(text):
 		out += text.substr(at, int(sp["from"]) - at)
-		out += "[url=%s%s]%s[/url]" % [META, sp["key"], text.substr(int(sp["from"]), int(sp["to"]) - int(sp["from"]))]
+		out += "[color=#%s][u][url=%s%s]%s[/url][/u][/color]" % [UIStyle.STATUS_LINK.to_html(false), META, sp["key"], text.substr(int(sp["from"]), int(sp["to"]) - int(sp["from"]))]
 		at = int(sp["to"])
 	return out + text.substr(at)
 
@@ -107,6 +107,8 @@ static func watch_label(label: Label) -> void:
 	label.set_meta("status_help", true)
 	if label.mouse_filter == Control.MOUSE_FILTER_IGNORE:
 		label.mouse_filter = Control.MOUSE_FILTER_PASS
+	var ink := Ink.new(label)
+	label.add_child(ink)
 	label.gui_input.connect(func(e: InputEvent):
 		if e is InputEventMouseMotion:
 			_label_hover(label, (e as InputEventMouseMotion).position))
@@ -181,3 +183,122 @@ static func section_label(text: String) -> Label:
 	l.custom_minimum_size.x = SECTION_W
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
+
+
+## D12: draws `tp` (a shaped paragraph, left aligned) at `pos` on canvas item `ci` like TextParagraph.draw,
+## but with each status word of `text` in `link` colour and underlined, so it reads as hoverable.
+## `oversampling` is the text oversampling the surrounding draw uses (0: the default).
+static func draw_marked(ci: CanvasItem, tp: TextParagraph, pos: Vector2, col: Color, text: String, link: Color, oversampling: float = 0.0) -> void:
+	var sp := spans(text)
+	var y := pos.y
+	for i in tp.get_line_count():
+		y += draw_marked_line(ci, tp, i, Vector2(pos.x, y), col, sp, link, oversampling)
+
+
+## Draws line `i` of `tp` with its top-left at `pos` (status words recoloured and underlined, `sp` from
+## spans()) and returns the line's height.
+static func draw_marked_line(ci: CanvasItem, tp: TextParagraph, i: int, pos: Vector2, col: Color, sp: Array, link: Color, oversampling: float = 0.0) -> float:
+	var srv := TextServerManager.get_primary_interface()
+	var canvas := ci.get_canvas_item()
+	var rid: RID = tp.get_line_rid(i)
+	var ofs := pos + Vector2(0.0, srv.shaped_text_get_ascent(rid))
+	var rng: Vector2i = tp.get_line_range(i)
+	var marks: Array = []             # x ranges (line space) of the status words on this line
+	for m in sp:
+		var a := maxi(int(m["from"]), rng.x)
+		var b := mini(int(m["to"]), rng.y)
+		if a < b:
+			for r in srv.shaped_text_get_selection(rid, a, b):
+				marks.append(r)
+	marks.sort_custom(func(p, q): return p.x < q.x)
+	var at := -1.0
+	for r in marks:
+		srv.shaped_text_draw(rid, canvas, ofs, at, r.x, col, oversampling)
+		at = r.y
+	srv.shaped_text_draw(rid, canvas, ofs, at, -1.0, col, oversampling)
+	for r in marks:
+		srv.shaped_text_draw(rid, canvas, ofs, r.x, r.y, link, oversampling)
+		var uy := ofs.y + srv.shaped_text_get_underline_position(rid) + 0.5
+		var th := maxf(1.0, srv.shaped_text_get_underline_thickness(rid))
+		ci.draw_rect(Rect2(ofs.x + r.x, uy, r.y - r.x, th), Color(link, 0.9))
+	return srv.shaped_text_get_size(rid).y
+
+
+## D12: child of a watched Label. It draws the label's text itself with the status words highlighted
+## and underlined, and keeps the label's own text transparent (the label still sizes, wraps, trims
+## and answers hover as before). A label naming no status is left alone.
+class Ink extends Control:
+	var _label: Label
+	var _ink: Color = Color.WHITE
+	var _hidden: bool = false
+
+	func _init(label: Label) -> void:
+		_label = label
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		label.draw.connect(queue_redraw)
+		label.resized.connect(queue_redraw)
+
+	func _draw() -> void:
+		var text := _label.text
+		var want := not StatusHelp.spans(text).is_empty()
+		var cur := _label.get_theme_color("font_color")
+		if cur.a > 0.01:
+			_ink = cur                      # the label's real text colour (also if it was changed later)
+		if not want:
+			if _hidden:
+				_restore()
+			return
+		if cur.a > 0.01 or not _hidden:
+			_label.add_theme_color_override("font_color", Color(_ink, 0.0))
+			_hidden = true
+		var font := _label.get_theme_font("font")
+		var fs := _label.get_theme_font_size("font_size")
+		var tp := TextParagraph.new()
+		var wrap := _label.autowrap_mode != TextServer.AUTOWRAP_OFF
+		tp.width = _label.size.x if wrap else -1.0
+		var flags := TextServer.BREAK_MANDATORY
+		match _label.autowrap_mode:
+			TextServer.AUTOWRAP_WORD: flags |= TextServer.BREAK_WORD_BOUND
+			TextServer.AUTOWRAP_WORD_SMART: flags |= TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE
+			TextServer.AUTOWRAP_ARBITRARY: flags |= TextServer.BREAK_GRAPHEME_BOUND
+		tp.break_flags = flags
+		tp.alignment = _label.horizontal_alignment
+		if _label.max_lines_visible > 0:
+			tp.max_lines_visible = _label.max_lines_visible
+		tp.text_overrun_behavior = _label.text_overrun_behavior
+		tp.add_string(text, font, fs)
+		var spacing := float(_label.get_theme_constant("line_spacing"))
+		var total := tp.get_size().y + spacing * float(maxi(0, tp.get_line_count() - 1))
+		var y := 0.0
+		match _label.vertical_alignment:
+			VERTICAL_ALIGNMENT_CENTER: y = (_label.size.y - total) / 2.0
+			VERTICAL_ALIGNMENT_BOTTOM: y = _label.size.y - total
+		_draw_lines(tp, Vector2(0.0, y), spacing, text)
+
+	func _draw_lines(tp: TextParagraph, pos: Vector2, spacing: float, text: String) -> void:
+		# One line at a time so the label's line spacing and alignment are honoured.
+		var sp := StatusHelp.spans(text)
+		var srv := TextServerManager.get_primary_interface()
+		var y := pos.y
+		for i in tp.get_line_count():
+			var lw := srv.shaped_text_get_size(tp.get_line_rid(i)).x
+			var dx := 0.0
+			match _label.horizontal_alignment:
+				HORIZONTAL_ALIGNMENT_CENTER: dx = (_label.size.x - lw) / 2.0
+				HORIZONTAL_ALIGNMENT_RIGHT: dx = _label.size.x - lw
+			y += StatusHelp.draw_marked_line(self, tp, i, Vector2(pos.x + dx, y), _ink, sp, UIStyle.STATUS_LINK) + spacing
+
+	func _restore() -> void:
+		_hidden = false
+		_label.add_theme_color_override("font_color", _ink)
+
+	func _exit_tree() -> void:
+		if _hidden and is_instance_valid(_label):
+			_restore()
+
+
+## A PanelContainer whose tooltip is the rich one: the text plus a section for each status it names.
+class TipPanel extends PanelContainer:
+	func _make_custom_tooltip(for_text: String) -> Object:
+		return StatusHelp.tooltip(for_text)

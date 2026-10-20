@@ -99,7 +99,7 @@ func test_material_tray_marks_overpay_and_confirm_needs_the_exact_total() -> voi
 	gs.prompt.render()
 	var over := _tray_widget(gs, 9002)
 	assert_bool(over.get_meta("overpay")).is_true()
-	assert_str(over.tooltip_text).is_equal("Cannot overpay")
+	assert_str(over.tooltip_text).starts_with("Cannot overpay")      # D11: followed by the card's effect
 	gs.selection.pick_option(2)                                  # 4 would overpay: refused
 	assert_array(gs.multi).is_equal([0])
 	assert_bool(_confirm(gs).disabled).is_true()
