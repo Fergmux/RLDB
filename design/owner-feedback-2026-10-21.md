@@ -29,11 +29,11 @@ and have a few more things for you to change". Standing instructions from the 20
 | H21 | "the power trap inidcators on card should stay on the left not the center" | A card face | done |
 | H22 | "the I go first and my opponent goes first buttons are too close together, give them some margin" | C panels | done |
 | H23 | "when i killing blow an opponent the hitpoints lost appears underneath their player card" | B board | done |
-| H24 | (deck builder, middle pane) "the atk/def should be smaller" | E deck builder | open |
-| H25 | "the rules should ben split out into sections like in the game right preview pane, I don't want to have to scroll that middle pane ever" | E deck builder | open |
-| H26 | "also remove the 'in your deck' tag under the card image" | E deck builder | open |
-| H27 | "the in this deck section at the bottom should not have three empty by default, it should show one empty, and fill it when one is in, and add more filled gems when more are added, not this +2 or whatever after the three have been filled" | E deck builder | open |
-| H28 | "ALSO THE ARCAN SUMMON COMPLETE SOUND EFFECT IS A BIT JARRING CAN ME MAKE IT MORE MYSTICAL AND COOL" | F audio | open |
+| H24 | (deck builder, middle pane) "the atk/def should be smaller" | E deck builder | done |
+| H25 | "the rules should ben split out into sections like in the game right preview pane, I don't want to have to scroll that middle pane ever" | E deck builder | done |
+| H26 | "also remove the 'in your deck' tag under the card image" | E deck builder | done |
+| H27 | "the in this deck section at the bottom should not have three empty by default, it should show one empty, and fill it when one is in, and add more filled gems when more are added, not this +2 or whatever after the three have been filled" | E deck builder | done |
+| H28 | "ALSO THE ARCAN SUMMON COMPLETE SOUND EFFECT IS A BIT JARRING CAN ME MAKE IT MORE MYSTICAL AND COOL" | F audio | done |
 
 ## Decisions for review
 
@@ -53,8 +53,15 @@ and have a few more things for you to change". Standing instructions from the 20
 - H12: brackets' halo slightly stronger on all parts.
 - H23: damage numbers draw above struck plates but under the victory/defeat veil.
 
+- H2 (integration): action buttons widen to fit their whole label (field rows cut "To Defense" / "Apply Pierce").
+- H24: ATK/DEF tiles keep full width and lose height (74 -> 39 px); text sizes unchanged.
+- H25: the card art shrinks (180-336 px) to make room; text never shrinks. The card catalogue screen still shows rules as one block (offer to match).
+- H27: literal reading: 0 copies = one empty socket; N copies = N filled gems, no trailing empty. No per-card copy limit exists, so gems shrink/wrap up to the 99 cap.
+- H28: new Arcane completion is a swelling Dsus2 glass chord with sparkle and a long tail, 2.35 s (runs ~0.6 s past the visual), peak -4.5 dBFS to match Fusion's loudness. Needs the owner's ears.
+
 ## Blockers and workarounds
 
 - Agents' 20-turn limits: resumed repeatedly; no lost work.
 - No in-duel "before" shots for the card face (no stash allowed); the card gallery covers every kind before/after.
 - The perf baseline (18 Oct) played duel is not like-for-like (older rules and lighter screens).
+- RLDB-dev was running at export time: the new dev build is in build/windows-next-dev/ (build/windows-dev untouched). build/windows and build/RLDB-friends.zip are updated.
