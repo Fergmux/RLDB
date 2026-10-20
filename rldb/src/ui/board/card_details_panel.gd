@@ -263,10 +263,7 @@ func _build_stats(c: Dictionary) -> void:
 	var flags := _flow()
 	if c.get("zone", "") == "unit":
 		# Owner (21 Oct): no Attack / Defense stance tag; the card's rotation on the field shows it.
-		if c.get("protected", false):
-			flags.add_child(_chip("Protected", UIStyle.GOOD))
-		if c.get("protecting", false):
-			flags.add_child(_chip("Protecting", UIStyle.STATE_STEEL))
+		# J8 (owner, 22 Oct): no Protected / Protecting tags either.
 		var cu = c.get("controlled_until", -1)
 		if cu != null and int(cu) != -1:
 			flags.add_child(_chip("Controlled until end of turn %d" % int(cu), UIStyle.BAD))

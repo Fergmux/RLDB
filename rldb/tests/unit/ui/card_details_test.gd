@@ -88,7 +88,7 @@ func test_stat_markers_and_flags() -> void:
 	assert_bool(t.contains("3 AP (base 2)")).is_true()
 	assert_bool(t.contains("Cost")).is_false()
 	assert_bool(t.contains("Defense stance")).is_false()   # owner 21 Oct: no stance tag
-	assert_bool(t.contains("Protected")).is_true()
+	assert_bool(t.contains("Protected")).is_false()             # J8: no protection tags
 	assert_bool(t.contains("Summoned this turn")).is_false()   # feedback 04: tags removed
 	assert_bool(t.contains("Attacked this turn")).is_false()
 	assert_bool(t.contains("Controlled until end of turn 5")).is_true()
