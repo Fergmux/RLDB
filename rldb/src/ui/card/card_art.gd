@@ -17,11 +17,21 @@ static var _tex_cache := {}
 static var _radial_cache := {}
 
 
-## Draws the art window into `rect` (card-face space).
-static func draw(pt: CardPainter, rect: Rect2) -> void:
+## H16: the art window's rim, a dark bronze well edge (was a bright square BRONZE rect that cut the
+## kind-coloured outer frame's rounded corners off), and the thin lit lip just inside it.
+const RIM := Color(0.13, 0.085, 0.045, 0.96)
+const RIM_LIP := Color(0.83, 0.65, 0.29, 0.22)
+## H20: the window's inner shadow, [inset px (base units), alpha] rings from the rim inwards.
+const INNER_SHADOW := [[0.0, 0.5], [1.4, 0.3], [2.8, 0.15], [4.4, 0.06]]
+
+
+## Draws the art window into `rect` (card-face space) with its corners rounded to `radius` px (H16:
+## concentric with the frame's corner, so the window never cuts the outer border off).
+static func draw(pt: CardPainter, rect: Rect2, radius: float = 0.0) -> void:
 	var ci := pt.ci
 	var view := pt.view
 	var tex := _art_texture(view)
+	var pts := CardGeometry.round_rect_pts(rect, radius)
 	if tex != null:
 		var ts := tex.get_size()
 		var ra := rect.size.x / rect.size.y
@@ -32,16 +42,28 @@ static func draw(pt: CardPainter, rect: Rect2) -> void:
 		else:
 			var h := ts.x / ra
 			src = Rect2(0, (ts.y - h) / 2.0, ts.x, h)
-		ci.draw_texture_rect_region(tex, rect, src)
+		ci.draw_polygon(pts, PackedColorArray([Color.WHITE]), _uvs(pts, rect, Rect2(src.position / ts, src.size / ts)), tex)
 	else:
 		var base: Color = UIStyle.type_color(view.get("type", "")) if view.has("type") and view.get("race") != null else UIStyle.CATEGORY_COLORS.get(view.get("category", "unit"), UIStyle.BRONZE)
-		ci.draw_texture_rect(_radial_tex(base), rect, false)
+		ci.draw_polygon(pts, PackedColorArray([Color.WHITE]), _uvs(pts, rect, Rect2(0, 0, 1, 1)), _radial_tex(base))
 		draw_glyph(ci, _glyph_kind(view), rect.get_center(), minf(rect.size.x, rect.size.y) * 0.34, Color(1, 1, 1, 0.25))
-	# inner shadow strip + defence tint + bronze border
-	var sh := 7.0 * pt.s
-	ci.draw_polygon(PackedVector2Array([rect.position, Vector2(rect.end.x, rect.position.y), Vector2(rect.end.x, rect.position.y + sh), Vector2(rect.position.x, rect.position.y + sh)]),
-		PackedColorArray([Color(0, 0, 0, 0.4), Color(0, 0, 0, 0.4), Color(0, 0, 0, 0), Color(0, 0, 0, 0)]))
-	ci.draw_rect(rect, Color(UIStyle.BRONZE, 0.95), false, maxf(1.0, 2.0 * pt.s), true)
+	# H20: a recessed window: a soft shadow falling in from the rim (heavier at the top: light from
+	# above), then the dark rim and a faint lit lip on the lower edge.
+	var s := pt.s
+	for ring in INNER_SHADOW:
+		var d := float(ring[0]) * s
+		var rr := Rect2(rect.position + Vector2(d, d * 1.5), rect.size - Vector2(2.0 * d, d * 1.8))
+		pt.ring(Color(0, 0, 0, float(ring[1])), maxf(1.0, 1.5 * s), rr, maxf(1.0, radius - d * 0.5))
+	pt.ring(RIM, maxf(1.0, 1.6 * s), rect, maxf(1.0, radius))
+	ci.draw_line(Vector2(rect.position.x + radius, rect.end.y - 1.6 * s), Vector2(rect.end.x - radius, rect.end.y - 1.6 * s), RIM_LIP, maxf(1.0, 0.6 * s), true)
+
+
+## Texture coordinates of the outline `pts` inside `rect`, mapped onto the texture region `uv` (0..1).
+static func _uvs(pts: PackedVector2Array, rect: Rect2, uv: Rect2) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p in pts:
+		out.append(uv.position + (p - rect.position) / rect.size * uv.size)
+	return out
 
 
 ## Kind glyph centred on `c` with radius `r`: "sword" (units), "star" (spells), "eye" (traps), "crown" (powers).

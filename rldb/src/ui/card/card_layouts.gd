@@ -31,6 +31,16 @@ const TALL := {"art": [4, 4, 112, 112], "banner": [2, 100, 116, 19], "gem": [16,
 const TEXT_MIN_K := 0.5
 
 
+## H16: corner radius (px) of the art window: concentric with the card's outer corner `frame_radius`
+## (base units) at the window's inset, plus ART_RADIUS_EXTRA so the round reads at board size.
+static func art_radius(pt: CardPainter, frame_radius: float, g: Dictionary) -> float:
+	return maxf(1.0, (frame_radius - float(g["art"][0]) + ART_RADIUS_EXTRA) * pt.s)
+
+
+## Extra rounding (base units) of the art window over the concentric radius.
+const ART_RADIUS_EXTRA := 0.75
+
+
 static func _is_unit(pt: CardPainter) -> bool:
 	return String(pt.view.get("category", "")) in CardWidget.UNIT_CATS
 
@@ -43,7 +53,7 @@ static func _r(pt: CardPainter, a: Array) -> Rect2:
 static func draw_square(pt: CardPainter) -> void:
 	var g := FIELD
 	CardFaceParts.frame(pt, RADIUS_SMALL)
-	CardArt.draw(pt, _r(pt, g["art"]))
+	CardArt.draw(pt, _r(pt, g["art"]), art_radius(pt, RADIUS_SMALL, g))
 	_art_corners(pt, g)
 	_icons(pt, g["icons"], 0.0)
 	# H14: the full name on one line, shrunk then condensed to fit (never ellipsised).
@@ -58,7 +68,7 @@ static func draw_square(pt: CardPainter) -> void:
 static func draw_power(pt: CardPainter) -> void:
 	var g := FIELD
 	CardFaceParts.frame(pt, RADIUS_SMALL)
-	CardArt.draw(pt, _r(pt, g["art"]))
+	CardArt.draw(pt, _r(pt, g["art"]), art_radius(pt, RADIUS_SMALL, g))
 	_icons(pt, g["icons"], 0.0)
 	CardFaceParts.name_plate(pt, _r(pt, g["banner"]), g["f_name"], 0.0, 0.0, pt.accent(), g["f_name_min"], true)
 	var txt := CardText.card_text(pt.view)
@@ -76,7 +86,7 @@ static func draw_tall(pt: CardPainter, _big: bool = false) -> void:
 	var s := pt.s
 	var is_unit := _is_unit(pt)
 	CardFaceParts.frame(pt, RADIUS_TALL)
-	CardArt.draw(pt, _r(pt, g["art"]))
+	CardArt.draw(pt, _r(pt, g["art"]), art_radius(pt, RADIUS_TALL, g))
 	_art_corners(pt, g)
 	_icons(pt, g["icons_unit"] if is_unit else g["icons"], 0.5)
 	# Race / Type line (units) or the card kind (Spells, Traps, Powers).

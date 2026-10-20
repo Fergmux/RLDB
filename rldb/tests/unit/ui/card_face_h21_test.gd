@@ -127,5 +127,24 @@ func test_spell_trap_and_power_kind_line_is_left_aligned_like_the_race() -> void
 		assert_int(int(rows[0][5])).is_equal(HORIZONTAL_ALIGNMENT_LEFT)
 
 
+# ---------------------------------------------------------------- H16 rounded art window
+
+func test_art_window_corner_is_concentric_with_the_frame_corner() -> void:
+	var pt := CardPainter.new(null)
+	pt.s = 1.0
+	var r := CardLayouts.art_radius(pt, CardLayouts.RADIUS_SMALL, CardLayouts.FIELD)
+	var inset := float(CardLayouts.FIELD["art"][0])
+	assert_float(r).is_equal_approx(CardLayouts.RADIUS_SMALL - inset + CardLayouts.ART_RADIUS_EXTRA, 0.001)
+	assert_float(r).is_greater(1.0)
+
+
+func test_rounded_window_outline_stays_inside_and_cuts_the_corner() -> void:
+	var rect := Rect2(3, 3, 79, 79)
+	var pts := CardGeometry.round_rect_pts(rect, 4.0)
+	for p in pts:
+		assert_bool(rect.grow(0.01).has_point(p)).is_true()
+	assert_bool(pts.has(rect.position)).is_false()
+
+
 func test_selected_card_stays_under_the_fx_vignette() -> void:
 	assert_int(CardWidget.SELECTED_Z).is_less(FxPlayer.VIGNETTE_Z)
