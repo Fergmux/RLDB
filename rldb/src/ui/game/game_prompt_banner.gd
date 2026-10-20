@@ -137,7 +137,7 @@ var tray: PanelContainer
 var tray_box: VBoxContainer
 ## Notice that the opponent is responding.
 var wait_chip: PanelContainer
-## Text of the wait notice.
+## Text of the wait notice (its dots animate: WaitingDots).
 var wait_label: Label
 ## Short toast message over the board.
 var toast: Label
@@ -152,7 +152,6 @@ var _banner_how: String = ""
 ## Who must act and that input is needed (the header strip title of the plate).
 var banner_tag: Label
 var _banner_pid: int = -2
-var _wait_tween: Tween
 var _toast_game: int = -99
 ## G09: the card of the last command sent and when (a refusal of it shows over that card).
 var _sent_uid: int = -1
@@ -514,7 +513,10 @@ func _response_row(e: Dictionary) -> Control:
 	nm.set_meta("rname", true)
 	v.add_child(nm)
 	var txt := String(c.get("text", "")).strip_edges()
-	var t := UIStyle.label(txt if txt != "" else "No rules text.", 12, UIStyle.TEXT, true)
+	# Design review #36: a card without rules shows its name only (no "No rules text." line).
+	var t := UIStyle.label(txt, 12, UIStyle.TEXT, true)
+	t.set_meta("empty", txt == "")
+	t.visible = txt != ""
 	t.max_lines_visible = RESPONSE_LINES
 	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	t.tooltip_text = txt
@@ -564,7 +566,7 @@ func _fit_mentions(w: float, compact: bool = false) -> void:
 					if l.has_meta("rname"):
 						_fit_name(l as Label, content - rsz.x - 8.0, RESPONSE_NAME_PX)
 					if l.has_meta("rules"):
-						(l as Label).visible = not compact
+						(l as Label).visible = not compact and not bool(l.get_meta("empty", false))
 
 
 ## A strip name in the largest size (MENTION_NAME_PX down to MENTION_NAME_MIN_PX) at which its
@@ -622,31 +624,11 @@ class DirectToken extends Control:
 
 ## Builds the opponent-is-deciding notice and the toast (hidden).
 func build_notices() -> void:
-	# Opponent-is-deciding notice in the middle of the board (user feedback: otherwise the game
-	# looks stuck). Click-through.
-	wait_chip = PanelContainer.new()
-	var wsb := UIStyle.flat(Color(0.05, 0.04, 0.035, 0.9), Color(UIStyle.GOLD, 0.75), 2, 22)
-	wsb.content_margin_left = 26
-	wsb.content_margin_right = 26
-	wsb.content_margin_top = 8
-	wsb.content_margin_bottom = 8
-	wsb.shadow_color = Color(0, 0, 0, 0.5)
-	wsb.shadow_size = 8
-	wait_chip.add_theme_stylebox_override("panel", wsb)
-	wait_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wait_chip.z_index = UiLayers.WAIT
-	wait_chip.visible = false
-	wait_label = UIStyle.label("", 22, UIStyle.GOLD_HI, false, true)
-	wait_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var wrow := HBoxContainer.new()
-	wrow.add_theme_constant_override("separation", 10)
-	wrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wait_chip.add_child(wrow)
-	var rune := WaitPlate.Rune.new()
-	rune.custom_minimum_size = Vector2(30, 30)
-	rune.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	wrow.add_child(rune)
-	wrow.add_child(wait_label)
+	# Opponent-is-deciding notice (user feedback: otherwise the game looks stuck), docked under the
+	# opponent's plate (#38). Click-through.
+	var wn := WaitNotice.new()
+	wait_chip = wn
+	wait_label = wn.label
 	gs.add_child(wait_chip)
 	var tl := ToastLabel.new()
 	tl.follow = place_toast
@@ -923,7 +905,7 @@ func place_banner() -> void:
 		return
 	var area := gs.play_area
 	var board := gs.board
-	var col_left := 14.0
+	var col_left := float(UIStyle.SAFE_HUD)   # D5: the HUD safe margin
 	var col_right := area.end.x
 	var top := area.position.y + 6.0
 	var have_zones := not board.slots.is_empty()
@@ -1372,28 +1354,19 @@ func _fit_tray() -> void:
 	place_tray()
 
 
-## Shows (text != "") or hides the centre-of-board wait notice; it breathes gently while shown.
+## Shows (text != "") or hides the wait notice (#38): docked under the opponent's plate, right-aligned
+## with it, its hourglass turning and its dots running; it fades in after WaitNotice.APPEAR_DELAY.
 func show_wait(text: String) -> void:
+	(wait_chip as WaitNotice).show_text(text)
 	if text == "":
-		if wait_chip.visible:
-			wait_chip.visible = false
-			if _wait_tween != null and _wait_tween.is_valid():
-				_wait_tween.kill()
 		return
-	wait_label.text = text
-	wait_chip.reset_size()
-	var sz := wait_chip.get_combined_minimum_size()
-	wait_chip.size = sz
-	var area := gs.play_area
-	wait_chip.position = Vector2(area.position.x + (area.size.x - sz.x) / 2.0, gs.board.deco.mid_y - sz.y / 2.0)
-	if wait_chip.visible:
-		return
-	wait_chip.visible = true
-	wait_chip.modulate.a = 1.0
-	if not UIStyle.reduce_motion:
-		_wait_tween = gs.create_tween().set_loops()
-		_wait_tween.tween_property(wait_chip, "modulate:a", 0.65, 0.9).set_trans(Tween.TRANS_SINE)
-		_wait_tween.tween_property(wait_chip, "modulate:a", 1.0, 0.9).set_trans(Tween.TRANS_SINE)
+	wait_chip.position = wait_position(gs.board.plates[0] as Control, wait_chip.size)
+
+
+## Top-left of a wait notice `sz` big under the opponent plate `plate` (md gap, right edges aligned).
+static func wait_position(plate: Control, sz: Vector2) -> Vector2:
+	var ph := maxf(plate.size.y, plate.get_combined_minimum_size().y)
+	return Vector2(plate.position.x + plate.size.x - sz.x, plate.position.y + ph + UIStyle.sp("md") + WaitNotice.NOTCH)
 
 
 

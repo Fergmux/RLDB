@@ -55,8 +55,7 @@ func _init(screen: GameScreen) -> void:
 ## Builds the details panel into the sidebar column and returns it.
 func build(col: VBoxContainer) -> PanelContainer:
 	var panel := GameUi.side_panel()
-	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.size_flags_stretch_ratio = 1.75   # F02-05: details get most of the height
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL   # F02-05 / #48: the details take the rest
 	col.add_child(panel)
 	var dv := VBoxContainer.new()
 	dv.add_theme_constant_override("separation", 4)
