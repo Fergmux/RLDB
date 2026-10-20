@@ -22,6 +22,9 @@ var _res := ""
 
 func _initialize() -> void:
 	verbose = "--verbose" in OS.get_cmdline_user_args()
+	# `--reduce-motion`: the same comparison with UIStyle.reduce_motion on (a still zone pick).
+	if "--reduce-motion" in OS.get_cmdline_user_args():
+		UIStyle.reduce_motion = true
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--diff-out="):
 			out_dir = a.split("=", true, 1)[1]
@@ -42,9 +45,11 @@ func _run() -> void:
 	await _until(func() -> bool: return _my_idle_turn(host), 30.0)
 	# Time-based (a windowed run draws ~1000 fps): the coin flip, the deal and the hand settle.
 	await _seconds(8.0)
+	if "--reduce-motion" in OS.get_cmdline_user_args():
+		UIStyle.reduce_motion = true   # again: the settings load may have reset it
 	CardLayouts.clock_ms = func() -> float: return 12345.0
 	_freeze_motes(root)
-	_res = "%dx%d" % [root.size.x, root.size.y]
+	_res = "%dx%d%s" % [root.size.x, root.size.y, "_rm" if UIStyle.reduce_motion else ""]
 	var zones := _empty_zones()
 	print("DIFF setup: window=%s zones=%d msaa_2d=%d final=%s" % [_res, zones.size(), root.msaa_2d, root.get_final_transform()])
 	await _compare("idle", zones)

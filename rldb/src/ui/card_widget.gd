@@ -536,20 +536,18 @@ func _draw() -> void:
 
 
 ## An empty zone (J31 follow-up): the static recess and mark are one ZoneMesh triangle list (one draw
-## call, the same pixels as drawing them one by one); a zone pick draws its animated glow, border and
-## mote live over the recess, then its stronger mark. Without a mesh everything is drawn live.
+## call, the same pixels as drawing them one by one). A zone being picked (highlighted) draws live, the
+## pre-J31 path exactly: its glow animates and redraws every frame anyway, and under 4x MSAA the old
+## path is not frame-stable there, so a merged pick could not be shown identical (see zone_mesh_diff.gd).
 func _draw_empty_zone(pt: CardPainter, ls: Vector2) -> void:
 	var vp := get_viewport()
 	var os := vp.get_oversampling() if vp != null else 1.0
-	var base := ZoneMesh.for_zone(size_kind, ls, os, not highlighted, self_modulate)
+	var base: MeshPen = null if highlighted else ZoneMesh.for_zone(size_kind, ls, os, true, self_modulate)
 	_zone_merged = base != null
 	if base == null:
 		CardLayouts.draw_empty(pt, ls, highlighted)
 		return
 	base.emit(get_canvas_item())
-	if highlighted:
-		CardLayouts.draw_empty_pick(pt, ls)
-		CardLayouts.draw_empty_mark(pt, ls, true)
 
 
 ## True when the last redraw drew this empty zone's static layers from a ZoneMesh (tests, probes).

@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## J31 follow-up regression guard: an empty board zone draws its static layers (recess, inner shadow,
 ## rim, lip, engraved mark) as ONE recorded triangle list (ZoneMesh), not ~92 draw calls, shared by
-## every zone of its kind and size, and it does not redraw while idle. If a change to
+## every zone of its kind, size and dim, and it does not redraw while idle (a zone pick draws live). If a change to
 ## CardLayouts.draw_empty_base / draw_empty_mark adds something MeshPen cannot reproduce exactly (text,
 ## a texture, a StyleBox shadow), the zones silently fall back to the slow live path: these tests catch it.
 ## The pixel-exactness itself is checked windowed by src/dev/zone_mesh_diff.gd.
@@ -64,18 +64,21 @@ func test_idle_empty_zones_share_one_mesh_and_do_not_redraw() -> void:
 	assert_int(ZoneMesh.builds).is_equal(1)
 
 
-func test_zone_pick_keeps_the_mark_live_and_bakes_only_the_recess() -> void:
+func test_zone_pick_draws_live_and_returns_to_the_mesh_after() -> void:
 	# Arrange
 	var w := _zone("trap", SIZES[1])
 	await _frames(2)
-	var builds := ZoneMesh.builds
-	# Act: a zone pick (the glow animates; the mark is drawn stronger, over it)
+	# Act: a zone pick (the glow animates), then the pick ends
 	w.set_marks(true, false)
 	await _frames(3)
-	# Assert: still merged (a second mesh: the recess without the mark), animating unless motion is reduced
+	var during := w.is_zone_merged()
+	var animating := w.is_processing()
+	w.set_marks(false, false)
+	await _frames(2)
+	# Assert: the pick is drawn by the old live path; the idle zone is merged again
+	assert_bool(during).is_false()
+	assert_bool(animating).is_equal(not UIStyle.reduce_motion)
 	assert_bool(w.is_zone_merged()).is_true()
-	assert_int(ZoneMesh.builds).is_equal(builds + 1)
-	assert_bool(w.is_processing()).is_equal(not UIStyle.reduce_motion)
 
 
 func test_dimmed_zone_uses_a_mesh_for_its_own_modulate() -> void:
