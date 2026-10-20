@@ -133,6 +133,9 @@ var _mentions_top := false
 ## G03: option buttons of a response, yes / no or ordering prompt, one per row, the declining
 ## option (Pass, No, Skip) always last, below the accepting ones.
 var banner_list: VBoxContainer
+## The trap response's Skip / Pass-for-the-turn pair (D13): side by side, stacked when the first
+## button's share of the row is narrower than its label (pair_fits).
+var decline_pair: BoxContainer
 ## Tray offering pile cards for a choice (a HousePanel).
 var tray: PanelContainer
 ## Container of the tray cards.
@@ -356,11 +359,10 @@ func _render_subject(pd: Dictionary) -> void:
 ## column of my responding cards.
 func _build_mentions(col: VBoxContainer) -> void:
 	mention_box = PanelContainer.new()
-	var sb := UIStyle.flat(Color(0.045, 0.035, 0.025, 0.92), Color(UIStyle.BRONZE, 0.75), 1, 8)
-	sb.content_margin_left = 6
-	sb.content_margin_right = 6
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
+	# D5 check: the same engraved F3 well as the card strip (#36: 12 px sides, 8 px top / bottom);
+	# a flat box with 6 px padding put the YOUR RESPONSE caption 5 px from its rim.
+	var sb := UIStyle.inset_style(Color(0.045, 0.035, 0.025, 0.92), 8, 0.2)
+	UIStyle.pad(sb, "md", "sm")
 	mention_box.add_theme_stylebox_override("panel", sb)
 	mention_box.visible = false
 	mention_box.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -862,9 +864,12 @@ func _render_banner() -> void:
 	if pd["kind"] == "trap_response" and row == banner_list and declines.size() == 2:
 		# D13: Skip and Pass for the rest of this turn share one row under the gold Activate, the
 		# declining pair side by side (it also keeps the panel short enough for the full layout).
-		var pair := HBoxContainer.new()
+		# A BoxContainer: _fit_subject stacks the pair in the thin side column, where side by side
+		# "Skip" had about 28 px of text room and broke into "Ski / p".
+		var pair := BoxContainer.new()
 		pair.add_theme_constant_override("separation", 6)
 		pair.set_meta("decline_pair", true)
+		decline_pair = pair
 		row.add_child(pair)
 		declines[0].size_flags_stretch_ratio = 0.75
 		declines[1].size_flags_stretch_ratio = 1.25
@@ -902,6 +907,24 @@ static func _has_decline(pd: Dictionary) -> bool:
 		if is_decline(String(o.get("label", ""))):
 			return true
 	return false
+
+
+## True when the decline pair fits side by side in `inner_w` px: its first button's stretch share
+## of the row holds that button's longest word (with the button's padding). Else it stacks.
+static func pair_fits(pair: BoxContainer, inner_w: float) -> bool:
+	if pair.get_child_count() < 2:
+		return true
+	var a := pair.get_child(0) as Button
+	var b := pair.get_child(1) as Button
+	var sep := float(pair.get_theme_constant("separation"))
+	var share := (inner_w - sep) * a.size_flags_stretch_ratio / (a.size_flags_stretch_ratio + b.size_flags_stretch_ratio)
+	var font := a.get_theme_font("font")
+	var fs := a.get_theme_font_size("font_size")
+	var word := 0.0
+	for wd in a.text.split(" "):
+		word = maxf(word, font.get_string_size(wd, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
+	var sb := a.get_theme_stylebox("normal")
+	return share >= word + sb.get_margin(SIDE_LEFT) + sb.get_margin(SIDE_RIGHT) + 2.0
 
 
 ## A full-width row button of the option list (G03): its label wraps instead of widening the panel,
@@ -1023,6 +1046,8 @@ func _fit_subject(w: float, compact: bool = false) -> void:
 	# The narrow column: a smaller headline and the tag without the player's name, so neither
 	# wraps word by word nor clips (UI review, 1600x900).
 	var thin := w < BANNER_NARROW_W
+	if is_instance_valid(decline_pair):
+		decline_pair.vertical = not pair_fits(decline_pair, w - (ctx_banner as HousePanel).chrome_size().x)
 	var px := HEADLINE_NARROW_PX if thin or compact else HEADLINE_PX
 	if _exact_pay:
 		px = HEADLINE_PAY_NARROW_PX if thin or compact else HEADLINE_PAY_PX

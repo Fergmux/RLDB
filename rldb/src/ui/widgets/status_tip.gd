@@ -72,10 +72,11 @@ func _init() -> void:
 	_panel = PanelContainer.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := UIStyle.flat(Color(BODY, 0.98), Color(UIStyle.GOLD, 0.6), 1, 4)
-	sb.content_margin_left = 10
-	sb.content_margin_right = 10
-	sb.content_margin_top = 5
-	sb.content_margin_bottom = 6
+	# D5: tooltip text keeps the 12 px content floor (it had 5 px above it).
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = UIStyle.CONTENT_FLOOR
+	sb.content_margin_bottom = UIStyle.CONTENT_FLOOR
 	UIStyle.lift(sb, UIStyle.DEPTH_FLOATING)
 	_panel.add_theme_stylebox_override("panel", UiSurface.box(sb, UiSurface.LEATHER, GRAIN))
 	var v := VBoxContainer.new()

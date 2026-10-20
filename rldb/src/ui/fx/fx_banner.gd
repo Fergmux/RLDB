@@ -65,7 +65,8 @@ func _show_strip(text: String, sub: String, col: Color, flare: bool, hold: float
 	var layer: Control = _fx.screen.banner_layer
 	var pill := PanelContainer.new()
 	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pill.add_theme_stylebox_override("panel", _pill_style(0.92, UIStyle.GOLD, 22, 26, 2))
+	# D5: 8 px above and below the title (the pill token; it was 2 px), 32 px at the ends.
+	pill.add_theme_stylebox_override("panel", _pill_style(0.92, UIStyle.GOLD, 22, UIStyle.sp("xxl"), UIStyle.sp("sm")))
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 14)

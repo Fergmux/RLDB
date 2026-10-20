@@ -4,6 +4,13 @@ extends GdUnitTestSuite
 ## G09 card-anchored toasts.
 
 
+var screen_size := Vector2(1600, 900)
+
+
+func before_test() -> void:
+	screen_size = Vector2(1600, 900)
+
+
 func _screen() -> Array:
 	SeriesStore.DIR = "user://test_saves"
 	var host: LocalHost = auto_free(LocalHost.new())
@@ -16,7 +23,7 @@ func _screen() -> Array:
 		m.submit(m.active, {"t": "next_phase"})
 	host.broadcast()
 	var gs: GameScreen = auto_free(GameScreen.new())
-	gs.size = Vector2(1600, 900)
+	gs.size = screen_size
 	add_child(gs)
 	await gs.attach(host.seats[m.active])
 	await await_idle_frame()
@@ -115,10 +122,18 @@ func test_d13_activate_then_skip_then_pass_for_the_turn() -> void:
 	assert_array(_list_texts(gs)).is_equal(["Activate Damage Conversion", "Skip", "Pass for the rest of this turn"])
 	await await_idle_frame()
 	var btns := gs.prompt.banner_list.find_children("*", "Button", true, false)
-	# Activate on top; Skip and Pass for the rest of this turn side by side below it.
+	# Activate on top; Skip and Pass for the rest of this turn below it: side by side when Skip fits
+	# its share of the row, else one per row (H1 release check: side by side, a 190 px panel broke
+	# "Skip" into "Ski / p").
 	assert_float((btns[1] as Control).global_position.y).is_greater((btns[0] as Control).global_position.y)
-	assert_float((btns[2] as Control).global_position.y).is_equal_approx((btns[1] as Control).global_position.y, 0.5)
-	assert_float((btns[2] as Control).global_position.x).is_greater((btns[1] as Control).global_position.x)
+	var pair := gs.prompt.decline_pair
+	var inner := gs.prompt.ctx_banner.size.x - (gs.prompt.ctx_banner as HousePanel).chrome_size().x
+	assert_bool(pair.vertical).is_equal(not GamePromptBanner.pair_fits(pair, inner))
+	if pair.vertical:
+		assert_float((btns[2] as Control).global_position.y).is_greater((btns[1] as Control).global_position.y + (btns[1] as Control).size.y - 0.5)
+	else:
+		assert_float((btns[2] as Control).global_position.y).is_equal_approx((btns[1] as Control).global_position.y, 0.5)
+		assert_float((btns[2] as Control).global_position.x).is_greater((btns[1] as Control).global_position.x)
 	assert_bool(gs.prompt.banner_flow.visible).is_false()
 	# Three distinct faces: the overrides of the three normal styles all differ.
 	var faces := btns.map(func(b): return UiSurface.flat_of((b as Button).get_theme_stylebox("normal")).bg_color)
@@ -129,6 +144,40 @@ func test_d13_activate_then_skip_then_pass_for_the_turn() -> void:
 	(btns[1] as Button).pressed.emit()
 	await await_idle_frame()
 	assert_str(String(m.pending.get("kind", ""))).is_not_equal("trap_response")
+
+
+## H1 release check: at 1600x1000 the side column is thinner; side by side, "Skip" got about 20 px
+## of text room and broke into "Ski / p". There the pair stacks and every decline button is wide
+## enough for its first word.
+func test_d13_thin_column_stacks_skip_and_pass_so_skip_never_breaks() -> void:
+	screen_size = Vector2(1600, 1000)
+	var r := await _attack_window()
+	var gs: GameScreen = r[0]
+	for i in 8:
+		await await_idle_frame()
+	var btns := gs.prompt.banner_list.find_children("*", "Button", true, false)
+	var skip := btns[1] as Button
+	var pass_b := btns[2] as Button
+	assert_str(skip.text).is_equal("Skip")
+	assert_float(pass_b.global_position.y).is_greater(skip.global_position.y + skip.size.y - 0.5)
+	var font := skip.get_theme_font("font")
+	var need := font.get_string_size("Skip", HORIZONTAL_ALIGNMENT_LEFT, -1, skip.get_theme_font_size("font_size")).x
+	var sb := skip.get_theme_stylebox("normal")
+	assert_float(skip.size.x - sb.get_margin(SIDE_LEFT) - sb.get_margin(SIDE_RIGHT)).is_greater_equal(need)
+
+
+func test_d13_pair_fits_side_by_side_only_when_skip_holds_its_word() -> void:
+	var pair: BoxContainer = auto_free(BoxContainer.new())
+	add_child(pair)
+	pair.add_theme_constant_override("separation", 6)
+	var a := UIStyle.button("Skip", 14)
+	a.size_flags_stretch_ratio = 0.75
+	var b := UIStyle.wine_button("Pass for the rest of this turn", 13)
+	b.size_flags_stretch_ratio = 1.25
+	pair.add_child(a)
+	pair.add_child(b)
+	assert_bool(GamePromptBanner.pair_fits(pair, 300.0)).is_true()
+	assert_bool(GamePromptBanner.pair_fits(pair, 40.0)).is_false()
 
 
 func test_g03_direct_attack_shows_the_attacked_player() -> void:

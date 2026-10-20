@@ -47,9 +47,10 @@ func build(col: VBoxContainer) -> PanelContainer:
 	var lbg := PanelContainer.new()
 	var lsb := UIStyle.inset_style(UIStyle.PANEL_INK, 6, LOG_GRAIN)
 	lsb.base.content_margin_left = LOG_PAD
-	lsb.base.content_margin_top = LOG_PAD - 4
-	lsb.base.content_margin_bottom = LOG_PAD - 4
-	lsb.base.content_margin_right = UIStyle.sp("xs")
+	# D5: 12 px above and below the text; the scrollbar track sits 6 px in from the frame (§1.4.2).
+	lsb.base.content_margin_top = UIStyle.CONTENT_FLOOR
+	lsb.base.content_margin_bottom = UIStyle.CONTENT_FLOOR
+	lsb.base.content_margin_right = 6
 	lsb.base = lsb.base
 	lbg.add_theme_stylebox_override("panel", lsb)
 	lbg.size_flags_vertical = Control.SIZE_EXPAND_FILL

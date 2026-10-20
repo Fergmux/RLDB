@@ -169,10 +169,7 @@ static func section_box() -> PanelContainer:
 	var p := PanelContainer.new()
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := UIStyle.flat(Color(0, 0, 0, 0.35), Color(UIStyle.BRONZE, 0.5), 1, 4)
-	sb.content_margin_left = 7
-	sb.content_margin_right = 7
-	sb.content_margin_top = 4
-	sb.content_margin_bottom = 5
+	UIStyle.pad(sb, "md")   # D5: 12 px around the effect text (it was 4-7 px)
 	p.add_theme_stylebox_override("panel", sb)
 	return p
 
