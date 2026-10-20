@@ -87,9 +87,10 @@ func test_series_game_with_drafted_decks_is_shuffled() -> void:
 	s.setup({"seed": 5, "deck_mode": "draft", "best_of": 1})
 	for p in 2:
 		var guard := 0
-		while not s.deck_ready[p] and guard < 100:
+		while not bool(s.view_for(p)["draft"]["complete"]) and guard < 100:
 			assert_str(s.submit(p, {"t": "draft_pick", "index": 0})).is_empty()
 			guard += 1
+		assert_str(s.submit(p, {"t": "draft_confirm"})).is_empty()   # J30: Confirm selections
 	assert_str(s.stage).is_equal(Series.STAGE_GAME)
 	for p in 2:
 		assert_bool(_unshuffled(s.game, p)).is_false()
