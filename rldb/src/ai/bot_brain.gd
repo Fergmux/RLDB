@@ -180,18 +180,26 @@ func resolve(sim: MatchEngine, depth: int) -> void:
 
 
 ## Position score from the bot's point of view (higher is better for the bot).
+##
+## B6 (owner feedback 2026-10-20, "the bot doesn't attack when it could easily kill a unit"): in
+## the bot's own Battle Phase its units are scored on what they are (presence, stats, statuses),
+## not on the attacks they could still make. The stance value counts an attack's potential (a kill
+## plus PROTECTEE_W of the unit it would expose), so before this the bot kept the potential rather
+## than cash it: killing a Defense guard in front of a strong back-row unit lowered its score. The
+## opponent's threats still count, so it does not make attacks that leave it exposed.
 func evaluate(m: MatchEngine) -> float:
 	if m.winner == me:
 		return 100000.0
 	if m.winner != -1:
 		return -100000.0
+	var realized := realized_only(m)
 	var s := 0.0
 	for p in 2:
 		var sign := 1.0 if p == me else -1.0
 		var pl: Dictionary = m.players[p]
 		s += sign * W_HP * float(pl["hp"])
 		for u in m.field_units(p):
-			s += sign * unit_value(m, u)
+			s += sign * unit_value(m, u, realized and p == me)
 		s += sign * W_POWER * float(m.power_cards(p).size())
 		s += sign * W_SET * float(m.backrow_cards(p).size())
 		s += sign * W_HAND * float(pl["hand"].size())
@@ -200,12 +208,20 @@ func evaluate(m: MatchEngine) -> float:
 	return s
 
 
+## True while the bot is attacking (its own Battle Phase): its own units' attack potential is then
+## left out of evaluate(), so an attack is judged by what it actually achieves (B6).
+func realized_only(m: MatchEngine) -> bool:
+	return m.active == me and m.phase == MatchEngine.PHASE_BATTLE
+
+
 ## Value of one unit on the field: presence, stats, a stance that suits its stats, statuses.
-func unit_value(m: MatchEngine, u: int) -> float:
+## `realized`: leave out the stance value (the attacks it could make), see evaluate().
+func unit_value(m: MatchEngine, u: int, realized: bool = false) -> float:
 	var atk := float(m.atk_of(u))
 	var def := float(m.def_of(u))
 	var v := W_UNIT + W_ATK * atk + W_DEF * def
-	v += float(BotStance.explain(m, u, me)["total"])   # F11: stance value (offense, threat, protection)
+	if not realized:
+		v += float(BotStance.explain(m, u, me)["total"])   # F11: stance value (offense, threat, protection)
 	for s in m.cards[u]["st"]:
 		var n := float(m.cards[u]["st"][s])
 		v += (W_STATUS if CardDB.is_buff(String(s)) else -W_STATUS) * minf(n, 4.0)
