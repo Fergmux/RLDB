@@ -320,13 +320,13 @@ func _draw() -> void:
 	var bot := Color("1a1714").lerp(Color("231c11"), hv)
 	var rad := 9.0
 	var inset := Rect2(Vector2(2, 2), size - Vector2(4, 4))
-	Ornate.vgradient(self, Rect2(inset.position + Vector2(0, rad), inset.size - Vector2(0, rad * 2.0)), top, bot)
-	draw_rect(Rect2(inset.position + Vector2(rad, 0), Vector2(inset.size.x - rad * 2.0, rad)), top)
-	draw_rect(Rect2(inset.position + Vector2(rad, inset.size.y - rad), Vector2(inset.size.x - rad * 2.0, rad)), bot)
-	Ornate.vgradient(self, Rect2(inset.position + Vector2(rad, 1), Vector2(inset.size.x - rad * 2.0, 26)), Color(1, 0.9, 0.6, 0.07 + 0.05 * hv), Color(1, 0.9, 0.6, 0))
-	Ornate.corners(self, Rect2(Vector2.ZERO, size), Color(UIStyle.BRONZE.lerp(UIStyle.GOLD_HI, maxf(hv, 0.0)), 0.55 + 0.4 * hv), 13.0, 5.0, 1.5)
+	# J12: the body follows the rim's inner corner (its old bands left a dark square in each corner).
+	Ornate.rounded_gradient(self, inset, rad - 1.0, rad - 1.0, top, bot)
+	# The top sheen runs into the rounded corners too (it used to stop short of them with square ends).
+	Ornate.rounded_gradient(self, Rect2(inset.position, Vector2(inset.size.x, 26)), rad - 1.0, 0.0, Color(1, 0.9, 0.6, 0.07 + 0.05 * hv), Color(1, 0.9, 0.6, 0))
+	Ornate.corners(self, Rect2(Vector2.ZERO, size), Color(UIStyle.BRONZE.lerp(UIStyle.GOLD_HI, maxf(hv, 0.0)), 0.55 + 0.4 * hv), 13.0, 5.0, 1.5, float(_box.corner_radius_top_left))   # J12
 	if selected:
-		draw_rect(Rect2(Vector2(5, 5), size - Vector2(10, 10)), Color(UIStyle.GOLD, 0.35), false, 1.0)
+		Ornate.round_frame(self, Rect2(Vector2(5, 5), size - Vector2(10, 10)), rad - 4.0, Color(UIStyle.GOLD, 0.35))   # J12: concentric
 
 
 ## Card-kind composition: one coloured segment per kind, proportional to its card count.

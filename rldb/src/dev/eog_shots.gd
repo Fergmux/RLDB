@@ -295,6 +295,42 @@ func _mode_rewards() -> void:
 	await _snap("02_rewards_offer")
 
 
+## J12: every corner decoration on a rounded shape, drawn 3x on a plain backdrop: the rewards Picks plate,
+## a reward choice tile, a house panel corner, a deck tile and a selected card's brackets.
+func _mode_corners() -> void:
+	var a := _stage_kill_board()
+	var gs := _gs()
+	await _wait(0.4)
+	var unit_view: Dictionary = (gs.fx_slot_item(a, "unit", 0)["widget"] as CardWidget).view
+	var back := ColorRect.new()
+	back.color = Color("17120c")
+	back.size = Vector2(root.size)
+	back.z_index = 200   # over the whole match screen (its top strip draws at z 61)
+	root.add_child(back)
+	var zoom := Control.new()
+	zoom.scale = Vector2(3, 3)
+	zoom.position = Vector2(20, 20)
+	back.add_child(zoom)
+	var picks: Control = gs.overlays.rewards._picks_plate(2, 4)
+	picks.position = Vector2(4, 4)
+	zoom.add_child(picks)
+	var tile := ChoiceTile.new("Add a card", "Pick a card type.", Color("5fa86a"))
+	tile.position = Vector2(4, 72)
+	tile.size = Vector2(140, 112)
+	zoom.add_child(tile)
+	var hp := HousePanel.new("Series", "Best of 3", Vector2(10, 10), 4)
+	hp.arm = 22.0
+	hp.position = Vector2(160, 72)
+	hp.size = Vector2(200, 140)
+	zoom.add_child(hp)
+	var cw := CardWidget.new().setup(unit_view, "board")
+	cw.position = Vector2(390, 72)
+	zoom.add_child(cw)
+	cw.selected = true
+	await _wait(0.8)
+	await _snap("00_corners_3x")
+
+
 ## J13: the in-game menu.
 func _mode_menu() -> void:
 	_stage_kill_board()
