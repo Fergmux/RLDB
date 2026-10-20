@@ -22,7 +22,6 @@ func run(main_node: Node, dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	DisplayServer.window_set_size(Vector2i(1600, 1000))
 	Sfx.set_muted(false)
-	GameBoardView.prompts_sync = false   # this run scripts the P-27 Trap prompts (J6 has its own driver)
 	await _frames(5)
 	main._privacy = false
 	main._start_local({"seed": 4242, "best_of": 3, "deck_mode": "starter", "names": ["Ana", "Ben"]})

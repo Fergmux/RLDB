@@ -5,7 +5,7 @@ extends "res://src/dev/f02_driver.gd"
 ## Plays a local match through the real UI with pointer events (the F02 driver's helpers): the
 ## Sacrifice Unit and Trap Prompts controls under the plate (J11 / J6), the card row without
 ## Sacrifice, a Paralysed unit's row without a stance change (J25), the single Ritual Summon
-## button and its card select tray (J14), the hidden Trap prompt (J6) and a full hand beside the
+## button and its card select tray (J14), no Trap prompt without a usable Trap (J6) and a full hand beside the
 ## controls. Writes PNG screenshots and `duel_controls_report.json`, then quits.
 
 const CREEPING_NULL := 65
@@ -162,7 +162,7 @@ func _controls_steps() -> void:
 		"zone %s ap %d -> %d" % [m.cards[uids["water"]]["zone"], ap0, m.players[a]["ap"]])
 	await _shot("09_after_sacrifice")
 	# J6: the Trap Prompts toggle.
-	_check("J6 toggle on by default, seat set to always", String(m.players[a].get("trap_prompts", "")) == "always", String(m.players[a].get("trap_prompts", "")))
+	_check("J6 toggle on by default, seat set to eligible", String(m.players[a].get("trap_prompts", "")) == "eligible", String(m.players[a].get("trap_prompts", "")))
 	await _click(_ctl_btn(1).get_global_rect().get_center())
 	await _wait(0.4)
 	_check("J6 toggle off sets the seat off", String(m.players[a].get("trap_prompts", "")) == "off" and _ctl_btn(1).text.ends_with("Off"), _ctl_btn(1).text)
@@ -171,7 +171,7 @@ func _controls_steps() -> void:
 	await _shot("10_prompts_off_hover")
 	await _click(_ctl_btn(1).get_global_rect().get_center())
 	await _wait(0.4)
-	_check("J6 toggle back on", String(m.players[a].get("trap_prompts", "")) == "always")
+	_check("J6 toggle back on", String(m.players[a].get("trap_prompts", "")) == "eligible")
 	# J11: disabled in the Battle Phase, with the reason as tooltip.
 	host.handle(a, {"t": "next_phase"})
 	await _wait(1.0)
@@ -179,21 +179,15 @@ func _controls_steps() -> void:
 	await _move(_ctl_btn(0).get_global_rect().get_center())
 	await _wait(1.3)
 	await _shot("11_sacrifice_disabled_battle")
-	# J6: the opponent (prompts on) holds only a face-down Spell: still asked, nothing given away.
-	host.handle(o, {"t": "trap_prompts", "mode": "always"})
+	# J6: the opponent (prompts on) holds only a face-down Spell: no Trap can respond, so not asked
+	# (owner, 22 Oct: prompts on ask only when a Trap can respond).
+	host.handle(o, {"t": "trap_prompts", "mode": "eligible"})
 	host.handle(a, {"t": "attack", "uid": uids["fire"]})
 	if m.pending.get("kind", "") == "attack_target":
 		_answer(a, m.name_of(uids["o_unit"]))
 	await _wait(0.6)
-	_check("J6 hidden prompt with no usable Trap", m.pending.get("kind", "") == "trap_response" and int(m.pending.get("player", -1)) == o)
-	_view_seat(o)
-	await _wait(1.0)
-	await _move(Vector2(700, 470))
-	await _wait(0.3)
-	await _shot("12_hidden_prompt_no_trap")
-	_view_seat(a)
-	await _wait(0.6)
-	await _shot("12b_attacker_waits")
+	_check("J6 prompts on: no prompt without a usable Trap", not (m.pending.get("kind", "") == "trap_response" and int(m.pending.get("player", -1)) == o), str(m.pending.get("kind", "")))
+	await _shot("12_no_prompt_without_usable_trap")
 	# Skip this window and any later one of the same attack (the battle's destructions open more).
 	var guard := 0
 	while m.pending.get("kind", "") == "trap_response" and guard < 6:

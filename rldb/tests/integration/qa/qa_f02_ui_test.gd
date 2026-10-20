@@ -30,9 +30,6 @@ func _attach(seat: int) -> void:
 	await gs.attach(host.seats[seat])
 	gs.skip_effects()
 	await await_idle_frame()
-	# These tests pin the P-27 prompts (asked only when a Trap can respond); J6's hidden prompts,
-	# which the screen turns on for its seat, have their own tests.
-	m.players[seat]["trap_prompts"] = EffectEngine.TRAP_PROMPT_ELIGIBLE
 
 
 func _key(code: int) -> InputEventKey:

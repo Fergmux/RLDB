@@ -7,9 +7,8 @@ extends Control
 ##   only while a sacrifice is legal; the tooltip says why it is not. The card action row no longer
 ##   offers Sacrifice, so a misclick on a card cannot spend a unit.
 ## - J6 "Trap Prompts" toggle (bell medallion, struck through when off, and a topaz state lamp): on,
-##   the player is asked to respond whenever they hold a face-down card set before this turn, so the
-##   prompt (and the opponent's wait) never shows whether a Trap can respond; off, they are never
-##   asked. The choice is the viewer's own: saved in the UI settings file (per seat in hot-seat
+##   the player is asked to respond only when one of their Traps can (the pause shows that one can);
+##   off, they are never asked, their Traps stay down and the opponent never sees a pause. The choice is the viewer's own: saved in the UI settings file (per seat in hot-seat
 ##   play) and sent to the authority as the seat's setting, never shown to the opponent.
 
 ## The Sacrifice Unit button was pressed (it is enabled: a sacrifice is legal).
@@ -22,8 +21,8 @@ signal prompts_toggled(on: bool)
 const SACRIFICE_LABEL := "Sacrifice Unit"
 const PROMPTS_ON_LABEL := "Trap Prompts: On"
 const PROMPTS_OFF_LABEL := "Trap Prompts: Off"
-const PROMPTS_ON_TIP := "Trap response prompts are on: you are asked to respond whenever you hold a face-down card, even when none can respond, so a prompt never gives your hand away."
-const PROMPTS_OFF_TIP := "Trap response prompts are off: you are never asked to respond, and your Traps stay down."
+const PROMPTS_ON_TIP := "Trap response prompts are on: you are asked to respond whenever one of your Traps can. Your opponent sees you deciding."
+const PROMPTS_OFF_TIP := "Trap response prompts are off: you are never asked to respond, your Traps stay down, and your opponent never sees you pause."
 ## Gap (px) under the plate and between the two plates, and their height.
 const TOP_GAP := 8.0
 const GAP := 7.0
@@ -179,4 +178,4 @@ static func reset_cache() -> void:
 
 ## The authority's setting for a toggle state (EffectEngine.TRAP_PROMPT_*).
 static func mode_for(on: bool) -> String:
-	return EffectEngine.TRAP_PROMPT_ALWAYS if on else EffectEngine.TRAP_PROMPT_OFF
+	return EffectEngine.TRAP_PROMPT_ELIGIBLE if on else EffectEngine.TRAP_PROMPT_OFF

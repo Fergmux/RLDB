@@ -111,7 +111,7 @@ func test_prompts_toggle_starts_on_and_sets_the_seat() -> void:
 	assert_bool(c.prompts_btn.visible).is_true()
 	assert_bool(c.prompts_on()).is_true()
 	assert_str(c.prompts_btn.text).is_equal(DuelControls.PROMPTS_ON_LABEL)
-	assert_str(m.trap_prompt_mode(me)).is_equal(EffectEngine.TRAP_PROMPT_ALWAYS)
+	assert_str(m.trap_prompt_mode(me)).is_equal(EffectEngine.TRAP_PROMPT_ELIGIBLE)
 	assert_str(m.trap_prompt_mode(1 - me)).is_equal(EffectEngine.TRAP_PROMPT_ELIGIBLE)   # the bot's own
 
 
@@ -128,7 +128,7 @@ func test_prompts_toggle_off_is_saved_and_sent() -> void:
 	assert_bool(DuelControls.load_prompts(DuelControls.PREF_KEY)).is_false()   # read back from the file
 	c.prompts_btn.pressed.emit()
 	await await_idle_frame()
-	assert_str(m.trap_prompt_mode(me)).is_equal(EffectEngine.TRAP_PROMPT_ALWAYS)
+	assert_str(m.trap_prompt_mode(me)).is_equal(EffectEngine.TRAP_PROMPT_ELIGIBLE)
 
 
 func test_a_saved_off_choice_is_sent_for_a_new_screen() -> void:
