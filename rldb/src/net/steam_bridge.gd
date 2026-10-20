@@ -86,7 +86,7 @@ static func display_name(n: String) -> String:
 	return n.substr(0, 1).to_upper() + n.substr(1) if n != "" else n
 
 
-## The build version from the project settings (application/config/version), e.g. "0.3.6".
+## The build version from the project settings (application/config/version), e.g. "0.3.7".
 static func build_version() -> String:
 	return String(ProjectSettings.get_setting("application/config/version", ""))
 
