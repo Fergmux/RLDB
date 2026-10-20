@@ -100,8 +100,7 @@ func _update_scroll_cue() -> void:
 		return
 	var vb := details_scroll.get_v_scroll_bar()
 	var more := vb.max_value - vb.page > 3.0 and vb.value + vb.page < vb.max_value - 3.0
-	if scroll_cue.visible != more:
-		scroll_cue.visible = more
+	scroll_cue.set_shown(more)
 	scroll_cue.queue_redraw()
 
 
