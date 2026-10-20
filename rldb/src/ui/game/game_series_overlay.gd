@@ -128,11 +128,13 @@ func layout_pause(w: float, h: float) -> void:
 
 
 ## Centres the stage modal (and the pile popup) in the left-hand play area. J15 (owner, 22 Oct): its dim
-## fills the whole window (top strip and sidebar too); the top strip's buttons are raised above it in place.
+## fills the window from the top edge (the top strip's buttons are raised above it in place) and, after a
+## game (rewards, next game, series over), the sidebar too. During the deck choice the sidebar stays live:
+## it holds the draft's "Your draft" list.
 func place_modals() -> void:
 	var region := Rect2(0, GameScreen.TOP_H, gs.size.x - gs.sidebar_w, gs.size.y - GameScreen.TOP_H)
 	overlay_dim.position = Vector2.ZERO
-	overlay_dim.size = gs.size
+	overlay_dim.size = Vector2(gs.size.x - gs.sidebar_w, gs.size.y) if String(gs.view.get("stage", "")) == "decks" else gs.size
 	var sz := Vector2(minf(_overlay_want.x, region.size.x - 40.0), minf(_overlay_want.y, region.size.y - 24.0))
 	# F01: the content's minimum width follows the window, so a small window never forces the
 	# modal wider than the play area (it would clip); the content scrolls inside instead.

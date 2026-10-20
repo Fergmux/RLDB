@@ -192,6 +192,25 @@ func test_j15_the_rewards_dim_fills_the_window_under_the_top_strip_buttons() -> 
 	var at := mb.get_global_rect().get_center()
 	assert_bool(dim._has_point(dim.get_global_transform().affine_inverse() * at)).is_false()
 	assert_bool(dim._has_point(dim.get_global_transform().affine_inverse() * gs.play_area.get_center())).is_true()
+	assert_bool(dim._has_point(dim.get_global_transform().affine_inverse() * Vector2(gs.size.x - 20.0, gs.size.y / 2.0))).is_true()   # the sidebar too
 	# Back in a game the strip returns to its in-game layer
 	gs.menu.raise_top_strip(false)
 	assert_int(gs.menu.top_strip.z_index).is_equal(UiLayers.TOP_STRIP)
+
+
+func test_j15_deck_choice_dim_reaches_the_top_but_leaves_the_sidebar_live() -> void:
+	# Arrange: a new series on its deck choice (the draft's "Your draft" list lives in the sidebar)
+	var h2: LocalHost = auto_free(LocalHost.new())
+	add_child(h2)
+	h2.start({"seed": 5, "best_of": 3, "deck_mode": "draft", "names": ["A", "B"]})
+	var g2: GameScreen = auto_free(GameScreen.new())
+	g2.size = Vector2(1600, 1000)
+	add_child(g2)
+	# Act
+	await g2.attach(h2.seats[0])
+	await await_idle_frame()
+	# Assert
+	var dim := g2.overlays.overlay_dim
+	assert_bool(dim.visible).is_true()
+	assert_float(dim.position.y).is_equal(0.0)
+	assert_float(dim.size.x).is_equal_approx(g2.size.x - g2.sidebar_w, 0.5)
