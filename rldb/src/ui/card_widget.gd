@@ -32,6 +32,10 @@ const EMPTY_SIZES := {"board": Vector2(128, 128), "trap": Vector2(128, 85), "pow
 const ART_DIR := CardArt.ART_DIR
 const UNIT_CATS := ["basic_unit", "unit", "fusion", "ritual", "arcane"]
 const BIG_KINDS := ["hand", "big", "mini", "back"]
+## H12: z_index (relative to the card's parent) of a selected card, so its corner brackets draw
+## above neighbouring zones and the board. Below the FX vignette (FxPlayer.VIGNETTE_Z) and every
+## UiLayers overlay, which must still cover it.
+const SELECTED_Z := 3
 
 var view: Dictionary = {}
 var size_kind: String = "board"
@@ -166,6 +170,9 @@ func set_marks(is_target: bool, is_selected: bool, is_dimmed: bool = false, soft
 	highlighted = is_target
 	selected = is_selected
 	dimmed = is_dimmed
+	# H12: the selection brackets reach outside the card; raised, they draw over the next zone, pile
+	# and board ornament (drawn later in tree order) instead of under them.
+	z_index = SELECTED_Z if is_selected else 0
 	if is_dimmed:
 		self_modulate = Color(0.55, 0.55, 0.55, 1.0)
 	elif soft_dim:

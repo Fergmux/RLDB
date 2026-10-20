@@ -124,7 +124,7 @@ func run() -> void:
 		p.add_child(z)
 		zones.append(z)
 	var holder := Control.new()
-	holder.position = Vector2(21, 0)
+	holder.position = Vector2(43, 0)   # flush with the zone edge: the brackets reach into the next zone
 	(zones[1] as Control).add_child(holder)
 	var sel := CardWidget.new().setup(_view(36), "board")
 	holder.add_child(sel)

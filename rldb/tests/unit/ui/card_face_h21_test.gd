@@ -65,3 +65,25 @@ func test_left_pane_card_rules_text_stays_inside_its_well() -> void:
 		assert_int(paras.size()).is_equal(1)
 		var r: Array = paras[0]
 		assert_float((r[2] as Vector2).y + float(r[4])).override_failure_message("card %d text runs past its well" % id).is_less_equal(well_bottom + 0.5)
+
+
+# ---------------------------------------------------------------- H12 selection brackets
+
+func test_selected_card_draws_above_later_zones_and_drops_back_when_cleared() -> void:
+	var row: Control = auto_free(Control.new())
+	add_child(row)
+	var zone_a := CardWidget.new().setup(null, "board")
+	var zone_b := CardWidget.new().setup(null, "board")
+	row.add_child(zone_a)
+	row.add_child(zone_b)
+	var card := CardWidget.new().setup(_view(LONG_TEXT_ID, "unit"), "board")
+	zone_a.add_child(card)
+	card.set_marks(false, true)
+	assert_int(card.z_index).is_greater(zone_b.z_index)
+	assert_bool(card.z_as_relative).is_true()
+	card.set_marks(false, false)
+	assert_int(card.z_index).is_equal(0)
+
+
+func test_selected_card_stays_under_the_fx_vignette() -> void:
+	assert_int(CardWidget.SELECTED_Z).is_less(FxPlayer.VIGNETTE_Z)
