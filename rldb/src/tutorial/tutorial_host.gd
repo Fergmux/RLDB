@@ -123,8 +123,9 @@ func handle(p: int, cmd: Dictionary) -> void:
 	var why := refusal(cmd)
 	if why != "":
 		refused += 1
+		# Review #100: one message for a refusal. The overlay shows it as a floating hint by the
+		# pointer (with the refusal cue); the screen's status toast is not sent as well.
 		hint.emit(why)
-		seats[p].status_changed.emit(why)
 		return
 	if _submit(p, cmd):
 		var st := current_step()

@@ -196,3 +196,134 @@ func test_reward_sub_panel_title_is_a_section_title() -> void:
 	auto_free(pv[0])
 	var t: Label = (pv[0] as Node).find_child("PanelTitle", true, false)
 	assert_int((t.get_meta(&"title_text") as TitleText).tier).is_equal(TitleText.Tier.SECTION)
+
+
+# ---------------------------------------------------------------- main menu subtitle (#2)
+
+func test_subtitle_cap_tops_sit_16px_under_the_logo_baseline() -> void:
+	# Arrange: the logo's baseline sits its ascent under its box top; its box ends a descent below.
+	var lf := TitleText.tier_font(TitleText.Tier.HERO)
+	var sf := MainMenu._subtitle_font()
+	var above_caps := sf.get_ascent(MainMenu.SUBTITLE_SIZE) - TitleText.cap_height(UIStyle.font_display(600), MainMenu.SUBTITLE_SIZE)
+	# Act
+	var gap := lf.get_descent(MainMenu.LOGO_SIZE) + MainMenu.subtitle_offset() + above_caps
+	# Assert
+	assert_float(gap).is_equal_approx(MainMenu.SUBTITLE_GAP, 0.01)
+	assert_float(MainMenu.SUBTITLE_GAP).is_equal(16.0)
+
+
+# ---------------------------------------------------------------- tutorial menu (#97)
+
+func before() -> void:
+	TutorialProgress.persist = false
+
+
+func test_tutorial_progress_records_in_memory_without_persisting() -> void:
+	# Arrange
+	TutorialProgress.reset_cache()
+	var ls := TutorialLessons.all()
+	# Act
+	TutorialProgress.mark_done(String(ls[0]["id"]))
+	TutorialProgress.mark_done(String(ls[0]["id"]))   # twice: recorded once
+	# Assert
+	assert_bool(TutorialProgress.persist).is_false()
+	assert_bool(TutorialProgress.is_done(String(ls[0]["id"]))).is_true()
+	assert_int(TutorialProgress.done_ids().size()).is_equal(1)
+	assert_int(TutorialProgress.recommended(ls)).is_equal(1)
+	TutorialProgress.reset_cache()
+	assert_int(TutorialProgress.recommended(ls)).is_equal(0)
+
+
+func test_tutorial_progress_recommends_none_when_all_done() -> void:
+	TutorialProgress.reset_cache()
+	var ls := TutorialLessons.all()
+	for l in ls:
+		TutorialProgress.mark_done(String(l["id"]))
+	assert_int(TutorialProgress.recommended(ls)).is_equal(-1)
+	TutorialProgress.reset_cache()
+
+
+func test_tutorial_menu_rows_show_medallion_name_subtitle_and_state() -> void:
+	# Arrange
+	TutorialProgress.reset_cache()
+	TutorialProgress.mark_done(String(TutorialLessons.get_lesson(0)["id"]))
+	var box: VBoxContainer = auto_free(VBoxContainer.new())
+	var picked := [-1]
+	# Act
+	TutorialMenu.add_lessons(box, func(i): picked[0] = i)
+	# Assert: one 52 px secondary row per lesson; lesson 1 ticked, lesson 2 recommended.
+	var rows := box.find_children("Lesson*", "", true, false).filter(func(n): return n is TutorialMenu.LessonRow)
+	assert_int(rows.size()).is_equal(TutorialLessons.count())
+	var r1: TutorialMenu.LessonRow = rows[0]
+	var r2: TutorialMenu.LessonRow = rows[1]
+	assert_float(r1.custom_minimum_size.y).is_equal(TutorialMenu.ROW_H)
+	assert_str(String(r1.get_meta(Sfx.FAMILY_META, ""))).is_equal("secondary")
+	assert_str(r1.title_label.text).is_equal("A turn of play")
+	assert_str(r1.sub_label.text).is_equal(TutorialMarkup.plain(String(TutorialLessons.get_lesson(0)["learned"][0])))
+	assert_object(r1.find_child("DoneTick", true, false)).is_not_null()
+	assert_object(r1.find_child("NextChip", true, false)).is_null()
+	assert_object(r2.find_child("NextChip", true, false)).is_not_null()
+	assert_int(box.find_children("NextChip", "", true, false).size()).is_equal(1)
+	var foot: Label = box.find_child("Footer", true, false)
+	assert_int(foot.get_theme_font_size("font_size")).is_equal(TutorialMenu.FOOT_PX)
+	r2.pressed.emit()
+	assert_int(picked[0]).is_equal(1)
+	TutorialProgress.reset_cache()
+
+
+func test_lesson_name_drops_the_lesson_number() -> void:
+	assert_str(TutorialMenu.lesson_name("Lesson 7 · Extra Deck: Arcane")).is_equal("Extra Deck: Arcane")
+	assert_str(TutorialMenu.lesson_name("Battle")).is_equal("Battle")
+
+
+# ---------------------------------------------------------------- tutorial overlay (#100, #101)
+
+func test_off_script_hint_is_sentence_case() -> void:
+	assert_str(TutorialOverlay.sentence_case("TUTORIAL: FOLLOW THE HIGHLIGHTED STEP.")).is_equal("Tutorial: follow the highlighted step.")
+	assert_str(TutorialOverlay.sentence_case("Tutorial: follow the highlighted step.")).is_equal("Tutorial: follow the highlighted step.")
+
+
+func test_off_script_hint_stays_inside_the_layer() -> void:
+	var layer := Vector2(1600, 900)
+	var sz := Vector2(300, 40)
+	# By the pointer, up and to the right.
+	assert_vector(TutorialOverlay.hint_position(Vector2(400, 500), sz, layer)).is_equal((Vector2(400, 500) + TutorialOverlay.HINT_OFFSET).round())
+	# Near the right edge it flips to the pointer's left; near the top it stays 12 px inside.
+	var p := TutorialOverlay.hint_position(Vector2(1550, 20), sz, layer)
+	assert_float(p.x + sz.x).is_less_equal(layer.x - UIStyle.CONTENT_FLOOR)
+	assert_float(p.y).is_equal(float(UIStyle.CONTENT_FLOOR))
+
+
+func test_arrow_keeps_its_gap_and_avoids_text() -> void:
+	# Arrange: a button at the bottom right with a row of pills just above it (the phase pills).
+	var target := Rect2(1250, 830, 330, 50)
+	var pills := Rect2(1250, 805, 330, 22)
+	var layer := Vector2(1600, 900)
+	# Act / Assert: with nothing to avoid the arrow sits above; with the pills it moves to the left.
+	assert_int(TutorialHighlight.choose_side(target, layer, false, [])).is_equal(1)
+	var d := TutorialHighlight.choose_side(target, layer, false, [pills])
+	assert_int(d).is_equal(2)
+	var box := TutorialHighlight.arrow_box(target, d)
+	assert_bool(box.intersects(pills)).is_false()
+	assert_float(target.position.x - box.end.x).is_equal(TutorialHighlight.RING_PAD + TutorialHighlight.ARROW_GAP)
+	# Decided once per target.
+	assert_int(TutorialHighlight.choose_side(target, layer, false, [], d, target)).is_equal(d)
+
+
+func test_highlight_flash_decays() -> void:
+	var h: TutorialHighlight = auto_free(TutorialHighlight.new())
+	h.flash()
+	assert_float(h.flash_level()).is_equal(1.0)
+	h._process(TutorialHighlight.FLASH_TIME / 2.0)
+	assert_float(h.flash_level()).is_equal_approx(0.5, 0.001)
+	h._process(TutorialHighlight.FLASH_TIME)
+	assert_float(h.flash_level()).is_equal(0.0)
+
+
+func test_steps_bar_fills_over_its_fill_time() -> void:
+	var bar: TutorialDeco = auto_free(TutorialDeco.steps(7, 2))
+	bar.fill_time = 0.5
+	bar.set_current(7, 3)
+	bar._process(0.25 * UIStyle.dur(1.0))
+	assert_float(bar._shown).is_equal_approx(2.5, 0.01)
+	assert_float(bar._glow).is_equal(1.0)

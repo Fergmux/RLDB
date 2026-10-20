@@ -9,10 +9,31 @@ extends Control
 ## The guidance card sits over the game log at the top of the sidebar: the input-required banner
 ## uses the left column or the top centre of the board (depending on width), so the sidebar top is
 ## the one place that never overlaps it at any window size.
+##
+## H1 menus pass (design review #98-#103): the card's header reads "LESSON n OF N" over the lesson
+## name (no ellipsis); Restart lesson / Exit tutorial are text links at the right of the footer and
+## Next is the 40 px primary; a refused action shows ONE message, a floating amber-edged hint by the
+## pointer that fades after HINT_SECS, while the highlight pulses once; a new lesson opens with a
+## HERO banner; lesson / tutorial complete use HERO titles, a ray burst (the final one with a crown
+## and motes) and their cues. Finished lessons are recorded in TutorialProgress.
 
 const PANEL_PAD := 14.0
-const HINT_SECS := 3.5
+const HINT_SECS := 2.2
 const COMPLETE_W := 560.0
+## HERO title size of the banner and the completion cards (D3).
+const HERO_PX := 48
+## The floating off-script hint: its text size and its offset from the pointer.
+const HINT_PX := 14
+const HINT_OFFSET := Vector2(18, -52)
+const HINT_EDGE := Color("e0a040")
+## Lesson banner timing (s): fade in, hold, fade out.
+const BANNER_IN := 0.3
+const BANNER_HOLD := 1.5
+const BANNER_OUT := 0.45
+## Seconds the lesson's progress segment takes to fill on the completion card.
+const FILL_TIME := 0.5
+## Frames between two refreshes of the arrow's avoid rects (the text around the target).
+const AVOID_EVERY := 6
 
 ## Screen this overlay guides.
 var gs: GameScreen
@@ -31,17 +52,24 @@ var restart_btn: Button
 ## Exit tutorial button.
 var exit_btn: Button
 
+## The floating off-script hint (null while hidden).
+var hint_plate: PanelContainer
+## The lesson banner shown when a lesson opens (null while hidden).
+var banner: Control
+
 var _lesson_label: Label
+var _name_label: Label
 var _count_label: Label
 var _title_label: Label
 var _text_label: RichTextLabel
-var _hint_label: Label
 var _panel_style: StyleBoxFlat
 var _progress: TutorialDeco
 var _step_box: VBoxContainer
-var _hint_panel: PanelContainer
 var _shown_key: String = ""
 var _hint_gen: int = 0
+var _banner_lesson: int = -1
+var _avoid_tick: int = 0
+var _avoid_target: Rect2 = Rect2()
 
 
 ## Creates the overlay on `screen` for `tutorial_host` and returns it.
@@ -62,6 +90,7 @@ func _ready() -> void:
 	_build_panel()
 	host.step_changed.connect(refresh.unbind(1))
 	host.lesson_completed.connect(refresh.unbind(1))
+	host.lesson_completed.connect(_record_done.unbind(1))
 	host.hint.connect(show_hint)
 	refresh()
 
@@ -101,12 +130,23 @@ func _build_panel() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
 	head_p.add_child(head)
-	_lesson_label = UIStyle.label("", 13, UIStyle.GOLD, false, true)
-	_lesson_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_lesson_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_lesson_label.clip_text = true
-	_lesson_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	head.add_child(_lesson_label)
+	# Review #98: two lines, "LESSON 1 OF 7" (SECTION, 11 px) over the lesson's name (SCREEN, 18 px,
+	# wrapping rather than trimmed); the step chip on the right.
+	var hv := VBoxContainer.new()
+	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hv.add_theme_constant_override("separation", 2)
+	head.add_child(hv)
+	_lesson_label = UIStyle.label("", 11, UIStyle.GOLD, false, true)
+	_lesson_label.name = "LessonOf"
+	hv.add_child(_lesson_label)
+	var lt := TitleText.apply(_lesson_label, TitleText.Tier.SECTION, 11)
+	lt.show_underline = false
+	TitleText.apply(_lesson_label, TitleText.Tier.SECTION, 11)
+	_name_label = UIStyle.label("", 18, UIStyle.GOLD_HI, true, true)
+	_name_label.name = "LessonName"
+	hv.add_child(_name_label)
+	TitleText.apply(_name_label, TitleText.Tier.SCREEN, 18)
 	var pill := PanelContainer.new()
 	var ps := UIStyle.flat(Color(0.04, 0.03, 0.02, 0.95), Color(UIStyle.GOLD, 0.6), 1, 11)
 	ps.content_margin_left = 10
@@ -115,6 +155,7 @@ func _build_panel() -> void:
 	ps.content_margin_bottom = 1
 	pill.add_theme_stylebox_override("panel", ps)
 	head.add_child(pill)
+	pill.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_count_label = UIStyle.label("", 13, UIStyle.GOLD_HI, false, true)
 	pill.add_child(_count_label)
 	_progress = TutorialDeco.steps(1, 0)
@@ -138,18 +179,6 @@ func _build_panel() -> void:
 	_step_box.add_child(TutorialDeco.divider(UIStyle.GOLD, 10.0))
 	_text_label = TutorialMarkup.rich_label(16)
 	_step_box.add_child(_text_label)
-	_hint_panel = PanelContainer.new()
-	var hts := UIStyle.flat(Color(0.2, 0.05, 0.045, 0.92), Color(UIStyle.BAD, 0.8), 1, 6)
-	hts.border_width_left = 4
-	hts.content_margin_left = 10
-	hts.content_margin_right = 8
-	hts.content_margin_top = 5
-	hts.content_margin_bottom = 5
-	_hint_panel.add_theme_stylebox_override("panel", hts)
-	_hint_panel.visible = false
-	v.add_child(_hint_panel)
-	_hint_label = UIStyle.label("", 14, Color("ffc9c4"), true, true)
-	_hint_panel.add_child(_hint_label)
 	# Footer: the buttons sit at the bottom of the box (F04-11).
 	var foot_p := PanelContainer.new()
 	var fs := UIStyle.flat(Color(0.045, 0.036, 0.026, 1.0), Color(UIStyle.BRONZE, 0.8), 0, 8)
@@ -164,24 +193,31 @@ func _build_panel() -> void:
 	fs.content_margin_bottom = 8
 	foot_p.add_theme_stylebox_override("panel", fs)
 	outer.add_child(foot_p)
+	# Review #99: Next is the 40 px primary on the left; the two escape hatches are text links at the
+	# right, so a step without Next keeps a balanced row.
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
+	row.add_theme_constant_override("separation", UIStyle.sp("sm"))
 	foot_p.add_child(row)
-	restart_btn = UIStyle.button("Restart lesson", 13)
-	restart_btn.custom_minimum_size = Vector2(0, 32)
-	restart_btn.pressed.connect(_on_restart)
-	row.add_child(restart_btn)
-	exit_btn = UIStyle.button("Exit tutorial", 13)
-	exit_btn.custom_minimum_size = Vector2(0, 32)
-	exit_btn.pressed.connect(_on_exit)
-	row.add_child(exit_btn)
-	var gap := Control.new()
-	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(gap)
 	next_btn = UIStyle.primary_button("Next", 15)
-	next_btn.custom_minimum_size = Vector2(96, 34)
+	next_btn.custom_minimum_size = Vector2(112, 40)
+	next_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	next_btn.pressed.connect(_on_next)
 	row.add_child(next_btn)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gap.custom_minimum_size = Vector2(0, 40)
+	row.add_child(gap)
+	restart_btn = TextLink.make("Restart lesson", 13)
+	restart_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	restart_btn.tooltip_text = "Start this lesson again from its first step."
+	restart_btn.pressed.connect(_on_restart)
+	row.add_child(restart_btn)
+	exit_btn = TextLink.make("Exit tutorial", 13)
+	exit_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	exit_btn.tooltip_text = "Back to the main menu."
+	exit_btn.set_meta(Sfx.BUTTON_META, "back")
+	exit_btn.pressed.connect(_on_exit)
+	row.add_child(exit_btn)
 
 
 ## Re-reads the host: step text, buttons, completion card.
@@ -189,7 +225,8 @@ func refresh() -> void:
 	if host == null or host.lesson.is_empty():
 		return
 	var n := host.step_count()
-	_lesson_label.text = "TUTORIAL · %s" % String(host.lesson["title"]).to_upper()
+	_lesson_label.text = "LESSON %d OF %d" % [host.lesson_index + 1, TutorialLessons.count()]
+	_name_label.text = TutorialMenu.lesson_name(String(host.lesson["title"]))
 	var key := "%d/%d" % [host.lesson_index, host.step_index]
 	if host.is_complete():
 		_count_label.text = "Done"
@@ -213,6 +250,9 @@ func refresh() -> void:
 	if key != _shown_key:
 		_shown_key = key
 		_fade_in(_step_box)
+	if host.step_index == 0 and not host.is_complete() and host.lesson_index != _banner_lesson:
+		_banner_lesson = host.lesson_index
+		_show_banner()
 	_hide_hint()
 	_place_panel()
 
@@ -228,23 +268,63 @@ func _fade_in(c: Control) -> void:
 
 
 func _hide_hint() -> void:
-	_hint_panel.visible = false
-	_panel_style.border_color = UIStyle.GOLD
-
-
-## Shows the refusal hint under the step text and flashes the card's border.
-func show_hint(text: String) -> void:
 	_hint_gen += 1
+	if hint_plate != null and is_instance_valid(hint_plate):
+		hint_plate.queue_free()
+	hint_plate = null
+
+
+## Review #100: the one message for a refused off-script action: a floating hint by the pointer
+## (F5 tooltip plate with an amber edge, sentence case, 14 px), fading after HINT_SECS, while the
+## highlighted element pulses once, with the `deny` cue.
+func show_hint(text: String) -> void:
+	_hide_hint()
+	Sfx.play("deny")
 	var gen := _hint_gen
-	_hint_label.text = text
-	_hint_panel.visible = true
-	_fade_in(_hint_panel)
-	_panel_style.border_color = UIStyle.BAD
-	_place_panel()
+	var p := PanelContainer.new()
+	p.name = "OffScriptHint"
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.z_index = UiLayers.TUTORIAL_RING + 1
+	var sb := UIStyle.flat(Color("1b1712"), Color(HINT_EDGE, 0.9), 1, 4)
+	sb.border_width_left = 3
+	UIStyle.pad(sb, "md", "sm")
+	UIStyle.lift(sb, UIStyle.DEPTH_FLOATING)
+	p.add_theme_stylebox_override("panel", UiSurface.box(sb, UiSurface.LEATHER, 0.3))
+	var l := UIStyle.label(sentence_case(text), HINT_PX, UIStyle.TEXT)
+	l.name = "Text"
+	l.add_theme_font_override("font", UIStyle.font_bold())
+	p.add_child(l)
+	add_child(p)
+	hint_plate = p
+	p.reset_size()
+	p.position = hint_position(get_local_mouse_position(), p.get_combined_minimum_size(), size)
+	UIStyle.tween_in(p, "tooltip_in")
+	ring.flash()
 	get_tree().create_timer(HINT_SECS).timeout.connect(func():
-		if gen == _hint_gen and is_instance_valid(self):
-			_hide_hint()
-			_place_panel())
+		if gen == _hint_gen and is_instance_valid(p):
+			hint_plate = null
+			UIStyle.tween_out(p, true))
+
+
+## Where the floating hint of `sz` goes for a pointer at `at` in a layer of `layer` size: up and
+## to the right of the pointer, kept 12 px inside the layer.
+static func hint_position(at: Vector2, sz: Vector2, layer: Vector2) -> Vector2:
+	var m := float(UIStyle.CONTENT_FLOOR)
+	var pos := at + HINT_OFFSET
+	if pos.x + sz.x > layer.x - m:
+		pos.x = at.x - HINT_OFFSET.x - sz.x
+	pos.x = clampf(pos.x, m, maxf(m, layer.x - m - sz.x))
+	pos.y = clampf(pos.y, m, maxf(m, layer.y - m - sz.y))
+	return pos.round()
+
+
+## "TUTORIAL: FOLLOW THE STEP." -> "Tutorial: follow the step." (a learner is never shouted at).
+static func sentence_case(text: String) -> String:
+	var t := text.strip_edges()
+	if t == "" or t != t.to_upper():
+		return t
+	var low := t.to_lower()
+	return low.substr(0, 1).to_upper() + low.substr(1)
 
 
 func _on_next() -> void:
@@ -322,6 +402,40 @@ func _process(_d: float) -> void:
 			ring.compact = true
 			ring.arrow_from_below = true
 	ring.visible = complete_card == null
+	# The text around the target: measured at once for a new target (the arrow's side is decided
+	# on its first frame), then refreshed every few frames.
+	var first: Rect2 = rects[0] if not rects.is_empty() else Rect2()
+	_avoid_tick += 1
+	if _avoid_tick >= AVOID_EVERY or not first.is_equal_approx(_avoid_target):
+		_avoid_tick = 0
+		_avoid_target = first
+		ring.avoid = avoid_rects(first)
+
+
+## Review #101: the text around the arrow's target that the arrow must not cover (layer
+## coordinates): the sidebar's and the prompt banner's labels and buttons, and the phase pills,
+## except the target itself and what lies inside it.
+func avoid_rects(target: Rect2) -> Array:
+	var out := []
+	if not target.has_area():
+		return out
+	var inv := get_global_transform().affine_inverse()
+	var roots: Array = [gs.sidebar, gs.prompt.ctx_banner]
+	var found := []
+	for rt in roots:
+		if rt is Node and is_instance_valid(rt):
+			found.append_array((rt as Node).find_children("*", "Label", true, false))
+			found.append_array((rt as Node).find_children("*", "Button", true, false))
+	if gs.sidebar.pips != null:
+		found.append(gs.sidebar.pips)
+	for c in found:
+		var cc := c as Control
+		if cc == null or not cc.is_visible_in_tree() or cc is TitleText:
+			continue
+		var r: Rect2 = inv * _rect_of(cc)
+		if r.has_area() and not r.intersects(target) and not target.encloses(r):
+			out.append(r)
+	return out
 
 
 # ---------------------------------------------------------------- targets
@@ -557,30 +671,49 @@ func _show_complete() -> void:
 	dim.add_child(c)
 	# House plate (F06-01): the header strip carries the lesson count; every layer follows the
 	# rim's rounded corners, so nothing squares off the frame.
+	# Celebration behind the card (#102 / #103): a gold ray burst; the final one adds motes.
+	var cel := Control.new()
+	cel.name = "Celebration"
+	cel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.add_child(cel)
+	dim.move_child(cel, 0)   # behind the card
 	var p := HousePanel.new("Tutorial complete" if last else "Lesson %d of %d" % [idx + 1, total], "Tutorial", Vector2(28, 24), 10)
 	p.arm = 18.0
 	p.custom_minimum_size = Vector2(COMPLETE_W, 0)
 	c.add_child(p)
 	var bv := p.body
-	var head := UIStyle.title_label("Tutorial complete" if last else "Lesson complete", 34, UIStyle.GOLD_HI)
+	if last:
+		var crown := Crown.new()
+		crown.name = "Crown"
+		crown.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		bv.add_child(crown)
+	# HERO title (D3): the gold metal gradient, bevel shadow, glow and its sweep.
+	var head := UIStyle.label("Tutorial complete" if last else "Lesson complete", HERO_PX, UIStyle.GOLD_HI)
+	head.name = "CompleteTitle"
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	head.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
-	head.add_theme_constant_override("shadow_offset_y", 2)
 	bv.add_child(head)
+	var hero := TitleText.apply(head, TitleText.Tier.HERO, HERO_PX)
+	hero.uppercase = true
 	var lt := String(host.lesson["title"])
 	var name_l := UIStyle.label(lt.get_slice("·", 1).strip_edges() if lt.contains("·") else lt, 18, UIStyle.TEXT, true, true)
 	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bv.add_child(name_l)
-	var bar := TutorialDeco.steps(total, idx + 1)
+	# The progress bar: this lesson's segment fills with light (#102).
+	var bar := TutorialDeco.steps(total, idx)
+	bar.name = "LessonBar"
 	bar.custom_minimum_size = Vector2(0, 6)
 	bar.highlight = false
+	bar.fill_time = FILL_TIME
 	bv.add_child(bar)
 	bv.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 12.0))
 	var sum := TutorialMarkup.rich_label(17)
 	sum.text = "[center]%s[/center]" % TutorialMarkup.to_bbcode(String(host.lesson["summary"]))
 	bv.add_child(sum)
-	var learned_head := UIStyle.label("WHAT YOU LEARNED", 12, UIStyle.TEXT_DIM, false, true)
+	var learned_head := UIStyle.label("WHAT YOU LEARNED", 13, UIStyle.GOLD, false, true)
+	learned_head.name = "LearnedHead"
 	bv.add_child(learned_head)
+	TitleText.apply(learned_head, TitleText.Tier.SECTION, 13)
 	var rows := []
 	for item in host.lesson.get("learned", []):
 		var r := HBoxContainer.new()
@@ -630,6 +763,9 @@ func _show_complete() -> void:
 		ex.pressed.connect(_on_exit)
 		row.add_child(ex)
 	p.appear()
+	hero.play_sweep()
+	_celebrate(cel, last)
+	bar.set_current(total, idx + 1)
 	if not UIStyle.reduce_motion:
 		# What-you-learned lines arrive one after another.
 		for i in rows.size():
@@ -638,3 +774,136 @@ func _show_complete() -> void:
 			var t2 := create_tween()
 			t2.tween_interval(UIStyle.dur(0.3 + 0.12 * i))
 			t2.tween_property(rw, "modulate:a", 1.0, UIStyle.dur(0.25))
+
+
+## Records the finished lesson (review #97: its tick in the lesson list).
+func _record_done() -> void:
+	if host != null and not host.lesson.is_empty():
+		TutorialProgress.mark_done(String(host.lesson.get("id", "")))
+
+
+## The ray burst behind a completion card and its cue (#102); the final completion gets the
+## series-victory weight: bigger rays, rising gold motes and victory_big (#103). Under reduce
+## motion the rays hold one static frame and the motes rest.
+func _celebrate(layer: Control, last: bool) -> void:
+	var area := gs.play_area
+	var rays := FxSigil.new()
+	rays.name = "Rays"
+	rays.kind = "rays"
+	rays.col = Color(UIStyle.GOLD, 0.55)
+	rays.radius = area.size.length() * (0.55 if last else 0.4)
+	rays.position = area.size / 2.0
+	layer.add_child(rays)
+	if last:
+		var motes := AmbientMotes.new(30, [AmbientMotes.GOLD], 2603)
+		motes.name = "Motes"
+		motes.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		layer.add_child(motes)
+	Sfx.play("victory_big" if last else "victory")
+	if UIStyle.reduce_motion or not is_inside_tree():
+		rays.t = 0.25   # one calm static frame
+		return
+	var tw := rays.create_tween()
+	tw.tween_property(rays, "t", 1.0, UIStyle.motion("celebrate") * (1.6 if last else 1.2)).from(0.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+
+## Review "LESSON" HERO banner: when a lesson opens, "LESSON n" (HERO, 48 px) over its name
+## (SCREEN) on a soft dark band across the board, in and out on its own; click-through, so it
+## never blocks the first step. A 120 ms fade each way under reduce motion.
+func _show_banner() -> void:
+	if banner != null and is_instance_valid(banner):
+		banner.queue_free()
+	var area := gs.play_area
+	var inv := get_global_transform().affine_inverse()
+	var b := Banner.new()
+	b.name = "LessonBanner"
+	b.z_index = UiLayers.TUTORIAL_RING + 2
+	b.position = inv * area.position
+	b.size = area.size
+	add_child(b)
+	banner = b
+	var v := VBoxContainer.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	v.add_theme_constant_override("separation", UIStyle.sp("xs"))
+	b.add_child(v)
+	var t := TitleText.make("LESSON %d" % (host.lesson_index + 1), TitleText.Tier.HERO, HERO_PX)
+	t.name = "BannerTitle"
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var nm := TitleText.make(TutorialMenu.lesson_name(String(host.lesson["title"])).to_upper(), TitleText.Tier.SCREEN, 26)
+	nm.name = "BannerName"
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(nm)
+	Sfx.play("notice")
+	b.modulate.a = 0.0
+	if not is_inside_tree():
+		return
+	var tw := b.create_tween()
+	var reduced := UIStyle.reduce_motion
+	tw.tween_property(b, "modulate:a", 1.0, UIStyle.motion("reduced") if reduced else UIStyle.dur(BANNER_IN))
+	if not reduced:
+		t.play_sweep()
+		b.scale_in(UIStyle.dur(BANNER_IN))
+	tw.tween_interval(UIStyle.dur(BANNER_HOLD))
+	tw.tween_property(b, "modulate:a", 0.0, UIStyle.motion("reduced") if reduced else UIStyle.dur(BANNER_OUT))
+	tw.tween_callback(func():
+		if is_instance_valid(b):
+			b.queue_free())
+
+
+## The lesson banner's ground: a horizontal band of shadow that fades out at the top and bottom,
+## with gold hairlines; its content grows from 0.92 when it opens.
+class Banner extends Control:
+	const BAND_H := 190.0
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	## Eases the banner's content from 0.92 to full size over `sec`.
+	func scale_in(sec: float) -> void:
+		pivot_offset = size / 2.0
+		scale = Vector2(0.92, 0.92)
+		create_tween().tween_property(self, "scale", Vector2.ONE, sec).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+	func _draw() -> void:
+		var cy := size.y / 2.0
+		var half := BAND_H / 2.0
+		Ornate.vgradient(self, Rect2(0, cy - half, size.x, half), Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.62))
+		Ornate.vgradient(self, Rect2(0, cy, size.x, half), Color(0, 0, 0, 0.62), Color(0, 0, 0, 0.0))
+		for y in [cy - half * 0.78, cy + half * 0.78]:
+			Ornate.hgradient(self, Rect2(size.x * 0.12, y, size.x * 0.38, 1.0), Color(UIStyle.GOLD, 0.0), Color(UIStyle.GOLD, 0.7))
+			Ornate.hgradient(self, Rect2(size.x * 0.5, y, size.x * 0.38, 1.0), Color(UIStyle.GOLD, 0.7), Color(UIStyle.GOLD, 0.0))
+			Ornate.diamond(self, Vector2(size.x / 2.0, y + 0.5), 4.0, UIStyle.GOLD_HI)
+
+
+## The crown sigil over the final "Tutorial complete" (review #103: the series VICTORY language).
+class Crown extends Control:
+	func _init() -> void:
+		custom_minimum_size = Vector2(76, 44)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		var pts := PackedVector2Array([Vector2(0.1 * w, 0.86 * h), Vector2(0.06 * w, 0.28 * h), Vector2(0.3 * w, 0.56 * h),
+			Vector2(0.5 * w, 0.1 * h), Vector2(0.7 * w, 0.56 * h), Vector2(0.94 * w, 0.28 * h), Vector2(0.9 * w, 0.86 * h)])
+		var sh := PackedVector2Array()
+		for q in pts:
+			sh.append(q + Vector2(0, 3))
+		draw_colored_polygon(sh, Color(0, 0, 0, 0.55))
+		draw_colored_polygon(pts, UIStyle.GOLD)
+		# Lit face: the same outline drawn smaller toward the light (up and left).
+		var c := Vector2(0.48 * w, 0.5 * h)
+		var lit := PackedVector2Array()
+		for q in pts:
+			lit.append(c + (q - c) * 0.78 + Vector2(-1, -2))
+		draw_colored_polygon(lit, Color(UIStyle.GOLD_HI, 0.5))
+		var closed := pts.duplicate()
+		closed.append(pts[0])
+		draw_polyline(closed, Color(0.16, 0.1, 0.02, 0.95), 1.5, true)
+		draw_rect(Rect2(0.1 * w, 0.78 * h, 0.8 * w, 0.1 * h), UIStyle.GOLD.darkened(0.25))
+		for x in [0.06, 0.5, 0.94]:
+			Ornate.diamond(self, Vector2(x * w, (0.1 if x == 0.5 else 0.28) * h), 4.0, UIStyle.GOLD_HI)
+		Ornate.diamond(self, Vector2(0.5 * w, 0.66 * h), 5.0, Color("e8605a"))
