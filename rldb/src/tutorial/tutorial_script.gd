@@ -79,6 +79,10 @@ static func matches(m: MatchEngine, keys: Dictionary, pat: Dictionary, cmd: Dict
 		return got == want
 	if pat.has("card") and int(cmd.get("uid", -1)) != int(keys.get(String(pat["card"]), -2)):
 		return false
+	# B3: summons from a command enter in Attack stance; a command asking for another stance than
+	# the pattern's ("atk" when it names none) is off script, since the engine would refuse it.
+	if cmd.has("stance") and String(cmd["stance"]) != String(pat.get("stance", "atk")):
+		return false
 	if pat.has("stance") and String(cmd.get("stance", "")) != String(pat["stance"]):
 		return false
 	if pat.has("idx") and int(cmd.get("idx", 0)) != int(pat["idx"]):

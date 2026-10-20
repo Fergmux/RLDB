@@ -24,21 +24,26 @@ func _opt_preview(m: MatchEngine, target: int) -> Dictionary:
 
 # ---------------------------------------------------------------- F02-02
 
-func test_f02_02_hand_unit_offers_summon_attack_and_defense() -> void:
+# B3 (owner feedback 2026-10-20) replaced F02-02's Summon Attack / Summon Defense pair with one
+# Summon button: the unit enters in Attack stance and To Defense changes it afterwards.
+
+func test_f02_02_hand_unit_offers_one_summon_button() -> void:
 	var m := TB.make()
 	var u := TB.card(m, 0, TB.WATER)
 	var labels := _actions(m, 0, u).map(func(a): return a["label"])
-	assert_array(labels).contains_exactly(["Summon Attack", "Summon Defense"])
+	assert_array(labels).contains_exactly(["Summon"])
 
 
-func test_f02_02_summon_defense_places_in_defense_without_stance_prompt() -> void:
+func test_f02_02_summon_then_to_defense_pays_once_and_ends_in_defense() -> void:
 	var m := TB.make()
 	var u := TB.card(m, 0, TB.WATER)
 	var ap_before: int = m.players[0]["ap"]
-	assert_str(m.submit(0, {"t": "summon", "uid": u, "stance": "def"})).is_empty()
+	assert_str(m.submit(0, {"t": "summon", "uid": u})).is_empty()
 	assert_str(m.pending["kind"]).is_equal("slot")
 	TB.choose(m, [TB.slot_label(1)])
 	assert_bool(m.pending.is_empty()).is_true()
+	assert_str(m.cards[u]["stance"]).is_equal("atk")
+	assert_str(m.submit(0, {"t": "stance", "uid": u})).is_empty()
 	assert_str(m.cards[u]["stance"]).is_equal("def")
 	assert_int(m.players[0]["units"][1]).is_equal(u)
 	assert_int(m.players[0]["ap"]).is_equal(ap_before - m.current_cost(u))
@@ -55,22 +60,21 @@ func test_f02_02_summon_attack_pays_once() -> void:
 	assert_int(TB.log_text(m).count("pays")).is_equal(1)
 
 
-func test_f02_02_no_defense_unit_cannot_summon_defense() -> void:
+func test_f02_02_no_defense_unit_cannot_change_to_defense_after_its_summon() -> void:
 	var m := TB.make()
-	var u := TB.card(m, 0, 150)                           # flag no_defense
-	m.players[0]["ap"] = 20
-	var acts := _actions(m, 0, u)
-	var def_act: Dictionary = acts.filter(func(a): return a.get("stance", "") == "def")[0]
-	assert_bool(def_act["ok"]).is_false()
-	assert_str(def_act["reason"]).contains("Defense")
-	assert_str(m.submit(0, {"t": "summon", "uid": u, "stance": "def"})).contains("Defense")
+	var u := TB.summon(m, 0, 150, 0)                      # flag no_defense
+	assert_str(m.cards[u]["stance"]).is_equal("atk")
+	var to_def: Dictionary = _actions(m, 0, u).filter(func(a): return a["t"] == "stance")[0]
+	assert_bool(to_def["ok"]).is_false()
+	assert_str(to_def["reason"]).contains("Defense")
+	assert_str(m.submit(0, {"t": "summon", "uid": TB.card(m, 0, 150), "stance": "def"})).is_equal(MatchEngine.SUMMON_ATTACK_ONLY)
 
 
 func test_f02_02_cancel_at_zone_choice_refunds_nothing_was_paid() -> void:
 	var m := TB.make()
 	var u := TB.card(m, 0, TB.WATER)
 	var ap_before: int = m.players[0]["ap"]
-	m.submit(0, {"t": "summon", "uid": u, "stance": "def"})
+	m.submit(0, {"t": "summon", "uid": u})
 	m.submit(0, {"t": "cancel", "id": m.pending["id"]})
 	assert_str(m.cards[u]["zone"]).is_equal("hand")
 	assert_int(m.players[0]["ap"]).is_equal(ap_before)
@@ -79,7 +83,7 @@ func test_f02_02_cancel_at_zone_choice_refunds_nothing_was_paid() -> void:
 func test_f02_02_summon_stance_still_obeys_timing() -> void:
 	var m := _battle()
 	var u := TB.card(m, 1, TB.WATER)
-	assert_str(m.submit(1, {"t": "summon", "uid": u, "stance": "def"})).contains("Setup or Recovery Phase")
+	assert_str(m.submit(1, {"t": "summon", "uid": u, "stance": "atk"})).contains("Setup or Recovery Phase")
 
 
 func test_f02_02_malformed_stance_rejected() -> void:

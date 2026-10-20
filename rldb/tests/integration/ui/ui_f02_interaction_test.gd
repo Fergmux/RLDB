@@ -57,7 +57,7 @@ func test_f02_01_click_selects_and_reveals_summon_buttons() -> void:
 	gs.selection.on_widget_pressed(gs.hand.items[uid]["widget"])
 	await await_idle_frame()
 	assert_int(gs.selected_uid).is_equal(uid)
-	assert_array(_row()).contains_exactly(["Summon Attack", "Summon Defense"])
+	assert_array(_row()).contains_exactly(["Summon"])                    # B3: one Summon button
 	assert_int(gs.debug_sent).is_equal(0)
 	gs.selection.on_widget_pressed(gs.hand.items[uid]["widget"])      # second click deselects
 	await await_idle_frame()
@@ -65,17 +65,21 @@ func test_f02_01_click_selects_and_reveals_summon_buttons() -> void:
 	assert_array(_row()).is_empty()
 
 
-func test_f02_02_summon_defense_button_runs_stance_fixed_summon() -> void:
+## B3: Summon places the unit in Attack stance (zone prompt only); To Defense then turns it.
+func test_f02_02_summon_button_then_to_defense_rotates_the_unit() -> void:
 	var uid := _hand_unit()
 	await await_idle_frame()
 	gs.selection.select(uid)
 	await await_idle_frame()
-	var b: Button = gs.action_row.stack.get_children().filter(func(x): return (x as Button).text == "Summon Defense")[0]
+	var b: Button = gs.action_row.stack.get_children().filter(func(x): return (x as Button).text == "Summon")[0]
 	b.pressed.emit()
 	await await_idle_frame()
 	assert_str(m.pending["kind"]).is_equal("slot")
 	assert_bool(gs.prompt.ctx_banner.visible).is_true()
 	TB.choose(m, [TB.slot_label(2)])
+	assert_bool(m.pending.is_empty()).is_true()
+	assert_str(m.cards[uid]["stance"]).is_equal("atk")
+	assert_str(m.submit(m.active, {"t": "stance", "uid": uid})).is_empty()
 	host.broadcast()
 	assert_str(m.cards[uid]["stance"]).is_equal("def")
 	var w: CardWidget = gs.fx_slot_item(m.active, "unit", 2)["widget"]

@@ -8,6 +8,11 @@ extends SummonOps
 
 signal changed
 
+## Refusal of a summon command asking for Defense stance (B3).
+const SUMMON_ATTACK_ONLY := "Units summoned in your Setup or Recovery Phase enter in Attack stance; change stance afterwards."
+## Refusal of a manual stance change outside its timing (B3).
+const STANCE_PHASE_ONLY := "Stance can only be changed in the Setup Phase, or in the Recovery Phase by a unit summoned in it."
+
 var first_turn_player: int = 0
 var command_count: int = 0
 
@@ -253,15 +258,15 @@ func validate(p: int, cmd: Dictionary) -> String:
 	var main := phase in [PHASE_MAIN1, PHASE_MAIN2]
 	var own_turn_phase := phase in [PHASE_MAIN1, PHASE_BATTLE, PHASE_MAIN2]
 	var df := d(uid)
-	# F02-02: summons may carry the chosen stance; card stance restrictions still apply.
+	# B3 (owner feedback 2026-10-20): a summon from a command happens in the player's own Setup
+	# or Recovery Phase, so the unit always enters in Attack stance (no choice); the player changes
+	# stance afterwards. An explicit "atk" is still accepted from older clients; "def" is refused
+	# whatever the card, so the reply reveals nothing about it (QA-F02-03).
 	if cmd.has("stance"):
 		if not (t in ["summon", "ritual", "arcane"]) or not (cmd["stance"] in ["atk", "def"]):
 			return "Invalid stance."
-		# Only judge the stance of a card the player may actually summon from its own pile, so
-		# the reply never reveals anything about a card they cannot see (QA-F02-03).
-		var own_src: bool = inst["owner"] == p and inst["zone"] == ("hand" if t == "summon" else "extra")
-		if own_src and cmd["stance"] == "def" and has_flag_raw(uid, "no_defense"):
-			return "This unit cannot be in Defense stance."
+		if cmd["stance"] == "def":
+			return SUMMON_ATTACK_ONLY
 	match t:
 		"summon":
 			if inst["owner"] != p or inst["zone"] != "hand": return "Card is not in your Hand."
@@ -311,7 +316,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 			return _ability_check(p, uid, idx, abs[idx])
 		"stance":
 			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
-			if phase != PHASE_MAIN1: return "Stance can only be changed in the Setup Phase."
+			if not can_change_stance(uid): return STANCE_PHASE_ONLY
 			if has_flag(uid, "no_defense") and inst["stance"] == "atk": return "This unit cannot be in Defense stance."
 			return ""
 		"attack":
@@ -560,7 +565,6 @@ func _fusion_lead(ops: Array, lead: Array, ability: bool) -> Array:
 	return []
 
 
-## Stance step of a summon: fixed when the command chose it (F02-02), otherwise a prompt.
 ## The Ritual summon of Extra Deck unit `uid`; `mat` (or -1 to choose) is the tributed unit.
 func _push_ritual(p: int, uid: int, cmd: Dictionary, mat: int) -> void:
 	push_frame(make_frame(uid, p, [{"op": "ritual_material", "as": "mat", "cancellable": true, "preset": mat},
@@ -571,10 +575,21 @@ func _push_ritual(p: int, uid: int, cmd: Dictionary, mat: int) -> void:
 		{"op": "tribute_bonus", "target": "self"}] + summon_tail(uid, p), "Ritual summon " + name_of(uid)))
 
 
-func _stance_op(cmd: Dictionary) -> Dictionary:
-	if cmd.get("stance", "") in ["atk", "def"]:
-		return {"op": "pick_stance", "as": "stance", "fixed": cmd["stance"]}
+## Stance step of a summon command. Commands summon only in the player's own Setup or Recovery
+## Phase, where B3 enters the unit in Attack stance without asking (SummonOps.stance_choice_open).
+func _stance_op(_cmd: Dictionary) -> Dictionary:
 	return {"op": "pick_stance", "as": "stance", "cancellable": true}
+
+
+## B3 (owner feedback 2026-10-20): whether unit `uid` may change stance manually now. Always in
+## the Setup Phase (rule 01: "Choose stance freely in Main Phase 1"); in the Recovery Phase only
+## a unit summoned in this Recovery Phase, which entered in Attack stance without a choice, so its
+## controller can still pick its initial stance ("the player can change if they wish").
+func can_change_stance(uid: int) -> bool:
+	if phase == PHASE_MAIN1:
+		return true
+	var inst: Dictionary = cards[uid]
+	return phase == PHASE_MAIN2 and inst["summoned_turn"] == turn and String(inst.get("summoned_phase", "")) == PHASE_MAIN2
 
 
 ## Splits an effect's ops into its leading target/mode choices (made cancellable, so they

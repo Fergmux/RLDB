@@ -218,9 +218,8 @@ func test_c028_guardian_of_the_forest_summons_small_beast_into_column() -> void:
 	TB.summon(m, 0, 28, 0)
 	TB.choose_uids(m, [ff])
 	TB.choose(m, [TB.slot_label(3)])        # the only free zone is still offered to the player
-	TB.choose(m, ["Defense"])
 	assert_int(m.cards[ff]["slot"]).is_equal(3)
-	assert_str(m.cards[ff]["stance"]).is_equal("def")
+	assert_str(m.cards[ff]["stance"]).is_equal("atk")   # B3: own Setup Phase, no stance prompt
 
 
 func test_c029_sweeper_reveals_then_destroys_revealed_trap() -> void:
@@ -293,8 +292,8 @@ func test_c036_dante_revives_next_turn_for_one_ap() -> void:
 		m.submit(1, {"t": "next_phase"})
 	assert_str(TB.pend_kind(m)).is_equal("slot")      # the only free zone is still offered to the player
 	TB.choose(m, [TB.slot_label(1)])
-	assert_str(TB.pend_kind(m)).is_equal("stance")
-	TB.choose(m, ["Attack"])
+	assert_str(TB.pend_kind(m)).is_not_equal("stance")  # B3: returns in its owner's Setup Phase
+	assert_str(m.cards[dante]["stance"]).is_equal("atk")
 	assert_int(m.cards[dante]["slot"]).is_equal(1)
 	assert_int(m.players[0]["ap"]).is_equal(1)
 

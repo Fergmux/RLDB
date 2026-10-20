@@ -58,10 +58,18 @@ func _op_pick_slot(f: Dictionary, op: Dictionary) -> int:
 		{"placing": int(op.get("for", f["src"]))})
 
 
+## B3 (owner feedback 2026-10-20): whether player `p`, summoning now, is asked Attack or Defense.
+## Only when they could not change the stance afterwards: on the opponent's turn, in the Battle
+## Phase, or in the End Phase. In their own Setup or Recovery Phase the unit enters in Attack
+## stance and the player may change it with the normal stance change (see MatchEngine.validate).
+func stance_choice_open(p: int) -> bool:
+	return p != active or not (phase in [PHASE_MAIN1, PHASE_MAIN2])
+
+
 func _op_pick_stance(f: Dictionary, op: Dictionary) -> int:
 	# `for`: the unit being summoned when it is not the frame's source (Fusion / special summons).
 	var unit: int = int(op.get("for", f["src"]))
-	if has_flag_raw(unit, "no_defense") or op.get("fixed", "") == "atk":
+	if has_flag_raw(unit, "no_defense") or op.get("fixed", "") == "atk" or not stance_choice_open(f["ctl"]):
 		f["vars"][op["as"]] = "atk"
 		return R.CONT
 	if op.get("fixed", "") == "def":

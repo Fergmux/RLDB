@@ -79,8 +79,9 @@ func test_summoning_lesson_places_units_and_stances() -> void:
 	var mage: Dictionary = m.cards[h.keys["p_mage"]]
 	var warrior: Dictionary = m.cards[h.keys["p_warrior"]]
 	assert_int(mage["slot"]).is_equal(1)
-	assert_str(mage["stance"]).is_equal("def")
+	assert_str(mage["stance"]).is_equal("atk")              # B3: summoned in Attack stance
 	assert_int(warrior["slot"]).is_equal(4)
+	assert_str(warrior["stance"]).is_equal("def")           # then switched with To Defense
 	assert_bool(m.is_protected(h.keys["p_warrior"])).is_true()
 	assert_int(m.players[ME]["ap"]).is_equal(0)
 
@@ -118,11 +119,11 @@ func test_extra_deck_lesson_outcome() -> void:
 
 func test_off_script_command_is_refused_and_changes_nothing() -> void:
 	var h := _host(1)
-	h.next_step()                                            # to "Summon in Attack stance"
+	h.next_step()                                            # to "Summon a unit"
 	var before := _snap(h)
 	var hints := []
 	h.hint.connect(func(t): hints.append(t))
-	h.handle(ME, {"t": "summon", "uid": h.keys["p_mage"], "stance": "def"})     # wrong stance
+	h.handle(ME, {"t": "summon", "uid": h.keys["p_mage"], "stance": "def"})     # Defense: off script (B3)
 	h.handle(ME, {"t": "summon", "uid": h.keys["p_warrior"], "stance": "atk"})  # wrong card
 	h.handle(ME, {"t": "next_phase"})
 	h.handle(ME, {"t": "concede"})
@@ -130,7 +131,7 @@ func test_off_script_command_is_refused_and_changes_nothing() -> void:
 	assert_int(h.refused).is_equal(4)
 	assert_int(hints.size()).is_equal(4)
 	# The expected command still works afterwards; the wrong zone is refused too.
-	h.handle(ME, {"t": "summon", "uid": h.keys["p_mage"], "stance": "atk"})
+	h.handle(ME, {"t": "summon", "uid": h.keys["p_mage"]})
 	assert_str(h.game().pending.get("kind", "")).is_equal("slot")
 	var slot_snap := _snap(h)
 	var pd := h.game().pending
@@ -158,7 +159,8 @@ func test_only_the_expected_action_is_offered() -> void:
 	var oks: Array = h.seats[ME].last_view["match"]["actions"].filter(func(a): return a["ok"])
 	assert_int(oks.size()).is_equal(1)
 	assert_int(oks[0]["uid"]).is_equal(h.keys["p_mage"])
-	assert_str(oks[0]["stance"]).is_equal("atk")
+	assert_str(String(oks[0]["label"])).is_equal("Summon")
+	assert_bool(oks[0].has("stance")).is_false()
 
 
 func test_restart_restores_the_initial_state() -> void:
@@ -279,7 +281,7 @@ func test_ritual_lesson_refuses_off_script_commands() -> void:
 	var h := _host(TutorialLessons.index_of("ritual"))
 	_play_to(h, "Open the Ritual summon")
 	var before := _snap(h)
-	h.handle(ME, {"t": "ritual", "uid": h.keys["p_null"], "stance": "def"})   # wrong stance
+	h.handle(ME, {"t": "ritual", "uid": h.keys["p_null"], "stance": "def"})   # Defense: off script (B3)
 	h.handle(ME, {"t": "next_phase"})
 	h.handle(ME, {"t": "summon", "uid": h.keys["p_hand0"], "stance": "atk"})
 	assert_array(_snap(h)).is_equal(before)

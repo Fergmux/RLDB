@@ -54,7 +54,7 @@ func test_summon_arrow_starts_at_the_hand_card_after_a_sacrifice() -> void:
 	_act(sac, "sacrifice")
 	await _settle()
 	assert_str(CF.zone(m, sac)).is_equal("spent")
-	_act(h, "summon", "atk")
+	_act(h, "summon")
 	await _settle()
 	assert_str(String(gs.pending().get("kind", ""))).is_equal("slot")
 	assert_int(gs.targeting.source_uid()).is_equal(h)
@@ -145,7 +145,7 @@ func test_fusion_material_arrow_starts_at_the_fusion_unit_not_a_material() -> vo
 	m.players[p]["ap"] = 3
 	host.broadcast()
 	await _settle()
-	_act(tt, "summon", "atk")
+	_act(tt, "summon")
 	await _settle()
 	TB.choose(m, ["Back row, column 1"])
 	TB.choose(m, ["Yes"])

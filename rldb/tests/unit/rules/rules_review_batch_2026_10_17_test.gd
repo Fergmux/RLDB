@@ -87,23 +87,24 @@ func _state(m: MatchEngine) -> Dictionary:
 
 
 func test_review_ritual_cancel_each_step_then_commit() -> void:
-	for k in 4:
+	# B3: no stance prompt in the Setup Phase, so the zone commits and the unit enters in Attack.
+	for k in 3:
 		var m := TB.make()
 		var mimic := TB.card(m, 0, 95, "extra")               # Mimic 2R
 		var mat := TB.unit(m, 0, TB.WATER, 0)
 		m.apply_status(mat, "rune", 2)
 		var before := _state(m)
 		assert_str(m.submit(0, {"t": "ritual", "uid": mimic})).is_empty()
-		var answers := [mat, 0, 1]
-		for i in mini(k, 3):
+		var answers := [mat, 0]
+		for i in mini(k, 2):
 			assert_str(_answer(m, answers[i])).override_failure_message("step %d" % i).is_empty()
-		if k < 3:
+		if k < 2:
 			assert_bool(m.pending.get("cancellable", false)).override_failure_message("ritual step %d" % k).is_true()
 			assert_str(m.submit(0, {"t": "cancel", "id": m.pending["id"]})).is_empty()
 			assert_dict(_state(m)).override_failure_message("ritual cancel %d" % k).is_equal(before)
 		else:
 			assert_str(m.cards[mimic]["zone"]).is_equal("unit")
-			assert_str(m.cards[mimic]["stance"]).is_equal("def")
+			assert_str(m.cards[mimic]["stance"]).is_equal("atk")
 			assert_str(m.cards[mat]["zone"]).is_equal("spent")
 
 
@@ -125,11 +126,15 @@ func test_review_arcane_cancel_each_step_then_exact_commit() -> void:
 			assert_dict(_state(m)).is_equal(before)
 			continue
 		assert_str(_answer_many(m, [a, b])).is_empty()
-		if k >= 2:
-			assert_str(_answer(m, 1)).is_empty()
+		if k == 2:
+			assert_bool(m.pending.get("cancellable", false)).is_true()   # the zone choice
+			assert_str(m.submit(0, {"t": "cancel", "id": m.pending["id"]})).is_empty()
+			assert_dict(_state(m)).is_equal(before)
+			continue
 		if k >= 3:
-			assert_str(_answer(m, 0)).is_empty()
+			assert_str(_answer(m, 1)).is_empty()                  # the zone commits (B3: no stance)
 			assert_str(m.cards[tyde]["zone"]).is_equal("unit")
+			assert_str(m.cards[tyde]["stance"]).is_equal("atk")
 			assert_str(m.cards[a]["zone"]).is_equal("exhaust")
 			assert_str(m.cards[b]["zone"]).is_equal("exhaust")
 			assert_str(m.cards[two]["zone"]).is_equal("spent")
@@ -210,7 +215,7 @@ func test_review_magentric_bonus_through_tag_team_s_trigger() -> void:
 	var dr := TB.unit(m, 0, 2, 1)                              # Dragon
 	var wyrm := TB.card(m, 0, 93, "extra")                     # Bastion Wyrm: Beast + Dragon
 	TB.summon(m, 0, 8, 0)                                      # Tag Team - S in front of Magentric
-	for v in [1, wyrm, mag, dr, 1, 0]:
+	for v in [1, wyrm, mag, dr, 1]:
 		assert_str(_answer(m, v)).is_empty()
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 	assert_int(m.status_count(wyrm, "pierce")).is_equal(2)

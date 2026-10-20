@@ -92,7 +92,7 @@ func _create_instance(def_id: int, owner: int) -> int:
 		"uid": uid, "id": def_id, "owner": owner, "ctl": owner,
 		"zone": "draw", "slot": -1, "face_up": false, "stance": "atk",
 		"st": {}, "runes": 0, "mods": [], "cost_p": 0, "cost_t": [],
-		"summoned_turn": -1, "attacked_turn": -1, "moved_turn": -1, "opt": {},
+		"summoned_turn": -1, "summoned_phase": "", "attacked_turn": -1, "moved_turn": -1, "opt": {},
 		"type_o": null, "race_o": null, "base_atk": null, "base_def": null,
 		"orig_slot": -1, "control_until": -1, "set_turn": -1,
 	}
@@ -794,6 +794,9 @@ func place_unit(uid: int, p: int, slot: int, stance: String) -> void:
 	inst["stance"] = stance
 	inst["face_up"] = true
 	inst["summoned_turn"] = turn
+	# B3 (owner feedback 2026-10-20): a unit summoned in its controller's Recovery Phase may still
+	# change stance in that phase (it entered in Attack stance without a choice).
+	inst["summoned_phase"] = phase
 	players[p]["units"][slot] = uid
 
 
