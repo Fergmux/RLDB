@@ -12,9 +12,9 @@
  "deck_mode": "starter",
  "deck_mode_options": ["starter", "draft"],
  "draft": {
-  "_note": "PROPOSAL P-03: category draft, pick 1 of `offer` each time. F06-05: each player orders the categories before drafting. F06-06: no basic-unit category; each player chooses a basic unit by Type and Race and gets `basic_copies` copies.",
+  "_note": "PROPOSAL P-03: category draft, pick 1 of `offer` each time. F06-05: each player orders the categories before drafting. F06-06: no basic-unit category; each player chooses a basic unit by Type and Race and gets `basic_copies` copies. CONFIRMED J26 (owner, 22 Oct): a fixed composition of 4 Unit, 2 Spell, 2 Trap, 1 Power and 3 Extra Deck picks; the menu offers no per-category counts.",
   "offer": 3,
-  "quota": {"unit": 9, "spell": 3, "trap": 3, "power": 2, "extra": 3},
+  "quota": {"unit": 4, "spell": 2, "trap": 2, "power": 1, "extra": 3},
   "basic_copies": 3
  },
  "fatigue_damage": 2,

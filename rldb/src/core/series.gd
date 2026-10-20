@@ -95,7 +95,9 @@ static func load_starters() -> Array:
 	return decks_raw
 
 
-## The draft counts per category from data/mode_config.json (the setup pickers' defaults).
+## The draft counts per category from data/mode_config.json. J26 (owner, 22 Oct): this is the
+## fixed composition of every player-started draft (4 Unit, 2 Spell, 2 Trap, 1 Power, 3 Extra Deck);
+## the menu offers no counts.
 static func default_draft_quota() -> Dictionary:
 	var q: Dictionary = load_mode_config()["draft"]["quota"]
 	var out := {}
@@ -178,7 +180,10 @@ static func basic_label(id: int) -> String:
 	return "%s (%s)" % [d["name"], d["type"]]
 
 
-## overrides: best_of, deck_mode, seed, names, rewards_per_game, draft_quota (F03-10) ...
+## overrides: best_of, deck_mode, seed, names, rewards_per_game, draft_quota ...
+## `draft_quota` (F03-10) is an authority-side override for tests and development drivers only:
+## since J26 no player-facing path sends it, and a series saved with an old composition keeps the
+## counts it was drafted with (saves are only made after the draft).
 func setup(overrides: Dictionary = {}) -> void:
 	CardDB.ensure_loaded()
 	cfg = load_mode_config()

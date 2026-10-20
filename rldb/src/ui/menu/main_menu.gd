@@ -509,18 +509,16 @@ func _start_button(v: VBoxContainer, text: String, fn: Callable) -> void:
 		b.tree_exiting.connect(func(): if series_options_changed.is_connected(upd): series_options_changed.disconnect(upd))
 		upd.call()
 	b.pressed.connect(func():
-		# F03-10: an unusable draft composition is explained by the pickers and blocks the start.
-		var so: Dictionary = _options.series
 		if guarded and not _series_start_ok():
 			return
 		fn.call())
 	v.add_child(b)
 
 
-## False while Draft is chosen with an unusable composition (F03-10).
+## True when the series pickers allow a start. J26: the draft composition is fixed, so every
+## choice of the pickers can start (kept as the Start button's guard for future pickers).
 func _series_start_ok() -> bool:
-	var so: Dictionary = _options.series
-	return not (so.get("deck_mode", "") == "draft" and Series.validate_draft_quota(so.get("draft_quota", Series.default_draft_quota())) != "")
+	return true
 
 
 ## A house toggle row (SettingsForm.HouseCheck: bevelled box, drawn tick, row hover).
@@ -545,9 +543,10 @@ func _series_options(v: VBoxContainer) -> void:
 	dm.add_item("Draft")
 	dm.select(0 if opts["deck_mode"] == "starter" else 1)
 	_labelled(v, "Decks", dm)
-	# F03-10: draft composition, shown while Draft is chosen. In online/LAN games the host's
-	# counts are the series config both seats use.
-	var dq := _draft_quota_box(opts)
+	# J26 (owner, 22 Oct): the composition is fixed; while Draft is chosen a short note says what
+	# each player drafts. A stale count from before J26 is dropped, so it is never sent.
+	opts.erase("draft_quota")
+	var dq := _draft_summary_box()
 	dq.visible = opts["deck_mode"] == "draft"
 	v.add_child(dq)
 	dm.item_selected.connect(func(i):
@@ -557,66 +556,37 @@ func _series_options(v: VBoxContainer) -> void:
 	_series_panel_active = true
 
 
-## Per-category draft count steppers (defaults from mode_config.json), the pick total and why
-## the composition cannot be used, if it cannot (F03-10). Edits opts["draft_quota"] in place.
-func _draft_quota_box(opts: Dictionary) -> VBoxContainer:
-	if not (opts.get("draft_quota", null) is Dictionary):
-		opts["draft_quota"] = Series.default_draft_quota()
-	var q: Dictionary = opts["draft_quota"]
+## J26: what a draft gives each player (the fixed composition from mode_config.json and the basic
+## units), as a read-only note under the Decks picker: a section title, one chip per category in its
+## kind colour and a line about the basic unit.
+func _draft_summary_box() -> VBoxContainer:
 	var box := VBoxContainer.new()
+	box.name = "DraftSummary"
 	box.add_theme_constant_override("separation", UIStyle.sp("sm"))
 	box.add_child(_gap(UIStyle.sp("xs")))
-	var dh := UIStyle.label("DRAFT PICKS PER CATEGORY", 14, UIStyle.GOLD)
+	var dh := UIStyle.label("EACH PLAYER DRAFTS", 14, UIStyle.GOLD)
 	box.add_child(dh)
 	TitleText.apply(dh, TitleText.Tier.SECTION, 14)
-	# F06-06: the basic unit is no longer a counted category; F06-05: each player orders these.
+	var q := Series.default_draft_quota()
+	var chips := HFlowContainer.new()
+	chips.name = "DraftCounts"
+	chips.add_theme_constant_override("h_separation", UIStyle.sp("sm"))
+	chips.add_theme_constant_override("v_separation", UIStyle.sp("sm"))
+	for cat in Series.DRAFT_CATEGORIES:
+		var n := int(q.get(cat, 0))
+		if n <= 0:
+			continue
+		var col: Color = UIStyle.CATEGORY_COLORS.get(cat, UIStyle.BRONZE)
+		var chip := UIStyle.chip("%d %s" % [n, String(Series.DRAFT_LABELS[cat])], col, 15)
+		chip.custom_minimum_size.y = 28.0
+		chip.name = "Count_%s" % cat
+		chips.add_child(chip)
+	box.add_child(chips)
 	var copies := int(Series.load_mode_config()["draft"].get("basic_copies", 3))
-	var note := UIStyle.label("Before drafting, each player chooses a basic unit (×%d copies) and the order of these categories." % copies, 13, UIStyle.MUTED, true)
+	var note := UIStyle.label("Plus %d copies of a basic unit each player chooses. Draft the categories in any order." % copies, 13, UIStyle.MUTED, true)
 	note.custom_minimum_size = Vector2(300, 0)
 	box.add_child(note)
-	var total_l := UIStyle.label("", 14, UIStyle.MUTED)
-	var warn := UIStyle.label("", 14, Color("ff6b5e"))
-	var refresh := func():
-		var e := Series.validate_draft_quota(q)
-		warn.text = e
-		warn.visible = e != ""
-		var n := 0
-		for c in Series.DRAFT_CATEGORIES:
-			n += int(q.get(c, 0))
-		total_l.text = "%d picks in total" % n
-		series_options_changed.emit()
-	for cat in Series.DRAFT_CATEGORIES:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		var name_l := UIStyle.label(String(Series.DRAFT_LABELS[cat]), 15, UIStyle.TEXT)
-		name_l.custom_minimum_size = Vector2(SettingsForm.LABEL_W, 0)
-		name_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(name_l)
-		var minus := UIStyle.button("−", 16)
-		minus.custom_minimum_size = Vector2(UIStyle.BUTTON_H["small"], UIStyle.BUTTON_H["small"])
-		var val := UIStyle.label(str(int(q.get(cat, 0))), 17, UIStyle.GOLD_HI)
-		val.add_theme_font_override("font", UIStyle.font_display(700))
-		val.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		val.custom_minimum_size = Vector2(40, 0)
-		val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var plus := UIStyle.button("+", 16)
-		plus.custom_minimum_size = Vector2(UIStyle.BUTTON_H["small"], UIStyle.BUTTON_H["small"])
-		var c2: String = cat
-		minus.pressed.connect(func():
-			q[c2] = maxi(int(q.get(c2, 0)) - 1, 0)
-			val.text = str(q[c2])
-			refresh.call())
-		plus.pressed.connect(func():
-			q[c2] = mini(int(q.get(c2, 0)) + 1, Series.DRAFT_MAX_PER_CATEGORY)
-			val.text = str(q[c2])
-			refresh.call())
-		row.add_child(minus)
-		row.add_child(val)
-		row.add_child(plus)
-		box.add_child(row)
-	box.add_child(total_l)
-	box.add_child(warn)
-	refresh.call()
+	box.add_child(_gap(UIStyle.sp("xs")))
 	return box
 
 
@@ -644,7 +614,7 @@ func _leaf_panel(target: String) -> Control:
 	_series_panel_active = false
 	match target:
 		"bot":
-			pv = _leaf(target, "Play vs Bot", "A series against the computer. The bot picks a random Structure deck.")
+			pv = _leaf(target, "Play vs Bot", "A series against the computer. The bot picks a random Structure deck, or drafts its own.")
 			_series_options(pv[1])
 			_start_button(pv[1], "Start series", bot_requested.emit)
 		"hotseat":

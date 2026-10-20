@@ -290,7 +290,7 @@ func _draft_phase() -> void:
 		host.handle(0, {"t": "draft_pick", "index": 0})
 		guard += 1
 	await _frames(10)
-	_check("F06 seat 0 deck drafted", host.series.deck_ready[0] and host.series.decks[0].size() == 23, str(host.series.decks[0].size()))
+	_check("F06 seat 0 deck drafted", host.series.deck_ready[0] and host.series.decks[0].size() == 15, str(host.series.decks[0].size()))
 	_check("F06-06 three chosen basics", host.series.decks[0].count(Series.basic_for("Dark", "Dragon")) == 3)
 	_view_seat(0)        # hot-seat follows the seat that still has to act; look at seat 0's wait
 	await _frames(6)

@@ -138,7 +138,7 @@ func test_draft_builds_deck_from_category_quotas() -> void:
 			assert_str(s.submit(p, {"t": "draft_pick", "index": 0})).is_empty()
 			guard += 1
 	assert_str(s.stage).is_equal(Series.STAGE_GAME)
-	assert_int(s.decks[0].size()).is_equal(23)   # 3 basic copies + 17 picks + 3 extra
+	assert_int(s.decks[0].size()).is_equal(15)   # J26: 3 basic copies + 9 main picks + 3 extra
 
 
 func _draft_all(s: Series) -> void:
