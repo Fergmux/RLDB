@@ -202,7 +202,10 @@ func render() -> void:
 	if not c.is_empty():
 		for a in gs.mv.get("actions", []):
 			if a.get("uid", -1) == duid and not a["ok"] and a.get("reason", "") != "":
-				notes.append("Cannot %s: %s" % [String(a["label"]).to_lower(), a["reason"]])
+				var verb := String(a["label"]).to_lower()
+				if verb.begins_with("to "):
+					verb = "change " + verb   # stance labels: "To Defense" -> "change to defense"
+				notes.append("Cannot %s: %s" % [verb, a["reason"]])
 	var uid_key := duid if not c.is_empty() else -1
 	var sig := "%d|%d|%d" % [uid_key, hash(c), hash(notes)]
 	if sig == details_sig:
