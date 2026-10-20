@@ -25,7 +25,7 @@ BUILD = {"fusion": "fusion_vortex", "ritual": "ritual_choir"}
 HIT = {"fusion": "fusion_impact", "ritual": "ritual_impact"}
 ARCANE = {"build": "arcane_shimmer", "hit": "arcane_impact"}
 # The set pieces under test.
-KINDS = ("ritual",)
+KINDS = ("fusion", "ritual")
 
 
 def _load(name):

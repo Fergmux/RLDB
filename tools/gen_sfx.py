@@ -782,32 +782,84 @@ def s_arcane_impact(r):
     return finish(taper(x, 0.7), rev=False)
 
 
-def s_fusion_vortex(r):
-    """D8 Fusion anticipation: a vortex whoosh that spins faster (rising tremolo) and climbs in pitch."""
-    sec = 0.85
+def _brass_voice(f0, f1, glide_s, sec, start_s, attack_s, decay_s, bright, cents=0.0, phase=0.0, partials=10):
+    """H29: a brass-like voice: additive partials (1/k) behind a 'lip' brightness that opens and closes,
+    so it blooms 'bwaah' instead of hitting. Glides f0 -> f1 over `glide_s` (exponential), enters at
+    `start_s` with a raised-cosine attack and decays exponentially. `bright(t)` gives the roll-off
+    (about 1 = mellow, 6 = blazing) at time t after the start. Partials above 8 kHz are left out."""
     n = n_samples(sec)
-    wind = bandpass_sweep(noise(r, sec), 250.0, 3200.0, q=2.2)
+    out = [0.0] * n
+    s0, na = n_samples(start_s), max(1, n_samples(attack_s))
+    k_det = 2.0 ** (cents / 1200.0)
+    ph = phase
+    ng = max(1, n_samples(glide_s))
+    for i in range(s0, n):
+        j = i - s0
+        f = (f0 * (f1 / f0) ** min(1.0, j / ng)) * k_det
+        ph += TWO_PI * f / SR
+        q = math.exp(-1.0 / max(0.3, bright(j / SR)))
+        a, v = 1.0, 0.0
+        for k in range(1, partials + 1):
+            if f * k > 8000.0:
+                break
+            v += a * math.sin(ph * k) / k
+            a *= q
+        g = math.exp(-j / SR / decay_s)
+        if j < na:
+            g *= 0.5 - 0.5 * math.cos(math.pi * j / na)
+        out[i] = v * g
+    return out
+
+
+def s_fusion_vortex(r):
+    """D8 / H29 Fusion anticipation: two forces drawn together. Two brass-like tones, G2 rising and F3
+    falling, glide into one C3 unison just before the climax (0.78 s), beating faster as they close and
+    opening from mellow to blazing; a swirling vortex of wind spins faster around them and a C2 sub rises
+    underneath. Everything swells to 0.72 s and then draws in, a breath before the forge blooms."""
+    sec = 0.92
+    climax = 0.72
+    n, nc = n_samples(sec), n_samples(climax)
+    sw = [((i / nc) ** 1.8) if i < nc else math.exp(-(i - nc) / SR / 0.045) for i in range(n)]
+    bright = lambda t: 1.2 + 4.3 * min(1.0, t / climax) ** 1.5
+    a = _brass_voice(98.0, 130.81, climax, sec, 0.0, 0.2, 9.0, bright, 0.0, r.uniform(0, TWO_PI))
+    b = _brass_voice(174.61, 130.81, climax, sec, 0.0, 0.2, 9.0, bright, 2.0, r.uniform(0, TWO_PI))
+    sub = sweep(49.0, 65.41, sec)
+    wind = lowpass(bandpass_sweep(noise(r, sec), 300.0, 2000.0, q=3.0), 3000.0)
     ph = 0.0
     rot = []
     for i in range(n):
         u = i / n
-        ph += TWO_PI * (4.0 + 20.0 * u * u) / SR
+        ph += TWO_PI * (3.0 + 11.0 * u * u) / SR
         rot.append(0.55 + 0.45 * math.sin(ph))
-    env = [(i / n) ** 1.6 for i in range(n)]
-    tones = mix(sweep(80.0, 320.0, sec), scale(sweep(120.0, 480.0, sec), 0.6))
-    x = softclip(mix(scale(mul(mul(wind, rot), env), 1.6), scale(mul(tones, env), 0.5)), 2.2)
-    return finish(x, tail_kw=dict(wet=0.3, extra_s=0.1, delay_s=0.04))
+    x = taper(mix(scale(mul(mix(a, b), sw), 0.6), scale(mul(sub, sw), 0.12), scale(mul(mul(wind, rot), sw), 1.1)), 0.1)
+    x = hall(x, wet=0.3, predelay_s=0.015, rt60=1.2, damp=4500.0, extra_s=0.25)
+    x = smooth_limit(x, 4.0)
+    return finish(taper(x, 0.22), rev=False)
 
 
 def s_fusion_impact(r):
-    """D8 Fusion climax: the core implodes (a quick suck) and explodes: sub, crack, a shimmering metal cluster."""
-    suck = mul(sweep(1400.0, 180.0, 0.07), [(i / n_samples(0.07)) ** 2 for i in range(n_samples(0.07))])
-    sub = mul(sweep(115.0, 30.0, 0.9), env_exp(n_samples(0.9), 0.3, 0.002))
-    crack = mul(lowpass(noise(r, 0.2), 4200), env_exp(n_samples(0.2), 0.035, 0.0005))
-    metal = mix(scale(bell(880.0, 1.1, 0.32), 0.6), scale(bell(1331.0, 1.1, 0.26), 0.45), scale(bell(1769.0, 1.0, 0.2), 0.35))
-    rumble = mul(lowpass2(noise(r, 1.0), 300), env_exp(n_samples(1.0), 0.32, 0.01))
-    hit = softclip(mix(scale(sub, 1.1), scale(crack, 0.8), scale(metal, 0.7), scale(rumble, 1.1)), 2.2)
-    return finish(mix(scale(suck, 0.5), (0.07, hit)), tail_kw=dict(wet=0.42, extra_s=0.35, delay_s=0.055))
+    """D8 / H29 Fusion climax: the forces forge into one. A low brass C major chord (C2-C3-G3-C4-E4, the
+    unison the build-up converged on) blooms open with a 45 ms swell and mellows as it rings, over a deep
+    soft-mallet boom; a heroic fifth (G4-C5) rises out of it and a forge glint sparks on top. A warm hall,
+    no crack, no soft-clip."""
+    sec = 2.0
+    bloom = lambda t: 2.0 + 5.0 * (min(1.0, t / 0.08) if t < 0.08 else math.exp(-(t - 0.08) / 0.5))
+    chord = [0.0] * n_samples(sec)
+    for f, st, amp, dec in ((65.41, 0.0, 0.4, 1.2), (130.81, 0.0, 0.8, 1.1), (196.0, 0.01, 0.7, 1.0),
+                            (261.63, 0.02, 0.65, 0.9), (329.63, 0.03, 0.55, 0.8)):
+        for c in (-5.0, 5.0):
+            chord = mix(chord, scale(_brass_voice(f, f, 0.0, sec, st, 0.045, dec, bloom, c, r.uniform(0, TWO_PI)), amp * 0.5))
+    horn = lambda t: 1.2 + 1.8 * min(1.0, t / 0.2)
+    rise = mix(_brass_voice(392.0, 392.0, 0.0, sec, 0.12, 0.18, 0.7, horn, 0.0, r.uniform(0, TWO_PI)),
+               scale(_brass_voice(523.25, 523.25, 0.0, sec, 0.16, 0.18, 0.65, horn, 3.0, r.uniform(0, TWO_PI)), 0.8))
+    glint = taper(tone(1046.5, 0.9, 0.3, ((1, 0.12), (2.4, 0.05), (3.9, 0.03)), 0.006), 0.3)
+    nb = n_samples(1.4)
+    boom = taper(mul(sweep(72.0, 41.0, 1.4), [(0.5 - 0.5 * math.cos(math.pi * min(1.0, i / n_samples(0.012)))) * math.exp(-i / SR / 0.4)
+                                              for i in range(nb)]), 0.4)
+    x = mix(scale(taper(chord, 0.6), 1.0), scale(taper(rise, 0.6), 0.5), scale(glint, 1.0), scale(boom, 0.45))
+    x = hall(x, wet=0.45, predelay_s=0.02, rt60=2.0, damp=4500.0, extra_s=0.4)
+    x = smooth_limit(x, 5.0)
+    return finish(taper(x, 0.7), rev=False)
 
 
 def s_card_slam(r):
@@ -1039,13 +1091,14 @@ PEAK = {"chat": -12.0, "click_primary": -11.0, "click_secondary": -12.0, "back":
         # this + card_slam) at about -1.4 dBFS (the old one: -2).
         "arcane_impact": -4.5,
         # H29: the same rule for the other two set pieces. Each climax sits within 1 LU of arcane_impact and
-        # each build-up within 1 LU of arcane_shimmer (loudest 400 ms, K-weighted).
-        "ritual_choir": -4.5, "ritual_impact": -5.0}
+        # each build-up within 1 LU of arcane_shimmer (loudest 400 ms, K-weighted); the low brass of Fusion
+        # needs the most peak for the same loudness.
+        "fusion_vortex": -5.0, "fusion_impact": -3.5, "ritual_choir": -4.5, "ritual_impact": -5.0}
 
 
 # Hard duration caps (seconds); longer renders are trimmed and re-faded.
 MAX_LEN = {"boom": 1.6, "charge": 1.4, "victory_big": 2.6, "exhaust": 1.3, "fuse": 1.3, "ritual": 1.4, "arcane": 1.3, "victory": 1.4, "defeat": 1.4, "turn": 0.9, "heal": 0.9, "summon": 0.8,
-           "fusion_vortex": 1.0, "fusion_impact": 1.8, "ritual_choir": 2.0, "ritual_impact": 2.9, "arcane_shimmer": 1.4,
+           "fusion_vortex": 1.3, "fusion_impact": 2.6, "ritual_choir": 2.0, "ritual_impact": 2.9, "arcane_shimmer": 1.4,
            "arcane_impact": 2.4, "card_slam": 0.6, "serpent_coil": 1.6, "serpent_strike": 1.6, "sacrifice": 1.2,
            "ap_gain": 0.6, "ap_loss": 0.45,
            "ui_hover": 0.12, "panel_open": 0.55, "panel_close": 0.35, "tab": 0.2, "toggle_on": 0.16, "toggle_off": 0.16,
