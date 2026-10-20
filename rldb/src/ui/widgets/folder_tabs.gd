@@ -58,7 +58,7 @@ func _init() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	_strip = HBoxContainer.new()
-	_strip.add_theme_constant_override("separation", 0)
+	_strip.add_theme_constant_override("separation", 18)
 	add_child(_strip)
 	_tabs_box = HBoxContainer.new()
 	_tabs_box.add_theme_constant_override("separation", int(tab_gap))

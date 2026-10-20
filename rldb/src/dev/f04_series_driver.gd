@@ -29,6 +29,12 @@ func run(main_node: Node, dir: String) -> void:
 	var gs: GameScreen = main.screen
 	var ov: GameSeriesOverlay = gs.overlays
 	await _shot("series_01_structured")
+	# F3: the closed tab's hover glow (the tab is driven directly: the real pointer is not over the window).
+	var custom_tab := ov.decks.tab_widget.tab("custom")
+	custom_tab.glow = 1.0
+	await _frames(3)
+	await _shot("series_01b_tab_hover")
+	custom_tab.glow = 0.0
 	_f01_rect = Rect2(ov.overlay.position, ov.overlay.size)
 	ov.deck_open["s0"] = true
 	ov.refresh()
