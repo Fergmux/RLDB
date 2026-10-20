@@ -18,9 +18,12 @@ var gs: GameScreen
 var details_title: Label
 ## Scroll area holding the card details.
 var details_scroll: ScrollContainer
+## The plain frame holding the details scroll and its overlaid scroll cue (J5); it follows the
+## scroll's visibility.
+var details_frame: Control
 ## Card details widget.
 var details_view: CardDetailsPanel
-## Fade cue shown when the details have more to scroll.
+## Fade cue over the bottom of the details while they have more to scroll (an overlay, J5).
 var scroll_cue: ScrollCue
 ## Own pile shown as a scrollable list in the details panel (instead of a board overlay).
 var pile_scroll: ScrollContainer
@@ -72,7 +75,7 @@ static func art_crop_height(scroll_h: float) -> float:
 ## Shows the illustrated empty state (`on`) or the card details scroll.
 func _set_empty(on: bool) -> void:
 	empty_art.visible = on
-	details_scroll.size_flags_vertical = Control.SIZE_FILL if on else Control.SIZE_EXPAND_FILL
+	details_frame.size_flags_vertical = Control.SIZE_FILL if on else Control.SIZE_EXPAND_FILL
 
 
 ## Builds the details panel into the sidebar column and returns it.
@@ -106,18 +109,20 @@ func build(col: VBoxContainer) -> PanelContainer:
 	room.add_theme_constant_override("margin_right", UIStyle.CONTENT_FLOOR)
 	pile_scroll.add_child(room)
 	details_scroll = ScrollContainer.new()
+	details_scroll.name = "DetailsScroll"
 	details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dv.add_child(details_scroll)
 	details_view = CardDetailsPanel.new()
 	details_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	details_view.art_crop = true   # #43
 	details_scroll.add_child(details_view)
+	# J5: the cue lies over the bottom of the details (not under them), so nothing jumps as it fades.
+	scroll_cue = ScrollCue.new()
+	details_frame = scroll_cue.wrap(details_scroll)
+	dv.add_child(details_frame)
 	empty_art = DetailsEmptyArt.new()   # #42
 	empty_art.visible = false
 	dv.add_child(empty_art)
-	scroll_cue = ScrollCue.new()
-	dv.add_child(scroll_cue)
 	var vb := details_scroll.get_v_scroll_bar()
 	vb.changed.connect(_update_scroll_cue)
 	vb.value_changed.connect(func(_v): _update_scroll_cue())
@@ -132,7 +137,7 @@ func _update_scroll_cue() -> void:
 	# The cue follows the card details only: never over the illustrated empty state (#42), nor under
 	# a pile or draft list (the empty "Your draft (0)" list showed it).
 	scroll_cue.set_shown(more and details_scroll.visible and not empty_art.visible)
-	scroll_cue.queue_redraw()
+	scroll_cue.place()
 
 
 ## Visible card view by uid anywhere in the match (or offered in the pile tray), or {}.
