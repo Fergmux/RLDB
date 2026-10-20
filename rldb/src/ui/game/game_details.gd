@@ -304,7 +304,7 @@ func render_pile_list() -> void:
 	var drafting := pile_zone == DRAFT_ZONE
 	var cards: Array
 	if drafting:
-		cards = gs.view.get("draft", {}).get("picked", []).map(func(c): return MatchView.summary_view(c))
+		cards = draft_views(gs.view.get("draft", {}).get("picked", []))
 	else:
 		var key := "draw_inspect" if pile_zone == "draw" else pile_zone
 		cards = gs.pv(gs.me()).get(key, [])
@@ -335,9 +335,15 @@ func render_pile_list() -> void:
 		# #59: one engraved card slot per pick of the draft; the slots fill (in the picked card's
 		# kind colour) as the draft goes, so progress is visible and the column never sits empty.
 		var dr: Dictionary = gs.view.get("draft", {})
+		# J29 (owner, 22 Oct): the filled slots show the drafted cards themselves, with the duel's
+		# card tooltip; right-click inspects one, and the newest pick lifts into its slot.
 		var slots := DraftSlots.new()
 		slots.name = "DraftSlots"
-		slots.setup(int(dr.get("total", cards.size())), cards.map(func(c): return String(c.get("category", "unit"))))
+		slots.setup(int(dr.get("total", cards.size())), cards, cards.size() > _draft_shown)
+		_draft_shown = cards.size()
+		for w in slots.cards:
+			if w != null:
+				(w as CardWidget).right_pressed.connect(gs.inspect.inspect_widget)
 		pile_list.add_child(slots)
 	elif cards.is_empty():
 		pile_list.add_child(UIStyle.label("Empty.", 14, UIStyle.MUTED))
@@ -350,6 +356,23 @@ func render_pile_list() -> void:
 	pile_scroll.set_deferred("scroll_vertical", keep)
 	if sel_row != null:
 		_reveal_pile_row.call_deferred(sel_row)
+
+
+## Picks the draft list last showed (a new one lifts into its slot, J29).
+var _draft_shown: int = 0
+
+
+## J28 (owner, 22 Oct): the drafted cards as full definition views (MatchView.def_view), so the
+## draft list's rows and tooltips carry exactly what the duel's pile rows do: the kind, the cost,
+## Race and Type, a Fusion's materials, keywords and abilities. Each pick gets its own uid (two
+## copies of one card stay two rows). `picked` holds Series.card_summary entries.
+static func draft_views(picked: Array) -> Array:
+	var out := []
+	for i in picked.size():
+		var v := MatchView.def_view(int(picked[i].get("id", -1)))
+		v["uid"] = -3000 - i
+		out.append(v)
+	return out
 
 
 ## Scrolls the list so the selected row, including its action buttons, is fully visible.

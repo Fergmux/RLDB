@@ -106,6 +106,7 @@ func test_f06_06_chosen_basic_unit_gives_basic_copies_copies() -> void:
 	assert_int(int(s.view_for(0)["draft"]["basic"]["id"])).is_equal(HEAVENLY_WARRIOR)
 	s.submit(0, {"t": "draft_pick", "index": 0})
 	s.submit(0, {"t": "draft_pick", "index": 0})
+	assert_str(s.submit(0, {"t": "draft_confirm"})).is_empty()   # J30
 	assert_bool(s.deck_ready[0]).is_true()
 	assert_int(s.decks[0].count(HEAVENLY_WARRIOR)).is_equal(copies)
 	assert_int(_basics(s.decks[0]).size()).is_equal(copies)
@@ -118,6 +119,7 @@ func test_basic_unit_can_change_at_any_point_of_the_draft() -> void:
 	assert_str(s.submit(0, {"t": "draft_basic", "basic_type": "Fire", "basic_race": "Dragon"})).is_empty()
 	assert_str(s.submit(0, {"t": "draft_basic", "basic_type": "Light", "basic_race": "Warrior"})).is_empty()
 	assert_str(s.submit(0, {"t": "draft_pick", "index": 0})).is_empty()
+	assert_str(s.submit(0, {"t": "draft_confirm"})).is_empty()   # J30
 	assert_bool(s.deck_ready[0]).is_true()
 	assert_array(_basics(s.decks[0])).is_equal([HEAVENLY_WARRIOR, HEAVENLY_WARRIOR, HEAVENLY_WARRIOR])
 
@@ -161,7 +163,7 @@ func test_categories_are_drafted_in_any_order() -> void:
 		var c: String = CardDB.get_def(picked)["category"]
 		assert_bool(c in Series.EXTRA_CATEGORIES if cat == "extra" else c == cat).override_failure_message("%s from %s" % [c, cat]).is_true()
 		seen.append(cat)
-	assert_bool(s.deck_ready[0]).is_true()
+	assert_bool(s.draft_complete(0)).is_true()   # J30: complete; the deck locks in on confirm
 
 
 func test_switching_category_keeps_its_offer() -> void:
@@ -189,7 +191,7 @@ func test_f06_05_other_seat_offers_are_not_in_the_view() -> void:
 	s.view_for(1)
 	var dv: Dictionary = v0["draft"]
 	assert_array(dv["offer"]).is_not_empty()
-	assert_array(dv["opponent"].keys()).contains_exactly_in_any_order(["setup_done", "step", "total"])
+	assert_array(dv["opponent"].keys()).contains_exactly_in_any_order(["setup_done", "step", "total", "complete"])   # J30: whether it has drafted every card
 	var other_offer: Array = s.draft[1]["offer"]
 	var text := var_to_str(dv["opponent"])
 	for id in other_offer:

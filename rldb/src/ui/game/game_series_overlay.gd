@@ -705,9 +705,12 @@ func _render_spectator(stage: String) -> void:
 			for p in 2:
 				var ready: bool = bool(view["deck_ready"][p])
 				var prog := ""
+				var doing := "choosing"
 				if not ready and dp.size() == 2 and int(dp[p].get("total", 0)) > 0:
 					prog = " (%d / %d picks)" % [int(dp[p]["step"]), int(dp[p]["total"])]
-				chips.append({"text": "%s: %s" % [names[p], "deck ready" if ready else "choosing" + prog], "done": ready})
+					if int(dp[p]["step"]) >= int(dp[p]["total"]):
+						doing = "confirming"   # J30: every card drafted, not yet confirmed
+				chips.append({"text": "%s: %s" % [names[p], "deck ready" if ready else doing + prog], "done": ready})
 		"rewards":
 			title = "Choosing rewards"
 			sub = "Each player picks new cards for their deck. You will see the next duel when it starts."

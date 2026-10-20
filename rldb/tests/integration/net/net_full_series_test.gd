@@ -68,6 +68,8 @@ func _decide(p: int) -> Dictionary:
 					var open: Array = dv["categories"].filter(func(c): return int(dv["left"].get(c, 0)) > 0 and c != dv["category"])
 					if not open.is_empty():
 						return {"t": "draft_category", "category": open[rng.randi_range(0, open.size() - 1)]}
+				if bool(dv.get("complete", false)):
+					return {"t": "draft_confirm"}   # J30: every card drafted, lock the deck in
 				return {"t": "draft_pick", "index": rng.randi_range(0, dv["offer"].size() - 1)}
 			return {"t": "pick_starter", "index": rng.randi_range(0, v["starters"].size() - 1)}
 		"rewards":
