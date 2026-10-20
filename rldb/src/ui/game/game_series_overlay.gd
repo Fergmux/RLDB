@@ -30,8 +30,8 @@ var pause_dim: ColorRect
 var pause_panel: PanelContainer
 ## Content of the pause panel.
 var pause_box: VBoxContainer
-## Dim behind the series overlay.
-var overlay_dim: ColorRect
+## Dim behind the series overlay (the whole window; clicks on the top strip's buttons pass through).
+var overlay_dim: ModalDim
 ## Series-stage modal (rewards, decks, results).
 var overlay: PanelContainer
 ## Content of the series modal.
@@ -79,7 +79,8 @@ func build_pause() -> void:
 
 ## Builds the stage modal (dim + scrolling panel) and the deck popup.
 func build_modals() -> void:
-	overlay_dim = ColorRect.new()
+	overlay_dim = ModalDim.new()
+	overlay_dim.pass_through = gs.menu.over_top_button
 	overlay_dim.color = Color(0, 0, 0, 0.6)
 	overlay_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	overlay_dim.visible = false
@@ -126,11 +127,12 @@ func layout_pause(w: float, h: float) -> void:
 	pause_panel.position = (pause_dim.size - Vector2(PAUSE_W, 160)) / 2.0
 
 
-## Centres the stage modal (and the pile popup) in the left-hand play area.
+## Centres the stage modal (and the pile popup) in the left-hand play area. J15 (owner, 22 Oct): its dim
+## fills the whole window (top strip and sidebar too); the top strip's buttons are raised above it in place.
 func place_modals() -> void:
 	var region := Rect2(0, GameScreen.TOP_H, gs.size.x - gs.sidebar_w, gs.size.y - GameScreen.TOP_H)
-	overlay_dim.position = region.position
-	overlay_dim.size = region.size
+	overlay_dim.position = Vector2.ZERO
+	overlay_dim.size = gs.size
 	var sz := Vector2(minf(_overlay_want.x, region.size.x - 40.0), minf(_overlay_want.y, region.size.y - 24.0))
 	# F01: the content's minimum width follows the window, so a small window never forces the
 	# modal wider than the play area (it would clip); the content scrolls inside instead.
@@ -229,6 +231,19 @@ func render_pause() -> void:
 	leave.pressed.connect(func(): gs.menu.confirm_forfeit(false))
 	foot.add_child(leave)
 	pause_panel.set_deferred("size", Vector2(PAUSE_W, 0))
+
+
+## J15: the series modal's full-window dim. It takes every click (the finished board stays out of reach)
+## except those over the top strip's buttons, which sit above it: Controls take clicks in tree order,
+## not by z_index, so the dim lets those points through itself.
+class ModalDim extends ColorRect:
+	## Callable(global point: Vector2) -> bool: true where a click must reach what is under the dim.
+	var pass_through: Callable
+
+	func _has_point(point: Vector2) -> bool:
+		if not Rect2(Vector2.ZERO, size).has_point(point):
+			return false
+		return not (pass_through.is_valid() and bool(pass_through.call(get_global_transform() * point)))
 
 
 ## "Waiting m:ss" since the pause began (#67), counting up once a second.
@@ -341,6 +356,7 @@ func render() -> void:
 	if stage == "game" or stage == "":
 		overlay.visible = false
 		overlay_dim.visible = false
+		gs.menu.raise_top_strip(false)
 		_overlay_stage = ""
 		rewards.mode = ""
 		return
@@ -349,6 +365,7 @@ func render() -> void:
 		clear_board_interactions()
 	overlay.visible = true
 	overlay_dim.visible = true
+	gs.menu.raise_top_strip(true)
 	var house := overlay as HousePanel
 	house.set_title("Series · %s" % String({"decks": "deck choice", "rewards": "rewards", "first_player": "next game", "over": "final result"}.get(stage, stage)))
 	house.set_tag("Best of %d" % int(view.get("best_of", 3)))

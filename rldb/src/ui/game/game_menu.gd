@@ -79,6 +79,23 @@ func build_top_strip() -> void:
 	gs.spectate.build(row, gs.chat.button)
 
 
+## J15 (owner, 22 Oct): while the series modal is up the top strip (Menu, Chat, spectator badge) draws
+## above its full-window dim, where it is; `false` returns it to its in-game layer.
+func raise_top_strip(on: bool) -> void:
+	if top_strip != null:
+		top_strip.z_index = UiLayers.SERIES_TOP_STRIP if on else UiLayers.TOP_STRIP
+
+
+## True when global point `at` is over one of the top strip's visible buttons (Menu, Chat, Watch...).
+func over_top_button(at: Vector2) -> bool:
+	if top_strip == null or not top_strip.is_visible_in_tree():
+		return false
+	for b in top_strip.find_children("*", "BaseButton", true, false):
+		if (b as Control).is_visible_in_tree() and (b as Control).get_global_rect().has_point(at):
+			return true
+	return false
+
+
 ## Builds the in-game menu and the settings popup (hidden).
 func build_popups() -> void:
 	# In-game menu (Menu button / Esc): Settings, Return to menu, then the destructive group.

@@ -159,3 +159,26 @@ func test_j10_a_selected_card_and_a_status_tip_never_sit_over_the_rewards_screen
 		assert_int(_abs_z(layer) + UiLayers.LIFTED_CARD).is_less(modal_z)
 	assert_int(_abs_z(gs.hover_layer)).is_less(modal_z)
 
+
+func test_j15_the_rewards_dim_fills_the_window_under_the_top_strip_buttons() -> void:
+	# Arrange
+	var a := await _kill_board()
+	# Act: the game ends; the rewards screen opens
+	host.handle(1 - a, {"t": "concede"})
+	await await_idle_frame()
+	gs.skip_effects()
+	await await_idle_frame()
+	# Assert: the dim covers the whole window, the Menu button stays at the top above it and takes clicks
+	var dim := gs.overlays.overlay_dim
+	assert_bool(dim.visible).is_true()
+	assert_vector(dim.get_global_rect().position).is_equal(gs.get_global_rect().position)
+	assert_vector(dim.size).is_equal(gs.size)
+	var mb := gs.menu.menu_button
+	assert_float(mb.get_global_rect().position.y).is_less(GameScreen.TOP_H)
+	assert_int(_abs_z(mb)).is_greater(_abs_z(dim))
+	var at := mb.get_global_rect().get_center()
+	assert_bool(dim._has_point(dim.get_global_transform().affine_inverse() * at)).is_false()
+	assert_bool(dim._has_point(dim.get_global_transform().affine_inverse() * gs.play_area.get_center())).is_true()
+	# Back in a game the strip returns to its in-game layer
+	gs.menu.raise_top_strip(false)
+	assert_int(gs.menu.top_strip.z_index).is_equal(UiLayers.TOP_STRIP)
