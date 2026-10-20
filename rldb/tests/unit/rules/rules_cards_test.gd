@@ -96,7 +96,7 @@ func test_trap_owner_orders_multiple_eligible_traps() -> void:
 	var d := TB.unit(m, 0, TB.WATER, 0, "atk", 8)
 	TB.attack(m, a, d)
 	var labels: Array = m.pending["options"].map(func(o): return o["label"])
-	assert_array(labels).contains(["Skip", "Pass for the rest of this turn", "Activate Magic Cylinder", "Activate Rushed Recklessly"])
+	assert_array(labels).contains(["Skip", "Skip for the rest of this turn", "Activate Magic Cylinder", "Activate Rushed Recklessly"])
 	assert_array(labels).not_contains(["Activate Damage Conversion"])
 	TB.choose(m, ["Activate Rushed Recklessly"])
 	assert_str(m.pending["kind"]).is_equal("trap_response")

@@ -294,19 +294,32 @@ const STAT_EDGE_A := 0.4
 const BASE_PX := 12
 
 
-## One stat tile (#45): an F3 inset with an ATK-red / DEF-blue edge; the caption sits on the big
-## number's baseline (both bottom-aligned in one row) and "Base: N" sits under the number in 11 px.
+## H11 (owner, 21 Oct): the match tiles are short: one row with the caption over its "Base: N" line on
+## the left and the current value on the right, in TILE_PAD_X / TILE_PAD_Y padding.
+const TILE_PAD_X := 10
+const TILE_PAD_Y := 5
+## The current value's size (px) in a match tile (compact rows: 20).
+const STAT_PX := 26
+
+
+## One stat tile (#45): an F3 inset with an ATK-red / DEF-blue edge. In a match (H11) the caption sits
+## over "Base: N" at the left and the value (with its up / down marker when changed) at the right,
+## in one short row.
 func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	var pc := PanelContainer.new()
 	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var sb := UIStyle.inset_style(UIStyle.PANEL_INK, 6)
 	sb.base.border_color = Color(STAT_EDGE.get(cap, UIStyle.BRONZE), STAT_EDGE_A)
 	sb.base.set_border_width_all(1)
-	# D5: 12 px around the caption, the number and its base line (they sat 4 px from the edge).
 	if compact:
 		UIStyle.pad(sb, "sm", "xs")
+	elif construction:
+		UIStyle.pad(sb, "md", "md")   # D5: the construction tile's 36 px number keeps its 12 px
 	else:
-		UIStyle.pad(sb, "md", "md")
+		sb.base.content_margin_left = TILE_PAD_X
+		sb.base.content_margin_right = TILE_PAD_X
+		sb.base.content_margin_top = TILE_PAD_Y
+		sb.base.content_margin_bottom = TILE_PAD_Y
 	sb.base = sb.base
 	pc.add_theme_stylebox_override("panel", sb)
 	var hb := HBoxContainer.new()
@@ -320,46 +333,35 @@ func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	var trend := HBoxContainer.new()
 	trend.add_theme_constant_override("separation", 4)
 	left.add_child(trend)
-	var col := UIStyle.TEXT
-	var trend_mark: Mark = null
 	if construction:
 		return _plain_stat_tile(pc, hb, left, trend, cap, printed if printed != null or cur == null else cur)
-	# The caption moves down onto the number's baseline; the trend row is not needed in this layout.
 	left.remove_child(trend)
 	trend.free()
 	var cap_l := left.get_child(0) as Label
 	cap_l.add_theme_font_override("font", UIStyle.font_display(700))
-	cap_l.add_theme_font_size_override("font_size", _fs(15))
-	left.alignment = BoxContainer.ALIGNMENT_END
-	if cur != null and printed != null and cur != printed:
-		var up: bool = cur > printed
-		col = UIStyle.GOOD if up else UIStyle.BAD
-		trend_mark = Mark.new("up" if up else "down", col, 12)   # beside the resulting value
-	var right := VBoxContainer.new()
-	right.add_theme_constant_override("separation", -4)
+	cap_l.add_theme_font_size_override("font_size", _fs(14))
+	left.alignment = BoxContainer.ALIGNMENT_CENTER
+	left.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var base_l := _lbl("Base: %s" % ("?" if printed == null else str(printed)), BASE_PX - 1, UIStyle.MUTED, false, false, false)
+	left.add_child(base_l)
+	var col := UIStyle.TEXT
 	var nrow := HBoxContainer.new()
 	nrow.add_theme_constant_override("separation", 4)
 	nrow.alignment = BoxContainer.ALIGNMENT_END
-	right.add_child(nrow)
-	if trend_mark != null:
-		nrow.add_child(trend_mark)
+	nrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if cur != null and printed != null and cur != printed:
+		var up: bool = cur > printed
+		col = UIStyle.GOOD if up else UIStyle.BAD
+		nrow.add_child(Mark.new("up" if up else "down", col, 11))   # beside the resulting value
 	var num := Label.new()
 	num.text = "?" if cur == null else str(cur)
 	num.add_theme_font_override("font", UIStyle.font_display(700))
-	num.add_theme_font_size_override("font_size", _fs(30) if not compact else 22)
+	num.add_theme_font_size_override("font_size", _fs(STAT_PX) if not compact else 20)
 	num.add_theme_color_override("font_color", col)
 	num.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
 	num.add_theme_constant_override("outline_size", 3)
 	nrow.add_child(num)
-	var base_l := _lbl("Base: %s" % ("?" if printed == null else str(printed)), BASE_PX, UIStyle.MUTED, false, false, false)
-	base_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	right.add_child(base_l)
-	hb.add_child(right)
-	# Bottom-align the caption with the number's foot (the base line hangs under the number).
-	left.add_theme_constant_override("separation", 0)
-	var foot := Control.new()
-	foot.custom_minimum_size.y = base_l.get_combined_minimum_size().y - 4.0
-	left.add_child(foot)
+	hb.add_child(nrow)
 	return pc
 
 
@@ -507,7 +509,31 @@ static func _strip_status_prefix(help: String) -> String:
 	return body.substr(0, 1).to_upper() + body.substr(1)
 
 
-## Caption colour of a rules timing ("On Summon", "Once per turn", ...).
+## Caption colour of a rules timing ("On Summon", "Once per turn", ...). Public for the card tooltip
+## (H8), which colours its sections the same way.
+static func timing_color(k: String) -> Color:
+	return _timing_color(k)
+
+
+## The colour of status `key`'s section: buffs GOOD, debuffs BAD, Runes RUNE_BLUE (as in the panel).
+static func status_color(key: String) -> Color:
+	if key == "rune":
+		return UIStyle.RUNE_BLUE
+	return UIStyle.GOOD if CardDB.is_buff(key) else UIStyle.BAD
+
+
+## The stylebox of a rule / status block: dark ink with a BLOCK_BAR_W accent bar in `col` (alpha
+## `bar_a`) at the left and `pad` px of padding. Shared with the card tooltip (H8).
+static func block_style(col: Color, bar_a: float, pad: int) -> StyleBoxFlat:
+	var sb := UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(col, bar_a), 0, 4)
+	sb.border_width_left = BLOCK_BAR_W
+	sb.content_margin_left = BLOCK_BAR_W + pad
+	sb.content_margin_right = pad
+	sb.content_margin_top = pad
+	sb.content_margin_bottom = pad
+	return sb
+
+
 static func _timing_color(k: String) -> Color:
 	match k:
 		"Condition", "Materials", "Activates": return UIStyle.RUNE_BLUE
@@ -615,16 +641,10 @@ func _flow() -> HFlowContainer:
 ## empty zero-separation VBoxContainer (its first child) for the content.
 func _block(col: Color, bar_a: float) -> PanelContainer:
 	var pc := PanelContainer.new()
-	var sb := UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(col, bar_a), 0, 4)
-	sb.border_width_left = BLOCK_BAR_W
 	# D5: the text keeps the 12 px content floor from the block's edges (it sat 3-6 px from them);
 	# the compact pile rows keep the 8 px chip scale.
 	var pad := UIStyle.CONTENT_FLOOR if not compact else UIStyle.sp("sm")
-	sb.content_margin_left = BLOCK_BAR_W + pad
-	sb.content_margin_right = pad
-	sb.content_margin_top = pad
-	sb.content_margin_bottom = pad
-	pc.add_theme_stylebox_override("panel", sb)
+	pc.add_theme_stylebox_override("panel", block_style(col, bar_a, pad))
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 2)
 	pc.add_child(vb)

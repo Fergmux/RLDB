@@ -7,6 +7,9 @@ extends HBoxContainer
 ##
 ##     var seg := SegmentedChoice.new(["I go first", "My opponent goes first"], -1)
 ##     seg.chosen.connect(func(i): ...)
+##
+## With a `gap` (H22, owner 21 Oct: the go-first answers sat too close together) the segments stand
+## apart as separate, fully rounded buttons `gap` px apart; the gold fill still marks the choice.
 
 ## Segment `index` was pressed.
 signal chosen(index: int)
@@ -15,6 +18,8 @@ signal chosen(index: int)
 const SEGMENT_H := 46.0
 const SEGMENT_MIN_W := 200.0
 const RADIUS := 8
+## H22: the gap (px) between the go-first answers when they stand apart (the xl spacing token).
+const SPLIT_GAP := 24
 ## Prefix of the chosen segment's label.
 const CHECK := "✓  "
 
@@ -23,12 +28,15 @@ var labels: Array = []
 var selected: int = -1
 ## The segment buttons, in order.
 var buttons: Array[Button] = []
+## Px between the segments: 0 joins them into one bar, more stands them apart (all corners rounded).
+var gap: int = 0
 
 
-func _init(p_labels: Array = [], p_selected: int = -1, font_size: int = 17) -> void:
+func _init(p_labels: Array = [], p_selected: int = -1, font_size: int = 17, p_gap: int = 0) -> void:
 	labels = p_labels
 	selected = p_selected
-	add_theme_constant_override("separation", 0)
+	gap = maxi(0, p_gap)
+	add_theme_constant_override("separation", gap)
 	alignment = BoxContainer.ALIGNMENT_CENTER
 	for i in labels.size():
 		var is_on := i == selected
@@ -43,10 +51,11 @@ func _init(p_labels: Array = [], p_selected: int = -1, font_size: int = 17) -> v
 		buttons.append(b)
 
 
-## Rounds only the outer corners of segment `i` and joins the inner edges into one bar.
+## Rounds only the outer corners of segment `i` and joins the inner edges into one bar (with a
+## gap, every segment keeps its own rounded corners and full border).
 func _shape(b: Button, i: int) -> void:
-	var first := i == 0
-	var last := i == labels.size() - 1
+	var first := i == 0 or gap > 0
+	var last := i == labels.size() - 1 or gap > 0
 	for st in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		if not b.has_theme_stylebox_override(st):
 			continue

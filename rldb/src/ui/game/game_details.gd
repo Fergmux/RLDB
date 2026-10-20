@@ -7,7 +7,6 @@ extends RefCounted
 ## pile_zone value of the draft list.
 const DRAFT_ZONE := "draft"
 const PILE_NAMES := {"draw": "Draw pile", "spent": "Spent", "exhaust": "Exhaust", "extra": "Extra Deck"}
-const PILE_ROW_CARD := Vector2(64, 96)
 
 ## The host screen this component works on.
 ## Pile / draft list rows (#92): inner padding and the height of their action buttons (px).
@@ -380,6 +379,7 @@ func _pile_row(c: Dictionary) -> Control:
 	row.add_theme_stylebox_override("panel", sb)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.tooltip_text = CardWidget.tooltip_for(c) + "\n\nRight-click to inspect"   # D15: no Inspect button
+	row.set_meta(&"tip_card", c)   # H8: the coloured card tooltip
 	var editable := pile_zone != DRAFT_ZONE   # draft picks are read-only (but can still be inspected)
 	if editable:
 		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -442,21 +442,59 @@ func _pile_row(c: Dictionary) -> Control:
 	return row
 
 
-## #91: thumbnail size of a compact pile row.
-const PILE_THUMB := Vector2(44, 66)
+## H6 (owner, 21 Oct): the row's card is the same small card face as the left input pane's (a "mini"
+## CardWidget drawn face up through GamePromptBanner.pane_view), not an art crop, at 7/8 of the pane's
+## GamePromptBanner.SUBJECT_CARD so the rows stay compact.
+const PILE_CARD := GamePromptBanner.SUBJECT_CARD * 0.875
+## H6: the kind a pile row names: units by how they are summoned (Unit / Fusion / Ritual / Arcane),
+## other cards by their category.
+const ROW_KIND := {"basic_unit": "Unit", "unit": "Unit", "fusion": "Fusion", "ritual": "Ritual", "arcane": "Arcane",
+	"spell": "Spell", "trap": "Trap", "power": "Power"}
+## H6: text sizes of the row (px): name, chips and the race / materials lines.
+const ROW_NAME_PX := 15
+const ROW_SMALL_PX := 12
+## Most lines a Fusion's materials take in the row (the full text is in the expanded details).
+const ROW_MATERIAL_LINES := 2
 
 
-## #91: the summary line of a pile row: a thumbnail, the name over its Type chip (units) or kind
-## (other cards), and for units the current "ATK / DEF" in the badge colours, right-aligned.
+## The kind a pile row shows for card view `c` (H6).
+static func row_kind(c: Dictionary) -> String:
+	var cat := String(c.get("category", ""))
+	return String(ROW_KIND.get(cat, cat.capitalize()))
+
+
+## H6: the cost a pile row shows for `c`: {"text", "kind"} ("3 AP", "2 Rune", "1 Arcane"), or the
+## Fusion materials as {"text": "Beast Unit + Dragon Unit", "kind": "fusion"}; {} when it has none.
+static func row_cost(c: Dictionary) -> Dictionary:
+	var kind := String(c.get("cost_kind", "ap"))
+	if kind == "fusion" or String(c.get("category", "")) == "fusion":
+		for part in c.get("text_parts", []):
+			if String(part.get("k", "")) == "Materials" and String(part.get("t", "")) != "":
+				return {"text": String(part["t"]), "kind": "fusion"}
+		return {}
+	var txt := String(c.get("cost_text", ""))
+	if txt == "" and c.get("cost") != null:
+		txt = "%s AP" % str(c["cost"])
+	return {"text": txt, "kind": kind} if txt != "" else {}
+
+
+## #91 / H6: the summary line of a pile row before it expands: the small card face (as in the left
+## input pane), then the name with "ATK / DEF" at the right for units, a line of chips with the kind
+## (Unit / Fusion / Ritual / Arcane, or Spell / Trap / Power) and the cost, the Race and Type for
+## units, and a Fusion's material cost.
 func _pile_summary(c: Dictionary, can_act: bool) -> Control:
 	var hb := HBoxContainer.new()
 	hb.name = "RowSummary"
 	hb.add_theme_constant_override("separation", UIStyle.sp("md"))
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# The art alone, cover-cropped: a whole card face at this size is unreadable micro-text.
-	var w := ArtThumb.new(c, can_act)
-	w.custom_minimum_size = PILE_THUMB
-	w.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var w := CardWidget.new()
+	w.show_tooltip = false       # the row carries the card's tooltip
+	w.setup(GamePromptBanner.pane_view(c), "mini")
+	w.auto_hover = false
+	w.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	GameUi.resize_card(w, PILE_CARD)
+	w.set_ready(can_act)
+	w.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	hb.add_child(w)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", UIStyle.sp("xs"))
@@ -464,45 +502,117 @@ func _pile_summary(c: Dictionary, can_act: bool) -> Control:
 	vb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hb.add_child(vb)
-	var nm := UIStyle.label(String(c.get("name", "?")), 15, UIStyle.TEXT)
+	var unit := CardDetailsPanel.is_unit_view(c)
+	# Name, with the current ATK / DEF at the right for units.
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", UIStyle.sp("sm"))
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(top)
+	var nm := UIStyle.label(String(c.get("name", "?")), ROW_NAME_PX, UIStyle.TEXT)
 	nm.add_theme_font_override("font", UIStyle.font_bold())
 	nm.clip_text = true
 	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nm.custom_minimum_size.x = 40.0
 	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vb.add_child(nm)
-	var sub := HBoxContainer.new()
-	sub.add_theme_constant_override("separation", UIStyle.sp("xs"))
-	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vb.add_child(sub)
-	var unit := CardDetailsPanel.is_unit_view(c)
-	if unit:
-		var ty = c.get("type", "")
-		var ty_s: String = String(ty) if ty != null else ""
-		var tb := TypeIcons.TypeBadge.new(ty_s, 16.0)
-		tb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		sub.add_child(tb)
-		var tl := UIStyle.label(ty_s if ty_s != "" else "No type", 12, UIStyle.type_color(ty_s).lightened(0.25))
-		tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		sub.add_child(tl)
-	else:
-		var cat := String(c.get("category", ""))
-		var kl := UIStyle.label(cat.capitalize(), 12, UIStyle.category_text_color(cat))
-		kl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		sub.add_child(kl)
+	top.add_child(nm)
 	if unit:
 		var stats := HBoxContainer.new()
 		stats.add_theme_constant_override("separation", 3)
 		stats.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		for part in [[c.get("atk"), CardDetailsPanel.STAT_EDGE["ATK"]], ["/", UIStyle.MUTED], [c.get("def"), CardDetailsPanel.STAT_EDGE["DEF"]]]:
-			var l := UIStyle.label("?" if part[0] == null else str(part[0]), 17 if part[0] is not String else 14, part[1])
+			var l := UIStyle.label("?" if part[0] == null else str(part[0]), 16 if part[0] is not String else 13, part[1])
 			l.add_theme_font_override("font", UIStyle.font_display(700))
 			l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 			l.add_theme_constant_override("outline_size", 3)
 			l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			stats.add_child(l)
-		hb.add_child(stats)
+		top.add_child(stats)
+	# Kind and cost chips.
+	var chips := HFlowContainer.new()
+	chips.name = "RowChips"
+	chips.add_theme_constant_override("h_separation", UIStyle.sp("xs"))
+	chips.add_theme_constant_override("v_separation", UIStyle.sp("xs"))
+	chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(chips)
+	var cat := String(c.get("category", ""))
+	var kind_col: Color = UIStyle.CATEGORY_COLORS.get(cat, UIStyle.BRONZE)
+	chips.add_child(_row_chip(row_kind(c), kind_col, "", true))
+	var cost := row_cost(c)
+	if not cost.is_empty() and String(cost["kind"]) != "fusion":
+		var ck := String(cost["kind"])
+		chips.add_child(_row_chip(String(cost["text"]), UIStyle.COST_COLORS.get(ck, UIStyle.COST_COLORS["ap"]),
+			{"ap": "circle", "ritual": "square", "arcane": "hex"}.get(ck, "circle")))
+	# Race and Type (units).
+	if unit:
+		var sub := HBoxContainer.new()
+		sub.name = "RowRace"
+		sub.add_theme_constant_override("separation", UIStyle.sp("xs"))
+		sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vb.add_child(sub)
+		var race := String(c.get("race", ""))
+		var rl := UIStyle.label(race if race != "" else "No race", ROW_SMALL_PX, UIStyle.MUTED)
+		rl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sub.add_child(rl)
+		var dot := UIStyle.label("·", ROW_SMALL_PX, UIStyle.TEXT_DIM)
+		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sub.add_child(dot)
+		var ty = c.get("type", "")
+		var ty_s: String = String(ty) if ty != null else ""
+		var tb := TypeIcons.TypeBadge.new(ty_s, 15.0)
+		tb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		sub.add_child(tb)
+		var tl := UIStyle.label(ty_s if ty_s != "" else "No type", ROW_SMALL_PX, UIStyle.type_color(ty_s).lightened(0.25))
+		tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sub.add_child(tl)
+	# A Fusion's material cost.
+	if not cost.is_empty() and String(cost["kind"]) == "fusion":
+		var mrow := HBoxContainer.new()
+		mrow.name = "RowMaterials"
+		mrow.add_theme_constant_override("separation", UIStyle.sp("xs"))
+		mrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vb.add_child(mrow)
+		var mk := CardDetailsPanel.Mark.new("diamond", UIStyle.COST_COLORS["fusion"], 9)
+		mk.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		var mk_box := MarginContainer.new()
+		mk_box.add_theme_constant_override("margin_top", 4)
+		mk_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mk_box.add_child(mk)
+		mrow.add_child(mk_box)
+		var ml := UIStyle.label(String(cost["text"]), ROW_SMALL_PX, UIStyle.COST_COLORS["fusion"].lightened(0.45), true)
+		ml.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ml.custom_minimum_size.x = 40.0
+		ml.max_lines_visible = ROW_MATERIAL_LINES
+		ml.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		ml.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mrow.add_child(ml)
 	return hb
+
+
+## H6: a small chip of a pile row (the details panel's chip at row scale): a tinted pill with an
+## optional marker shape and the text.
+func _row_chip(text: String, col: Color, shape: String = "", strong: bool = false) -> PanelContainer:
+	var pc := PanelContainer.new()
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := UIStyle.flat(col.darkened(0.5) if strong else Color(col.darkened(0.62), 0.9), Color(col, 0.9), 1, 9)
+	sb.content_margin_left = 6
+	sb.content_margin_right = 7
+	sb.content_margin_top = 0
+	sb.content_margin_bottom = 1
+	pc.add_theme_stylebox_override("panel", sb)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 4)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pc.add_child(h)
+	if shape != "":
+		h.add_child(CardDetailsPanel.Mark.new(shape, col, 8))
+	var l := UIStyle.label(text, ROW_SMALL_PX, UIStyle.TEXT)
+	l.add_theme_font_override("font", UIStyle.font_bold())
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(l)
+	return pc
 
 
 ## The selected row's legal actions as buttons [{label, full, kind, run}] (none while locked).
@@ -817,37 +927,3 @@ class MethodTile extends PanelContainer:
 			Sfx.hover_item()
 		if _lift.is_valid() and not UIStyle.reduce_motion:
 			_lift.call(on)
-
-
-## #91: a pile row's thumbnail: the card's art cover-cropped in a rim of its kind colour (the
-## kind's radial tone when it has no art), with a gold rim and a soft glow when it can act now.
-class ArtThumb extends Control:
-	var card: Dictionary
-	var ready_now: bool
-
-	func _init(c: Dictionary, can_act: bool) -> void:
-		card = c
-		ready_now = can_act
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-
-	func _draw() -> void:
-		var r := Rect2(Vector2.ZERO, size)
-		var kind := UIStyle.CATEGORY_COLORS.get(String(card.get("category", "")), UIStyle.BRONZE) as Color
-		if ready_now:
-			draw_rect(r.grow(2.0), Color(UIStyle.GOLD, 0.28))
-		draw_rect(r, Color(0.03, 0.025, 0.02))
-		var inner := r.grow(-2.0)
-		var tex := CardArt.texture_for(card)
-		if tex != null:
-			var ts := tex.get_size()
-			var k := maxf(inner.size.x / ts.x, inner.size.y / ts.y)
-			var src_sz := inner.size / k
-			draw_texture_rect_region(tex, inner, Rect2((ts - src_sz) / 2.0, src_sz))
-		else:
-			draw_rect(inner, kind.darkened(0.55))
-		# A faint top-light and a dark foot so the art sits in its frame.
-		draw_rect(Rect2(inner.position, Vector2(inner.size.x, inner.size.y * 0.3)), Color(1, 1, 1, 0.05))
-		draw_rect(Rect2(inner.position + Vector2(0, inner.size.y * 0.75), Vector2(inner.size.x, inner.size.y * 0.25)), Color(0, 0, 0, 0.25))
-		draw_rect(r, UIStyle.GOLD if ready_now else kind.lightened(0.1), false, 1.5)
-

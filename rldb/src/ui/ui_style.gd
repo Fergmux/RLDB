@@ -723,7 +723,7 @@ static func danger_button(text: String, size: int = 15) -> Button:
 	return style_button(button(text, size), "danger")
 
 
-## Face of a "stand down" button (D13 Pass for the rest of this turn): deep wine leather.
+## Face of a "stand down" button (D13 Skip for the rest of this turn): deep wine leather.
 const WINE := Color("3b1d22")
 const WINE_EDGE := Color("8a4b4f")
 

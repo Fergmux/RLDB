@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## Owner feedback 2026-10-20 D13: a Trap response window offers Activate, Skip (this window only)
-## and "Pass for the rest of this turn", after which the engine offers that player no Trap window
+## and "Skip for the rest of this turn", after which the engine offers that player no Trap window
 ## until the turn ends.
 
 const DAMAGE_CONVERSION := 47      # Trap: an attack on one of your units in this column
@@ -29,7 +29,7 @@ func test_window_offers_skip_pass_for_the_turn_and_activate() -> void:
 	var m: MatchEngine = b["m"]
 	assert_str(TB.attack(m, b["a1"], b["wall"])).is_empty()
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
-	assert_array(_labels(m)).is_equal(["Skip", "Pass for the rest of this turn", "Activate Damage Conversion"])
+	assert_array(_labels(m)).is_equal(["Skip", "Skip for the rest of this turn", "Activate Damage Conversion"])
 	assert_int(int(m.pending["options"][0]["v"])).is_equal(EffectEngine.TRAP_V_SKIP)
 
 
@@ -47,7 +47,7 @@ func test_pass_for_the_turn_stops_every_later_window_this_turn() -> void:
 	var b := _board()
 	var m: MatchEngine = b["m"]
 	TB.attack(m, b["a1"], b["wall"])
-	assert_str(TB.choose(m, ["Pass for the rest of this turn"])).is_empty()
+	assert_str(TB.choose(m, ["Skip for the rest of this turn"])).is_empty()
 	assert_bool(m.passing_traps(DEFENDER)).is_true()
 	assert_str(TB.attack(m, b["a2"], b["wall"])).is_empty()
 	assert_bool(m.pending.is_empty()).is_true()                    # no window: the attack resolved
@@ -59,7 +59,7 @@ func test_pass_for_the_turn_ends_with_the_turn() -> void:
 	var b := _board()
 	var m: MatchEngine = b["m"]
 	TB.attack(m, b["a1"], b["wall"])
-	TB.choose(m, ["Pass for the rest of this turn"])
+	TB.choose(m, ["Skip for the rest of this turn"])
 	m.submit(ATTACKER, {"t": "next_phase"})                       # Recovery
 	m.submit(ATTACKER, {"t": "next_phase"})                       # end of turn 2
 	assert_int(m.turn).is_equal(3)
@@ -77,7 +77,7 @@ func test_the_flag_is_in_the_passing_players_view_only_and_logged_privately() ->
 	var b := _board()
 	var m: MatchEngine = b["m"]
 	TB.attack(m, b["a1"], b["wall"])
-	TB.choose(m, ["Pass for the rest of this turn"])
+	TB.choose(m, ["Skip for the rest of this turn"])
 	var own: Dictionary = MatchView.build(m, DEFENDER)["players"][DEFENDER]
 	var theirs: Dictionary = MatchView.build(m, ATTACKER)["players"][DEFENDER]
 	assert_bool(bool(own.get("trap_pass", false))).is_true()
@@ -96,7 +96,7 @@ func test_hidden_window_variant_is_named_skip() -> void:
 	TB.set_card(m, DEFENDER, DAMAGE_CONVERSION, 2)                  # face down, wrong column
 	TB.attack(m, a1, wall)
 	assert_str(TB.pend_kind(m)).is_equal("trap_response")
-	assert_array(_labels(m)).is_equal(["Skip (no Trap can respond)", "Pass for the rest of this turn"])
+	assert_array(_labels(m)).is_equal(["Skip (no Trap can respond)", "Skip for the rest of this turn"])
 
 
 func test_remote_answer_by_index_passes_the_sanitiser() -> void:

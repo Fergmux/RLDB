@@ -164,6 +164,114 @@ static func tooltip(text: String) -> Control:
 	return v
 
 
+## H8 (owner, 21 Oct): the rich tooltip of card view `v`, coloured like the details panel: the name
+## (gold, in the title face) over a kind line, one block per rules part with its timing caption in the
+## panel's timing colour and the same accent bar, then a block per status the card names (buff green,
+## debuff red, Rune blue). `prefix` / `suffix` are the caller's own lines around the card text (a
+## role caption, "Right-click to inspect"), shown plainly above / below. Hidden cards get none (null).
+static func card_tooltip(v: Dictionary, prefix: String = "", suffix: String = "") -> Control:
+	if v.is_empty() or bool(v.get("hidden", false)) or not v.has("name"):
+		return null
+	var col := VBoxContainer.new()
+	col.name = "CardTooltip"
+	col.add_theme_constant_override("separation", TIP_GAP)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if prefix.strip_edges() != "":
+		col.add_child(_tip_label(prefix.strip_edges(), 13, UIStyle.MUTED))
+	var nm := UIStyle.label(String(v.get("name", "")), 17, UIStyle.GOLD_HI, false, true)
+	nm.name = "TipName"
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(nm)
+	var kind := tip_kind_line(v)
+	if kind != "":
+		var kl := _tip_label(kind, 13, UIStyle.category_text_color(String(v.get("category", ""))))
+		kl.name = "TipKind"
+		col.add_child(kl)
+	var parts: Array = v.get("text_parts", [])
+	if parts.is_empty() and String(v.get("text", "")).strip_edges() != "":
+		parts = [{"k": "", "t": String(v["text"])}]
+	for p0 in parts:
+		var p := CardDetailsPanel.split_once_per_turn(p0)
+		var k := String(p.get("k", ""))
+		var c := CardDetailsPanel.timing_color(k)
+		col.add_child(_tip_block(k.to_upper(), String(p.get("t", "")), c, "TipRule"))
+	var keys := keys_in(CardText.card_text(v))
+	for key in keys:
+		var help := describe(String(key))
+		var at := help.find(": ")
+		var title := help.substr(0, at) if at > 0 else String(key).capitalize()
+		var body := CardDetailsPanel._strip_status_prefix(help)
+		col.add_child(_tip_block(title.to_upper(), body, CardDetailsPanel.status_color(String(key)), "TipStatus"))
+	if suffix.strip_edges() != "":
+		col.add_child(_tip_label(suffix.strip_edges(), 13, UIStyle.MUTED))
+	return col
+
+
+## Width (px) of the card tooltip's text and the gap between its sections.
+const TIP_W := 330.0
+const TIP_GAP := 6
+
+
+## The kind line of a card tooltip: "Fusion Unit · Dragon · Fire", "Spell · 2 AP" ...
+static func tip_kind_line(v: Dictionary) -> String:
+	var cat := String(v.get("category", ""))
+	var bits := [String(UIStyle.CATEGORY_NAMES.get(cat, cat.capitalize()))]
+	if String(v.get("cost_kind", "ap")) != "fusion" and String(v.get("cost_text", "")) != "":
+		bits.append(String(v["cost_text"]))
+	if CardDetailsPanel.is_unit_view(v):
+		if String(v.get("race", "")) != "":
+			bits.append(String(v["race"]))
+		var ty = v.get("type", "")
+		if ty != null and String(ty) != "":
+			bits.append(String(ty))
+	return " · ".join(bits.filter(func(b): return String(b) != ""))
+
+
+static func _tip_label(text: String, px: int, col: Color) -> Label:
+	var l := UIStyle.label(text, px, col, true)
+	l.custom_minimum_size.x = TIP_W
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+
+## One section of the card tooltip: the details panel's block (accent bar in `col`) with the caption
+## in `col` over the body text.
+static func _tip_block(caption: String, body: String, col: Color, name: String) -> PanelContainer:
+	var pc := PanelContainer.new()
+	pc.name = name
+	pc.set_meta(&"tip_section", name)
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pc.add_theme_stylebox_override("panel", CardDetailsPanel.block_style(col, 0.7, UIStyle.sp("sm")))
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 1)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pc.add_child(vb)
+	if caption != "":
+		var cap := UIStyle.label(caption, 12, col)
+		cap.add_theme_font_override("font", UIStyle.font_bold())
+		cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vb.add_child(cap)
+	var bl := UIStyle.label(body, 14, UIStyle.TEXT, true)
+	bl.custom_minimum_size.x = TIP_W - float(CardDetailsPanel.BLOCK_BAR_W + 2 * UIStyle.sp("sm"))
+	bl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(bl)
+	return pc
+
+
+## The card tooltip for a control showing card `v` whose tooltip text is `for_text`: the coloured
+## card tooltip when the text holds the card's own tooltip (with the caller's lines around it), else
+## the plain status-section tooltip (or null).
+static func tooltip_for_card(v: Dictionary, for_text: String) -> Control:
+	if not v.is_empty() and not bool(v.get("hidden", false)) and v.has("name"):
+		var own := CardText.tooltip_for(v)
+		var at := for_text.find(own) if own != "" else -1
+		if at >= 0:
+			var t := card_tooltip(v, for_text.substr(0, at), for_text.substr(at + own.length()))
+			if t != null:
+				return t
+	return tooltip(for_text)
+
+
 ## The darker inset panel of a tooltip's effect section.
 static func section_box() -> PanelContainer:
 	var p := PanelContainer.new()
@@ -306,6 +414,9 @@ class Ink extends Control:
 
 
 ## A PanelContainer whose tooltip is the rich one: the text plus a section for each status it names.
+## With a card view in its "tip_card" meta (a pile row) it shows the coloured card tooltip (H8).
 class TipPanel extends PanelContainer:
 	func _make_custom_tooltip(for_text: String) -> Object:
+		if has_meta(&"tip_card"):
+			return StatusHelp.tooltip_for_card(get_meta(&"tip_card"), for_text)
 		return StatusHelp.tooltip(for_text)

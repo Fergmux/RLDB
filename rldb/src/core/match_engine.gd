@@ -161,7 +161,7 @@ func _op_next_turn(f: Dictionary, op: Dictionary) -> int:
 	for u in cards:
 		for m in cards[u]["mods"]:
 			m.erase("pre_swap")
-	# D13: "Pass for the rest of this turn" ends with the turn.
+	# D13: "Skip for the rest of this turn" ends with the turn.
 	for pl in players:
 		pl["trap_pass_turn"] = -1
 	# Return temporarily controlled units.

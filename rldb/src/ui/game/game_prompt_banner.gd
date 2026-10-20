@@ -133,7 +133,7 @@ var _mentions_top := false
 ## G03: option buttons of a response, yes / no or ordering prompt, one per row, the declining
 ## option (Pass, No, Skip) always last, below the accepting ones.
 var banner_list: VBoxContainer
-## The trap response's Skip / Pass-for-the-turn pair (D13): side by side, stacked when the first
+## The trap response's Skip / Skip-for-the-turn pair (D13): side by side, stacked when the first
 ## button's share of the row is narrower than its label (pair_fits).
 var decline_pair: BoxContainer
 ## Tray offering pile cards for a choice (a HousePanel).
@@ -397,7 +397,7 @@ static func mentions_for(pd: Dictionary) -> Array:
 	return out
 
 
-## True for an option that declines the choice (Skip, Skip (no Trap can respond), Pass for the rest
+## True for an option that declines the choice (Skip, Skip (no Trap can respond), Skip for the rest
 ## of this turn, No).
 static func is_decline(label: String) -> bool:
 	return label in DECLINE_LABELS or label.begins_with("Pass ") or label.begins_with("Skip ")
@@ -862,7 +862,7 @@ func _render_banner() -> void:
 		c.pressed.connect(gs.selection.confirm_multi)
 		banner_btns.add_child(c)
 	if pd["kind"] == "trap_response" and row == banner_list and declines.size() == 2:
-		# D13: Skip and Pass for the rest of this turn share one row under the gold Activate, the
+		# D13: Skip and Skip for the rest of this turn share one row under the gold Activate, the
 		# declining pair side by side (it also keeps the panel short enough for the full layout).
 		# A BoxContainer: _fit_subject stacks the pair in the thin side column, where side by side
 		# "Skip" had about 28 px of text room and broke into "Ski / p".
