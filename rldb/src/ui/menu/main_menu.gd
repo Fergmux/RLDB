@@ -59,11 +59,13 @@ const SUBTITLE_SIZE := 14
 ## Logo baseline to the subtitle's cap tops (review #2).
 const SUBTITLE_GAP := 16.0
 const LOGO_RULE_W := 300.0
-## Ambient motes, the light shaft in the arch (fractions of the screen) and the Ken Burns drift.
+## Ambient motes and the light shaft in the arch (fractions of the screen). J2 (owner, 22 Oct):
+## the painting itself never moves. Its old 40 s "Ken Burns" scale drift (1.000 -> 1.006 about the
+## centre) made it jump by single pixels now and then: with snap_controls_to_pixels on, Godot
+## rounds a Control's canvas translation to whole pixels, and a centred scale moves that
+## translation by -pivot * (scale - 1). The motes and the shaft carry the ambient life instead.
 const MOTE_COUNT := 26
 const SHAFT_RECT := Rect2(0.4, 0.0, 0.22, 0.86)
-const KEN_BURNS_SCALE := 1.006
-const KEN_BURNS_TIME := 40.0
 ## Centre panels: padding (24 px modal padding, 28 px clear of the filigree corners) and the
 ## Settings panel's Close button row.
 const CENTER_PAD := Vector2(28, 24)
@@ -76,7 +78,7 @@ const LEAF_TAGS := {
 	"settings": ["Options", "This device"], "credits": ["About", "v%s"],
 }
 
-## The menu backdrop (the Ken Burns drift scales it), its ambient motes and the hero logo.
+## The menu backdrop (static, J2), its ambient motes and the hero logo.
 var backdrop: Control
 var motes: AmbientMotes
 var logo: TitleText
@@ -112,7 +114,6 @@ func _build() -> void:
 	backdrop = UIStyle.background(BACKGROUND_DIM, UIStyle.MENU_BACKGROUND)
 	backdrop.name = "Backdrop"
 	add_child(backdrop)
-	backdrop.resized.connect(func(): backdrop.pivot_offset = backdrop.size / 2.0)
 	# Ambient life (design review #6): drifting petals and gold motes, a light shaft in the arch.
 	motes = AmbientMotes.new(MOTE_COUNT, [AmbientMotes.PETAL, AmbientMotes.GOLD])
 	motes.name = "AmbientMotes"
@@ -172,20 +173,6 @@ func _build() -> void:
 	_menu_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_menu_center)
 	_build_menu_level(false)
-
-
-func _ready() -> void:
-	_ken_burns()
-
-
-## A 40 s "Ken Burns" drift of the backdrop (1.00 -> 1.006 and back, design review 1.4.5); off
-## under reduce motion.
-func _ken_burns() -> void:
-	if UIStyle.reduce_motion or backdrop == null:
-		return
-	var tw := backdrop.create_tween().set_loops()
-	tw.tween_property(backdrop, "scale", Vector2.ONE * KEN_BURNS_SCALE, KEN_BURNS_TIME / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(backdrop, "scale", Vector2.ONE, KEN_BURNS_TIME / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
 static var _sub_font: FontVariation
