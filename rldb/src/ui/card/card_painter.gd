@@ -159,10 +159,13 @@ func para_text(tp: TextParagraph, pos: Vector2, col: Color, text: String) -> voi
 
 func para(tp: TextParagraph, pos: Vector2, col: Color) -> void:
 	if tracing:
+		# Every line TextParagraph.draw paints (it ignores max_lines_visible) and their total height.
 		var lines := []
+		var drawn_h := 0.0
 		for i in tp.get_line_count():
 			lines.append(tp.get_line_range(i))
-		trace.append(["para", tp.get_size(), pos, lines])
+			drawn_h += tp.get_line_size(i).y
+		trace.append(["para", tp.get_size(), pos, lines, drawn_h])
 	tp.draw(ci.get_canvas_item(), pos, col, Color(1, 1, 1), text_os)
 
 

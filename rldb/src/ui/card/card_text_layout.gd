@@ -29,8 +29,11 @@ static func para(text: String, font: Font, tag: String, fs: int, width: float, m
 	return tp
 
 
-## Paragraph at the largest size (<= fs_max) at which ALL of `text` fits in width x height; at
-## fs_min it is clipped with an ellipsis as a last resort. Shared cache like para().
+## Paragraph at the largest size (<= fs_max) at which ALL of `text` fits in width x height. If it
+## does not fit even at fs_min (H10, 21 Oct), the text is cut at the last whole word that fits in
+## the lines the box holds and ends with an ellipsis, so it can never run past the box (a
+## TextParagraph's own max_lines_visible still draws every line). The text actually shown is the
+## paragraph's "shown" meta (shown_text()); status-word marking must use it. Shared cache like para().
 static func fit_para(text: String, font: Font, fs_max: int, fs_min: int, width: float, height: float) -> TextParagraph:
 	var key := "fit|%s|%d|%d|%d|%d" % [text, fs_max, fs_min, int(width), int(height)]
 	if _para_shared.has(key):
@@ -38,17 +41,46 @@ static func fit_para(text: String, font: Font, fs_max: int, fs_min: int, width: 
 	if _para_shared.size() > PARA_CACHE_MAX:
 		_para_shared.clear()
 	var tp: TextParagraph = null
-	for fs in range(fs_max, fs_min - 1, -1):
-		tp = TextParagraph.new()
-		tp.width = width
-		tp.add_string(text, font, fs)
-		if tp.get_size().y <= height:
+	var lo := mini(fs_min, fs_max)
+	for fs in range(fs_max, lo - 1, -1):
+		tp = _shape(text, font, fs, width)
+		if tp.get_size().y <= height + 0.5:
 			break
-		if fs == fs_min:
-			tp.max_lines_visible = maxi(1, int(height / maxf(1.0, tp.get_size().y / maxf(1.0, float(tp.get_line_count())))))
-			tp.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		if fs == lo:
+			tp = _clip_para(tp, text, font, fs, width, height)
+	if not tp.has_meta("shown"):
+		tp.set_meta("shown", text)
 	_para_shared[key] = tp
 	return tp
+
+
+## The text a fit_para() paragraph shows (its "shown" meta; `fallback` for any other paragraph).
+static func shown_text(tp: TextParagraph, fallback: String) -> String:
+	return String(tp.get_meta("shown", fallback))
+
+
+static func _shape(text: String, font: Font, fs: int, width: float) -> TextParagraph:
+	var tp := TextParagraph.new()
+	tp.width = width
+	tp.add_string(text, font, fs)
+	return tp
+
+
+## `full` (all of `text` at size `fs`) cut to the lines that fit in `height`: whole words, then "…".
+static func _clip_para(full: TextParagraph, text: String, font: Font, fs: int, width: float, height: float) -> TextParagraph:
+	var n := full.get_line_count()
+	var line_h := full.get_size().y / maxf(1.0, float(n))
+	var keep := clampi(int(floor((height + 0.5) / maxf(1.0, line_h))), 1, n)
+	var shown := text.substr(0, full.get_line_range(keep - 1).y).strip_edges(false, true)
+	while true:
+		var cand := shown.rstrip(" ,;:\n") + ELLIPSIS
+		var tp := _shape(cand, font, fs, width)
+		if tp.get_line_count() <= keep or shown.length() <= 1:
+			tp.set_meta("shown", cand)
+			return tp
+		var sp := maxi(shown.rfind(" "), shown.rfind("\n"))
+		shown = shown.substr(0, sp if sp > 0 else shown.length() - 1).strip_edges(false, true)
+	return full
 
 
 ## Largest one-line font size between fs_min and fs_max (base units, scaled by `s`) at which

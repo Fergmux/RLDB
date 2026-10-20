@@ -65,7 +65,7 @@ static func draw_power(pt: CardPainter) -> void:
 	if txt != "":
 		var t: Array = g["text"]
 		var tp := CardTextLayout.fit_para(txt, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(CardPainter.MIN_FS - 1, pt.fs(g["f_text"] * 0.7)), float(t[2]) * pt.s, float(t[3]) * pt.s)
-		pt.para_text(tp, pt.p(t[0], t[1]), Color(UIStyle.TEXT, 0.9), txt)
+		pt.para_text(tp, pt.p(t[0], t[1]), Color(UIStyle.TEXT, 0.9), CardTextLayout.shown_text(tp, txt))
 	CardFaceParts.gem(pt, pt.p(g["gem"][0], g["gem"][1]), float(g["gem_r"]) * pt.s, pt.fs(g["f_gem"]))
 
 
@@ -94,7 +94,7 @@ static func draw_tall(pt: CardPainter, _big: bool = false) -> void:
 	pt.round_rect(_r(pt, t), TEXT_WELL, 3.0 * s)
 	if rules != "":
 		var tp := CardTextLayout.fit_para(rules, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(5, pt.fs(g["f_text"] * TEXT_MIN_K)), (float(t[2]) - 6.0) * s, (float(t[3]) - 3.0) * s)
-		pt.para_text(tp, pt.p(float(t[0]) + 3.0, float(t[1]) + 1.5), UIStyle.TEXT, rules)
+		pt.para_text(tp, pt.p(float(t[0]) + 3.0, float(t[1]) + 1.5), UIStyle.TEXT, CardTextLayout.shown_text(tp, rules))
 	else:
 		# No rules (Basic Units, #75): a small engraved filigree with a diamond, never a lone glyph that
 		# reads as a missing asset.
