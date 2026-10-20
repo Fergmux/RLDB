@@ -399,30 +399,31 @@ func _pile_row(c: Dictionary) -> Control:
 	col.add_theme_constant_override("separation", 6)
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(col)
-	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 8)
-	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(hb)
-	var w := CardWidget.new().setup(c, "mini")
-	w.auto_hover = false
-	w.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	GameUi.resize_card(w, PILE_ROW_CARD)
-	w.set_ready(can_act)
-	w.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	hb.add_child(w)
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 1)
-	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hb.add_child(vb)
-	# The same layout as the card details panel, in compact form (name, tags, stats, timing
-	# blocks, statuses), so the list reads like the details pane.
-	var dp := CardDetailsPanel.new()
-	dp.compact = true
-	dp.add_theme_constant_override("separation", 3)
-	dp.show_card(c)
-	GameUi.ignore_mouse(dp)
-	vb.add_child(dp)
+	# #91: a compact summary line (thumbnail, name, Type chip, "ATK / DEF" inline), so four Basic
+	# Mages no longer make a wall of identical stat boxes; the full compact details open under it
+	# while the row is hovered or selected.
+	col.add_child(_pile_summary(c, can_act))
+	var more := VBoxContainer.new()
+	more.name = "RowDetails"
+	more.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	more.visible = false
+	col.add_child(more)
+	var expand := func(on: bool) -> void:
+		if not is_instance_valid(more):
+			return
+		if on and more.get_child_count() == 0:
+			# The same layout as the card details panel, in compact form, built on first use.
+			var dp := CardDetailsPanel.new()
+			dp.compact = true
+			dp.add_theme_constant_override("separation", 3)
+			dp.show_card(c)
+			GameUi.ignore_mouse(dp)
+			more.add_child(dp)
+		more.visible = on
+	if sel:
+		expand.call(true)
+	row.mouse_entered.connect(func(): expand.call(true))
+	row.mouse_exited.connect(func(): expand.call(sel))
 	# F04: Extra Deck rows always show their legal summons (no selection needed); other piles show
 	# the selected row's actions.
 	var buttons := extra_summons(uid) if pile_zone == "extra" else ([] if not sel else _row_actions(uid))
@@ -439,6 +440,71 @@ func _pile_row(c: Dictionary) -> Control:
 			b.pressed.connect(e["run"])
 			af.add_child(b)
 	return row
+
+
+## #91: thumbnail size of a compact pile row.
+const PILE_THUMB := Vector2(44, 66)
+
+
+## #91: the summary line of a pile row: a thumbnail, the name over its Type chip (units) or kind
+## (other cards), and for units the current "ATK / DEF" in the badge colours, right-aligned.
+func _pile_summary(c: Dictionary, can_act: bool) -> Control:
+	var hb := HBoxContainer.new()
+	hb.name = "RowSummary"
+	hb.add_theme_constant_override("separation", UIStyle.sp("md"))
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var w := CardWidget.new().setup(c, "mini")
+	w.auto_hover = false
+	w.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	GameUi.resize_card(w, PILE_THUMB)
+	w.set_ready(can_act)
+	w.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hb.add_child(w)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", UIStyle.sp("xs"))
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hb.add_child(vb)
+	var nm := UIStyle.label(String(c.get("name", "?")), 15, UIStyle.TEXT)
+	nm.add_theme_font_override("font", UIStyle.font_bold())
+	nm.clip_text = true
+	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(nm)
+	var sub := HBoxContainer.new()
+	sub.add_theme_constant_override("separation", UIStyle.sp("xs"))
+	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(sub)
+	var unit := CardDetailsPanel.is_unit_view(c)
+	if unit:
+		var ty = c.get("type", "")
+		var ty_s: String = String(ty) if ty != null else ""
+		var tb := TypeIcons.TypeBadge.new(ty_s, 16.0)
+		tb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sub.add_child(tb)
+		var tl := UIStyle.label(ty_s if ty_s != "" else "No type", 12, UIStyle.type_color(ty_s).lightened(0.25))
+		tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sub.add_child(tl)
+	else:
+		var cat := String(c.get("category", ""))
+		var kl := UIStyle.label(cat.capitalize(), 12, UIStyle.category_text_color(cat))
+		kl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sub.add_child(kl)
+	if unit:
+		var stats := HBoxContainer.new()
+		stats.add_theme_constant_override("separation", 3)
+		stats.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		for part in [[c.get("atk"), CardDetailsPanel.STAT_EDGE["ATK"]], ["/", UIStyle.MUTED], [c.get("def"), CardDetailsPanel.STAT_EDGE["DEF"]]]:
+			var l := UIStyle.label("?" if part[0] == null else str(part[0]), 17 if part[0] is not String else 14, part[1])
+			l.add_theme_font_override("font", UIStyle.font_display(700))
+			l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+			l.add_theme_constant_override("outline_size", 3)
+			l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			stats.add_child(l)
+		hb.add_child(stats)
+	return hb
 
 
 ## The selected row's legal actions as buttons [{label, full, kind, run}] (none while locked).
@@ -625,31 +691,31 @@ func open_method_picker(fu: int) -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 16)
 	hp.body.add_child(row)
+	row.add_theme_constant_override("separation", UIStyle.sp("lg"))
 	for m in ms:
 		var mm: Dictionary = m
-		var cell := VBoxContainer.new()
-		cell.add_theme_constant_override("separation", 6)
-		row.add_child(cell)
-		var holder := MarginContainer.new()
-		for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-			holder.add_theme_constant_override(side, 5)
-		cell.add_child(holder)
+		# #93: the card (150 px) and its button are one tile in a joined frame: hovering either
+		# lights the frame, lifts the card and warms the button, so the pair reads as one choice.
+		var tile := MethodTile.new()
+		row.add_child(tile)
 		var cw := CardWidget.new().setup(find_card(int(m["via"])), "hand")
+		GameUi.resize_card(cw, METHOD_CARD)
+		cw.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		cw.tooltip_text = method_label(m)
 		cw.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		cw.set_meta("fusion_method", true)
 		cw.pressed.connect(func(_w): run_fusion(fu, mm))
 		cw.right_pressed.connect(gs.inspect.inspect_widget)
-		cw.mouse_entered.connect(func(): gs.overlays._lift(cw, 1.05))
-		cw.mouse_exited.connect(func(): gs.overlays._lift(cw, 1.0))
-		holder.add_child(cw)
+		tile.col.add_child(cw)
 		# The card is shown above, so the button names only the action; the full label is the tooltip.
-		var b := UIStyle.button(method_action(m), 13)
-		b.custom_minimum_size = Vector2(CardWidget.SIZES["hand"].x + 40.0, 34)
+		var b := UIStyle.button(method_action(m), 14)
+		b.custom_minimum_size = Vector2(METHOD_CARD.x + 24.0, 36)
+		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		b.set_meta("method_button", true)
 		b.tooltip_text = method_full(m)
 		b.pressed.connect(func(): run_fusion(fu, mm))
-		cell.add_child(b)
+		tile.col.add_child(b)
+		tile.bind(cw, b, func(): run_fusion(fu, mm), func(on: bool): gs.overlays._lift(cw, 1.05 if on else 1.0))
 	hp.body.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.45), true, 10.0))
 	var cancel := UIStyle.button("Cancel", 15)
 	cancel.custom_minimum_size = Vector2(140, 40)
@@ -688,3 +754,68 @@ func _sync_method_picker() -> void:
 		close_method_picker()
 	elif hash(ms) != _method_sig:
 		open_method_picker(fu)
+
+
+## #93: card size in the Fusion-method picker (the hand size was small for its modal).
+const METHOD_CARD := Vector2(150, 225)
+
+
+## #93: one way to Fusion Summon in the method picker: the method's card over its button in one
+## joined frame (an F3 well). Hovering anywhere on it lights the rim gold, lifts the card and gives
+## the button its hover face, with one ui_hover cue; a click anywhere on it picks the method.
+## Under reduced motion the card does not lift (the rim marks the hover).
+class MethodTile extends PanelContainer:
+	## The tile's content column (the card, then the button).
+	var col := VBoxContainer.new()
+	var hovered := false
+	var _sb: StyleBoxFlat
+	var _button: Button
+	var _pick: Callable
+	var _lift: Callable
+
+	func _init() -> void:
+		_sb = UIStyle.flat(Color(0.045, 0.035, 0.025, 0.92), Color(UIStyle.BRONZE, 0.7), 1, 10)
+		UIStyle.pad(_sb, "md")
+		_sb.shadow_color = Color(0, 0, 0, 0.45)
+		_sb.shadow_size = 6
+		_sb.shadow_offset = Vector2(0, 3)
+		add_theme_stylebox_override("panel", _sb)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		col.add_theme_constant_override("separation", UIStyle.sp("md"))
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(col)
+
+	## Wires the button `b`, the pick action and the card lift (Callable(bool)).
+	func bind(_cw: CardWidget, b: Button, pick: Callable, lift: Callable) -> void:
+		_button = b
+		_pick = pick
+		_lift = lift
+
+	func _gui_input(e: InputEvent) -> void:
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT and _pick.is_valid():
+			accept_event()
+			_pick.call()
+
+	func _process(_d: float) -> void:
+		var h := get_viewport().gui_get_hovered_control() if is_inside_tree() else null
+		var on := h != null and (h == self or is_ancestor_of(h))
+		if on != hovered:
+			set_hover(on)
+
+	## Shows the tile hovered (`on`) or at rest.
+	func set_hover(on: bool) -> void:
+		hovered = on
+		_sb.border_color = UIStyle.GOLD_HI if on else Color(UIStyle.BRONZE, 0.7)
+		_sb.set_border_width_all(2 if on else 1)
+		_sb.shadow_color = Color(UIStyle.GOLD, 0.35) if on else Color(0, 0, 0, 0.45)
+		_sb.shadow_size = 14 if on else 6
+		if _button != null:
+			if on:
+				_button.add_theme_stylebox_override("normal", _button.get_theme_stylebox("hover"))
+			else:
+				_button.remove_theme_stylebox_override("normal")
+		if on:
+			Sfx.hover_item()
+		if _lift.is_valid() and not UIStyle.reduce_motion:
+			_lift.call(on)
