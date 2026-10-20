@@ -52,6 +52,8 @@ func _init(title: String = "", caption: String = "", color: Color = UIStyle.GOLD
 	if compact:
 		tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tl.clip_text = true
+	else:
+		tl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # a long title wraps instead of widening its tile
 	box.add_child(tl)
 	if caption != "":
 		var cl := UIStyle.label(caption, 13, UIStyle.TEXT_DIM, true)

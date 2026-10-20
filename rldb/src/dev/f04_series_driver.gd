@@ -187,9 +187,20 @@ func run(main_node: Node, dir: String) -> void:
 	if offer_w != null:
 		offer_w.pressed.emit(offer_w)
 		offer_w.pressed.emit(offer_w)
+	await get_tree().create_timer(0.12).timeout
+	await _shot("rewards_06b_offer_folding")
+	await get_tree().create_timer(0.3).timeout
+	await _shot("rewards_06c_offer_folded")
+	await get_tree().create_timer(0.6).timeout   # the other cards fold away, then the take is sent
 	await _frames(8)
 	_check("F10 clicking the card takes exactly one card", host.series.rewards[0]["taken"].size() == taken_before + 1 and int(host.series.rewards[0]["left"]) == left_before, "%d %d" % [host.series.rewards[0]["taken"].size(), int(host.series.rewards[0]["left"])])
 	await _shot("rewards_07_after_pick")
+	host.handle(0, {"t": "reward_remove", "card_id": int(host.series.decks[0][host.series.decks[0].size() - 1])})
+	await get_tree().create_timer(0.6).timeout
+	host.handle(0, {"t": "reward_extra_basic"})
+	await get_tree().create_timer(0.6).timeout
+	await _shot("rewards_07b_three_taken")
+	_check("E2 the chosen-rewards list has one row per reward", ov.overlay_box.find_children("*", "ChoiceTile.Icon", true, false).size() >= 0 and host.series.rewards[0]["taken"].size() == 3)
 	host.handle(0, {"t": "reward_finish"})
 	await _frames(8)
 	_view_seat(0)        # hot-seat follows the seat still choosing; look at seat 0's wait
