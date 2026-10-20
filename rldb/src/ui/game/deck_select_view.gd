@@ -55,10 +55,15 @@ func render() -> bool:
 	var box := ov.overlay_box
 	_lobby_bar(box)
 	if view["deck_ready"][p]:
+		held.clear()
 		_waiting(box)
 		return false
 	if view.has("starters"):
 		_close_picker()
+		if not held.is_empty() and not choosing_for_bot(view, p):
+			held.clear()
+		if bot_stage() or choosing_for_bot(view, p):
+			_bot_bar(box, bot_stage())
 		_tabs_and_list(box)
 		return true
 	_draft(box)
@@ -111,6 +116,108 @@ func _waiting(box: VBoxContainer) -> void:
 	box.add_child(wp)
 
 
+# ---------------------------------------------------------------- the bot's deck (J24)
+## J24 (owner, 22 Oct): in a bot series with "Choose the bot's deck" on, choosing your deck does
+## not start the game. It is held here while a second deck screen ("Choose the bot's deck", with a
+## Back to your own choice) picks the bot's; then the bot's deck is locked in (LocalHost
+## "bot_deck") and yours right after it. {} while not choosing the bot's deck.
+var held: Dictionary = {}
+## Name of the held deck (shown on the bot screen).
+var held_name: String = ""
+## Pick button of a tile on the bot screen.
+const BOT_PICK_TEXT := "Bot plays this"
+
+
+## True while the bot's deck is being chosen (your own is held).
+func bot_stage() -> bool:
+	return not held.is_empty()
+
+
+## True when seat `p` of `view` chooses the other seat's (the bot's) deck after its own.
+static func choosing_for_bot(view: Dictionary, p: int) -> bool:
+	return bool(view.get("bot_deck_pick", false)) and String(view.get("mode", "")) == "bot" \
+		and not bool(view["deck_ready"][1 - p]) and view.has("starters")
+
+
+## A deck tile's pick: sends `cmd` (named `deck_name`), or J24 holds it and opens the bot's deck
+## screen, or (on that screen) locks the bot's deck in and then the held one.
+func choose(cmd: Dictionary, deck_name: String) -> void:
+	var gs := ov.gs
+	var p := gs.me()
+	if not bot_stage():
+		if choosing_for_bot(gs.view, p):
+			held = cmd
+			held_name = deck_name
+			_open_stage()
+			return
+		gs.send(cmd)
+		return
+	var mine := held
+	held = {}
+	gs.send({"t": "bot_deck", "deck": cmd})
+	if not bool(gs.view["deck_ready"][1 - p]):
+		held = mine   # refused (the reason shows as the seat's status): stay on the bot screen
+		ov.refresh()
+		return
+	gs.send(mine)
+
+
+## Back from the bot's deck screen to choosing your own (Back button, Esc).
+func back_to_own() -> void:
+	if not bot_stage():
+		return
+	Sfx.play("back")
+	held = {}
+	held_name = ""
+	_open_stage()
+
+
+## Rebuilds the deck stage for the other screen (your deck / the bot's), from the top of the list.
+func _open_stage() -> void:
+	ov.deck_open.clear()
+	_saved_scroll = 0
+	ov.refresh()
+	if ov.overlay is HousePanel and ov.overlay.is_inside_tree():
+		(ov.overlay as HousePanel).appear()
+
+
+## The two-step bar above the tabs of a bot series that chooses the bot's deck. Step 1 (your deck):
+## the step and what comes next. Step 2 (the bot's deck): Back to your own choice (Esc too), the
+## deck you will play, and the step. Both rows keep the small button's height, so the tabs below
+## stay where they are when the screen changes.
+func _bot_bar(box: VBoxContainer, second: bool) -> void:
+	var row := HBoxContainer.new()
+	row.name = "BotDeckBar"
+	row.custom_minimum_size.y = UIStyle.BUTTON_H["small"]
+	row.add_theme_constant_override("separation", UIStyle.sp("md"))
+	box.add_child(row)
+	if second:
+		var back := UIStyle.size_button(UIStyle.secondary_button("‹  Back", 14), "small")
+		back.name = "BotDeckBack"
+		back.custom_minimum_size.x = 110
+		back.tooltip_text = "Back to choosing your own deck (Esc)"
+		back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		back.pressed.connect(back_to_own)
+		row.add_child(back)
+		var chip := UIStyle.chip("Your deck: %s" % held_name, UIStyle.GOLD, 14)
+		chip.name = "HeldDeck"
+		chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(chip)
+	else:
+		var next := UIStyle.label("After this, you choose the bot's deck.", HINT_PX + 1, UIStyle.MUTED)
+		next.name = "NextHint"
+		next.add_theme_font_override("font", UIStyle.font_italic())
+		next.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(next)
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(sp)
+	var step := UIStyle.chip("Step %d of 2 · %s" % [2 if second else 1, "the bot's deck" if second else "your deck"], UIStyle.BRONZE.lightened(0.3), 13)
+	step.name = "StepChip"
+	step.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(step)
+
+
 # ---------------------------------------------------------------- tabs + tiles
 func _tabs_and_list(box: VBoxContainer) -> void:
 	var gs := ov.gs
@@ -151,11 +258,12 @@ func _tabs_and_list(box: VBoxContainer) -> void:
 	grid.add_theme_constant_override("v_separation", 12)
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inner.add_child(grid)
+	var btn := BOT_PICK_TEXT if bot_stage() else "Choose deck"
 	if tab == "structured":
 		for i in starters.size():
 			var s: Dictionary = starters[i]
 			var idx: int = i
-			_add_tile(grid, "s%d" % i, s["name"], s["theme"], s["main"], s["extra"], "Choose deck", func(): ov.gs.send({"t": "pick_starter", "index": idx}))
+			_add_tile(grid, "s%d" % i, s["name"], s["theme"], s["main"], s["extra"], btn, func(): choose({"t": "pick_starter", "index": idx}, String(s["name"])))
 	elif saved.is_empty():
 		inner.remove_child(grid)
 		grid.queue_free()
@@ -175,7 +283,7 @@ func _tabs_and_list(box: VBoxContainer) -> void:
 				else:
 					main.append(sm)
 			var deck: Dictionary = d
-			_add_tile(grid, "c%d" % n, d["name"], "Saved custom deck", main, extra, "Use this deck", func(): ov.gs.send({"t": "custom_deck", "cards": deck["cards"], "name": deck["name"]}), DeckStore.validate(deck["cards"]))
+			_add_tile(grid, "c%d" % n, d["name"], "Saved custom deck", main, extra, btn if bot_stage() else "Use this deck", func(): choose({"t": "custom_deck", "cards": deck["cards"], "name": deck["name"]}, String(deck["name"])), DeckStore.validate(deck["cards"]))
 			n += 1
 
 

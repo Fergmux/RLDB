@@ -59,11 +59,13 @@ const SUBTITLE_SIZE := 14
 ## Logo baseline to the subtitle's cap tops (review #2).
 const SUBTITLE_GAP := 16.0
 const LOGO_RULE_W := 300.0
-## Ambient motes, the light shaft in the arch (fractions of the screen) and the Ken Burns drift.
+## Ambient motes and the light shaft in the arch (fractions of the screen). J2 (owner, 22 Oct):
+## the painting itself never moves. Its old 40 s "Ken Burns" scale drift (1.000 -> 1.006 about the
+## centre) made it jump by single pixels now and then: with snap_controls_to_pixels on, Godot
+## rounds a Control's canvas translation to whole pixels, and a centred scale moves that
+## translation by -pivot * (scale - 1). The motes and the shaft carry the ambient life instead.
 const MOTE_COUNT := 26
 const SHAFT_RECT := Rect2(0.4, 0.0, 0.22, 0.86)
-const KEN_BURNS_SCALE := 1.006
-const KEN_BURNS_TIME := 40.0
 ## Centre panels: padding (24 px modal padding, 28 px clear of the filigree corners) and the
 ## Settings panel's Close button row.
 const CENTER_PAD := Vector2(28, 24)
@@ -76,7 +78,7 @@ const LEAF_TAGS := {
 	"settings": ["Options", "This device"], "credits": ["About", "v%s"],
 }
 
-## The menu backdrop (the Ken Burns drift scales it), its ambient motes and the hero logo.
+## The menu backdrop (static, J2), its ambient motes and the hero logo.
 var backdrop: Control
 var motes: AmbientMotes
 var logo: TitleText
@@ -112,7 +114,6 @@ func _build() -> void:
 	backdrop = UIStyle.background(BACKGROUND_DIM, UIStyle.MENU_BACKGROUND)
 	backdrop.name = "Backdrop"
 	add_child(backdrop)
-	backdrop.resized.connect(func(): backdrop.pivot_offset = backdrop.size / 2.0)
 	# Ambient life (design review #6): drifting petals and gold motes, a light shaft in the arch.
 	motes = AmbientMotes.new(MOTE_COUNT, [AmbientMotes.PETAL, AmbientMotes.GOLD])
 	motes.name = "AmbientMotes"
@@ -172,20 +173,6 @@ func _build() -> void:
 	_menu_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_menu_center)
 	_build_menu_level(false)
-
-
-func _ready() -> void:
-	_ken_burns()
-
-
-## A 40 s "Ken Burns" drift of the backdrop (1.00 -> 1.006 and back, design review 1.4.5); off
-## under reduce motion.
-func _ken_burns() -> void:
-	if UIStyle.reduce_motion or backdrop == null:
-		return
-	var tw := backdrop.create_tween().set_loops()
-	tw.tween_property(backdrop, "scale", Vector2.ONE * KEN_BURNS_SCALE, KEN_BURNS_TIME / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(backdrop, "scale", Vector2.ONE, KEN_BURNS_TIME / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
 static var _sub_font: FontVariation
@@ -428,6 +415,7 @@ static func _center_panel(title: String, note: String = "", section: String = ""
 	v.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, 10.0))
 	if note != "":
 		var n := UIStyle.label(note, 15, UIStyle.MUTED, true)
+		n.name = "Note"
 		n.add_theme_constant_override("line_spacing", 4)
 		v.add_child(n)
 	return [p, v]
@@ -634,6 +622,38 @@ func _close_row() -> Control:
 	return row
 
 
+## The Play vs Bot note: who chooses the bot's deck (J24).
+static func bot_note(player_picks: bool) -> String:
+	if player_picks:
+		return "A series against the computer. After choosing your deck, you choose the bot's."
+	return "A series against the computer. The bot picks a random Structure deck."
+
+
+## J24: the "Choose the bot's deck" toggle of Play vs Bot, shown while Custom decks is chosen (a
+## draft has no deck to choose) and remembered for this viewer (SessionOptions).
+func _bot_deck_box(v: VBoxContainer) -> CheckBox:
+	var note: Label = v.get_node_or_null("Note")
+	var cb := SettingsForm.HouseCheck.new("Choose the bot's deck", _options.choose_bot_deck)
+	cb.custom_minimum_size.y = 40
+	var sync := func():
+		if not is_instance_valid(cb):
+			return
+		cb.visible = String(_options.series.get("deck_mode", "starter")) == "starter"
+		if note != null and is_instance_valid(note):
+			note.text = bot_note(_options.bot_deck_pick(_options.series))
+	cb.toggled.connect(func(on: bool):
+		_options.set_choose_bot_deck(on)
+		sync.call())
+	cb.name = "ChooseBotDeck"
+	cb.tooltip_text = "After you choose your deck, a second deck screen lets you pick the deck the bot plays.\nOff: the bot plays a random Structure deck."
+	v.add_child(cb)
+	series_options_changed.connect(sync)
+	# A retired panel leaves the tree twice (it fades out where it stood): disconnect once.
+	cb.tree_exiting.connect(func(): if series_options_changed.is_connected(sync): series_options_changed.disconnect(sync))
+	sync.call()
+	return cb
+
+
 func _privacy_box(text: String) -> CheckBox:
 	return _check_box(text, _options.privacy, func(on): _options.privacy = on)
 
@@ -644,8 +664,9 @@ func _leaf_panel(target: String) -> Control:
 	_series_panel_active = false
 	match target:
 		"bot":
-			pv = _leaf(target, "Play vs Bot", "A series against the computer. The bot picks a random Structure deck.")
+			pv = _leaf(target, "Play vs Bot", bot_note(_options.bot_deck_pick(_options.series)))
 			_series_options(pv[1])
+			_bot_deck_box(pv[1])
 			_start_button(pv[1], "Start series", bot_requested.emit)
 		"hotseat":
 			pv = _leaf(target, "Hot-seat", "Two players take turns on this screen.")

@@ -481,6 +481,8 @@ func stage_title(stage: String) -> String:
 			"rewards": return "Game %d complete — rewards" % gs.view["game_no"]
 			"first_player": return "Next game"
 			"over": return "Series over"
+	if stage == "decks" and decks != null and decks.bot_stage():
+		return "Choose the bot's deck"   # J24: the second deck screen of a bot series
 	match stage:
 		"decks": return "Choose your deck" if gs.view.get("deck_mode", "starter") == "starter" else "Draft your deck"
 		"rewards": return "Game %d complete — rewards" % gs.view["game_no"]

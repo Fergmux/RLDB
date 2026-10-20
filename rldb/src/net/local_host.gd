@@ -37,11 +37,35 @@ func handle(p: int, cmd: Dictionary) -> void:
 		else:
 			error.emit(p, "A series can only be saved between duels.")
 		return
+	if String(cmd.get("t", "")) == "bot_deck":
+		_bot_deck(p, cmd)
+		return
 	var err := series.submit(p, cmd)
 	if err == "" and String(cmd.get("t", "")) == "start_duel" and is_hotseat() and series.stage == Series.STAGE_FIRST:
 		# G05: hot-seat players share one screen, so one Start next duel press starts it for both.
 		if not series.duel_ready[1 - p]:
 			series.submit(1 - p, {"t": "start_duel"})
+	if err != "":
+		error.emit(p, err)
+		seats[p].status_changed.emit(err)
+	broadcast()
+
+
+## J24: the player (seat 0) of a bot series that lets them choose the bot's deck locks the bot's
+## seat in with `cmd["deck"]` (a "pick_starter" or "custom_deck" command, checked by the Series like
+## any other deck choice, so its telemetry source and Structure-deck name stay right). Local only:
+## a network seat can never choose the other seat's deck.
+func _bot_deck(p: int, cmd: Dictionary) -> void:
+	var deck = cmd.get("deck", {})
+	var err := ""
+	if p != 0 or not series.bot_deck_pick():
+		err = "Only the player of this bot series chooses the bot's deck."
+	elif not (deck is Dictionary) or not (String(deck.get("t", "")) in ["pick_starter", "custom_deck"]):
+		err = "Choose a deck for the bot."
+	elif series.stage != Series.STAGE_DECKS:
+		err = "Decks are already chosen."
+	else:
+		err = series.submit(1, deck)
 	if err != "":
 		error.emit(p, err)
 		seats[p].status_changed.emit(err)
