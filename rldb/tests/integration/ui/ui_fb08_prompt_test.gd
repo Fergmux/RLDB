@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## Playtest feedback 08 (agent B): G04 exact-payment panel without a status line, G03 every card
-## a response prompt mentions with Skip and Pass for the rest of this turn below Activate (D13),
+## a response prompt mentions with Skip and Skip for the rest of this turn below Activate (D13),
 ## G09 card-anchored toasts.
 
 
@@ -112,17 +112,17 @@ func test_g03_trap_response_shows_attacker_target_and_responding_trap() -> void:
 	assert_array(resp).is_equal([r[6]])
 
 
-## D13 (owner feedback 2026-10-20): Activate, Skip, then Pass for the rest of this turn, one per
+## D13 (owner feedback 2026-10-20): Activate, Skip, then Skip for the rest of this turn, one per
 ## row, each with its own look (gold primary, slate standard, wine leather).
 func test_d13_activate_then_skip_then_pass_for_the_turn() -> void:
 	var r := await _attack_window()
 	var gs: GameScreen = r[0]
 	var m: MatchEngine = r[2]
 	assert_str(String(m.pending["options"][0]["label"])).is_equal("Skip")    # the engine lists Skip first
-	assert_array(_list_texts(gs)).is_equal(["Activate Damage Conversion", "Skip", "Pass for the rest of this turn"])
+	assert_array(_list_texts(gs)).is_equal(["Activate Damage Conversion", "Skip", "Skip for the rest of this turn"])
 	await await_idle_frame()
 	var btns := gs.prompt.banner_list.find_children("*", "Button", true, false)
-	# Activate on top; Skip and Pass for the rest of this turn below it: side by side when Skip fits
+	# Activate on top; Skip and Skip for the rest of this turn below it: side by side when Skip fits
 	# its share of the row, else one per row (H1 release check: side by side, a 190 px panel broke
 	# "Skip" into "Ski / p").
 	assert_float((btns[1] as Control).global_position.y).is_greater((btns[0] as Control).global_position.y)
@@ -172,7 +172,7 @@ func test_d13_pair_fits_side_by_side_only_when_skip_holds_its_word() -> void:
 	pair.add_theme_constant_override("separation", 6)
 	var a := UIStyle.button("Skip", 14)
 	a.size_flags_stretch_ratio = 0.75
-	var b := UIStyle.wine_button("Pass for the rest of this turn", 13)
+	var b := UIStyle.wine_button("Skip for the rest of this turn", 13)
 	b.size_flags_stretch_ratio = 1.25
 	pair.add_child(a)
 	pair.add_child(b)

@@ -76,7 +76,7 @@ func _new_player(index: int) -> Dictionary:
 	powers.fill(-1)
 	return {
 		"index": index, "hp": START_HP, "ap": 0, "ap_start": 0, "ap_peak": 0, "ap_next": [], "delayed": [],
-		# D13: turn on which this player chose "Pass for the rest of this turn" for Traps (-1: none).
+		# D13: turn on which this player chose "Skip for the rest of this turn" for Traps (-1: none).
 		"trap_pass_turn": -1,
 		"units": units, "backrow": backrow, "powers": powers,
 		"hand": [], "draw": [], "spent": [], "exhaust": [], "extra": [],

@@ -583,13 +583,19 @@ func _render_first() -> void:
 		var sel := -1
 		if chosen:
 			sel = whos.find(first)
-		var seg := SegmentedChoice.new(["I go first", "My opponent goes first"], sel, 17)
+		# H22 (owner, 21 Oct): the two answers stand SPLIT_GAP apart, with extra room above and below.
+		var seg := SegmentedChoice.new(["I go first", "My opponent goes first"], sel, 17, SegmentedChoice.SPLIT_GAP)
 		seg.name = "FirstPlayerChoice"
 		seg.set_disabled(you_ready)
 		for i in seg.buttons.size():
 			seg.buttons[i].tooltip_text = "Chosen" if i == sel else "Choose this"
 		seg.chosen.connect(func(i: int): gs.send({"t": "first_player", "who": int(whos[i])}))
-		overlay_box.add_child(seg)
+		var room := MarginContainer.new()
+		room.name = "FirstPlayerRoom"
+		room.add_theme_constant_override("margin_top", UIStyle.sp("sm"))
+		room.add_theme_constant_override("margin_bottom", UIStyle.sp("md"))
+		room.add_child(seg)
+		overlay_box.add_child(room)
 	elif chosen:
 		overlay_box.add_child(_centred(("%s chose you to go first in game %d." if first == me else "%s chose to go first in game %d.") % [opp, next_no], 18, UIStyle.ACCENT))
 	else:

@@ -88,7 +88,7 @@ func _setup_battle() -> Dictionary:
 	return {"m": m, "atk": atk, "def": def, "trap": trap, "secret": secret}
 
 
-## Index of the pending Trap window's first "Activate ..." option (D13: Skip and Pass for the rest
+## Index of the pending Trap window's first "Activate ..." option (D13: Skip and Skip for the rest
 ## of this turn come first).
 func _activate_i(m: MatchEngine) -> int:
 	for i in m.pending.get("options", []).size():

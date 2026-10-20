@@ -142,18 +142,45 @@ func layout(w: float, h: float) -> void:
 	side_root.scale = Vector2(gs.side_k, gs.side_k)
 	side_root.position = Vector2(w - gs.sidebar_w, 0)
 	side_root.size = Vector2(GameScreen.SIDEBAR_W, h / gs.side_k)
-	log_panel.custom_minimum_size.y = log_height(h / gs.side_k)
+	_col_h = h / gs.side_k
+	if _log_tw != null and _log_tw.is_valid():
+		_log_tw.kill()
+	log_panel.custom_minimum_size.y = log_height(_col_h, GameLog.expanded())
 
 
-## #48: the game log takes LOG_SHARE of the sidebar's height (at least LOG_MIN_H); the card details
-## below it get the rest.
-const LOG_SHARE := 0.28
-const LOG_MIN_H := 180.0
+## #48 / H11 (owner, 21 Oct): the game log takes LOG_SHARE of the sidebar's height (at least
+## LOG_MIN_H) by default, or LOG_SHARE_TALL (at least LOG_MIN_TALL, a little more than the 0.28 / 180
+## it used to have) once the viewer expands it; the card details below get the rest.
+const LOG_SHARE := 0.22
+const LOG_MIN_H := 150.0
+const LOG_SHARE_TALL := 0.34
+const LOG_MIN_TALL := 220.0
+
+## Sidebar height (layout px) of the last layout, and the log's height tween.
+var _col_h: float = 0.0
+var _log_tw: Tween
 
 
-## Height of the log panel in a sidebar `col_h` tall (layout px).
-static func log_height(col_h: float) -> float:
+## Height of the log panel in a sidebar `col_h` tall (layout px), short or `tall`.
+static func log_height(col_h: float, tall: bool = false) -> float:
+	if tall:
+		return maxf(LOG_MIN_TALL, roundf(col_h * LOG_SHARE_TALL))
 	return maxf(LOG_MIN_H, roundf(col_h * LOG_SHARE))
+
+
+## H11: eases the log panel to the height of the viewer's choice (the "slide" motion; at once under
+## reduce motion). The log keeps following its newest line.
+func animate_log() -> void:
+	if log_panel == null or _col_h <= 0.0:
+		return
+	var to := log_height(_col_h, GameLog.expanded())
+	if _log_tw != null and _log_tw.is_valid():
+		_log_tw.kill()
+	if UIStyle.reduce_motion or not log_panel.is_inside_tree():
+		log_panel.custom_minimum_size.y = to
+		return
+	_log_tw = log_panel.create_tween()
+	UIStyle.tween_token(_log_tw, log_panel, "custom_minimum_size:y", to, "slide")
 
 
 ## Turn panel: whose turn, phase pips and the phase button (or the state chip while a choice is

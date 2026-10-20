@@ -38,6 +38,21 @@ static func grow_pts(pts: PackedVector2Array, c: Vector2, amount: float) -> Pack
 	return out
 
 
+## Outline of `rect` with its corners rounded to `rad` (each corner `seg` segments), clockwise from
+## the top-left corner's top end. A `rad` of 0 is the plain rectangle.
+static func round_rect_pts(rect: Rect2, rad: float, seg: int = 5) -> PackedVector2Array:
+	var r := clampf(rad, 0.0, minf(rect.size.x, rect.size.y) / 2.0)
+	var pts := PackedVector2Array()
+	var centres := [Vector2(rect.end.x - r, rect.position.y + r), Vector2(rect.end.x - r, rect.end.y - r),
+		Vector2(rect.position.x + r, rect.end.y - r), Vector2(rect.position.x + r, rect.position.y + r)]
+	for k in 4:
+		var a0 := -PI / 2.0 + float(k) * PI / 2.0
+		for i in seg + 1:
+			var a := a0 + float(i) / float(seg) * PI / 2.0
+			pts.append((centres[k] as Vector2) + Vector2(cos(a), sin(a)) * r)
+	return pts
+
+
 ## Copy of `pts` with the first point appended, for drawing a closed outline with draw_polyline.
 static func closed(pts: PackedVector2Array) -> PackedVector2Array:
 	var o := PackedVector2Array(pts)

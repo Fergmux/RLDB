@@ -1,13 +1,14 @@
 class_name DeckSelectView
 extends RefCounted
-## "Choose your deck" stage of the series modal (F04-02): lobby bar, Structure / Custom tabs,
+## "Choose your deck" stage of the series modal (F04-02): lobby bar, Custom / Structure tabs,
 ## uniform deck tiles in a smooth scrolling plate, the locked-in waiting state and the draft
 ## (category tabs drafted in any order, the basic unit changeable at any time, the offer).
 ## Renders into the overlay's content box; sends commands through the host screen.
 
 
-## Which tab is open: "structured" (Structure decks) or "custom" (saved decks).
-var tab: String = "structured"
+## Which tab is open: "structured" (Structure decks) or "custom" (saved decks); "" until the deck
+## stage first renders, which then opens default_tab() (H1).
+var tab: String = ""
 ## Fill of the deck pane (the leather grain shows on it).
 const PANE_FILL := Color(0.092, 0.074, 0.054, 0.95)
 ## The tab hint size (px).
@@ -117,24 +118,11 @@ func _tabs_and_list(box: VBoxContainer) -> void:
 	var starters: Array = view["starters"]
 	var custom_ok: bool = view.get("deck_mode", "starter") != "draft"
 	var saved: Array = DeckStore.list() if custom_ok else []
+	if tab == "":
+		tab = default_tab(custom_ok, saved.size())
 	if tab == "custom" and not custom_ok:
 		tab = "structured"
-	# Folder tabs joined to the pane that holds the tile list (one widget for every tab strip).
-	var ft := FolderTabs.new()
-	ft.tab_height = 50.0
-	ft.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	ft.set_pane_margins(8, 14, 6, 8)
-	ft.pane_fill = PANE_FILL   # leather that reads as leather, not a black void (review #54)
-	_add_tab(ft, "structured", "Structure", starters.size(), "shield")
-	if custom_ok:
-		_add_tab(ft, "custom", "Custom", saved.size(), "tome")
-	ft.select(tab, false)
-	# Review #53: 13 px italic MUTED, its baseline on the tab titles' baseline.
-	var hint := UIStyle.label("Structure decks, ready to play" if tab == "structured" else "Decks you built and saved", HINT_PX, UIStyle.MUTED)
-	hint.name = "TabHint"
-	hint.add_theme_font_override("font", UIStyle.font_italic())
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	ft.set_trailing(hint, UIStyle.font_italic(), HINT_PX)
+	var ft := deck_tabs(custom_ok, starters.size(), saved.size())
 	ft.tab_selected.connect(func(key: String):
 		if tab != key:
 			tab = key
@@ -189,6 +177,34 @@ func _tabs_and_list(box: VBoxContainer) -> void:
 			var deck: Dictionary = d
 			_add_tile(grid, "c%d" % n, d["name"], "Saved custom deck", main, extra, "Use this deck", func(): ov.gs.send({"t": "custom_deck", "cards": deck["cards"], "name": deck["name"]}), DeckStore.validate(deck["cards"]))
 			n += 1
+
+
+## The deck-source folder tabs, joined to the pane that holds the tile list: Custom first (when custom
+## decks are allowed), then Structure (H1), with the open tab `tab` and its hint at the right.
+func deck_tabs(custom_ok: bool, n_structure: int, n_custom: int) -> FolderTabs:
+	var ft := FolderTabs.new()
+	ft.tab_height = 50.0
+	ft.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	ft.set_pane_margins(8, 14, 6, 8)
+	ft.pane_fill = PANE_FILL   # leather that reads as leather, not a black void (review #54)
+	# H1 (owner, 21 Oct): the player's own decks come first, the Structure decks second.
+	if custom_ok:
+		_add_tab(ft, "custom", "Custom", n_custom, "tome")
+	_add_tab(ft, "structured", "Structure", n_structure, "shield")
+	ft.select(tab, false)
+	# Review #53: 13 px italic MUTED, its baseline on the tab titles' baseline.
+	var hint := UIStyle.label("Structure decks, ready to play" if tab == "structured" else "Decks you built and saved", HINT_PX, UIStyle.MUTED)
+	hint.name = "TabHint"
+	hint.add_theme_font_override("font", UIStyle.font_italic())
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ft.set_trailing(hint, UIStyle.font_italic(), HINT_PX)
+	return ft
+
+
+## H1: the tab a fresh deck stage opens on: Custom when custom decks are allowed (not a draft) and
+## the player has saved at least one, else Structure (an empty Custom tab is never the first view).
+static func default_tab(custom_ok: bool, saved_count: int) -> String:
+	return "custom" if custom_ok and saved_count > 0 else "structured"
 
 
 func _add_tile(grid: GridContainer, id: String, title: String, theme: String, main: Array, extra: Array, btn: String, on_pick: Callable, blocked: String = "") -> void:

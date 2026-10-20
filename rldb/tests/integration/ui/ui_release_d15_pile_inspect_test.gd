@@ -63,9 +63,11 @@ func test_pile_row_is_a_compact_summary_that_expands_on_hover() -> void:
 	assert_bool(row.find_children("*", "CardDetailsPanel", true, false).is_empty()).is_true()
 	var texts := summary.find_children("*", "Label", true, false).map(func(l): return String((l as Label).text))
 	assert_array(texts).contains(["/"])
-	# The thumbnail is the art alone (a whole card face at 44 px is unreadable micro-text).
-	assert_int(summary.find_children("*", "CardWidget", true, false).size()).is_equal(0)
-	assert_bool(summary.get_child(0) is GameDetails.ArtThumb).is_true()
+	# H6 (owner, 21 Oct): the row leads with the left input pane's small card face, not an art crop,
+	# and names the card's kind before it expands.
+	assert_bool(summary.get_child(0) is CardWidget).is_true()
+	assert_object((summary.get_child(0) as CardWidget).custom_minimum_size).is_equal(GameDetails.PILE_CARD)
+	assert_object(summary.find_child("RowChips", true, false)).is_not_null()
 	row.mouse_entered.emit()
 	assert_bool(more.visible).is_true()
 	assert_int(row.find_children("*", "CardDetailsPanel", true, false).size()).is_equal(1)

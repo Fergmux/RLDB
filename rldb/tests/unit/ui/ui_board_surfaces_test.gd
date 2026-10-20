@@ -69,9 +69,18 @@ func test_log_arrival_curve_rises_then_rests() -> void:
 
 
 func test_log_takes_a_share_of_the_sidebar_with_a_floor() -> void:
-	# #48: 28% of the sidebar's height, never under 180 px.
-	assert_float(GameSidebar.log_height(1000.0)).is_equal(280.0)
+	# #48 / H11: the short default is 22% of the sidebar's height, never under its floor.
+	assert_float(GameSidebar.log_height(1000.0)).is_equal(220.0)
 	assert_float(GameSidebar.log_height(500.0)).is_equal(GameSidebar.LOG_MIN_H)
+
+
+func test_expanded_log_is_a_little_taller_than_the_old_size() -> void:
+	# H11: the tall log is a little larger than the old 28% / 180 px share; the short one smaller.
+	assert_float(GameSidebar.log_height(1000.0, true)).is_equal(340.0)
+	assert_float(GameSidebar.log_height(1000.0, true)).is_greater(280.0)
+	assert_float(GameSidebar.log_height(1000.0)).is_less(280.0)
+	assert_float(GameSidebar.log_height(500.0, true)).is_equal(GameSidebar.LOG_MIN_TALL)
+	assert_float(GameSidebar.LOG_MIN_TALL).is_greater(180.0)
 
 
 func test_wait_notice_strips_its_static_dots() -> void:

@@ -211,22 +211,35 @@ static func _ready_badge(ci: CanvasItem, rect: Rect2, s: float, glow: float) -> 
 ## Four L-shaped corner brackets on `r`, each arm `len_px` long.
 ## Selection brackets (#29): a gold filigree L at each corner of `r` with a soft glow under it and
 ## a small diamond set on the corner.
+## H12: every part glows the same way: the arms AND the corner diamond each get the two soft halo
+## passes (BRACKET_GLOW wide / near), then the solid part and a bright core line.
 static func _corner_brackets(ci: CanvasItem, r: Rect2, len_px: float, col: Color, w: float) -> void:
 	var xs := [r.position.x, r.end.x]
 	var ys := [r.position.y, r.end.y]
-	var glow := Color(col, col.a * 0.16)
+	var hot := col.lightened(0.55)
 	for i in 2:
 		for j in 2:
 			var p := Vector2(xs[i], ys[j])
 			var dx := len_px if i == 0 else -len_px
 			var dy := len_px if j == 0 else -len_px
 			var arm := PackedVector2Array([p + Vector2(dx, 0), p, p + Vector2(0, dy)])
-			ci.draw_polyline(arm, glow, w + 6.0, true)
-			ci.draw_polyline(arm, Color(col, col.a * 0.3), w + 2.5, true)
-			ci.draw_polyline(arm, col, w, true)
 			var d := w * 1.25 + 0.5
 			var q := p - Vector2(signf(dx), signf(dy)) * (w * 0.9)
-			ci.draw_colored_polygon(PackedVector2Array([q + Vector2(0, -d), q + Vector2(d, 0), q + Vector2(0, d), q + Vector2(-d, 0)]), col)
+			var dia := CardGeometry.poly(q, d, 4, 0.0)
+			# Halo passes first, under every solid part, so the arms and the diamond glow as one shape.
+			for g in BRACKET_GLOW:
+				var gc := Color(col, col.a * float(g[1]))
+				ci.draw_polyline(arm, gc, w + float(g[0]), true)
+				ci.draw_colored_polygon(CardGeometry.poly(q, d + float(g[0]) * 0.5, 4, 0.0), gc)
+			ci.draw_polyline(arm, Color(0, 0, 0, 0.35), w + 1.2, true)
+			ci.draw_polyline(arm, col, w, true)
+			ci.draw_polyline(arm, Color(hot, 0.85), maxf(0.8, w * 0.35), true)
+			ci.draw_colored_polygon(dia, col)
+			ci.draw_colored_polygon(CardGeometry.poly(q, d * 0.45, 4, 0.0), Color(hot, 0.95))
+
+
+## Selection bracket halo passes: [extra width px, alpha share], widest first.
+const BRACKET_GLOW := [[9.0, 0.12], [4.5, 0.3]]
 
 
 ## Numbered circle (`order_no`) on the top-right corner for ordered multi-select.

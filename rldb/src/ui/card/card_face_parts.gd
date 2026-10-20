@@ -15,6 +15,11 @@ const BODY_TILE := 210.0
 const PLATE := Color(0.102, 0.086, 0.075, 0.94)
 const PLATE_GRAIN := 0.45
 const PLATE_TILE := 150.0
+## H17: depth (base units) of the gilded setting round the cost gem, and the round gem's table size.
+const GEM_SETTING := 2.5
+const GEM_TABLE_K := 0.6
+## Dark gap (base units) between the cost gem's setting and its stone.
+const GEM_GAP := 0.5
 
 
 ## Card body: kind-coloured border with a drop shadow (larger while hovered), inner gradient and a
@@ -32,41 +37,89 @@ static func frame(pt: CardPainter, radius: float) -> void:
 	UiSurface.draw_round(ci, Rect2(inset, inset, pt.ps.x - 2 * inset, pt.ps.y - 2 * inset), maxf(0.0, (radius - 3.0) * s), UiSurface.PEBBLE, BODY, BODY_GRAIN, BODY_TILE * s)
 	pt.vgrad(Rect2(inset, inset, pt.ps.x - 2 * inset, pt.ps.y - 2 * inset), Color(pt.accent().darkened(0.7), 0.45), Color(0, 0, 0, 0.45))
 	ci.draw_line(Vector2(radius * s, 3.5 * s), Vector2(pt.ps.x - radius * s, 3.5 * s), Color(UIStyle.GOLD_HI, 0.4), maxf(1.0, s), true)
+	_bevel(pt, radius)
 
 
-## Name plate. One line when the name fits at a legible size, otherwise two lines (split before a
-## trailing "(Type)") so "Basic Mage (Water)" and "(Fire)" stay distinguishable (D9). `stripe` is
-## the colour of the kind stripe along the plate's foot.
-## `one_line` (field cards, #26): never split the name over two lines; below `fs_min` it is ellipsised
-## (the full name is in the hover details and the inspector).
+## H20 (21 Oct): depth on the kind-coloured frame: the border is bevelled (a lit line along its top
+## and left runs, a shade along its bottom and right), a fine gold filet runs inside it, and each
+## corner wears a small gilded cap with a stud, like the metal corners of a bound book.
+static func _bevel(pt: CardPainter, radius: float) -> void:
+	var ci := pt.ci
+	var s := pt.s
+	var w := pt.ps.x
+	var h := pt.ps.y
+	var rad := radius * s
+	var bw := maxf(2.0, 2.8 * s)
+	var e := bw * 0.3
+	var lw := maxf(1.0, 0.7 * s)
+	var lit := Color(pt.accent().lightened(0.5), 0.75)
+	var shade := Color(0, 0, 0, 0.45)
+	ci.draw_line(Vector2(rad, e), Vector2(w - rad, e), lit, lw, true)
+	ci.draw_line(Vector2(e, rad), Vector2(e, h - rad), Color(lit, lit.a * 0.7), lw, true)
+	ci.draw_line(Vector2(rad, h - e), Vector2(w - rad, h - e), shade, lw, true)
+	ci.draw_line(Vector2(w - e, rad), Vector2(w - e, h - rad), shade, lw, true)
+	pt.ring(Color(UIStyle.GOLD, FILET_A), lw, Rect2(bw, bw, w - 2.0 * bw, h - 2.0 * bw), maxf(1.0, rad - bw))
+	if s < CORNER_MIN_S:
+		return
+	# Gilded corner caps: an arc riding the border round each corner, a stud at its middle.
+	var cw := bw * 0.95
+	for i in 4:
+		var cc := [Vector2(rad, rad), Vector2(w - rad, rad), Vector2(w - rad, h - rad), Vector2(rad, h - rad)][i] as Vector2
+		var a0 := PI + float(i) * PI / 2.0
+		var r_mid := rad - bw / 2.0
+		ci.draw_arc(cc, r_mid, a0 - 0.12, a0 + PI / 2.0 + 0.12, 8, Color(0, 0, 0, 0.55), cw + 1.2, true)
+		ci.draw_arc(cc, r_mid, a0 - 0.12, a0 + PI / 2.0 + 0.12, 8, CardJewel.METAL if i < 2 else CardJewel.METAL_LO, cw, true)
+		ci.draw_arc(cc, r_mid + cw * 0.25, a0 + 0.1, a0 + PI / 2.0 - 0.1, 8, Color(CardJewel.METAL_HI, 0.7 if i == 0 else 0.4), maxf(0.6, cw * 0.3), true)
+		var sp := cc + Vector2(cos(a0 + PI / 4.0), sin(a0 + PI / 4.0)) * r_mid
+		ci.draw_circle(sp, cw * 0.62, Color(0, 0, 0, 0.6), true, -1.0, true)
+		ci.draw_circle(sp, cw * 0.45, CardJewel.METAL_HI, true, -1.0, true)
+
+
+## H20: the name plate as a forged bar: a lit top edge and a shaded foot inside its gold border, and a
+## gilded stud riveted on each end (on the border, so the name keeps all its room).
+static func _plate_trim(pt: CardPainter, rect: Rect2) -> void:
+	var ci := pt.ci
+	var s := pt.s
+	var lw := maxf(1.0, 0.6 * s)
+	var r := 4.0 * s
+	ci.draw_line(Vector2(rect.position.x + r, rect.position.y + 1.6 * s), Vector2(rect.end.x - r, rect.position.y + 1.6 * s), Color(1, 0.95, 0.8, 0.16), lw, true)
+	ci.draw_line(Vector2(rect.position.x + r, rect.end.y - 1.2 * s), Vector2(rect.end.x - r, rect.end.y - 1.2 * s), Color(0, 0, 0, 0.45), lw, true)
+	if s < CORNER_MIN_S:
+		return
+	var d := maxf(1.6, 2.1 * s)
+	for x in [rect.position.x + 0.6 * s, rect.end.x - 0.6 * s]:
+		var c := Vector2(x, rect.get_center().y)
+		var dia := CardGeometry.poly(c, d, 4, 0.0)
+		ci.draw_colored_polygon(CardGeometry.grow_pts(dia, c, maxf(0.8, 0.7 * s)), Color(0, 0, 0, 0.7))
+		ci.draw_polygon(dia, PackedColorArray([CardJewel.METAL, CardJewel.METAL_LO, CardJewel.METAL_LO, CardJewel.METAL_HI]))
+		ci.draw_circle(c + Vector2(-0.35, -0.35) * d, maxf(0.5, d * 0.22), Color(1, 1, 1, 0.75), true, -1.0, true)
+
+
+## Alpha of the gold filet inside the frame border (H20).
+const FILET_A := 0.42
+## Card scale below which the corner caps are left out (too small to read; keeps tiny cards cheap).
+const CORNER_MIN_S := 0.6
+
+
+## Name plate. The full name always shows on one line (H14 / H19, 21 Oct: it replaced the two-line
+## split and the field ellipsis): from `fs_max` it shrinks to `fs_min`, then condenses
+## (CardTextLayout.fit_name_line). `stripe` is the colour of the kind stripe along the plate's foot.
+## `one_line` is kept for callers; every plate is one line now.
 static func name_plate(pt: CardPainter, rect: Rect2, fs_max: float, reserve_l: float, reserve_r: float, stripe: Color, fs_min: float = 9.0, one_line: bool = false) -> void:
 	var ci := pt.ci
 	var s := pt.s
 	pt.round_rect(rect, PLATE, 4.0 * s, Color(UIStyle.GOLD, 0.65), maxf(1.0, s))
 	UiSurface.draw_round(ci, rect.grow(-maxf(1.0, s)), 3.0 * s, UiSurface.METAL, PLATE, PLATE_GRAIN, PLATE_TILE * s, rect.position)
 	ci.draw_rect(Rect2(rect.position.x + 3 * s, rect.end.y - 3.0 * s, rect.size.x - 6 * s, 2.0 * s), stripe)
+	_plate_trim(pt, rect)
 	var font := UIStyle.font_display(600)
 	var avail := rect.size.x - (reserve_l + reserve_r) * s - 6.0 * s
 	var nm: String = pt.view["name"]
 	var x := rect.position.x + (reserve_l + 3.0) * s
-	var fs := CardTextLayout.fit_name(nm, avail, fs_max, fs_min, font, s)
-	# Names are centred on the plate (user feedback 2026-10-16).
-	if font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= avail:
-		pt.text_at(font, nm, Vector2(x, rect.position.y), fs, UIStyle.TEXT, avail, HORIZONTAL_ALIGNMENT_CENTER, rect.size.y - 3.0 * s)
-		return
-	var parts := CardTextLayout.split_name(nm) if not one_line else PackedStringArray([nm])
-	var inner_h := rect.size.y - 3.0 * s
-	var fs2 := mini(roundi(fs_max * s), floori(inner_h / 2.0 / 1.05))
-	if parts.size() == 2 and fs2 >= 7:
-		var longest := parts[0] if parts[0].length() >= parts[1].length() else parts[1]
-		while fs2 > 7 and font.get_string_size(longest, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x > avail:
-			fs2 -= 1
-		var lh := float(fs2) * 1.05
-		var y0 := rect.position.y + (inner_h - 2.0 * lh) / 2.0
-		for k in 2:
-			pt.text_at(font, CardTextLayout.ellipsize(font, parts[k], fs2, avail), Vector2(x, y0 + float(k) * lh), fs2, UIStyle.TEXT if k == 0 else UIStyle.MUTED, avail, HORIZONTAL_ALIGNMENT_CENTER, lh)
-		return
-	pt.text_at(font, CardTextLayout.ellipsize(font, nm, fs, avail), Vector2(x, rect.position.y), fs, UIStyle.TEXT, avail, HORIZONTAL_ALIGNMENT_CENTER, inner_h)
+	# H14 / H19 (21 Oct): the whole name on one line, centred (2026-10-16), on every card: shrunk, then
+	# condensed, never wrapped and never ellipsised.
+	var fit := CardTextLayout.fit_name_line(nm, avail, fs_max, fs_min, font, s)
+	pt.text_squeezed(font, nm, Vector2(x, rect.position.y), avail, int(fit[0]), UIStyle.TEXT, float(fit[1]), rect.size.y - 3.0 * s)
 
 
 ## Cost gem centred on `c` (radius `r` px, text size `fs` px), upright on a rotated card: circle (AP),
@@ -76,31 +129,40 @@ static func gem(pt: CardPainter, c: Vector2, r: float, fs: int) -> void:
 	pt.upright_begin(c)
 	var kind := String(pt.view.get("cost_kind", "ap"))
 	var col: Color = UIStyle.COST_COLORS.get(kind, UIStyle.COST_COLORS["ap"])
-	var dark := col.darkened(0.7)
-	var bw := maxf(1.5, 2.0 * pt.s)
+	var s := pt.s
+	var band := maxf(1.4, GEM_SETTING * s)
+	# H17: a faceted gem in a gilded setting, the AP gems' look. The shape still says the cost kind:
+	# a round brilliant (AP: topaz, Fusion: sapphire with a ring engraved round its table), a lozenge
+	# (Ritual) or a hexagon (Arcane).
+	var outer: PackedVector2Array
+	var girdle_n := 8
+	var rot := PI / 8.0
 	match kind:
 		"ritual":
-			var rr := r * 1.22
-			ci.draw_colored_polygon(CardGeometry.poly(c, rr, 4, PI / 4.0), dark)
-			ci.draw_colored_polygon(CardGeometry.poly(c, rr - bw * 1.3, 4, PI / 4.0), col)
-			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -(rr - bw * 1.3)), c + Vector2(rr - bw * 1.3, 0), c + Vector2(0, 0), c + Vector2(-(rr - bw * 1.3), 0)]), col.lightened(0.25))
+			outer = CardGeometry.poly(c, r * 1.24, 4, PI / 2.0)
+			girdle_n = 4
+			rot = PI / 2.0
 		"arcane":
-			var rh := r * 1.08
-			ci.draw_colored_polygon(CardGeometry.poly(c, rh, 6, 0.0), dark)
-			ci.draw_colored_polygon(CardGeometry.poly(c, rh - bw, 6, 0.0), col)
-			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-(rh - bw), 0), c + Vector2(-(rh - bw) / 2.0, -(rh - bw) * 0.866), c + Vector2((rh - bw) / 2.0, -(rh - bw) * 0.866), c + Vector2(rh - bw, 0)]), col.lightened(0.25))
-		"fusion":
-			ci.draw_circle(c, r, dark, true, -1.0, true)
-			ci.draw_circle(c, r - bw, col, true, -1.0, true)
-			ci.draw_arc(c, r * 0.68, 0.0, TAU, 28, dark, maxf(1.0, 1.5 * pt.s), true)
-			ci.draw_circle(c + Vector2(-r * 0.25, -r * 0.3), r * 0.28, Color(1, 1, 1, 0.25), true, -1.0, true)
+			outer = CardGeometry.poly(c, r * 1.1, 6, 0.0)
+			girdle_n = 6
+			rot = 0.0
 		_:
-			ci.draw_circle(c, r, dark, true, -1.0, true)
-			ci.draw_circle(c, r - bw, col, true, -1.0, true)
-			ci.draw_circle(c + Vector2(-r * 0.22, -r * 0.3), r * 0.38, Color(1, 1, 1, 0.28), true, -1.0, true)
+			outer = CardGeometry.poly(c, r, 24, 0.0)
+	CardJewel.drop_shadow(ci, outer, c, s)
+	var inner := CardJewel.setting(ci, outer, c, band, s)
+	# A dark ink gap between the metal and the stone (as in the AP sockets) so the gem reads apart.
+	ci.draw_colored_polygon(inner, CardJewel.GEM_EDGE)
+	var gr := c.distance_to(inner[0]) - GEM_GAP * s
+	var girdle := CardGeometry.grow_pts(inner, c, -GEM_GAP * s) if girdle_n != 8 else CardGeometry.poly(c, gr, 8, rot)
+	var dark_text := kind == "ap"
+	var pal: Array = [ApGemRow.TOPAZ_HI, ApGemRow.TOPAZ, ApGemRow.TOPAZ_LO] if kind == "ap" else []
+	CardJewel.gem(ci, girdle, c, col, GEM_TABLE_K if girdle_n == 8 else 0.58, false, not dark_text, pal)
+	if kind == "fusion":
+		ci.draw_arc(c, gr * 0.74, 0.0, TAU, 24, Color(col.darkened(0.6), 0.85), maxf(1.0, 0.9 * s), true)
 	var txt := cost_text(pt.view)
 	var tc := cost_color(pt.view)
-	pt.text_c(UIStyle.font_display(700), txt, c + Vector2(0, 0.5 * pt.s), fs, tc, 0.0 if tc == UIStyle.ON_GOLD else 1.5)
+	pt.text_c(UIStyle.font_display(700), txt, c + Vector2(0, 0.5 * s), fs, tc, 0.0 if tc == UIStyle.ON_GOLD else 1.5)
+	CardJewel.sparkle(ci, c + CardJewel.LIGHT.normalized() * gr * 0.68, maxf(0.9, gr * 0.16), 0.9)
 	pt.upright_end()
 
 
@@ -149,7 +211,7 @@ static func type_pip(pt: CardPainter, c: Vector2, r: float) -> void:
 		return
 	var t = view.get("type")
 	pt.upright_begin(c)
-	TypeIcons.draw_pip(pt.ci, "" if t == null else str(t), c, r)
+	TypeIcons.draw_pip_jewel(pt.ci, "" if t == null else str(t), c, r)
 	pt.upright_end()
 
 

@@ -75,7 +75,7 @@ func _feedback08_shots() -> void:
 	_ok("G03 response shows the responding Trap", pr.respond_col.visible and pr.respond_col.get_child_count() >= 2)
 	var btns := pr.banner_list.find_children("*", "Button", true, false)
 	var texts := btns.map(func(b): return (b as Button).text)
-	_ok("D13 Activate on top, then Skip | Pass for the rest of this turn side by side", texts == ["Activate Damage Conversion", "Skip", "Pass for the rest of this turn"] \
+	_ok("D13 Activate on top, then Skip | Skip for the rest of this turn side by side", texts == ["Activate Damage Conversion", "Skip", "Skip for the rest of this turn"] \
 		and (btns[1] as Control).get_global_rect().position.y > (btns[0] as Control).get_global_rect().end.y - 1.0 \
 		and absf((btns[2] as Control).global_position.y - (btns[1] as Control).global_position.y) < 1.0 \
 		and (btns[2] as Control).global_position.x > (btns[1] as Control).get_global_rect().end.x - 1.0, str(texts))

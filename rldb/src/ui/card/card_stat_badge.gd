@@ -2,9 +2,8 @@ class_name CardStatBadge
 extends RefCounted
 ## ATK diamond (red) and DEF shield (blue) with the live value, raised / lowered markers, and the
 ## combat-preview decoration (F02-12): glow, dashed ring and a "+N" / "-N" tag. Drawn upright even
-## on a rotated (Defense) card. Owner feedback 2026-10-18 ("a bit chunky"): slimmer shapes, a gold
-## hairline rim with a dark outline and a soft shadow instead of the thick faceted rim; the numbers
-## keep their size.
+## on a rotated (Defense) card. H17 (21 Oct): cut gems (ruby rhombus, sapphire shield) in a slim
+## gilded setting, the AP gems' look, kept slim (2026-10-18 "a bit chunky"); the numbers keep their size.
 
 const ATK_TOP := Color("c9453a")
 const ATK_BOTTOM := Color("4d1713")
@@ -13,10 +12,12 @@ const DEF_BOTTOM := Color("1b3a5a")
 ## Value colour while previewing, and the "lowered" colour of values, markers and tags.
 const PREVIEW_TEXT := Color("eafcff")
 const LOWERED := Color("ff8a84")
-## Gold hairline rim width (base units) inside the badge outline.
-const RIM := 1.3
+## Depth (base units) of the gilded setting inside the badge outline (H17).
+const RIM := 2.1
 ## Dark outline (base units) around the rim, so the badge reads on light art.
 const OUTLINE := 0.9
+## Size of the gem's flat table as a share of the girdle (H17): wide, so the number sits on it.
+const TABLE_K := 0.62
 ## F03-20: the badge is drawn at this fraction of the layout rect (about its centre), which leaves a
 ## margin to the card edge and the art; the font size scales with it.
 const SHRINK := 0.86
@@ -41,22 +42,15 @@ static func draw(pt: CardPainter, slot_rect: Rect2, is_atk: bool, fs_max: float)
 	var top := ATK_TOP if is_atk else DEF_TOP
 	var bot := ATK_BOTTOM if is_atk else DEF_BOTTOM
 	var outer := CardGeometry.diamond_pts(rect) if is_atk else CardGeometry.shield_pts(rect)
-	# Soft shadow below, a dark outline, the gold hairline, then the fill.
-	var sh := PackedVector2Array()
-	for p in outer:
-		sh.append(p + Vector2(0, 1.4 * s))
-	ci.draw_colored_polygon(CardGeometry.grow_pts(sh, c + Vector2(0, 1.4 * s), OUTLINE * s), Color(0, 0, 0, 0.42))
-	ci.draw_colored_polygon(CardGeometry.grow_pts(outer, c, OUTLINE * s), Color(0.04, 0.03, 0.02, 0.9))
-	ci.draw_colored_polygon(outer, Color(UIStyle.GOLD, 0.95))
-	var inner := _inset(outer, rect, is_atk, RIM * s)
-	var cols := PackedColorArray()
-	for p in inner:
-		var ty := clampf((p.y - rect.position.y) / rect.size.y, 0.0, 1.0)
-		cols.append(top.lerp(bot, ty))
-	ci.draw_polygon(inner, cols)
-	# A fine highlight along the upper edges (light from above), no facets.
-	var hi := PackedVector2Array([inner[3], inner[0], inner[1]]) if is_atk else PackedVector2Array([inner[5], inner[6], inner[0], inner[1], inner[2]])
-	ci.draw_polyline(hi, Color(1, 1, 1, 0.28), maxf(1.0, 0.7 * s), true)
+	# H17 (21 Oct): a cut ruby rhombus / sapphire shield in a slim gilded setting, the AP gems' look:
+	# soft shadow, metal band, crown facets lit from the upper left round a deep table (the white
+	# number reads on it), and a glint on the lit shoulder.
+	CardJewel.drop_shadow(ci, outer, c, s)
+	CardJewel.setting(ci, outer, c, RIM * s, s)
+	var girdle := _inset(outer, rect, is_atk, RIM * s)
+	CardJewel.gem(ci, girdle, c, top.lerp(bot, 0.15), TABLE_K, false, true)
+	var gl := girdle[0].lerp(girdle[3], 0.5).lerp(c, 0.3) if is_atk else girdle[6].lerp(girdle[0], 0.4).lerp(c, 0.22)
+	CardJewel.sparkle(ci, gl, maxf(0.9, 1.2 * s), 0.85)
 	var tcol := Color.WHITE
 	var mod := 0
 	var shown_v = value
