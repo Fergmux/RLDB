@@ -401,28 +401,71 @@ static func _public_kind(kind: String) -> String:
 	return "making a choice"
 
 
+## The log as seat `viewer` sees it (-1: a spectator who sees nothing hidden): one row per entry with
+## text for them or with presentation events, after `since` (a seq). The result equals log_for_full.
+## J31 (performance): every view used to rebuild a row for every entry of the game, for each seat, so
+## a long game cost more on every command. The rows of settled entries (all but the last: only the
+## latest entry ever gains fx or a toast) are kept per viewer in `m.log_view_cache` and reused; a toast
+## row is rebuilt every time, because whether its card's uid may be shown changes with the board.
 static func log_for(m: MatchEngine, viewer: int, since: int = 0) -> Array:
+	if since > 0:
+		return log_for_full(m, viewer, since)
+	var entries: Array = m.log_entries
+	var c: Dictionary = m.log_view_cache.get(viewer, {})
+	if c.is_empty() or not is_same(c["src"], entries) or int(c["n"]) > entries.size():
+		c = {"src": entries, "n": 0, "rows": [], "toasts": []}
+		m.log_view_cache[viewer] = c
+	var rows: Array = c["rows"]
+	var settled := entries.size() - 1
+	for i in range(int(c["n"]), settled):
+		var row := _log_row(m, entries[i], viewer)
+		if row.is_empty():
+			continue
+		if row.has("toast"):
+			c["toasts"].append([rows.size(), i])
+		rows.append(row)
+	c["n"] = maxi(int(c["n"]), settled)
+	var out := rows.duplicate()
+	for t in c["toasts"]:
+		out[t[0]] = _log_row(m, entries[t[1]], viewer)
+	if not entries.is_empty():
+		var last := _log_row(m, entries[-1], viewer)
+		if not last.is_empty():
+			out.append(last)
+	return out
+
+
+## The redacted log built from scratch (no cache): the reference log_for must equal.
+static func log_for_full(m: MatchEngine, viewer: int, since: int = 0) -> Array:
 	var out := []
 	for e in m.log_entries:
 		if e["seq"] <= since:
 			continue
-		var text: String = e["priv"].get(viewer, e["pub"])
-		if text != "":
-			var row := {"seq": e["seq"], "turn": e["turn"], "text": text, "fx": redact_fx(e.get("fx", []), viewer)}
-			if e.get("toast", false):
-				row["toast"] = true
-				# G09: the card the toast is about, so it can appear over that card: its board position
-				# when the entry was made (public), and its uid while this seat may see the card.
-				if not (e.get("toast_at", {}) as Dictionary).is_empty():
-					row["toast_at"] = e["toast_at"]
-				var tu := int(e.get("toast_src", -1))
-				if m.cards.has(tu) and can_see(m, tu, viewer):
-					row["toast_uid"] = tu
+		var row := _log_row(m, e, viewer)
+		if not row.is_empty():
 			out.append(row)
-		elif e["pub"] != "" and not e.get("fx", []).is_empty():
-			# Presentation-only events carry public board positions/amounts, never identities.
-			out.append({"seq": e["seq"], "turn": e["turn"], "text": "", "fx": redact_fx(e["fx"], viewer)})
 	return out
+
+
+# The row of log entry `e` for `viewer`, or {} when it shows them nothing.
+static func _log_row(m: MatchEngine, e: Dictionary, viewer: int) -> Dictionary:
+	var text: String = e["priv"].get(viewer, e["pub"])
+	if text != "":
+		var row := {"seq": e["seq"], "turn": e["turn"], "text": text, "fx": redact_fx(e.get("fx", []), viewer)}
+		if e.get("toast", false):
+			row["toast"] = true
+			# G09: the card the toast is about, so it can appear over that card: its board position
+			# when the entry was made (public), and its uid while this seat may see the card.
+			if not (e.get("toast_at", {}) as Dictionary).is_empty():
+				row["toast_at"] = e["toast_at"]
+			var tu := int(e.get("toast_src", -1))
+			if m.cards.has(tu) and can_see(m, tu, viewer):
+				row["toast_uid"] = tu
+		return row
+	if e["pub"] != "" and not e.get("fx", []).is_empty():
+		# Presentation-only events carry public board positions/amounts, never identities.
+		return {"seq": e["seq"], "turn": e["turn"], "text": "", "fx": redact_fx(e["fx"], viewer)}
+	return {}
 
 
 ## Presentation events naming a card (`id` + `seen_by`) keep the identity only for the seats allowed to
