@@ -453,11 +453,9 @@ func _pile_summary(c: Dictionary, can_act: bool) -> Control:
 	hb.name = "RowSummary"
 	hb.add_theme_constant_override("separation", UIStyle.sp("md"))
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var w := CardWidget.new().setup(c, "mini")
-	w.auto_hover = false
-	w.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	GameUi.resize_card(w, PILE_THUMB)
-	w.set_ready(can_act)
+	# The art alone, cover-cropped: a whole card face at this size is unreadable micro-text.
+	var w := ArtThumb.new(c, can_act)
+	w.custom_minimum_size = PILE_THUMB
 	w.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hb.add_child(w)
 	var vb := VBoxContainer.new()
@@ -819,3 +817,37 @@ class MethodTile extends PanelContainer:
 			Sfx.hover_item()
 		if _lift.is_valid() and not UIStyle.reduce_motion:
 			_lift.call(on)
+
+
+## #91: a pile row's thumbnail: the card's art cover-cropped in a rim of its kind colour (the
+## kind's radial tone when it has no art), with a gold rim and a soft glow when it can act now.
+class ArtThumb extends Control:
+	var card: Dictionary
+	var ready_now: bool
+
+	func _init(c: Dictionary, can_act: bool) -> void:
+		card = c
+		ready_now = can_act
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+	func _draw() -> void:
+		var r := Rect2(Vector2.ZERO, size)
+		var kind := UIStyle.CATEGORY_COLORS.get(String(card.get("category", "")), UIStyle.BRONZE) as Color
+		if ready_now:
+			draw_rect(r.grow(2.0), Color(UIStyle.GOLD, 0.28))
+		draw_rect(r, Color(0.03, 0.025, 0.02))
+		var inner := r.grow(-2.0)
+		var tex := CardArt.texture_for(card)
+		if tex != null:
+			var ts := tex.get_size()
+			var k := maxf(inner.size.x / ts.x, inner.size.y / ts.y)
+			var src_sz := inner.size / k
+			draw_texture_rect_region(tex, inner, Rect2((ts - src_sz) / 2.0, src_sz))
+		else:
+			draw_rect(inner, kind.darkened(0.55))
+		# A faint top-light and a dark foot so the art sits in its frame.
+		draw_rect(Rect2(inner.position, Vector2(inner.size.x, inner.size.y * 0.3)), Color(1, 1, 1, 0.05))
+		draw_rect(Rect2(inner.position + Vector2(0, inner.size.y * 0.75), Vector2(inner.size.x, inner.size.y * 0.25)), Color(0, 0, 0, 0.25))
+		draw_rect(r, UIStyle.GOLD if ready_now else kind.lightened(0.1), false, 1.5)
+
