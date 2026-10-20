@@ -45,6 +45,11 @@ var opp_hand_n: int = -1
 var ready_uids: Dictionary = {}
 ## Card my current pick belongs to (kept lit while everything else dims), or -1.
 var src_uid: int = -1
+## D9: field zones ({p, zone, slot}) previewed as the valid targets of the effect button under the
+## pointer; empty when no preview is showing.
+var preview_refs: Array = []
+## Uid of the card whose effect button is hovered (it is not darkened by the preview).
+var preview_src: int = -1
 var _y0: float = 0.0
 var _ux: float = 0.0
 
@@ -346,6 +351,12 @@ func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, target
 	var is_sel: bool = vis and uid == gs.selected_uid
 	var chosen: bool = opt != -1 and opt in gs.multi
 	var dim: bool = targeting and opt == -1 and not (vis and uid == src_uid)
+	# D9: while an effect button is hovered, the invalid targets stay darkened and the valid ones get a
+	# subtle border (the real targeting highlight only starts once the effect is chosen).
+	var previewing: bool = not targeting and not preview_refs.is_empty()
+	var pv_hit: bool = previewing and _in_preview(pidx, zone, slot)
+	if previewing and not pv_hit and not (vis and uid == preview_src):
+		dim = true
 	var pd := gs.pending()
 	var zone_pick: bool = opt != -1 and String(pd.get("kind", "")) == "slot"
 	# The card whose summon / activation a Trap prompt responds to is outlined in red.
@@ -358,10 +369,28 @@ func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, target
 		bg.set_marks(opt != -1, chosen, dim)
 		return
 	bg.set_marks(false, false, dim)
+	w.set_preview_target(pv_hit)
 	w.set_marks(opt != -1 and not zone_pick, is_sel or chosen, dim)
 	w.set_ready(vis and ready_uids.has(uid))
 	w.order_no = sel.order_no(opt)
 	w.queue_redraw()
+
+
+## D9: shows (refs non-empty) or clears (empty) the target preview of the hovered effect button of card
+## `src`. `refs` are the {p, zone, slot} zones the effect's first target choice offers (from the view).
+func set_preview(refs: Array, src: int = -1) -> void:
+	if refs.is_empty() and preview_refs.is_empty():
+		return
+	preview_refs = refs.duplicate()
+	preview_src = src if not refs.is_empty() else -1
+	render()
+
+
+func _in_preview(pidx: int, zone: String, slot: int) -> bool:
+	for r in preview_refs:
+		if int(r["p"]) == pidx and String(r["zone"]) == zone and int(r["slot"]) == slot:
+			return true
+	return false
 
 
 # ---------------------------------------------------------------- where things are

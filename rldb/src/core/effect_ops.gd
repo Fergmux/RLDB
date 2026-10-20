@@ -19,12 +19,7 @@ func _op_choose(f: Dictionary, op: Dictionary) -> int:
 	if ans != null:
 		f["vars"][op["as"]] = ans.filter(func(v): return v != -1)
 		return R.CONT
-	var cands := select(f, op["sel"])
-	if op.has("exclude"):
-		var ex := refs(f, op["exclude"])
-		cands = cands.filter(func(u): return not (u in ex))
-	if cards.has(f["src"]) and cards[f["src"]]["zone"] == "hand":
-		cands = cands.filter(func(u): return u != f["src"])   # a Spell choosing before it is cast never picks itself
+	var cands := choose_candidates(f, op)
 	var chooser: int = who(f, op.get("chooser", "self"))
 	if op["sel"].get("kind", "unit") in ["hand", "draw", "spent", "exhaust", "extra", "spent_or_draw"]:
 		cands.sort()
@@ -57,6 +52,34 @@ func _op_choose(f: Dictionary, op: Dictionary) -> int:
 		opts.append(card_option(u, _target_label(u, chooser)))
 	return ask(f, chooser, "select", op.get("prompt", "%s: choose." % f["label"]), opts, min_n, max_n, op.get("cancellable", false),
 		{"reveal_pile": op["sel"].get("kind", "unit") in ["hand", "draw", "spent", "exhaust", "extra"]})
+
+
+## The cards a "choose" op of frame `f` offers: its selector minus the excluded ones. The one place
+## this is decided, so the targeting preview (lead_targets) can never disagree with the real prompt.
+func choose_candidates(f: Dictionary, op: Dictionary) -> Array:
+	var cands := select(f, op["sel"])
+	if op.has("exclude"):
+		var ex := refs(f, op["exclude"])
+		cands = cands.filter(func(u): return not (u in ex))
+	if cards.has(f["src"]) and cards[f["src"]]["zone"] == "hand":
+		cands = cands.filter(func(u): return u != f["src"])   # a Spell choosing before it is cast never picks itself
+	return cands
+
+
+## D9: the Field cards the first target choice of `ops` (an ability or set-Spell effect of card `uid`)
+## offers right now, or [] when that choice is not about Field cards (or there is none). Read-only; it
+## uses the same selector logic as the real prompt (choose_candidates), so a preview is never a guess.
+func lead_targets(uid: int, ops: Array) -> Array:
+	var f := make_frame(uid, cards[uid]["ctl"], ops, name_of(uid))
+	for op in ops:
+		if op["op"] != "choose":
+			continue
+		if not (String(op["sel"].get("kind", "unit")) in ["unit", "facedown", "backrow", "power", "field_card"]):
+			return []
+		if op.get("random", false):
+			return []
+		return choose_candidates(f, op)
+	return []
 
 
 func _target_label(uid: int, viewer: int) -> String:

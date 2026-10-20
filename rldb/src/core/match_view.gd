@@ -483,5 +483,30 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 		var reason := m.validate(viewer, c)
 		c["ok"] = reason == ""
 		c["reason"] = reason
+		# D9: where the effect's first target choice could land (field zones only), for the hover preview.
+		if c["ok"] and c["t"] in ["ability", "activate_set"]:
+			var tg := _lead_target_refs(m, c)
+			if not tg.is_empty():
+				c["targets"] = tg
 		out.append(c)
 	return out
+
+
+## D9: Field zones ({p, zone, slot}) the first target choice of ability / set-Spell action `c` offers
+## now, from the engine's own selector. Zones only (no identity): a set card's slot is public anyway.
+static func _lead_target_refs(m: MatchEngine, c: Dictionary) -> Array:
+	var u: int = c["uid"]
+	var sc: Dictionary = m.script_of(u)
+	var ops: Array = []
+	if c["t"] == "ability":
+		var abs: Array = sc.get("abilities", [])
+		if int(c["idx"]) < abs.size():
+			ops = abs[int(c["idx"])]["ops"]
+	else:
+		ops = sc.get("spell", [])
+	var refs := []
+	for t in m.lead_targets(u, ops):
+		var inst: Dictionary = m.cards[t]
+		if inst["zone"] in ["unit", "backrow", "power"]:
+			refs.append({"p": inst["ctl"], "zone": inst["zone"], "slot": inst["slot"]})
+	return refs

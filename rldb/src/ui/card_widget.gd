@@ -38,6 +38,9 @@ var size_kind: String = "board"
 ## Draw the portrait card turned 90 degrees clockwise inside a landscape rect (defense units, backrow).
 var rotated: bool = false
 var highlighted: bool = false
+## D9: a valid target shown in the toned-down hover preview of an effect button (a steady, subtle
+## yellow border; never animated). The full targeting highlight is `highlighted`.
+var preview_target: bool = false
 var selected: bool = false
 var dimmed: bool = false
 var empty_text: String = ""
@@ -161,6 +164,13 @@ func set_marks(is_target: bool, is_selected: bool, is_dimmed: bool = false, soft
 		self_modulate = Color.WHITE
 	_update_process()
 	queue_redraw()
+
+
+## D9: marks this card as a valid target in the hover preview of an effect button.
+func set_preview_target(on: bool) -> void:
+	if preview_target != on:
+		preview_target = on
+		queue_redraw()
 
 
 ## "This card can act now" highlight (F02-11). Static (no per-frame redraw); independent of hover/select/target.
