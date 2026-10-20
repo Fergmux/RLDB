@@ -186,6 +186,9 @@ func set_hover(it: Dictionary) -> void:
 	_close_at = -1.0
 	(it["w"] as CardWidget).hovered = true
 	lift(it)
+	# #32: a hand card lifting makes the soft paper-slide cue (rate-limited with every hover cue).
+	if it["kind"] == "hand" and it.get("own", true):
+		Sfx.hover_card()
 	# Details follow the pointer immediately (user feedback: no delay).
 	if it["uid"] != -1 and it["uid"] != gs.peek_uid:
 		gs.peek_uid = it["uid"]

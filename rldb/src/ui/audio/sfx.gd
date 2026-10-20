@@ -19,6 +19,9 @@ const NAMES: PackedStringArray = [
 	# H1 WP-1 / WP-3 (design review 1.4.6): UI feedback cues and the low-HP heartbeat. A missing file
 	# is silent (_stream_for returns null), so a name may be registered before its sound exists.
 	"ui_hover", "panel_open", "panel_close", "tab", "toggle_on", "toggle_off", "hp_low_heartbeat",
+	# H1 WP-9 (design review 1.4.6): the card hover (a paper slide), the reward reveal and pick, a
+	# tutorial step done, and a toast.
+	"card_hover", "reward_reveal", "reward_pick", "step_done",
 ]
 ## F22 / F25: UI sounds. One user action makes exactly one UI sound: within one frame only the request
 ## with the highest priority plays (a later, higher one stops the earlier voice, a lower or equal one is
@@ -27,11 +30,13 @@ const NAMES: PackedStringArray = [
 const UI_PRIORITY := {
 	"select": 0, "click_secondary": 1, "click_primary": 2,
 	"tab": 2, "toggle_on": 2, "toggle_off": 2, "panel_open": 3, "panel_close": 3,
-	"deck_add": 3, "deck_remove": 3, "cancel": 3, "confirm": 3, "deny": 4, "back": 5,
+	"deck_add": 3, "deck_remove": 3, "cancel": 3, "confirm": 3, "reward_pick": 3, "reward_reveal": 4, "deny": 4, "back": 5,
 }
 ## Hover cue (design review 1.4.6): at most one per HOVER_MIN_MS, pitch +/- HOVER_JITTER, quiet. It
 ## is not a UI action sound (it never replaces or blocks a click) and skips the game-sound limiter.
 const HOVER_SFX := "ui_hover"
+## The card variant of the hover cue (design review #32): a soft paper slide. Shares the limiter.
+const CARD_HOVER_SFX := "card_hover"
 const HOVER_MIN_MS := 60
 const HOVER_JITTER := 0.04
 const HOVER_DB := 0.0
@@ -140,16 +145,28 @@ static func hover(b: BaseButton) -> bool:
 
 
 ## The hover rate limit at clock `now_ms` (injectable for tests): true (and records it) when the
-## last hover cue is at least HOVER_MIN_MS old; the sound starts when the tree is available.
-static func hover_at(now_ms: int) -> bool:
+## last hover cue is at least HOVER_MIN_MS old; the sound `cue` (ui_hover, or the card variant)
+## starts when the tree is available. Every hover cue shares the one limiter.
+static func hover_at(now_ms: int, cue: String = HOVER_SFX) -> bool:
 	if now_ms - _last_hover_ms < HOVER_MIN_MS:
 		return false
 	_last_hover_ms = now_ms
-	debug_hover.append(HOVER_SFX)
+	debug_hover.append(cue)
 	if debug_hover.size() > 200:
 		debug_hover.remove_at(0)
-	_start(HOVER_SFX, HOVER_DB, HOVER_JITTER, false)
+	_start(cue, HOVER_DB, HOVER_JITTER, false)
 	return true
+
+
+## The hover cue of a non-button target (a deck tile, a reward tile): ui_hover, rate-limited.
+static func hover_item() -> bool:
+	return hover_at(Time.get_ticks_msec())
+
+
+## The hover cue of a card (hand, draft, rewards, catalogue, pile browser): the paper slide,
+## rate-limited with the other hover cues so sweeping across a row never chatters.
+static func hover_card() -> bool:
+	return hover_at(Time.get_ticks_msec(), CARD_HOVER_SFX)
 
 
 ## Forgets the hover limiter (tests).

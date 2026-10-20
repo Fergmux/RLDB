@@ -40,6 +40,12 @@ var _ledger_seen: int = 0
 var _collapsing: bool = false
 ## True from choosing a reward kind until its panel is first shown (it then opens with motion).
 var _fresh_panel: bool = false
+## The game whose rewards opening has played its reveal (#63): it plays once per rewards stage.
+var _revealed_game: int = -99
+## Delay before the reward tiles rise, after the modal's panel_in has begun (s, before dur()).
+const REVEAL_TILES_AT := 0.22
+## The picks gems start popping this long after the modal opens (s).
+const REVEAL_GEMS_AT := 0.08
 
 
 func _init(screen: GameScreen) -> void:
@@ -65,9 +71,13 @@ func render() -> void:
 			box.add_child(_taken_flow(r["taken"]))
 		box.add_child(_footer(false))
 		return
-	# Picks remaining: gems in a plate.
+	# Picks remaining: gems in a plate. The first render of a game's rewards plays the reveal (#63).
+	var game_no := int(gs.view.get("game_no", -1))
+	var intro: bool = game_no != _revealed_game and r["taken"].is_empty() and not r.get("pending", false)
+	_revealed_game = game_no
 	var total: int = r["left"] + r["taken"].size() + (1 if r.get("pending", false) else 0)
-	box.add_child(_picks_plate(r["left"], maxi(total, r["left"])))
+	var picks := _picks_plate(r["left"], maxi(total, r["left"]))
+	box.add_child(picks)
 	if r["opponent_done"]:
 		box.add_child(_info_chip("Your opponent has finished choosing", true))
 	if not r["taken"].is_empty():
@@ -78,7 +88,10 @@ func render() -> void:
 	# The reward kinds as equal illustrated tiles. Once one is chosen they fold away into a single
 	# bar naming the choice (with a way back), so its panel below never needs the modal to scroll.
 	if mode == "":
-		box.add_child(_kinds_row())
+		var kinds := _kinds_row()
+		box.add_child(kinds)
+		if intro:
+			reveal(picks, kinds.get_children())
 	else:
 		box.add_child(_chosen_bar(mode))
 	var counts := {}
@@ -120,6 +133,34 @@ func _result_plate(line: String) -> Control:
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	p.add_child(l)
 	return p
+
+
+## The rewards opening (design review #63): one rising `reward_reveal` chime, the picks gems pop in
+## one by one, then the reward tiles rise in a `stagger` (fade, scale 0.94 -> 1). Under reduce
+## motion the tiles fade in together and the gems are simply there. Returns the tile tween (null when
+## nothing animates).
+func reveal(picks: Control, tiles: Array) -> Tween:
+	Sfx.play("reward_reveal")
+	var pips := picks.find_children("*", "PickPips", true, false)
+	if not pips.is_empty():
+		(pips[0] as PickPips).pop_in(REVEAL_GEMS_AT)
+	if tiles.is_empty() or not (tiles[0] as Control).is_inside_tree():
+		return null
+	var tw := (tiles[0] as Control).create_tween()
+	tw.set_parallel(true)
+	for i in tiles.size():
+		var t: Control = tiles[i]
+		t.modulate.a = 0.0
+		if UIStyle.reduce_motion:
+			tw.tween_property(t, "modulate:a", 1.0, UIStyle.motion("reduced"))
+			continue
+		var at := UIStyle.dur(REVEAL_TILES_AT) + UIStyle.motion("stagger") * 2.0 * i
+		tw.tween_callback(func() -> void:
+			if is_instance_valid(t):
+				t.pivot_offset = t.size / 2.0).set_delay(at)
+		UIStyle.tween_token(tw, t, "modulate:a", 1.0, "hover").set_delay(at)
+		UIStyle.tween_token(tw, t, "scale", Vector2.ONE, "panel_in").from(Vector2(UIStyle.PANEL_IN_SCALE, UIStyle.PANEL_IN_SCALE)).set_delay(at)
+	return tw
 
 
 ## Plate with the "picks left" gems.
@@ -336,6 +377,7 @@ func _render_offer(r: Dictionary) -> void:
 		cw.tooltip_text = "Take %s\nRight-click to inspect" % c["name"]
 		cw.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		cw.set_meta("reward_offer", i)
+		cw.hover_sound = true
 		var idx: int = i
 		cw.pressed.connect(func(_w): pick_offer(idx, sig, holders, flow))
 		cw.right_pressed.connect(gs.inspect.inspect_widget)
@@ -479,7 +521,7 @@ func _chosen_bar(key: String) -> Control:
 func pick_offer(idx: int, sig: int, holders: Array, flow: Control) -> bool:
 	if not _claim_offer(idx, sig):
 		return false
-	Sfx.play("confirm")
+	Sfx.play("reward_pick")   # #62: a gem set in its socket
 	if UIStyle.reduce_motion or not gs.is_inside_tree() or idx >= holders.size():
 		gs.send({"t": "reward_add", "index": idx})
 		return true
@@ -526,7 +568,7 @@ static func offer_sig(r: Dictionary) -> int:
 func take_offer(idx: int, sig: int) -> bool:
 	if not _claim_offer(idx, sig):
 		return false
-	Sfx.play("confirm")
+	Sfx.play("reward_pick")   # #62: a gem set in its socket
 	gs.send({"t": "reward_add", "index": idx})
 	return true
 
@@ -657,6 +699,7 @@ func _reward_remove_panel(order: Array, counts: Dictionary) -> Control:
 	ok.disabled = _remove_sel == -1
 	ok.custom_minimum_size = Vector2(PREVIEW_CARD.x, 38)
 	ok.clip_text = true
+	ok.set_meta(Sfx.BUTTON_META, "reward_pick")   # #62: taking a reward sets a gem
 	var rid := _remove_sel
 	ok.pressed.connect(func():
 		mode = ""
@@ -720,6 +763,7 @@ func _extra_basic_panel(order: Array, counts: Dictionary) -> Control:
 	var have := int(counts.get(bid, 0))
 	var ok := UIStyle.primary_button("Add another %s (%s): %d → %d" % [c["name"], c["type"], have, have + 1], 15)
 	ok.custom_minimum_size = Vector2(0, 40)
+	ok.set_meta(Sfx.BUTTON_META, "reward_pick")   # #62: taking a reward sets a gem
 	ok.clip_text = true
 	ok.pressed.connect(func():
 		mode = ""
@@ -774,6 +818,7 @@ func _basic_change_panel(r: Dictionary, order: Array, counts: Dictionary) -> Con
 		_basic_type = t
 		_basic_race = rc
 		sync.call())
+	ok.set_meta(Sfx.BUTTON_META, "reward_pick")   # #62: taking a reward sets a gem
 	ok.pressed.connect(func():
 		var cmd := {"t": "reward_basic", "to_type": _basic_type, "to_race": _basic_race}
 		_basic_type = ""

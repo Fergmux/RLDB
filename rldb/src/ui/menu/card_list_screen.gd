@@ -163,7 +163,10 @@ func preview_is_empty() -> bool:
 
 ## Opens the shared inspector for card `id`.
 func inspect_card(id: int) -> CardInspector:
-	return CardInspector.open(self, MatchView.summary_view(_summary(id)))
+	# #87: the card flies out of its catalogue cell when that cell is on screen.
+	var w := browser.cell_widget(id)
+	var from := w.get_global_rect() if w != null and w.is_visible_in_tree() else Rect2()
+	return CardInspector.open(self, MatchView.summary_view(_summary(id)), Callable(), from)
 
 
 func _show_empty_preview() -> void:

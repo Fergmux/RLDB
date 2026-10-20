@@ -31,6 +31,11 @@ var state_label: Label
 var series_panel: PanelContainer
 ## Content of the series panel.
 var series_box: VBoxContainer
+## The turn panel (turn title, phase track, the main action); hidden between games (#49: it only
+## echoed the modal's title there).
+var turn_panel: Control
+## The series medallion while no game is being played (#49).
+var medallion: SeriesMedallion
 ## Panel holding the card details.
 var details_panel: PanelContainer
 ## Panel holding the game log.
@@ -59,6 +64,7 @@ func build() -> void:
 	side_root.add_child(col)
 	# Turn bar
 	var tp := GameUi.side_panel()
+	turn_panel = tp
 	col.add_child(tp)
 	var tv := VBoxContainer.new()
 	tv.add_theme_constant_override("separation", 6)
@@ -168,6 +174,7 @@ func render_turnbar() -> void:
 		clk.observe(view)
 	if clock_view.clock != clk:
 		clock_view.set_clock(clk)
+	turn_panel.visible = in_game
 	if not in_game:
 		# Between games / before the first game nothing of the finished game's turn state is shown.
 		turn_title.text = gs.overlays.stage_title(stage) if stage != "" else "Series"
@@ -267,19 +274,61 @@ func render_series() -> void:
 	GameUi.clear(series_box)
 	series_box.add_child(GameUi.header("Series"))
 	var names: Array = view["names"]
+	var history: Array = view.get("history", [])
+	# #49: the Best-of medallion with one socket per game (won / lost gems, the next one breathing).
+	var res := []
+	for h in history:
+		res.append(0 if int(h["winner"]) == gs.me() else 1)
+	medallion = SeriesMedallion.new().setup(int(view.get("best_of", 3)), res, -1 if stage == "over" else history.size())
+	medallion.name = "SeriesMedallion"
+	series_box.add_child(_gap(UIStyle.sp("sm")))
+	series_box.add_child(medallion)
+	series_box.add_child(_gap(UIStyle.sp("lg")))
 	for p in 2:
-		var row := HBoxContainer.new()
-		series_box.add_child(row)
-		var nm := UIStyle.label(String(names[p]) + ("  (you)" if p == gs.me() and not gs.is_spectator() else ""), 17, UIStyle.TEXT, false, true)
-		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		nm.clip_text = true
-		row.add_child(nm)
-		row.add_child(UIStyle.label(str(view["scores"][p]), 24, UIStyle.GOLD, false, true))
-		if stage == "decks":
-			series_box.add_child(UIStyle.label("Deck ready" if view["deck_ready"][p] else "Choosing a deck…", 14, UIStyle.GOOD if view["deck_ready"][p] else UIStyle.MUTED))
-	series_box.add_child(UIStyle.label("Best of %d" % view["best_of"], 14, UIStyle.MUTED))
-	for h in view.get("history", []):
-		series_box.add_child(UIStyle.label("Game %d: %s won (turn %d)" % [h["game"], names[h["winner"]], h["turns"]], 14, UIStyle.TEXT, true))
+		series_box.add_child(_seat_plate(p, String(names[p]) + ("  (you)" if p == gs.me() and not gs.is_spectator() else ""), int(view["scores"][p]), stage, bool(view["deck_ready"][p])))
+	if not history.is_empty():
+		series_box.add_child(_gap(UIStyle.sp("md")))
+		series_box.add_child(GameUi.header("Games"))
+	for h in history:
+		var won: bool = int(h["winner"]) == gs.me()
+		var line := UIStyle.label("Game %d: %s won (turn %d)" % [h["game"], names[h["winner"]], h["turns"]], 14, UIStyle.TEXT if won else UIStyle.MUTED, true)
+		series_box.add_child(line)
+
+
+## A fixed vertical gap of `h` px.
+static func _gap(h: float) -> Control:
+	var g := Control.new()
+	g.custom_minimum_size = Vector2(0, h)
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return g
+
+
+## One player of the series (#49): an F3 well with the name and score, and in the deck choice a
+## status line: "Choosing a deck" with the waiting dots, or "Deck ready" with a tick.
+func _seat_plate(p: int, title: String, score: int, stage: String, ready: bool) -> Control:
+	var well := UIStyle.inset(UIStyle.PANEL_INK, 0.25)
+	(well.get_theme_stylebox("panel") as StyleBox).content_margin_left = UIStyle.sp("md")
+	(well.get_theme_stylebox("panel") as StyleBox).content_margin_right = UIStyle.sp("md")
+	well.name = "SeatPlate%d" % p
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", UIStyle.sp("xs"))
+	well.add_child(v)
+	var row := HBoxContainer.new()
+	v.add_child(row)
+	var nm := UIStyle.label(title, 17, UIStyle.TEXT, false, true)
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nm.clip_text = true
+	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(nm)
+	row.add_child(UIStyle.label(str(score), 24, UIStyle.GOLD, false, true))
+	if stage == "decks":
+		if ready:
+			v.add_child(UIStyle.label("\u2713 Deck ready", 14, UIStyle.GOOD))
+		else:
+			var dots := WaitingDots.new("Choosing a deck", 14, UIStyle.MUTED)
+			dots.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			v.add_child(dots)
+	return well
 
 
 ## Gold chevron pointing left (towards the prompt pane), bobbing 4 px on a 1.2 s loop; still under

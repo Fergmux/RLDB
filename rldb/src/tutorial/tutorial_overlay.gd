@@ -66,6 +66,14 @@ var _panel_style: StyleBoxFlat
 var _progress: TutorialDeco
 var _step_box: VBoxContainer
 var _shown_key: String = ""
+## The lesson and step shown last, and whether it was a "do" step (the learner acts): moving on
+## from one plays the small step_done chime.
+var _last_lesson: int = -1
+var _last_step: int = -1
+var _last_do: bool = false
+## step_done waits this long (s) so it lands after the action's own sound (a summon, an attack).
+const STEP_DONE_DELAY := 0.35
+const STEP_DONE_DB := -3.0
 var _hint_gen: int = 0
 var _banner_lesson: int = -1
 var _avoid_tick: int = 0
@@ -250,11 +258,32 @@ func refresh() -> void:
 	if key != _shown_key:
 		_shown_key = key
 		_fade_in(_step_box)
+		if step_done_due(_last_lesson, _last_step, _last_do, host.lesson_index, host.step_index, host.is_complete()):
+			_chime_step_done()
+		_last_lesson = host.lesson_index
+		_last_step = host.step_index
+		_last_do = not host.is_complete() and String(host.current_step().get("kind", "")) == "do"
 	if host.step_index == 0 and not host.is_complete() and host.lesson_index != _banner_lesson:
 		_banner_lesson = host.lesson_index
 		_show_banner()
 	_hide_hint()
 	_place_panel()
+
+
+## True when moving from step (`l0`, `s0`, a "do" step when `was_do`) to (`l1`, `s1`) completes
+## something the learner did: the next step of the same lesson after a "do" step. The lesson's last
+## step is not chimed (the completion celebration plays instead).
+static func step_done_due(l0: int, s0: int, was_do: bool, l1: int, s1: int, complete: bool) -> bool:
+	return was_do and l0 == l1 and s1 == s0 + 1 and not complete
+
+
+## The step_done chime, a moment after the action so the two never sound at once.
+func _chime_step_done() -> void:
+	if not is_inside_tree():
+		return
+	get_tree().create_timer(UIStyle.dur(STEP_DONE_DELAY)).timeout.connect(func() -> void:
+		if is_instance_valid(self):
+			Sfx.play("step_done", STEP_DONE_DB, 0.02))
 
 
 ## Short fade of a freshly changed block (skipped with reduced motion).

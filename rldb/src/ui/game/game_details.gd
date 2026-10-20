@@ -10,6 +10,10 @@ const PILE_NAMES := {"draw": "Draw pile", "spent": "Spent", "exhaust": "Exhaust"
 const PILE_ROW_CARD := Vector2(64, 96)
 
 ## The host screen this component works on.
+## Pile / draft list rows (#92): inner padding and the height of their action buttons (px).
+const ROW_PAD := 12
+const ROW_BUTTON_H := 32
+
 var gs: GameScreen
 ## Title label of the details panel.
 var details_title: Label
@@ -97,8 +101,11 @@ func build(col: VBoxContainer) -> PanelContainer:
 	dv.add_child(pile_scroll)
 	pile_list = VBoxContainer.new()
 	pile_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pile_list.add_theme_constant_override("separation", 6)
-	pile_scroll.add_child(GameUi.glow_room(pile_list, 6))
+	pile_list.add_theme_constant_override("separation", UIStyle.sp("sm"))
+	# #91 / #92: the rows keep the 12 px floor to the scrollbar (6 px of glow room elsewhere).
+	var room := GameUi.glow_room(pile_list, 6)
+	room.add_theme_constant_override("margin_right", UIStyle.CONTENT_FLOOR)
+	pile_scroll.add_child(room)
 	details_scroll = ScrollContainer.new()
 	details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -327,8 +334,16 @@ func render_pile_list() -> void:
 	_pile_sig = sig
 	var keep := pile_scroll.scroll_vertical
 	GameUi.clear(pile_list)
-	if cards.is_empty():
-		pile_list.add_child(UIStyle.label("No cards picked yet." if drafting else "Empty.", 14, UIStyle.MUTED))
+	if drafting:
+		# #59: one engraved card slot per pick of the draft; the slots fill (in the picked card's
+		# kind colour) as the draft goes, so progress is visible and the column never sits empty.
+		var dr: Dictionary = gs.view.get("draft", {})
+		var slots := DraftSlots.new()
+		slots.name = "DraftSlots"
+		slots.setup(int(dr.get("total", cards.size())), cards.map(func(c): return String(c.get("category", "unit"))))
+		pile_list.add_child(slots)
+	elif cards.is_empty():
+		pile_list.add_child(UIStyle.label("Empty.", 14, UIStyle.MUTED))
 	var sel_row: Control = null
 	for c in cards:
 		var r := _pile_row(c)
@@ -357,10 +372,11 @@ func _pile_row(c: Dictionary) -> Control:
 	row.set_meta("uid", uid)
 	var sb := UIStyle.flat(Color(UIStyle.PANEL_LIGHT, 0.95) if sel else Color(UIStyle.PANEL_INK, 0.9),
 		UIStyle.SELECT if sel else (UIStyle.READY if can_act else Color(UIStyle.BRONZE, 0.6)), 2 if (sel or can_act) else 1, 8)
-	sb.content_margin_left = 6
-	sb.content_margin_right = 8
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
+	# #92: 12 px row padding (10 px above and below), so the buttons never sit on the row's edge.
+	sb.content_margin_left = ROW_PAD
+	sb.content_margin_right = ROW_PAD
+	sb.content_margin_top = ROW_PAD - 2
+	sb.content_margin_bottom = ROW_PAD - 2
 	row.add_theme_stylebox_override("panel", sb)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.tooltip_text = CardWidget.tooltip_for(c) + "\n\nRight-click to inspect"   # D15: no Inspect button
@@ -412,12 +428,12 @@ func _pile_row(c: Dictionary) -> Control:
 	var buttons := extra_summons(uid) if pile_zone == "extra" else ([] if not sel else _row_actions(uid))
 	if not buttons.is_empty():
 		var af := HFlowContainer.new()
-		af.add_theme_constant_override("h_separation", 6)
-		af.add_theme_constant_override("v_separation", 4)
+		af.add_theme_constant_override("h_separation", UIStyle.sp("sm"))
+		af.add_theme_constant_override("v_separation", UIStyle.sp("sm"))
 		col.add_child(af)
 		for e in buttons:
 			var b := UIStyle.primary_button(String(e["label"]), 13)
-			b.custom_minimum_size = Vector2(0, 30)
+			b.custom_minimum_size = Vector2(0, ROW_BUTTON_H)   # #92: 32 px, 8 px apart
 			b.tooltip_text = String(e["full"])
 			b.set_meta("summon_kind", String(e["kind"]))
 			b.pressed.connect(e["run"])

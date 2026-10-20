@@ -47,16 +47,17 @@ func _browser_alive() -> bool:
 ## Opens the inspector for a card widget's card. False when that card is not inspectable (an empty
 ## zone, or a hidden/face-down card).
 func inspect_widget(w: CardWidget) -> bool:
-	return inspect_card(w.view)
+	return inspect_card(w.view, w.get_global_rect() if w.is_inside_tree() else Rect2())
 
 
-## Opens the inspector for a visible card view. False when it is not inspectable.
-func inspect_card(c: Dictionary) -> bool:
+## Opens the inspector for a visible card view. False when it is not inspectable. `from` (global
+## rect) is where the card is on screen: it flies from there into the inspector (#87).
+func inspect_card(c: Dictionary, from: Rect2 = Rect2()) -> bool:
 	if not CardInspector.is_inspectable(c):
 		return false
 	gs.hover.clear()
 	var parent: Node = browser if _browser_alive() else gs
-	return CardInspector.open(parent, c) != null
+	return CardInspector.open(parent, c, Callable(), from) != null
 
 
 ## Opens the browser for one of MY piles ("draw", "spent", "exhaust", "extra"). False when there is
@@ -71,7 +72,9 @@ func open_pile(zone: String) -> bool:
 	if _browser_alive():
 		browser.close()
 	browser_zone = zone
-	browser = PileBrowser.open(gs, GameDetails.PILE_NAMES[zone], _pile_cards(zone), DRAW_HINT if zone == "draw" else BROWSE_HINT)
+	var ps: PileStack = gs.board.piles[1].get(zone)
+	var from := ps.get_global_rect().get_center() if ps != null and ps.is_inside_tree() else Vector2.INF
+	browser = PileBrowser.open(gs, GameDetails.PILE_NAMES[zone], _pile_cards(zone), DRAW_HINT if zone == "draw" else BROWSE_HINT, Callable(), from)
 	Sfx.play("select")
 	return true
 

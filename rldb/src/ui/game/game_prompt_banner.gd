@@ -48,7 +48,7 @@ const TYPE_ICON_MAX := 28.0
 ## Type-button label size, and the compact label size and left margin (still clears the icon box).
 const TYPE_PX := 15
 ## Gap between Type-grid columns, and the most columns.
-const TYPE_GRID_SEP := 6
+const TYPE_GRID_SEP := 10   # design review #37: 10 px between the Type buttons
 const TYPE_GRID_MAX_COLS := 3
 const TYPE_COMPACT_PX := 13
 const TYPE_COMPACT_LEFT := 38
@@ -94,6 +94,8 @@ var gs: GameScreen
 var ctx_banner: PanelContainer
 ## Banner headline.
 var banner_title: Label
+## #33: the card a title names, on its own line in GOLD_HI under the instruction (hidden otherwise).
+var banner_name: Label
 ## Banner explanatory text.
 var banner_sub: RichTextLabel
 ## Banner buttons (skip, confirm ...).
@@ -182,6 +184,14 @@ func build() -> void:
 	banner_tag = plate.title_label
 	banner_title = plate.add_headline("", 21, false, 8.0, true, TitleText.Tier.SCREEN)   # D3: T2
 	StatusHelp.watch_label(banner_title)
+	banner_name = UIStyle.label("", 21, UIStyle.GOLD_HI, true, true)
+	banner_name.name = "TitleCard"
+	banner_name.custom_minimum_size = Vector2(40, 0)
+	banner_name.visible = false
+	bcol.add_child(banner_name)
+	bcol.move_child(banner_name, banner_title.get_index() + 1)
+	TitleText.apply(banner_name, TitleText.Tier.SCREEN, 21)
+	banner_name.add_theme_color_override("font_color", UIStyle.GOLD_HI)
 	_build_subject(bcol)
 	_build_mentions(bcol)
 	banner_sub = RichTextLabel.new()
@@ -271,9 +281,9 @@ func _build_subject(col: VBoxContainer) -> void:
 	subject_text = UIStyle.label("", 13, UIStyle.TEXT, true)
 	subject_text.max_lines_visible = SUBJECT_LINES
 	subject_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	# #33 / #36: the status-word ink (StatusHelp) draws its own paragraph over the label; clip it to
-	# the label so a long rules text can never run over the Confirm / Cancel row below.
-	subject_text.clip_contents = true
+	# #33 / #36: the status-word ink (StatusHelp) draws its own paragraph over the label and stops at
+	# the label's max_lines_visible (StatusHelp.visible_lines), so a long rules text can never run over
+	# the Confirm / Cancel row below; no clip is needed.
 	subject_text.mouse_filter = Control.MOUSE_FILTER_PASS
 	StatusHelp.watch_label(subject_text)
 	v.add_child(subject_text)
@@ -765,7 +775,10 @@ func _render_banner() -> void:
 	_exact_pay = false
 	if not on:
 		return
-	banner_title.text = String(pd["prompt"])
+	var parts := split_title(String(pd["prompt"]), String(subject_for(pd).get("name", "")))
+	banner_title.text = parts[0]
+	banner_name.text = parts[1]
+	banner_name.visible = parts[1] != ""
 	_render_subject(pd)
 	_render_mentions(pd)
 	_tag_full = ("%s · your decision" % String(gs.pv(gs.me())["name"])).to_upper()
@@ -1013,11 +1026,37 @@ func _fit_subject(w: float, compact: bool = false) -> void:
 	var px := HEADLINE_NARROW_PX if thin or compact else HEADLINE_PX
 	if _exact_pay:
 		px = HEADLINE_PAY_NARROW_PX if thin or compact else HEADLINE_PAY_PX
-	px = headline_px(banner_title.text, w - (ctx_banner as HousePanel).chrome_size().x, px)
+	var tw := w - (ctx_banner as HousePanel).chrome_size().x
+	if banner_name.visible:
+		# #33: the instruction and the name share the line budget; both take the smaller size.
+		px = mini(headline_px(banner_title.text, tw, px), headline_px(banner_name.text, tw, px))
+	else:
+		px = headline_px(banner_title.text, tw, px)
 	banner_title.add_theme_font_size_override("font_size", px)
+	banner_name.add_theme_font_size_override("font_size", px)
 	if _tag_full != "":
 		banner_tag.text = "YOUR DECISION" if thin else _tag_full
 		banner_tag.tooltip_text = _tag_full
+
+
+## Design review #33: a title that ends with the name of the card it is about splits into
+## [instruction, card name] ("Choose a stance for" / "Bastion Wyrm, the Eternal Guardian ..."), so
+## the name reads on its own line; Cinzel has no lower case, so this is the readable form of the
+## review's sentence case. Any other title is [title, ""]. The name's trailing full stop is dropped.
+static func split_title(prompt: String, card_name: String) -> Array:
+	var nm := card_name.strip_edges()
+	if nm.length() < 3:
+		return [prompt, ""]
+	var at := prompt.rfind(nm)
+	if at <= 0:
+		return [prompt, ""]
+	var tail := prompt.substr(at + nm.length()).strip_edges()
+	if tail != "" and not tail in [".", ":", "?", "!"]:
+		return [prompt, ""]
+	var lead := prompt.substr(0, at).strip_edges()
+	if lead.split(" ", false).size() < 2:
+		return [prompt, ""]
+	return [lead, nm + ("" if tail in ["", "."] else tail)]
 
 
 ## Headline size for `text` in a `width` px column (design review #33): `px` when it fits in
@@ -1161,10 +1200,11 @@ static func type_button(type_name: String, size: int = 15) -> Button:
 		sb.content_margin_top = 6
 		sb.content_margin_bottom = 6
 		if k == "hover":
-			UIStyle.lift_style(sb, Color(fill, 0.55), 9, 0)
+			UIStyle.lift_style(sb, Color(col, 0.5), 10, 0)   # #37: the hover glows in the Type colour
 		b.add_theme_stylebox_override(k, sb)
 		b.add_theme_color_override("font_color" if k == "normal" else "font_%s_color" % k, type_text_color(fill))
 	b.add_theme_color_override("font_focus_color", type_text_color(col))
+	(b as JuicyButton).hover_inner_glow = Color(col.lightened(0.2), 0.24)
 	# F03: a fixed square icon box, centred on the button's vertical middle. The bottom anchor is
 	# set before the top one: setting the top anchor (0.5) above a bottom anchor still at 0 made
 	# Godot clamp it back to 0, which stretched the box from the button's top and drew every icon
@@ -1219,7 +1259,7 @@ func _fit_type_buttons(content_w: float, compact: bool) -> void:
 	var btns := type_grid.get_children().filter(func(b): return b is Button and b.has_meta("type_choice"))
 	if btns.is_empty():
 		return
-	type_grid.add_theme_constant_override("v_separation", 4 if compact else 6)
+	type_grid.add_theme_constant_override("v_separation", 6 if compact else TYPE_GRID_SEP)
 	for b in btns:
 		compact_type_button(b, compact)
 	even_type_widths(type_grid)

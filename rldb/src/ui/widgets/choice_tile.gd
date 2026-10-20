@@ -17,6 +17,19 @@ var _hover := 0.0
 var _box: StyleBoxFlat
 var _compact := false
 var _title: Label
+var _icon: Icon
+## Hover lift (design review #62): 0 at rest, 1 under the pointer; `_want` is the pointer state.
+var _lift := 0.0
+var _want := 0.0
+var _primed := false
+## The pick flash (1 on click, fading to 0).
+var _flash := 0.0
+var _pad_top := 10
+var _pad_bottom := 12
+## Rise of a hovered tile (px) and the icon's idle float under the pointer (px, on the breathe loop).
+const LIFT_PX := 4.0
+const FLOAT_PX := 3.0
+const FLASH_TIME := 0.28
 
 
 ## `kind` is "add", "remove", "swap" or a card category ("unit", "spell", ...). `compact` lays the
@@ -28,8 +41,10 @@ func _init(title: String = "", caption: String = "", color: Color = UIStyle.GOLD
 	_box = UIStyle.flat(Color(0, 0, 0, 0), Color(accent, 0.65), 2, 10)
 	_box.content_margin_left = 12
 	_box.content_margin_right = 12
-	_box.content_margin_top = 10 if not compact else 7
-	_box.content_margin_bottom = 12 if not compact else 7
+	_pad_top = 10 if not compact else 7
+	_pad_bottom = 12 if not compact else 7
+	_box.content_margin_top = _pad_top
+	_box.content_margin_bottom = _pad_bottom
 	_box.shadow_color = Color(0, 0, 0, 0.5)
 	_box.shadow_size = 6
 	_box.shadow_offset = Vector2(0, 3)
@@ -43,6 +58,7 @@ func _init(title: String = "", caption: String = "", color: Color = UIStyle.GOLD
 	var ic := Icon.new(kind, accent, 34.0 if compact else 66.0)
 	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_icon = ic
 	box.add_child(ic)
 	var tl := UIStyle.label(title, 15 if compact else 17, UIStyle.TEXT, false, true)
 	_title = tl
@@ -56,7 +72,7 @@ func _init(title: String = "", caption: String = "", color: Color = UIStyle.GOLD
 		tl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # a long title wraps instead of widening its tile
 	box.add_child(tl)
 	if caption != "":
-		var cl := UIStyle.label(caption, 13, UIStyle.TEXT_DIM, true)
+		var cl := UIStyle.label(caption, 13, UIStyle.MUTED, true)   # #62: the description reads (MUTED, not dim)
 		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(cl)
@@ -85,6 +101,13 @@ func _click() -> void:
 	var s := String(get_meta(Sfx.BUTTON_META, "click_primary"))
 	if s != "none":
 		Sfx.play(s, 0.0, 0.03)
+	# #62: the picked tile flashes (a short warm wash fading out); none under reduce motion.
+	if not UIStyle.reduce_motion and is_inside_tree():
+		_flash = 1.0
+		var tw := create_tween()
+		tw.tween_method(func(v: float) -> void:
+			_flash = v
+			queue_redraw(), 1.0, 0.0, UIStyle.dur(FLASH_TIME)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
 func _notification(what: int) -> void:
@@ -97,16 +120,43 @@ func _process(delta: float) -> void:
 	var want := 1.0 if h != null and (h == self or is_ancestor_of(h)) else 0.0
 	var tgt := 1.0 if selected else want
 	var cur := _hover
+	if want > 0.5 and _want < 0.5 and _primed:
+		Sfx.hover_item()   # #62: the tile is the choice, so it answers the pointer
+	_want = want
+	_primed = true
 	_hover = tgt if UIStyle.reduce_motion else move_toward(_hover, tgt, delta * 8.0)
-	if _hover != cur:
+	var lcur := _lift
+	_lift = 0.0 if UIStyle.reduce_motion else move_toward(_lift, want, delta / maxf(UIStyle.motion("hover"), 0.01))
+	if _icon != null:
+		# The icon floats on the breathe loop while hovered (eased in with the lift; still under reduce motion).
+		var t := float(Time.get_ticks_msec()) / 1000.0
+		var f := -FLOAT_PX * _lift * (0.5 + 0.5 * sin(t / 2.4 * TAU)) if not UIStyle.reduce_motion else 0.0
+		if not is_equal_approx(_icon.float_y, f):
+			_icon.float_y = f
+			_icon.queue_redraw()
+	if _hover != cur or _lift != lcur:
 		queue_redraw()
+		var px := lift_px()
 		_box.border_color = Color(accent, 0.65).lerp(UIStyle.GOLD_HI if selected else accent.lightened(0.35), _hover)
 		_box.shadow_color = Color(0, 0, 0, 0.5).lerp(Color(accent, 0.38), _hover)
-		_box.shadow_size = int(lerpf(6.0, 15.0, _hover))
-		_box.shadow_offset = Vector2(0, lerpf(3.0, 0.0, _hover))
+		_box.shadow_size = int(lerpf(6.0, 15.0, _hover)) + int(px * 2.0)
+		_box.shadow_offset = Vector2(0, lerpf(3.0, 0.0, _hover) + px)
+		if _box.expand_margin_top != px:
+			# The frame and shadow rise (expand margins), the content follows (content margins).
+			_box.expand_margin_top = px
+			_box.expand_margin_bottom = -px
+			_box.content_margin_top = _pad_top - px
+			_box.content_margin_bottom = _pad_bottom + px
+
+
+## The tile's current rise in whole px (0 at rest and under reduce motion).
+func lift_px() -> float:
+	var e := 1.0 - (1.0 - _lift) * (1.0 - _lift)   # QUAD OUT
+	return roundf(e * LIFT_PX)
 
 
 func _draw() -> void:
+	draw_set_transform(Vector2(0, -lift_px()))
 	var rad := 9.0
 	var inset := Rect2(Vector2(2, 2), size - Vector2(4, 4))
 	var top := Color(accent.darkened(0.72), 1.0).lerp(Color(accent.darkened(0.55), 1.0), _hover)
@@ -121,12 +171,16 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2(4, 4), size - Vector2(8, 8)), Color(UIStyle.GOLD, 0.5), false, 1.0)
 	if has_focus():
 		draw_rect(Rect2(Vector2(5, 5), size - Vector2(10, 10)), Color(UIStyle.GOLD_HI, 0.9), false, 1.5)
+	if _flash > 0.001:
+		draw_rect(inset, Color(accent.lightened(0.6), 0.32 * _flash))
 
 
 ## The drawn icon.
 class Icon extends Control:
 	var kind := ""
 	var col := UIStyle.GOLD
+	## Idle float offset (px, negative = up) the tile animates while hovered.
+	var float_y := 0.0
 
 	func _init(k: String, c: Color, px: float) -> void:
 		kind = k
@@ -135,6 +189,7 @@ class Icon extends Control:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _draw() -> void:
+		draw_set_transform(Vector2(0, float_y))
 		var s := minf(size.x, size.y)
 		var c := size / 2.0
 		var cw := s * 0.56

@@ -363,7 +363,10 @@ func saved_row(n: String) -> Control:
 
 ## Opens the shared card inspector for card `id`; the working deck is untouched.
 func inspect_card(id: int) -> CardInspector:
-	return CardInspector.open(self, MatchView.summary_view(_summary(id)))
+	# #87: the card flies out of its catalogue cell when that cell is on screen.
+	var w := browser.cell_widget(id)
+	var from := w.get_global_rect() if w != null and w.is_visible_in_tree() else Rect2()
+	return CardInspector.open(self, MatchView.summary_view(_summary(id)), Callable(), from)
 
 
 ## Shows card `id` big in the preview column (deck-construction stats, F19) and selects it.
@@ -554,21 +557,22 @@ static func count_chip(caption: String, accent: Color = UIStyle.GOLD_HI) -> Pane
 	return pc
 
 
-## Gold quantity tag ("x3") shown just below a card (F18), fixed width with room for x99 (F16).
+## Quantity tag ("x3") shown just below a card (F18), fixed width with room for x99 (F16). Design
+## review #82: a passive count badge, not a button: a dark F4 gold chip with a gold Cinzel number.
 static func count_tag() -> PanelContainer:
 	var pc := PanelContainer.new()
-	var sb := UIStyle.flat(UIStyle.GOLD, Color("fff0b8"), 1, 10)
-	sb.content_margin_left = 4
-	sb.content_margin_right = 4
-	sb.content_margin_top = 0
-	sb.content_margin_bottom = 1
-	sb.shadow_color = Color(0, 0, 0, 0.6)
-	sb.shadow_size = 4
-	sb.shadow_offset = Vector2(0, 1)
+	var sb := UIStyle.chip_style(UIStyle.GOLD, 10)
+	sb.base.content_margin_left = 4
+	sb.base.content_margin_right = 4
+	sb.base.content_margin_top = 0
+	sb.base.content_margin_bottom = 1
+	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
+		sb.set_content_margin(side, sb.base.get_content_margin(side))
+	UIStyle.lift(sb.base, UIStyle.DEPTH_PLATE)
 	pc.add_theme_stylebox_override("panel", sb)
 	pc.custom_minimum_size = Vector2(TAG_W, TAG_H)
 	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var l := UIStyle.label("", 14, UIStyle.ON_GOLD)
+	var l := UIStyle.label("", 14, UIStyle.GOLD_HI)
 	l.add_theme_font_override("font", UIStyle.font_bold())
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1007,6 +1011,7 @@ func _make_tile(id: int) -> Control:
 	w.show_tooltip = false
 	w.tooltip_text = "%s\nClick to remove a copy, right-click to inspect" % String(_summary(id)["name"])
 	w.mouse_entered.connect(func(): _on_hover(id))
+	w.hover_sound = true
 	w.pressed.connect(func(_w): _on_tile_clicked(id))
 	w.right_pressed.connect(func(_w): inspect_card(id))
 	tile.add_child(w)
@@ -1069,10 +1074,10 @@ func _refresh_deck() -> void:
 		(sec["value"] as Label).text = str(totals[key])
 		(sec["box"] as Control).visible = not ids.is_empty()
 	var total: int = totals["main"] + totals["extra"]
-	(_chip_vals["total"] as Label).text = str(total)
-	(_chip_vals["main"] as Label).text = str(totals["main"])
-	(_chip_vals["extra"] as Label).text = str(totals["extra"])
-	(_chip_vals["unique"] as Label).text = str(counts.size())
+	_set_chip("total", total)
+	_set_chip("main", totals["main"])
+	_set_chip("extra", totals["extra"])
+	_set_chip("unique", counts.size())
 	_unsaved_chip.modulate.a = 1.0 if dirty else 0.0
 	_empty_note.visible = total == 0
 	_deck_scroll.visible = total > 0
@@ -1216,6 +1221,19 @@ func _pop(c: Control, flash: Color) -> void:
 	c.modulate = flash.lightened(0.35)
 	tw.tween_property(c, "scale", Vector2.ONE, UIStyle.dur(0.26)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(c, "modulate", Color.WHITE, UIStyle.dur(0.3))
+
+
+## Sets summary chip `key` to `n`; a changed count pops its chip (#85: the deck's counts react to an
+## edit, not only the card's own tag). The first fill of an empty builder stays still.
+func _set_chip(key: String, n: int) -> void:
+	var l := _chip_vals[key] as Label
+	var was := l.text
+	l.text = str(n)
+	if was != "" and was != l.text:
+		var chip: Node = l
+		while chip.get_parent() != null and chip.get_parent() != _deck_chips:
+			chip = chip.get_parent()
+		_pop(chip as Control, UIStyle.GOLD_HI)
 
 
 func _shake(c: Control) -> void:

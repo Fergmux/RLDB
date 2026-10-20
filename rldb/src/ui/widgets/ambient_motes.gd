@@ -35,10 +35,27 @@ var shaft_color: Color = Color("ffd9a0")
 var clock: Callable = func() -> float: return float(Time.get_ticks_msec()) / 1000.0
 
 var _motes: Array = []
+## Round mote core and halo radii, as multiples of the mote size.
+var core_k := 0.32
+var halo_k := 1.6
 
 
-## `count` motes in `cols`, from `seed`.
-func _init(count: int = 26, cols: Array = [], seed_value: int = 1606) -> void:
+## Table dust (design review #23): very sparse, small, slow warm motes in the duel table's light.
+const DUST := {"size": Vector2(3.0, 6.0), "life": Vector2(10.0, 16.0), "alpha": Vector2(0.4, 0.6),
+	"rise": Vector2(3.0, 9.0), "sway": 14.0, "petals": false, "core": 0.6, "halo": 2.4}
+const DUST_COLOR := Color("ffd9a0")
+
+
+## Sparse warm dust for the duel table (#23): `count` round motes on the DUST profile.
+static func dust(count: int = 10, seed_value: int = 2310) -> AmbientMotes:
+	var m := AmbientMotes.new(count, [DUST_COLOR], seed_value, DUST)
+	m.name = "TableDust"
+	return m
+
+
+## `count` motes in `cols`, from `seed`. `profile` overrides the size, life, alpha and rise ranges
+## (Vector2 min / max), the sway (px) and whether the first colour draws petals ("petals").
+func _init(count: int = 26, cols: Array = [], seed_value: int = 1606, profile: Dictionary = {}) -> void:
 	if not cols.is_empty():
 		colors = cols
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -48,18 +65,26 @@ func _init(count: int = 26, cols: Array = [], seed_value: int = 1606) -> void:
 	material = mat
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
+	var sz: Vector2 = profile.get("size", Vector2(SIZE_MIN, SIZE_MAX))
+	var lf: Vector2 = profile.get("life", Vector2(LIFE_MIN, LIFE_MAX))
+	var al: Vector2 = profile.get("alpha", Vector2(ALPHA_MIN, ALPHA_MAX))
+	var rs: Vector2 = profile.get("rise", Vector2(RISE_MIN, RISE_MAX))
+	var sw := float(profile.get("sway", SWAY_PX))
+	var petals := bool(profile.get("petals", true))
+	core_k = float(profile.get("core", core_k))
+	halo_k = float(profile.get("halo", halo_k))
 	for i in count:
 		_motes.append({
 			"x": rng.randf(), "y": rng.randf(),
-			"size": rng.randf_range(SIZE_MIN, SIZE_MAX),
-			"life": rng.randf_range(LIFE_MIN, LIFE_MAX),
+			"size": rng.randf_range(sz.x, sz.y),
+			"life": rng.randf_range(lf.x, lf.y),
 			"phase": rng.randf(),
-			"alpha": rng.randf_range(ALPHA_MIN, ALPHA_MAX),
-			"rise": rng.randf_range(RISE_MIN, RISE_MAX),
-			"sway": rng.randf_range(0.4, 1.0) * SWAY_PX,
+			"alpha": rng.randf_range(al.x, al.y),
+			"rise": rng.randf_range(rs.x, rs.y),
+			"sway": rng.randf_range(0.4, 1.0) * sw,
 			"spin": rng.randf_range(-1.0, 1.0),
 			"col": colors[i % colors.size()],
-			"petal": i % colors.size() == 0,
+			"petal": petals and i % colors.size() == 0,
 		})
 
 
@@ -101,7 +126,7 @@ func _draw() -> void:
 			continue
 		var p: Vector2 = st["pos"]
 		var s := float(m["size"])
-		draw_circle(p, s * 1.6, Color(col, a * 0.18), true, -1.0, true)
+		draw_circle(p, s * halo_k, Color(col, a * 0.18), true, -1.0, true)
 		if bool(m["petal"]):
 			# A petal: a soft ellipse turned by its spin.
 			var pts := PackedVector2Array()
@@ -110,7 +135,7 @@ func _draw() -> void:
 				pts.append(p + Vector2(cos(ang) * s * 0.55, sin(ang) * s * 0.3).rotated(float(st["rot"])))
 			draw_colored_polygon(pts, Color(col, a))
 		else:
-			draw_circle(p, s * 0.32, Color(col, a), true, -1.0, true)
+			draw_circle(p, s * core_k, Color(col, a), true, -1.0, true)
 
 
 func _draw_shaft(t: float) -> void:

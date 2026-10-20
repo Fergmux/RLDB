@@ -17,6 +17,9 @@ const DRAFT_HOVER_SCALE := 1.06
 const DRAFT_CARD_ROOM := 400.0
 
 ## The host screen this component works on.
+## When the current network pause began (ms; the "Waiting m:ss" count, #67).
+var _paused_at: int = 0
+
 var gs: GameScreen
 ## Reward sub-panels shown on the rewards stage.
 var rewards: GameRewardPanels
@@ -181,8 +184,19 @@ func render_pause() -> void:
 		return
 	if opening:
 		(pause_panel as HousePanel).appear()
+		_paused_at = Time.get_ticks_msec()
+	# Design review #67: a turning rune ring beside the title and a "Waiting m:ss" count, so the
+	# wait reads as alive; a secondary "Leave match" offers the way out (the usual leave choices).
+	var hrow := HBoxContainer.new()
+	hrow.add_theme_constant_override("separation", UIStyle.sp("md"))
+	pause_box.add_child(hrow)
+	var runes := PauseRunes.new()
+	runes.name = "PauseRunes"
+	hrow.add_child(runes)
 	var head := UIStyle.label("Match paused", 26, UIStyle.BAD, true, true)
-	pause_box.add_child(head)
+	head.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hrow.add_child(head)
 	TitleText.apply(head, TitleText.Tier.SCREEN, 26)
 	pause_box.add_child(Ornate.Rule.new(Color(UIStyle.BAD, 0.55), true, 10.0))
 	pause_box.add_child(UIStyle.label(net["message"] if net.get("message", "") != "" else "Waiting for the connection to be restored. Nothing can happen until both players are connected.", 14, UIStyle.TEXT, true))
@@ -193,8 +207,72 @@ func render_pause() -> void:
 		claim.tooltip_text = "Wins the current game only; the series continues."
 		claim.pressed.connect(func(): gs.send({"t": "claim_game"}))
 		pause_box.add_child(claim)
-	pause_box.add_child(UIStyle.label("You can still use Menu or inspect the log.", 12, UIStyle.MUTED, true))
+	var since := Elapsed.new(_paused_at)
+	since.name = "PauseElapsed"
+	pause_box.add_child(since)
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", UIStyle.sp("md"))
+	pause_box.add_child(foot)
+	var note := UIStyle.label("You can still use Menu or inspect the log.", 13, UIStyle.MUTED, true)
+	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	note.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	foot.add_child(note)
+	var leave := UIStyle.size_button(UIStyle.secondary_button("Leave match", 14), "small")
+	leave.name = "LeaveMatch"
+	leave.tooltip_text = "Save the series for later, or forfeit it, and return to the main menu."
+	leave.pressed.connect(func(): gs.menu.confirm_forfeit(false))
+	foot.add_child(leave)
 	pause_panel.set_deferred("size", Vector2(PAUSE_W, 0))
+
+
+## "Waiting m:ss" since the pause began (#67), counting up once a second.
+class Elapsed extends Label:
+	var start_ms := 0
+
+	func _init(from_ms: int) -> void:
+		start_ms = from_ms
+		add_theme_font_size_override("font_size", 14)
+		add_theme_color_override("font_color", UIStyle.TEXT)
+		_tick()
+
+	func _process(_d: float) -> void:
+		_tick()
+
+	func _tick() -> void:
+		var s := maxi(0, (Time.get_ticks_msec() - start_ms) / 1000)
+		var t := "Waiting %d:%02d" % [s / 60, s % 60]
+		if t != text:
+			text = t
+
+
+## A small rune ring turning once every PERIOD seconds beside the pause title (#67); still under
+## reduce motion.
+class PauseRunes extends Control:
+	const PERIOD := 3.0
+	const MARKS := 12
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(36, 36)
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _process(_d: float) -> void:
+		if not UIStyle.reduce_motion and is_visible_in_tree():
+			queue_redraw()
+
+	func _draw() -> void:
+		var c := size / 2.0
+		var r := minf(size.x, size.y) / 2.0 - 2.0
+		var turn := 0.0 if UIStyle.reduce_motion else fposmod(float(Time.get_ticks_msec()) / 1000.0 / PERIOD, 1.0) * TAU
+		draw_circle(c, r + 2.0, Color(UIStyle.BAD, 0.08), true, -1.0, true)
+		draw_arc(c, r, 0.0, TAU, 40, Color(UIStyle.GOLD, 0.55), 1.5, true)
+		draw_arc(c, r - 7.0, 0.0, TAU, 40, Color(UIStyle.GOLD, 0.3), 1.0, true)
+		for i in MARKS:
+			var a := turn + TAU * float(i) / MARKS
+			var d := Vector2(cos(a), sin(a))
+			var lit := 0.35 + 0.65 * (float(i) / MARKS)
+			draw_line(c + d * (r - 5.5), c + d * (r - 1.5), Color(UIStyle.GOLD_HI, lit), 1.6, true)
+		draw_circle(c, 2.5, Color(UIStyle.BAD, 0.8), true, -1.0, true)
 
 
 ## Your current deck (between games): every card once, with its number of copies.
@@ -616,6 +694,11 @@ func _centred(text: String, fs: int, col: Color) -> Label:
 	return l
 
 
+## Game history rows on the series-over screen (#66): side padding and height (px).
+const HISTORY_PAD_X := 14
+const HISTORY_ROW_H := 36
+
+
 func _render_over() -> void:
 	var view := gs.view
 	var w := 0 if view["scores"][0] > view["scores"][1] else 1
@@ -645,11 +728,21 @@ func _render_over() -> void:
 	overlay_box.add_child(GameUi.header("Game history"))
 	for h in view["history"]:
 		var hw: bool = h["winner"] == gs.me()
+		# Design review #66: a win row has a gold edge, a loss an ember edge at 50%; 14 px sides, 36 px rows.
 		var rowp := PanelContainer.new()
-		rowp.add_theme_stylebox_override("panel", UIStyle.flat(Color(UIStyle.PANEL_LIGHT, 0.9), Color(UIStyle.GOOD if hw else UIStyle.BAD, 0.7), 1, 6))
+		var rsb := UIStyle.flat(Color(UIStyle.PANEL_LIGHT, 0.9), Color(UIStyle.GOLD, 0.8) if hw else Color(UIStyle.BAD, 0.5), 1, 6)
+		UIStyle.pad(rsb, "lg", "xs")
+		rsb.content_margin_left = HISTORY_PAD_X
+		rsb.content_margin_right = HISTORY_PAD_X
+		if hw:
+			UIStyle.lift_style(rsb, Color(UIStyle.GOLD, 0.18), 6, 0)
+		rowp.add_theme_stylebox_override("panel", UiSurface.box(rsb, UiSurface.LEATHER, UIStyle.PANEL_GRAIN * 0.5))
+		rowp.custom_minimum_size.y = HISTORY_ROW_H
+		rowp.name = "HistoryRow"
 		overlay_box.add_child(rowp)
 		var hb := HBoxContainer.new()
 		hb.add_theme_constant_override("separation", 10)
+		hb.alignment = BoxContainer.ALIGNMENT_CENTER
 		rowp.add_child(hb)
 		hb.add_child(GameUi.pill("WIN" if hw else "LOSS", UIStyle.GOOD if hw else UIStyle.BAD))
 		var t := UIStyle.label("Game %d — %s won" % [h["game"], view["names"][h["winner"]]], 16, UIStyle.TEXT)
