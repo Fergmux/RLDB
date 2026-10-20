@@ -320,6 +320,7 @@ func _draft_phase() -> void:
 	_check("J30 Confirm selections shown once every card is drafted", confirm != null and not confirm.disabled)
 	_check("J30 draft modal inside the window", get_viewport().get_visible_rect().grow(1).encloses(ov.overlay.get_global_rect()), str(ov.overlay.get_global_rect()))
 	await _shot("draft_08b_complete")
+	await _draft_list_checks(gs)
 	# J30: the basic unit can still change after every card is drafted.
 	var chg2 := _find_button(ov.overlay_box, "Change basic unit")
 	_check("J30 Change basic unit on the complete pane", chg2 != null)
@@ -381,6 +382,59 @@ func _draft_phase() -> void:
 	await _frames(10)
 	_check("F06-04 every basic changed", host.series.decks[0].count(Series.basic_for("Fire", "Beast")) == 3 and int(host.series.rewards[0]["left"]) == 3)
 	await _shot("draft_12_reward_taken")
+
+
+## J28 / J29: the sidebar's draft list once every card is drafted: the grid holds the drafted cards
+## (small card faces with the duel's coloured tooltip) and the rows carry the duel pile rows'
+## information (kind, cost, Race and Type, a Fusion's materials). Shoots the list scrolled to the
+## rows and one grid card's tooltip.
+func _draft_list_checks(gs: GameScreen) -> void:
+	var slots := gs.find_children("DraftSlots", "", true, false)
+	var ds: DraftSlots = slots[0] if not slots.is_empty() else null
+	var picked: Array = host.series.draft[0]["picked"]
+	_check("J29 the grid shows every drafted card", ds != null and ds.cards.size() == picked.size()
+		and ds.cards.all(func(w): return w is CardWidget and (w as CardWidget).tooltip_text != ""))
+	_check("J29 grid cards are the drafted cards", ds != null and range(picked.size()).all(func(i): return int((ds.cards[i] as CardWidget).view["id"]) == int(picked[i])))
+	_check("J29 grid cards sit in their 56x84 slots", ds != null and ds.cards.all(func(w): return (w as Control).size.is_equal_approx(DraftSlots.SLOT)))
+	var fusion_rows := 0
+	var rows := gs.details.pile_list.get_children().filter(func(r): return r.has_meta("uid"))
+	for r in rows:
+		var c: Dictionary = r.get_meta(&"tip_card", {})
+		if String(c.get("category", "")) == "fusion":
+			fusion_rows += 1
+			_check("J28 a Fusion row names its materials", r.find_child("RowMaterials", true, false) != null)
+	_check("J28 one row per drafted card", rows.size() == picked.size(), str(rows.size()))
+	_check("J28 rows carry the full card view (rules parts, keywords)", rows.all(func(r): return (r.get_meta(&"tip_card", {}) as Dictionary).has("text_parts")))
+	print("J28 fusion rows: %d" % fusion_rows)
+	# The rows below the grid.
+	gs.details.pile_scroll.scroll_vertical = 330
+	await _frames(6)
+	await _shot("draft_08e_list_rows")
+	gs.details.pile_scroll.scroll_vertical = 100000   # the Extra Deck picks are last
+	await _frames(6)
+	await _shot("draft_08f_list_fusion_rows")
+	gs.details.pile_scroll.scroll_vertical = 0
+	await _frames(4)
+	if ds != null and not ds.cards.is_empty():
+		var w: CardWidget = ds.cards[ds.cards.size() - 1]
+		w.hovered = true
+		var tip = w._make_custom_tooltip(w.tooltip_text)
+		_check("J29 a grid card has the coloured card tooltip", tip != null and not (tip is Label))
+		if tip != null:
+			var pc := PanelContainer.new()
+			pc.add_theme_stylebox_override("panel", gs.get_theme_stylebox("panel", "TooltipPanel"))
+			pc.z_index = 4000
+			pc.z_as_relative = false
+			gs.add_child(pc)
+			pc.add_child(tip)
+			await _frames(2)
+			var wr := w.get_global_rect()
+			pc.position = Vector2(wr.position.x - pc.size.x - 12.0, clampf(wr.position.y - 40.0, 8.0, gs.size.y - pc.size.y - 8.0))
+			await _frames(4)
+			await _shot("draft_08d_grid_tooltip")
+			pc.queue_free()
+		w.hovered = false
+		await _frames(2)
 
 
 func _find_picker(n: Node) -> BasicUnitPicker:
