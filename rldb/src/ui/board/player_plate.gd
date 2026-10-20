@@ -321,4 +321,4 @@ func hp_anchor() -> Vector2:
 ## the floater never covers the label it changes.
 func ap_anchor() -> Vector2:
 	var r := ap_gems.get_global_rect()
-	return Vector2(r.position.x + ap_gems.label_end_x() + float(UIStyle.sp("xl")) + 20.0, r.get_center().y)
+	return Vector2(r.position.x + ap_gems.row_end_x() + float(UIStyle.sp("xl")) + 20.0, r.get_center().y)

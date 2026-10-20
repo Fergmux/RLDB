@@ -36,6 +36,7 @@ and have a few more things for you to change". Standing instructions from the 20
 | H28 | "ALSO THE ARCAN SUMMON COMPLETE SOUND EFFECT IS A BIT JARRING CAN ME MAKE IT MORE MYSTICAL AND COOL" | F audio | done |
 | H29 | "i like the new arcane sound effect, update ritual and fusion to have better mroe unique and fantasy esque epic sound effects" | F audio | open |
 | H30 | "also we don't need attack/defense stance tag in the right details panel" | integrator | done |
+| H31 | "also remove the ap 1/2 text next to your ap gems, the gems are enough" | integrator | done |
 
 ## Decisions for review
 
@@ -60,6 +61,7 @@ and have a few more things for you to change". Standing instructions from the 20
 - H25: the card art shrinks (180-336 px) to make room; text never shrinks. The card catalogue screen still shows rules as one block (offer to match).
 - H27: literal reading: 0 copies = one empty socket; N copies = N filled gems, no trailing empty. No per-card copy limit exists, so gems shrink/wrap up to the 99 cap.
 - H28: new Arcane completion is a swelling Dsus2 glass chord with sparkle and a long tail, 2.35 s (runs ~0.6 s past the visual), peak -4.5 dBFS to match Fusion's loudness. Needs the owner's ears.
+- H31: the count moved to a hover tooltip on the gems ("Action Points: 1 of 2"), like the HP vial's max HP.
 
 ## Blockers and workarounds
 

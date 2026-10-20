@@ -117,3 +117,18 @@ func test_snap_update_is_silent() -> void:
 	g.gem_spent.connect(func(_i: int) -> void: got[0] += 1)
 	g.set_values(0, 2, 2, true)
 	assert_int(got[0]).is_equal(0)
+
+
+## Owner (21 Oct): no "AP 1/2" text beside the gems; the gems are enough. The row ends at its last
+## socket, so nothing is drawn (or reserved) after it.
+func test_row_has_no_ap_text_after_the_gems() -> void:
+	# Arrange
+	var g: ApGemRow = auto_free(ApGemRow.new())
+	g.size = Vector2(240, ApGemRow.SOCKET + 2.0)
+	g.set_values(1, 2, 2, true)
+	var n := g.slots()
+	var s := ApGemRow.row_scale(n)
+	# Act
+	var end := g.row_end_x()
+	# Assert: the last socket's right edge (+1 px start inset), no label room
+	assert_float(end).is_equal_approx(float(n) * (ApGemRow.SOCKET + ApGemRow.GAP) * s - ApGemRow.GAP * s + 1.0, 0.5)

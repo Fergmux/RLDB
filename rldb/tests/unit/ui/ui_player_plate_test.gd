@@ -136,12 +136,12 @@ func test_skipped_release_snaps_without_shards() -> void:
 	assert_int(pl.hp_bar.particle_count()).is_equal(0)
 
 
-func test_ap_floater_anchor_sits_right_of_the_ap_label() -> void:
+func test_ap_floater_anchor_sits_right_of_the_gems() -> void:
 	var pl := _plate()
 	pl.size = Vector2(PlayerPlate.PLATE_W, pl.get_combined_minimum_size().y)
 	await await_idle_frame()
 	var r := pl.ap_gems.get_global_rect()
-	assert_float(pl.ap_anchor().x - r.position.x).is_greater(pl.ap_gems.label_end_x() + 20.0)
+	assert_float(pl.ap_anchor().x - r.position.x).is_greater(pl.ap_gems.row_end_x() + 20.0)
 	assert_float(pl.ap_anchor().x).is_less(pl.get_global_rect().end.x)
 
 

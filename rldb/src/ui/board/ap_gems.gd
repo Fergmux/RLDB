@@ -7,11 +7,11 @@ extends Control
 ##
 ## Each AP is a 16 px faceted topaz (radial #fff1b0 -> #f2b544 -> #9a6416, dark outline, white glint
 ## top-left) in a 20 px bronze socket. A spent gem leaves a dark cracked socket with a 1 px inner
-## rim. Before the first turn (capacity 0) two dark, uncracked sockets show with "AP 0/2" dimmed.
+## rim. Before the first turn (capacity 0) two dark, uncracked sockets show.
 ## Gaining: the gem pops in (scale 0 -> 1.15 -> 1, 260 ms BACK OUT, 60 ms stagger), `gem_gained`.
 ## Spending: it dims through amber to dark (200 ms) with a 3-particle puff, `gem_spent`.
-## The label: "AP" in 13 px Alegreya Bold MUTED and the numbers in GOLD_HI, 10 px after the gems.
-## Reduce motion: changes snap (no pop, puff or label punch) but the signals still fire, so the
+## No "AP x/y" text (owner, 21 Oct: the gems are enough); the count is the row's tooltip.
+## Reduce motion: changes snap (no pop or puff) but the signals still fire, so the
 ## sounds play. A `snap` update (a new player / game) is silent. Time comes from `clock`.
 
 ## A gem was gained at slot `index` (the moment its pop starts: the chime hook, D6).
@@ -27,13 +27,11 @@ const IDLE_SLOTS := 2
 ## Width budget for the gem row; above it the gems shrink (never below MIN_SCALE).
 const MAX_ROW_W := 170.0
 const MIN_SCALE := 0.35
-const LABEL_GAP := 10.0
 const GAIN_T := 0.26
 const SPEND_T := 0.2
 const STAGGER := 0.06
 const PUFF_T := 0.35
 const POP_PEAK := 1.15
-const LABEL_POP_T := 0.25
 ## Palette (review D4).
 const TOPAZ_HI := Color("fff1b0")
 const TOPAZ := Color("f2b544")
@@ -50,7 +48,6 @@ var clock: Callable = func() -> float: return float(Time.get_ticks_usec()) / 100
 ## Per-slot animation start times (clock s, stagger included).
 var _gain_t0: Dictionary = {}
 var _spend_t0: Dictionary = {}
-var _label_t0: float = -INF
 ## Puff particles: [pos, vel, t0].
 var _puffs: Array = []
 var _emitted: Dictionary = {}
@@ -58,7 +55,8 @@ var _emitted: Dictionary = {}
 
 func _init() -> void:
 	custom_minimum_size = Vector2(0, SOCKET + 2.0)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# PASS: the tooltip (the count, since the "AP x/y" label is gone) without taking the plate's clicks.
+	mouse_filter = Control.MOUSE_FILTER_PASS
 	set_process(false)
 
 
@@ -116,7 +114,7 @@ func slots() -> int:
 	return slots_for(ap, ap_start, ap_peak)
 
 
-## Label text: "AP 1/2"; before the first turn "AP 0/2" (IDLE_SLOTS).
+## Count text: "AP 1/2"; before the first turn "AP 0/2" (IDLE_SLOTS). Used for the tooltip.
 func ap_text() -> String:
 	return "AP %d/%d" % [ap, capacity() if capacity() > 0 else IDLE_SLOTS]
 
@@ -125,10 +123,10 @@ func ap_text() -> String:
 ## reduce motion / not in the tree) = no animation.
 func set_values(p_ap: int, p_start: int, p_peak: int, snap: bool = false) -> void:
 	var old_filled := filled()
-	var old_ap := ap
 	ap = p_ap
 	ap_start = p_start
 	ap_peak = p_peak
+	tooltip_text = "Action Points: %d of %d" % [ap, capacity() if capacity() > 0 else IDLE_SLOTS]
 	var new_filled := filled()
 	if UIStyle.reduce_motion and not snap and is_inside_tree():
 		# No motion, but the sound hooks still fire (sound is not motion).
@@ -140,7 +138,6 @@ func set_values(p_ap: int, p_start: int, p_peak: int, snap: bool = false) -> voi
 		_gain_t0.clear()
 		_spend_t0.clear()
 		_puffs.clear()
-		_label_t0 = -INF
 		set_process(false)
 		queue_redraw()
 		return
@@ -157,15 +154,13 @@ func set_values(p_ap: int, p_start: int, p_peak: int, snap: bool = false) -> voi
 		_spend_t0[i] = t + UIStyle.dur(STAGGER) * k
 		_emitted.erase("s%d" % i)
 		k += 1
-	if ap != old_ap:
-		_label_t0 = t
 	set_process(true)
 	step()
 
 
-## True while a gem or label animation runs.
+## True while a gem animation runs.
 func animating() -> bool:
-	return not _gain_t0.is_empty() or not _spend_t0.is_empty() or not _puffs.is_empty() or _label_t0 != -INF
+	return not _gain_t0.is_empty() or not _spend_t0.is_empty() or not _puffs.is_empty()
 
 
 ## Advances to the clock's time (each frame while animating; tests call it after moving the clock).
@@ -194,8 +189,6 @@ func step() -> void:
 		if t - float(p[2]) < UIStyle.dur(PUFF_T):
 			keep.append(p)
 	_puffs = keep
-	if _label_t0 != -INF and t - _label_t0 >= UIStyle.dur(LABEL_POP_T):
-		_label_t0 = -INF
 	if not animating():
 		set_process(false)
 	queue_redraw()
@@ -245,7 +238,6 @@ func _draw() -> void:
 		var e: float = (t - float(p[2])) / UIStyle.dur(PUFF_T)
 		var pos: Vector2 = p[0] + (p[1] as Vector2) * e
 		draw_circle(pos, 1.5 + 2.5 * e, Color(0.85, 0.62, 0.3, 0.45 * (1.0 - e)), true, -1.0, true)
-	_draw_label(n, s, t, cap)
 
 
 ## The bronze socket: a gilded ring, an ink well and a 1 px inner rim; `cracked` adds the spent
@@ -312,32 +304,7 @@ func _draw_gem(c: Vector2, r: float, dim: float, alpha: float) -> void:
 		draw_line(g + Vector2(-r * 0.22, 0), g + Vector2(r * 0.22, 0), Color(1, 1, 1, 0.55 * alpha * (1.0 - dim)), 1.0, true)
 
 
-## X (local px) where the "AP x/y" label ends: the free space for the "+N AP" floater starts here.
-func label_end_x() -> float:
-	var n := slots()
-	var s := row_scale(n)
-	var bold := UIStyle.font_bold()
-	var x := float(n) * _pitch() - GAP * s + 1.0 + LABEL_GAP
-	x += bold.get_string_size("AP", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 5.0
-	return x + bold.get_string_size("%d/%d" % [ap, capacity() if capacity() > 0 else IDLE_SLOTS], HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
-
-
-func _draw_label(n: int, s: float, t: float, cap: int) -> void:
-	var x := float(n) * _pitch() - GAP * s + 1.0 + LABEL_GAP
-	var bold := UIStyle.font_bold()
-	var y := size.y / 2.0 + (bold.get_ascent(15) - bold.get_descent(15)) / 2.0
-	var idle := cap == 0
-	var lab_col := UIStyle.TEXT_DIM if idle else UIStyle.MUTED
-	var num_col := UIStyle.TEXT_DIM if idle else UIStyle.GOLD_HI
-	var nums := "%d/%d" % [ap, cap if cap > 0 else IDLE_SLOTS]
-	draw_string_outline(bold, Vector2(x, y - 1), "AP", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 3, Color(0, 0, 0, 0.6))
-	draw_string(bold, Vector2(x, y - 1), "AP", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, lab_col)
-	var nx := x + bold.get_string_size("AP", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 5.0
-	var sc := 1.0
-	if _label_t0 != -INF:
-		sc = 1.0 + 0.15 * sin(clampf((t - _label_t0) / UIStyle.dur(LABEL_POP_T), 0.0, 1.0) * PI)
-	var piv := Vector2(nx, y - 5.0)
-	draw_set_transform(piv - piv * sc, 0.0, Vector2(sc, sc))
-	draw_string_outline(bold, Vector2(nx, y), nums, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, 3, Color(0, 0, 0, 0.65))
-	draw_string(bold, Vector2(nx, y), nums, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, num_col)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+## X (local px) where the gem row ends: the free space for the "+N AP" floater starts here.
+func row_end_x() -> float:
+	var s := row_scale(slots())
+	return float(slots()) * _pitch() - GAP * s + 1.0
