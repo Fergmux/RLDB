@@ -123,7 +123,9 @@ func _update_scroll_cue() -> void:
 		return
 	var vb := details_scroll.get_v_scroll_bar()
 	var more := vb.max_value - vb.page > 3.0 and vb.value + vb.page < vb.max_value - 3.0
-	scroll_cue.set_shown(more and not empty_art.visible)
+	# The cue follows the card details only: never over the illustrated empty state (#42), nor under
+	# a pile or draft list (the empty "Your draft (0)" list showed it).
+	scroll_cue.set_shown(more and details_scroll.visible and not empty_art.visible)
 	scroll_cue.queue_redraw()
 
 
@@ -309,6 +311,7 @@ func render_pile_list() -> void:
 	_sync_method_picker()
 	details_scroll.visible = false
 	empty_art.visible = false
+	_update_scroll_cue()
 	pile_scroll.visible = true
 	pile_head.visible = true
 	if drafting:
