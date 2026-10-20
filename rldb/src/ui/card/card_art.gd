@@ -64,8 +64,8 @@ static func draw(pt: CardPainter, rect: Rect2, radius: float = 0.0) -> void:
 const FOIL_CATS := ["fusion", "ritual", "arcane"]
 ## [band centre along the diagonal (0 = top-left corner, 1 = bottom-right), half-width share,
 ## peak alpha, colour] of the sheen bands; FOIL adds a second, tinted pair.
-const SHEEN := [[0.3, 0.13, 0.09, Color(1, 0.97, 0.9)]]
-const FOIL := [[0.28, 0.15, 0.22, Color(0.85, 0.95, 1.0)], [0.37, 0.05, 0.2, Color(1.0, 0.85, 0.98)], [0.7, 0.07, 0.12, Color(1.0, 0.98, 0.85)]]
+const SHEEN := [[0.3, 0.13, 0.14, Color(1, 0.97, 0.9)]]
+const FOIL := [[0.28, 0.15, 0.36, Color(0.85, 0.95, 1.0)], [0.37, 0.05, 0.28, Color(1.0, 0.85, 0.98)], [0.7, 0.07, 0.16, Color(1.0, 0.98, 0.85)]]
 ## Sheen geometry by window size and corner (the art windows come in a few sizes).
 static var _sheen_cache := {}
 const SHEEN_CACHE_MAX := 64
