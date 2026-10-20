@@ -4,6 +4,12 @@ extends Button
 ## #99): no plate, MUTED text that turns GOLD_HI with a 1 px underline on hover. It is a real
 ## Button, so the shared Sfx hook gives it its click ("back" for Cancel / Back) and hover cue.
 
+## Sets the left text padding (room for a leading glyph child), on every state.
+func set_lead(px: float) -> void:
+	for st in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		get_theme_stylebox(st).content_margin_left = px
+
+
 ## Gap between the baseline area and the underline (px).
 const UNDERLINE_GAP := 2.0
 
@@ -49,6 +55,9 @@ func _draw() -> void:
 	var font := get_theme_font("font")
 	var fs := get_theme_font_size("font_size")
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	var x0 := (size.x - w) / 2.0
+	var sb := get_theme_stylebox("normal")
+	var ml := sb.content_margin_left if sb != null else 0.0
+	var mr := sb.content_margin_right if sb != null else 0.0
+	var x0 := ml + (size.x - ml - mr - w) / 2.0
 	var y := size.y / 2.0 + (font.get_ascent(fs) - font.get_descent(fs)) / 2.0 + UNDERLINE_GAP
 	draw_line(Vector2(x0, y), Vector2(x0 + w, y), Color(UIStyle.GOLD_HI, 0.85), 1.0)

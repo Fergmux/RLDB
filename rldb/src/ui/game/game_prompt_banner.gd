@@ -72,7 +72,7 @@ const PASS_TURN_TIP := "Stop offering me Traps until this turn ends."
 const LIST_KINDS := ["trap_response", "confirm", "order"]
 ## Stance answers (#34): full-width 44 px plates with the card badge glyph, Attack in the ember
 ## family and Defense in steel, so the two answers read apart at a glance.
-const STANCE_FAMILY := {"Attack stance": "danger", "Defense stance": "steel"}
+const STANCE_FAMILY := {"atk": "danger", "def": "steel"}
 const STANCE_H := 44.0
 ## G09: gap between a card and the toast about it, the toast pointer's length, its fade-in (s), and
 ## how long after a command a refusal is still taken to be about that command's card (ms).
@@ -831,7 +831,7 @@ func _render_banner() -> void:
 			b = UIStyle.primary_button(label, 14)
 		elif String(o["label"]) == EffectEngine.TRAP_PASS_TURN:
 			b = UIStyle.wine_button(label, 14)        # D13: the third, "stand down" answer
-		elif STANCE_FAMILY.has(String(o["label"])):
+		elif String(pd["kind"]) == "stance" and stance_of(String(o["label"])) != "":
 			b = stance_button(label, String(o["label"]))
 		else:
 			b = UIStyle.button(label, 14)
@@ -1087,13 +1087,14 @@ static func type_fill(col: Color, v: float) -> Color:
 ## A stance answer (#34): `label` on a full-width 44 px plate in its STANCE_FAMILY colour with the
 ## card's stance glyph (the ATK diamond or the DEF shield) on the left.
 static func stance_button(label: String, option: String) -> Button:
-	var b := UIStyle.style_button(UIStyle.button(label, 15), String(STANCE_FAMILY.get(option, "secondary")))
+	var st_kind := stance_of(option)
+	var b := UIStyle.style_button(UIStyle.button(label, 15), String(STANCE_FAMILY.get(st_kind, "secondary")))
 	b.custom_minimum_size = Vector2(0, STANCE_H)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for st in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		if b.has_theme_stylebox_override(st):
 			b.get_theme_stylebox(st).content_margin_left = 38
-	var g := StanceGlyph.new(option == "Defense stance")
+	var g := StanceGlyph.new(st_kind == "def")
 	g.anchor_top = 0.5
 	g.anchor_bottom = 0.5
 	g.offset_left = 12
@@ -1102,6 +1103,16 @@ static func stance_button(label: String, option: String) -> Button:
 	g.offset_bottom = 9
 	b.add_child(g)
 	return b
+
+
+## "atk" / "def" for a stance option label ("Attack stance", "Defense"), else "".
+static func stance_of(option: String) -> String:
+	var s := option.strip_edges().to_lower()
+	if s.begins_with("attack"):
+		return "atk"
+	if s.begins_with("defen"):
+		return "def"
+	return ""
 
 
 ## The stance glyph of a stance answer: the ATK diamond or the DEF shield of the card badges.

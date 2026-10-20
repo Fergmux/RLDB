@@ -1,6 +1,7 @@
 class_name CostPips
 extends Control
-## F08: the exact cost of an Arcane material choice as a row of circles (wrapping when needed).
+## F08: the exact cost of an Arcane material choice as a row of hex gem sockets (wrapping when
+## needed; design review #35 uses the rewards' PickPips gems).
 ## Each circle is one point of the required total: hollow dark sockets while unpaid, filled gold
 ## coins for the points the selected materials pay (a material fills as many circles as its current
 ## cost, each material its own shade of gold so the split reads), and a bright rim on every circle
@@ -110,22 +111,20 @@ func _draw() -> void:
 		var c := Vector2(x0 + (i % cols) * (D + GAP) + D / 2.0, 2.0 + row * (D + GAP) + D / 2.0)
 		var r := D / 2.0
 		var fill := clampf(shown - float(i), 0.0, 1.0)
-		# Empty socket: a dark hollow with a dim bronze rim and an inner shadow ring, so it reads as
-		# a place still to fill.
-		draw_circle(c, r, Color(0.05, 0.04, 0.03, 0.95))
-		draw_arc(c, r - 1.0, 0.0, TAU, 28, Color(UIStyle.BRONZE, 0.7), 1.5, true)
-		draw_arc(c, r - 4.0, 0.0, TAU, 24, Color(0, 0, 0, 0.6), 2.0, true)
+		# Design review #35: the rewards' hex gems. An empty hex socket still to fill; a paid point
+		# pops in as a faceted gem (each material its own shade of gold, so the split reads).
+		PickPips.draw_socket(self, c, r)
 		if fill > 0.0:
 			var k := owner_of(i)
-			var col := UIStyle.GOLD if k % 2 == 0 else UIStyle.GOLD.lerp(Color("c9822e"), 0.45)
-			var rr := (r - 1.5) * pop(fill)
-			draw_circle(c, rr, col)
-			draw_arc(c, rr - 0.8, 0.0, TAU, 24, col.darkened(0.35), 1.6, true)
-			draw_circle(c, rr * 0.55, col.lightened(0.18))
-			draw_circle(c + Vector2(-rr * 0.32, -rr * 0.36), rr * 0.26, Color(1, 1, 1, 0.6 * fill))
-			# The fill flash: a bright ring that blooms and fades while the coin grows in.
+			var col: Color = UIStyle.COST_COLORS["ap"] if k % 2 == 0 else UIStyle.GOLD.lerp(Color("c9822e"), 0.45)
+			PickPips.draw_gem(self, c, (r - 1.0) * pop(fill), col, minf(1.0, fill * 2.0))
+			# The fill flash: a bright hex ring that blooms and fades while the gem grows in.
 			var fl := sin(PI * fill)
 			if fl > 0.01:
-				draw_arc(c, r + 1.5, 0.0, TAU, 28, Color(UIStyle.GOLD_HI, 0.8 * fl), 2.0, true)
+				var ring := PickPips._hex(c, r + 2.0)
+				ring.append(ring[0])
+				draw_polyline(ring, Color(UIStyle.GOLD_HI, 0.8 * fl), 2.0, true)
 		if exact:
-			draw_arc(c, r, 0.0, TAU, 28, UIStyle.GOLD_HI, 1.8, true)
+			var ring2 := PickPips._hex(c, r + 0.5)
+			ring2.append(ring2[0])
+			draw_polyline(ring2, UIStyle.GOLD_HI, 1.8, true)
