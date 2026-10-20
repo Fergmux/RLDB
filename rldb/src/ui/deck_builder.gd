@@ -557,21 +557,22 @@ static func count_chip(caption: String, accent: Color = UIStyle.GOLD_HI) -> Pane
 	return pc
 
 
-## Gold quantity tag ("x3") shown just below a card (F18), fixed width with room for x99 (F16).
+## Quantity tag ("x3") shown just below a card (F18), fixed width with room for x99 (F16). Design
+## review #82: a passive count badge, not a button: a dark F4 gold chip with a gold Cinzel number.
 static func count_tag() -> PanelContainer:
 	var pc := PanelContainer.new()
-	var sb := UIStyle.flat(UIStyle.GOLD, Color("fff0b8"), 1, 10)
-	sb.content_margin_left = 4
-	sb.content_margin_right = 4
-	sb.content_margin_top = 0
-	sb.content_margin_bottom = 1
-	sb.shadow_color = Color(0, 0, 0, 0.6)
-	sb.shadow_size = 4
-	sb.shadow_offset = Vector2(0, 1)
+	var sb := UIStyle.chip_style(UIStyle.GOLD, 10)
+	sb.base.content_margin_left = 4
+	sb.base.content_margin_right = 4
+	sb.base.content_margin_top = 0
+	sb.base.content_margin_bottom = 1
+	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
+		sb.set_content_margin(side, sb.base.get_content_margin(side))
+	UIStyle.lift(sb.base, UIStyle.DEPTH_PLATE)
 	pc.add_theme_stylebox_override("panel", sb)
 	pc.custom_minimum_size = Vector2(TAG_W, TAG_H)
 	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var l := UIStyle.label("", 14, UIStyle.ON_GOLD)
+	var l := UIStyle.label("", 14, UIStyle.GOLD_HI)
 	l.add_theme_font_override("font", UIStyle.font_bold())
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

@@ -187,6 +187,10 @@ func test_inspector_counts_closed_at_once_and_frees_after_its_motion() -> void:
 	var ins := CardInspector.open(host, VIEW, Callable(), Rect2(100, 700, 80, 120))
 	assert_object(ins).is_not_null()
 	await await_idle_frame()
+	await await_idle_frame()
+	# The card is in flight: a copy moves while the real card waits hidden.
+	assert_bool(ins._ghost != null and is_instance_valid(ins._ghost)).is_true()
+	assert_float(ins._card_widget.modulate.a).is_equal(0.0)
 	ins.close()
 	assert_int(CardInspector.open_count()).is_equal(0)
 	assert_bool(is_instance_valid(ins) and not ins.is_queued_for_deletion()).is_true()

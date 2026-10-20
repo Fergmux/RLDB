@@ -35,11 +35,14 @@ var shaft_color: Color = Color("ffd9a0")
 var clock: Callable = func() -> float: return float(Time.get_ticks_msec()) / 1000.0
 
 var _motes: Array = []
+## Round mote core and halo radii, as multiples of the mote size.
+var core_k := 0.32
+var halo_k := 1.6
 
 
 ## Table dust (design review #23): very sparse, small, slow warm motes in the duel table's light.
-const DUST := {"size": Vector2(2.0, 4.5), "life": Vector2(10.0, 16.0), "alpha": Vector2(0.2, 0.34),
-	"rise": Vector2(3.0, 9.0), "sway": 14.0, "petals": false}
+const DUST := {"size": Vector2(3.0, 6.0), "life": Vector2(10.0, 16.0), "alpha": Vector2(0.4, 0.6),
+	"rise": Vector2(3.0, 9.0), "sway": 14.0, "petals": false, "core": 0.6, "halo": 2.4}
 const DUST_COLOR := Color("ffd9a0")
 
 
@@ -68,6 +71,8 @@ func _init(count: int = 26, cols: Array = [], seed_value: int = 1606, profile: D
 	var rs: Vector2 = profile.get("rise", Vector2(RISE_MIN, RISE_MAX))
 	var sw := float(profile.get("sway", SWAY_PX))
 	var petals := bool(profile.get("petals", true))
+	core_k = float(profile.get("core", core_k))
+	halo_k = float(profile.get("halo", halo_k))
 	for i in count:
 		_motes.append({
 			"x": rng.randf(), "y": rng.randf(),
@@ -121,7 +126,7 @@ func _draw() -> void:
 			continue
 		var p: Vector2 = st["pos"]
 		var s := float(m["size"])
-		draw_circle(p, s * 1.6, Color(col, a * 0.18), true, -1.0, true)
+		draw_circle(p, s * halo_k, Color(col, a * 0.18), true, -1.0, true)
 		if bool(m["petal"]):
 			# A petal: a soft ellipse turned by its spin.
 			var pts := PackedVector2Array()
@@ -130,7 +135,7 @@ func _draw() -> void:
 				pts.append(p + Vector2(cos(ang) * s * 0.55, sin(ang) * s * 0.3).rotated(float(st["rot"])))
 			draw_colored_polygon(pts, Color(col, a))
 		else:
-			draw_circle(p, s * 0.32, Color(col, a), true, -1.0, true)
+			draw_circle(p, s * core_k, Color(col, a), true, -1.0, true)
 
 
 func _draw_shaft(t: float) -> void:
