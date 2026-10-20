@@ -26,12 +26,22 @@ var views: Array = []
 var clock: Callable = func() -> float: return float(Time.get_ticks_msec()) / 1000.0
 ## J29: the card widgets in the filled slots, in pick order (null where a pick has no view).
 var cards: Array = []
+## J31 (performance): the next slot's breathing gold ring is drawn on this internal layer (over the
+## grid, under the card widgets), so each frame repaints one ring, not every slot. The ring touches
+## only its own slot's rim, which the grid draws first either way: the pixels are the same.
+var _ring_layer: Control
+var _ring_sb: StyleBoxFlat
 
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	resized.connect(_place_cards)
+	_ring_layer = Control.new()
+	_ring_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ring_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ring_layer.draw.connect(_draw_ring)
+	add_child(_ring_layer, false, Node.INTERNAL_MODE_FRONT)
 
 
 ## Sets the draft shown: `n` picks in all, `picked` those made, each a card view (Dictionary) or
@@ -51,6 +61,7 @@ func setup(n: int, picked: Array, arrive_last: bool = false) -> DraftSlots:
 	custom_minimum_size = Vector2(COLS * SLOT.x + (COLS - 1) * GAP.x, rows * SLOT.y + maxi(rows - 1, 0) * GAP.y + 8.0)
 	_build_cards(arrive_last)
 	queue_redraw()
+	_ring_layer.queue_redraw()
 	return self
 
 
@@ -104,11 +115,31 @@ func _place_cards() -> void:
 
 func _process(_d: float) -> void:
 	if kinds.size() < total and is_visible_in_tree() and not UIStyle.reduce_motion:
-		queue_redraw()
+		_ring_layer.queue_redraw()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED and _ring_layer != null:
+		_ring_layer.queue_redraw()
+
+
+# The next slot's breathing gold ring (see _ring_layer).
+func _draw_ring() -> void:
+	var i := kinds.size()
+	if i >= total:
+		return
+	var t := float(clock.call())
+	var k := 0.8 if UIStyle.reduce_motion else 0.55 + 0.45 * (0.5 + 0.5 * sin(t / 2.4 * TAU))
+	if _ring_sb == null:
+		_ring_sb = StyleBoxFlat.new()
+		_ring_sb.bg_color = Color(0, 0, 0, 0)
+		_ring_sb.set_corner_radius_all(4)
+		_ring_sb.set_border_width_all(2)
+	_ring_sb.border_color = Color(UIStyle.GOLD_HI, 0.55 * k)
+	_ring_layer.draw_style_box(_ring_sb, Rect2(slot_pos(i), SLOT).grow(1.0))
 
 
 func _draw() -> void:
-	var t := float(clock.call())
 	for i in total:
 		var r := Rect2(slot_pos(i), SLOT)
 		if i < kinds.size():
@@ -118,12 +149,12 @@ func _draw() -> void:
 			else:
 				_filled(r, String(kinds[i]))
 		else:
-			_engraved(r, i == kinds.size(), t)
+			_engraved(r, i == kinds.size())
 
 
 ## An empty slot: an engraved card outline (a dark line with a faint lit line under it) and a
-## small diamond; the next slot's rim breathes gold.
-func _engraved(r: Rect2, next: bool, t: float) -> void:
+## small diamond; the next slot's rim breathes gold (_draw_ring).
+func _engraved(r: Rect2, next: bool) -> void:
 	var rad := 4
 	var well := StyleBoxFlat.new()
 	well.bg_color = Color(0, 0, 0, 0.22)
@@ -138,12 +169,6 @@ func _engraved(r: Rect2, next: bool, t: float) -> void:
 	var dark := lit.duplicate() as StyleBoxFlat
 	dark.border_color = Color(0, 0, 0, 0.6)
 	draw_style_box(dark, r)
-	if next:
-		var k := 0.8 if UIStyle.reduce_motion else 0.55 + 0.45 * (0.5 + 0.5 * sin(t / 2.4 * TAU))
-		var ring := lit.duplicate() as StyleBoxFlat
-		ring.border_color = Color(UIStyle.GOLD_HI, 0.55 * k)
-		ring.set_border_width_all(2)
-		draw_style_box(ring, r.grow(1.0))
 	var c := r.get_center()
 	var d := 6.0
 	var dia := PackedVector2Array([c + Vector2(0, -d), c + Vector2(d, 0), c + Vector2(0, d), c + Vector2(-d, 0), c + Vector2(0, -d)])

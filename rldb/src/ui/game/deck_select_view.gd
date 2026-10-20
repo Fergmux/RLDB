@@ -744,12 +744,21 @@ func _close_picker() -> void:
 class DraftPips extends Control:
 	var step := 0
 	var total := 1
+	## J31 (performance): the breathing current pip is drawn on this internal layer, so each frame
+	## repaints one pip, not the row. Its glow only meets its neighbours at a diamond tip (pitch 16,
+	## glow reach 10, pip 6), so drawing it after them gives the same pixels.
+	var _breath: Control
 
 	func _init(s: int, t: int) -> void:
 		step = s
 		total = maxi(t, 1)
 		custom_minimum_size = Vector2(DraftPips.row_width(mini(total, PIP_MAX)), PIP_R * 2.0 + 10.0)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_breath = Control.new()
+		_breath.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_breath.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_breath.draw.connect(_draw_current)
+		add_child(_breath, false, Node.INTERNAL_MODE_FRONT)
 
 	## Width of a row of `n` pips (the groups' extra gaps included).
 	static func row_width(n: int) -> float:
@@ -761,11 +770,14 @@ class DraftPips extends Control:
 
 	func _process(_d: float) -> void:
 		if not UIStyle.reduce_motion and is_visible_in_tree():
-			queue_redraw()
+			_breath.queue_redraw()
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED and _breath != null:
+			_breath.queue_redraw()
 
 	func _draw() -> void:
 		var n := mini(total, PIP_MAX)
-		var k := UIStyle.breathe(float(Time.get_ticks_msec()) / 1000.0, 0.35)
 		for i in n:
 			var c := Vector2(pip_x(i), size.y / 2.0)
 			var idx := int(float(i) * total / n)
@@ -774,12 +786,22 @@ class DraftPips extends Control:
 				Ornate.diamond(self, c, PIP_R, UIStyle.GOLD)
 				Ornate.diamond(self, c + Vector2(0, -1.5), PIP_R * 0.45, Color(UIStyle.GOLD_HI, 0.9))
 			elif idx == step:
-				Ornate.diamond(self, c, PIP_R + 4.0, Color(UIStyle.GOLD_HI, 0.22 * k))
-				Ornate.diamond(self, c, PIP_R + 1.0, Color(UIStyle.GOLD_HI, clampf(0.85 * k, 0.0, 1.0)))
-				Ornate.diamond(self, c, PIP_R * 0.45, Color(1, 0.97, 0.85, 0.95))
+				pass   # the breathing current pip: _draw_current, on the _breath layer
 			else:
 				Ornate.diamond(self, c, PIP_R, Color(UIStyle.BRONZE.lightened(0.15), 0.85))
 				Ornate.diamond(self, c, PIP_R - 1.6, Color(0.05, 0.04, 0.03, 1.0))
+
+	# The current pip (idx == step), breathing.
+	func _draw_current() -> void:
+		var n := mini(total, PIP_MAX)
+		var k := UIStyle.breathe(float(Time.get_ticks_msec()) / 1000.0, 0.35)
+		for i in n:
+			if int(float(i) * total / n) != step:
+				continue
+			var c := Vector2(pip_x(i), size.y / 2.0)
+			Ornate.diamond(_breath, c, PIP_R + 4.0, Color(UIStyle.GOLD_HI, 0.22 * k))
+			Ornate.diamond(_breath, c, PIP_R + 1.0, Color(UIStyle.GOLD_HI, clampf(0.85 * k, 0.0, 1.0)))
+			Ornate.diamond(_breath, c, PIP_R * 0.45, Color(1, 0.97, 0.85, 0.95))
 
 
 ## Small vector glyph for the tabs: "shield" (Structure) or "tome" (Custom).

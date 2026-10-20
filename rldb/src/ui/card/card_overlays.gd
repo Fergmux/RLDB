@@ -172,8 +172,16 @@ static func _ready_glow(pt: CardPainter, rect: Rect2, rad: float, pulse: float) 
 	ready_glow(pt.ci, rect, rad, pt.s, pulse)
 
 
+## J31 (performance): the one ring style box every _ring_on call reuses (draw_style_box tessellates it
+## on the spot, so mutating it for the next ring never changes one already drawn). A new StyleBoxFlat
+## per ring per frame was most of a pulsing card's overlay cost.
+static var _ring_sb: StyleBoxFlat
+
+
 static func _ring_on(ci: CanvasItem, col: Color, w: float, r: Rect2, radius: float) -> void:
-	var sb := StyleBoxFlat.new()
+	if _ring_sb == null:
+		_ring_sb = StyleBoxFlat.new()
+	var sb := _ring_sb
 	sb.draw_center = false
 	sb.border_color = col
 	sb.set_border_width_all(maxi(1, roundi(w)))

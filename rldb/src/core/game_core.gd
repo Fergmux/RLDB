@@ -33,6 +33,9 @@ var winner: int = -1
 var rng := RandomNumberGenerator.new()
 ## {seq, pub, priv:{player:text}}.
 var log_entries: Array = []
+## J31 (performance): MatchView.log_for's per-viewer cache of the redacted rows of settled log entries
+## (every entry but the last). Presentation only: never part of the rules state, a save or a clone.
+var log_view_cache: Dictionary = {}
 ## Match configuration.
 var config: Dictionary = {}
 ## Sneaky Snunday: turn during which reversals were played.
