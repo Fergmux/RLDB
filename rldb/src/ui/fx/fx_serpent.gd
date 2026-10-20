@@ -219,10 +219,14 @@ func _impact(pl: PlayerPlate, c: Vector2, dmg: int, reach: float, lethal: Dictio
 		_fx.shake(pl, 12.0)
 		var z0 := pl.z_index
 		pl.z_index = FxPlayer.STRUCK_PLATE_Z   # the struck plate reads above its own blast (UI review F12)
-		_fx.add_cleanup(func(): if is_instance_valid(pl): pl.z_index = z0)
+		_fx.add_cleanup_on(pl, func(p: Control) -> void: p.z_index = z0)
 		var zt := _fx.new_tween()
 		zt.tween_interval(UIStyle.dur(1.2))
-		zt.tween_callback(func(): if is_instance_valid(pl): pl.z_index = z0)
+		var pl_ref: WeakRef = weakref(pl)   # the plate can be freed before the tween ends
+		zt.tween_callback(func() -> void:
+			var p: Control = pl_ref.get_ref()
+			if p != null:
+				p.z_index = z0)
 	var b := FxBlast.new()
 	b.look = FxBlast.Look.BLAST
 	b.col = WATER

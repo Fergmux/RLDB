@@ -250,7 +250,7 @@ func _dust_puff(global_foot: Vector2) -> void:
 
 ## Registers a cleanup that removes the glow from `w` when the effects are skipped.
 func _clear_glow_on_finish(w: CardWidget) -> void:
-	_fx.add_cleanup(func(): if is_instance_valid(w): w.fx_glow = NO_GLOW)
+	_fx.add_cleanup_on(w, func(c: CardWidget) -> void: c.fx_glow = NO_GLOW)
 
 
 ## Damped horizontal shake of a slot widget about its rest position; `k` runs 0 -> 1. Drives the

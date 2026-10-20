@@ -221,7 +221,7 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			if int(lethal["loser"]) < pls.size():
 				before = int(pls[int(lethal["loser"])].get("hp", before))
 			lp.hold_hp(before)
-			add_cleanup(func() -> void: if is_instance_valid(lp): lp.release_hp(true))
+			add_cleanup_on(lp, func(p: PlayerPlate) -> void: p.release_hp(true))
 	var mats := {}   # player -> material events of the special summon that follows (F03-17 / D8)
 	for i in events.size():
 		var e: Dictionary = events[i]
@@ -612,6 +612,17 @@ func add_cleanup(fn: Callable) -> void:
 	_cleanups.append(fn)
 
 
+## Registers `fn(obj)` to run from finish_all() while `obj` is still alive. `obj` is held weakly and
+## `fn` must not capture it: Godot logs "Lambda capture ... was freed" when a lambda whose captured
+## object was freed is called, even if the lambda checks is_instance_valid() itself.
+func add_cleanup_on(obj: Object, fn: Callable) -> void:
+	var ref: WeakRef = weakref(obj)
+	_cleanups.append(func() -> void:
+		var o: Object = ref.get_ref()
+		if o != null:
+			fn.call(o))
+
+
 ## Forgets that `w` was pre-hidden (its arrival effect now owns its alpha).
 func unhide(w: CardWidget) -> void:
 	_hidden.erase(w)
@@ -709,8 +720,12 @@ func shake(node: Control, amp: float) -> void:
 	if UIStyle.reduce_motion:
 		return
 	var rest := node.position
-	add_cleanup(func(): if is_instance_valid(node): node.position = rest)
+	add_cleanup_on(node, func(n: Control) -> void: n.position = rest)
 	var tw := new_tween()
 	for dx in [amp, -amp, amp * 0.6, -amp * 0.3, 0.0]:
 		tw.tween_property(node, "position:x", rest.x + dx, UIStyle.dur(0.03))
-	tw.tween_callback(func(): if is_instance_valid(node): node.position = rest)
+	var node_ref: WeakRef = weakref(node)   # the node can be freed before the shake ends
+	tw.tween_callback(func() -> void:
+		var n: Control = node_ref.get_ref()
+		if n != null:
+			n.position = rest)
