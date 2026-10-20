@@ -155,7 +155,7 @@ func _action_rows() -> void:
 # ---------------------------------------------------------------- H11
 func _details_and_log() -> void:
 	# The field unit stays selected: the details panel shows its ATK / DEF tiles and statuses.
-	var side := Rect2(Vector2(want.x - gs.sidebar_w, 0), Vector2(gs.sidebar_w, want.y))
+	var side := _side()
 	await _snap("h11_01_details_default")
 	await _crop("h11_01b_sidebar_default", side)
 	var lg = gs.game_log
@@ -174,7 +174,7 @@ func _details_and_log() -> void:
 
 # ---------------------------------------------------------------- H6
 func _pile_rows() -> void:
-	var side := Rect2(Vector2(want.x - gs.sidebar_w, 0), Vector2(gs.sidebar_w, want.y))
+	var side := _side()
 	gs.details.show_pile("spent")
 	await _wait(0.5)
 	_move(_neutral())
@@ -301,6 +301,11 @@ func _auto_answer() -> void:
 
 func _neutral() -> Vector2:
 	return gs.get_global_transform() * Vector2(gs.board._ux - 320.0, gs.board._y0 + 520.0)
+
+
+func _side() -> Rect2:
+	var vis := root.get_visible_rect().size
+	return Rect2(Vector2(vis.x - gs.sidebar_w - 8.0, 0), Vector2(gs.sidebar_w + 8.0, vis.y))
 
 
 func _row_rect(st: Control) -> Rect2:
