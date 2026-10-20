@@ -464,6 +464,7 @@ static func facts(data: Dictionary = {}) -> Array:
 		out.append(_fact("Fastest win", "%d turns" % fastest, ""))
 	var longest: int = duels.map(func(x): return int(x["turns"])).max()
 	out.append(_fact("Longest duel", "%d turns" % longest, ""))
+	out.append_array(time_facts(duels))
 	var hit: int = duels.map(func(x): return int(x.get("best_hit", 0))).max()
 	if hit > 0:
 		var dealt := 0
@@ -498,7 +499,6 @@ static func facts(data: Dictionary = {}) -> Array:
 		summons += int(x.get("summons", 0))
 		spells += int(x.get("spells", 0))
 	out.append(_fact("Units summoned", str(summons), "%d spells and traps used" % spells))
-	out.append_array(time_facts(duels))
 	return out
 
 
