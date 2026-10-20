@@ -46,6 +46,19 @@ func test_j13_concede_game_comes_below_return_to_menu() -> void:
 	assert_array(order).contains_exactly(["settings", "return", "concede", "quit"])
 
 
+func test_menu_offers_no_concede_between_duels() -> void:
+	# Arrange: the game has ended; the rewards screen is up
+	host.handle(1 - m.active, {"t": "concede"})
+	await await_idle_frame()
+	gs.skip_effects()
+	await await_idle_frame()
+	# Act
+	gs.menu.toggle()
+	# Assert: nothing to concede between duels (the host would refuse it)
+	assert_array(_menu_order()).contains_exactly(["settings", "return", "quit"])
+	gs.menu.toggle()
+
+
 ## Turn 2's Battle Phase for the active seat `a`, shown on the screen: two ready attackers, the opponent on
 ## 5 HP with an empty field (any attack kills). Returns a.
 func _kill_board() -> int:

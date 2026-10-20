@@ -200,7 +200,8 @@ func update_conn() -> void:
 
 
 ## Shows the in-game menu buttons that fit this screen: a spectator gets Settings, Stop watching and
-## Quit; an online player also gets Spectators (with the count).
+## Quit; an online player also gets Spectators (with the count). Concede game shows only while a game
+## is being played (between duels there is nothing to concede; the host would refuse it).
 func refresh_items() -> void:
 	if items.is_empty():
 		return
@@ -208,7 +209,7 @@ func refresh_items() -> void:
 	var n: int = gs.view.get("net", {}).get("spectators", []).size()
 	(items["spectators"] as Button).visible = gs.is_network() and not spec
 	(items["spectators"] as Button).text = "Spectators (%d)" % n if n > 0 else "Spectators"
-	(items["concede"] as Button).visible = not spec
+	(items["concede"] as Button).visible = not spec and String(gs.view.get("stage", "")) == "game" 		and not gs.mv.is_empty() and int(gs.mv.get("winner", -1)) == -1
 	(items["return"] as Button).visible = not spec
 	(items["stop"] as Button).visible = spec
 
@@ -234,6 +235,7 @@ func toggle() -> void:
 	if game_menu.visible:
 		game_menu.visible = false
 	else:
+		refresh_items()
 		_show_popup(game_menu)
 		gs.hover.clear()
 
