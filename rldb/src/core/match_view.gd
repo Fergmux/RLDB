@@ -503,14 +503,13 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 		if m.category(u) == "spell":
 			cands.append({"t": "activate_set", "uid": u, "label": "Activate", "full": "Activate this set Spell"})
 	# Owner feedback 2026-10-18: a unit with enough Runes for a Ritual unit it could summon now
-	# offers "Ritual Tribute" itself (only while legal; one button per Ritual unit).
-	var rituals: Array = pl["extra"].filter(func(r): return m.category(r) == "ritual")
+	# offers the Ritual summon itself (only while legal). J14 (2026-10-22): one "Ritual Summon"
+	# button whatever the number of Ritual units; the player picks the unit in the card select tray.
 	for u in m.field_units(viewer):
-		var ok_r := rituals.filter(func(r): return m.validate(viewer, {"t": "ritual_tribute", "uid": u, "target": r}) == "")
-		for r in ok_r:
-			cands.append({"t": "ritual_tribute", "uid": u, "target": r,
-				"label": "Ritual Tribute" if ok_r.size() == 1 else "Ritual: %s" % m.name_of(r),
-				"full": "Tribute this unit to Ritual Summon %s" % m.name_of(r)})
+		var ok_r := m.ritual_tribute_targets(viewer, u)
+		if not ok_r.is_empty():
+			cands.append({"t": "ritual_tribute", "uid": u, "label": "Ritual Summon",
+				"full": "Tribute this unit to Ritual Summon %s" % " or ".join(ok_r.map(func(r): return m.name_of(r)))})
 	for u in pl["extra"]:
 		match m.category(u):
 			"ritual":

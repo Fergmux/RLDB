@@ -187,7 +187,7 @@ func run_action(uid: int, a: Dictionary) -> void:
 	if a.has("mode"):
 		cmd["mode"] = a["mode"]          # G07: Attack / Attack Direct
 	if a.has("target"):
-		cmd["target"] = a["target"]      # Ritual Tribute: the Ritual unit
+		cmd["target"] = a["target"]      # a targeted Ritual Tribute (J14: the button sends none; the tray asks)
 	gs.selected_uid = uid
 	gs.acting_uid = uid
 	gs.row_open = false
@@ -347,7 +347,7 @@ class ActionButton extends JuicyButton:
 	## Draws the glyph of action `k` (stance target `stance`) centred on `c`, about `s` px in radius.
 	static func draw_glyph(ci: CanvasItem, k: String, stance: String, c: Vector2, s: float, col: Color) -> void:
 		match k:
-			"summon", "ritual", "arcane":   # rising double chevron
+			"summon", "ritual", "arcane", "ritual_tribute":   # rising double chevron
 				for j in 2:
 					var y := c.y + s * (0.5 - 0.8 * j)
 					ci.draw_polyline(PackedVector2Array([Vector2(c.x - s * 0.8, y + s * 0.35), Vector2(c.x, y - s * 0.4), Vector2(c.x + s * 0.8, y + s * 0.35)]), col, 1.7, true)

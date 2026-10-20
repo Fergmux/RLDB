@@ -347,17 +347,22 @@ func validate(p: int, cmd: Dictionary) -> String:
 		"ritual", "arcane":
 			if inst["owner"] != p or inst["zone"] != "extra": return "Card is not in your Extra Deck."
 			if df["category"] != t: return "Not a %s unit." % t.capitalize()
-			if extra_summons_locked(): return NO_EXTRA_IN_BATTLE
-			if not main: return "Special summons from the Extra Deck follow normal summon timing (Setup or Recovery Phase)."
-			if _summon_blocked_by_type(p, unit_type(uid)): return "Your opponent's Bahatia prevents summoning %s units." % unit_type(uid)
+			var why_x := _extra_timing_check(p, uid)
+			if why_x != "": return why_x
 			if t == "ritual" and _ritual_materials(p, uid).is_empty(): return "No unit with enough Runes."
 			# F03-04: some Spent units' current costs must total exactly the requirement.
 			if t == "arcane" and not arcane_payable(p, int(extra_cost(uid))): return "No Spent units' current costs total exactly %d." % int(extra_cost(uid))
 			return ""
 		"ritual_tribute":
 			# Owner feedback 2026-10-18: the Ritual summon started from the unit with the Runes;
-			# "target" is the Ritual unit in the Extra Deck it is tributed for.
+			# "target" is the Ritual unit in the Extra Deck it is tributed for. J14 (2026-10-22):
+			# without a target the player then picks the Ritual unit (ritual_pick).
 			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
+			if int(cmd.get("target", -1)) == -1:
+				if not ritual_tribute_targets(p, uid).is_empty(): return ""
+				for rr in players[p]["extra"]:
+					if category(rr) == "ritual" and _extra_timing_check(p, rr) != "": return _extra_timing_check(p, rr)
+				return "This unit does not have enough Runes for a Ritual unit in your Extra Deck."
 			var r: int = int(cmd.get("target", -1))
 			if not cards.has(r) or not (r in players[p]["extra"]) or category(r) != "ritual": return "Not a Ritual unit in your Extra Deck."
 			var why := validate(p, {"t": "ritual", "uid": r})
@@ -365,6 +370,28 @@ func validate(p: int, cmd: Dictionary) -> String:
 			if not (uid in _ritual_materials(p, r)): return "This unit does not have enough Runes."
 			return ""
 	return "Unknown command."
+
+
+## Timing and lock reasons an Extra Deck unit `uid` of player p cannot be special summoned now
+## ("" when it may): no Extra Deck summons in the Battle Phase, Setup / Recovery Phase only, and
+## an opposing Bahatia's Type lock. Shared by the summon commands and the Ritual Tribute pick.
+func _extra_timing_check(p: int, uid: int) -> String:
+	if extra_summons_locked(): return NO_EXTRA_IN_BATTLE
+	if not (phase in [PHASE_MAIN1, PHASE_MAIN2]): return "Special summons from the Extra Deck follow normal summon timing (Setup or Recovery Phase)."
+	if _summon_blocked_by_type(p, unit_type(uid)): return "Your opponent's Bahatia prevents summoning %s units." % unit_type(uid)
+	return ""
+
+
+## J14 (owner feedback 2026-10-22): the Ritual units in player p's Extra Deck that unit `mat` could be
+## tributed for right now (enough Runes, summon timing and Type locks allow), in Extra Deck order.
+func ritual_tribute_targets(p: int, mat: int) -> Array:
+	var out := []
+	if not cards.has(mat) or cards[mat]["ctl"] != p or cards[mat]["zone"] != "unit":
+		return out
+	for r in players[p]["extra"]:
+		if category(r) == "ritual" and _extra_timing_check(p, r) == "" and mat in _ritual_materials(p, r):
+			out.append(r)
+	return out
 
 
 func _summon_blocked_by_type(p: int, t: String) -> bool:
@@ -546,7 +573,11 @@ func _execute(p: int, cmd: Dictionary) -> void:
 		"ritual":
 			_push_ritual(p, uid, cmd, -1)
 		"ritual_tribute":
-			_push_ritual(p, int(cmd["target"]), cmd, uid)
+			if int(cmd.get("target", -1)) == -1:
+				# J14: one "Ritual Summon" action; the Ritual unit is chosen in the card select tray.
+				push_frame(make_frame(uid, p, [{"op": "ritual_pick", "mat": uid, "cancellable": true}], "Ritual summon"))
+			else:
+				_push_ritual(p, int(cmd["target"]), cmd, uid)
 		"arcane":
 			push_frame(make_frame(uid, p, [{"op": "arcane_materials", "as": "mats", "cancellable": true},
 				{"op": "pick_slot", "zone": "unit", "as": "slot", "cancellable": true},
@@ -574,12 +605,38 @@ func _fusion_lead(ops: Array, lead: Array, ability: bool) -> Array:
 
 ## The Ritual summon of Extra Deck unit `uid`; `mat` (or -1 to choose) is the tributed unit.
 func _push_ritual(p: int, uid: int, cmd: Dictionary, mat: int) -> void:
-	push_frame(make_frame(uid, p, [{"op": "ritual_material", "as": "mat", "cancellable": true, "preset": mat},
+	push_frame(make_frame(uid, p, _ritual_ops(p, uid, mat, cmd), "Ritual summon " + name_of(uid)))
+
+
+## The ops of Ritual unit `uid`'s summon by player p with material `mat` (-1: the player chooses it).
+func _ritual_ops(p: int, uid: int, mat: int, cmd: Dictionary = {}) -> Array:
+	return [{"op": "ritual_material", "as": "mat", "cancellable": true, "preset": mat},
 		{"op": "pick_slot", "zone": "unit", "as": "slot", "cancellable": true, "freeing": "$mat"},
 		_stance_op(cmd),
 		{"op": "tribute", "target": "$mat", "ritual": true},
 		{"op": "place", "target": "self", "slot": "$slot", "stance": "$stance"},
-		{"op": "tribute_bonus", "target": "self"}] + summon_tail(uid, p), "Ritual summon " + name_of(uid)))
+		{"op": "tribute_bonus", "target": "self"}] + summon_tail(uid, p)
+
+
+## J14 (owner feedback 2026-10-22): a Ritual Tribute started from unit op.mat without a target asks
+## which Ritual unit to summon, in the card select tray (always, even with one candidate, so the
+## flow is the same every time). The answer turns this frame into that unit's Ritual summon.
+func _op_ritual_pick(f: Dictionary, op: Dictionary) -> int:
+	var mat: int = int(op["mat"])
+	var ans: Variant = take_answer(f)
+	if ans != null:
+		var r: int = int(ans[0])
+		f["src"] = r
+		f["label"] = "Ritual summon " + name_of(r)
+		_splice(f, _ritual_ops(f["ctl"], r, mat))
+		return R.CONT
+	var opts := []
+	for r in ritual_tribute_targets(f["ctl"], mat):
+		opts.append(card_option(r))
+	if opts.is_empty():
+		return R.END
+	return ask(f, f["ctl"], "select", "Choose the Ritual unit to summon by tributing %s." % name_of(mat), opts, 1, 1,
+		op.get("cancellable", true), {"reveal_pile": true})
 
 
 ## Stance step of a summon command. Commands summon only in the player's own Setup or Recovery
