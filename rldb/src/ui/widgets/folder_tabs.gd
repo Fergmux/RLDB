@@ -45,6 +45,16 @@ var tab_gap: float = 8.0:
 			_tabs_box.add_theme_constant_override("separation", int(v))
 ## Pane and open-tab fill.
 var pane_fill: Color = Color(0.05, 0.042, 0.034, 0.93)
+## J27 (owner, 22 Oct): with `tint_pane` on, an open tab that has an accent keeps its tinted face
+## and the whole pane takes that colour (the draft categories); off, they use `pane_fill`.
+var tint_pane: bool = false
+## J27: the pane colour shown before this widget was built (a rebuilt screen passes its last
+## `shown_fill()` here), so the new colour fades in from it instead of popping. Transparent: none.
+var tint_from: Color = Color.TRANSPARENT
+## Seconds of the pane's colour change when the open tab changes.
+const TINT_FADE := 0.22
+## Weight of a tinted pane's accent over the base face (a closed accent tab sits at 0.28).
+const TINT_K := 0.3
 ## Rim colour of the pane and the tabs.
 var rim: Color = UIStyle.BRONZE.lightened(0.18)
 ## Grain material of the faces.
@@ -59,6 +69,9 @@ var _tabs_box: HBoxContainer
 var _trailing_slot: HBoxContainer
 var _tabs: Array[Tab] = []
 var _pane_box: StyleBoxEmpty
+## The pane colour being drawn (it eases to `target_fill()`); alpha 0 until first drawn.
+var _fill_now: Color = Color.TRANSPARENT
+var _fill_tw: Tween
 
 
 func _init() -> void:
@@ -174,9 +187,45 @@ func select(key: String, emit: bool = true) -> void:
 		return
 	selected = key
 	_refresh_states()
+	_ease_fill()
 	queue_redraw()
 	if emit:
 		tab_selected.emit(key)
+
+
+## J27: the fill of the pane and the open tab: the open tab's accent colour over the base face
+## when `tint_pane` is on and the open tab has an accent, else `pane_fill`.
+func target_fill() -> Color:
+	var t := tab(selected) if selected != "" else null
+	if not tint_pane or t == null or t.accent.a <= 0.0:
+		return pane_fill
+	return Tab.BASE_FACE.lerp(Color(t.accent.darkened(0.6), 0.97), TINT_K)
+
+
+## J27: the pane colour drawn right now (mid-fade while the open tab changes).
+func shown_fill() -> Color:
+	if _fill_now.a > 0.0:
+		return _fill_now
+	# Not drawn yet (built and replaced within one frame): still the colour it fades from.
+	return tint_from if tint_from.a > 0.0 else target_fill()
+
+
+## Eases the drawn pane colour to target_fill() (at once under reduce motion or on first show).
+func _ease_fill() -> void:
+	if not is_inside_tree():
+		return   # NOTIFICATION_READY starts it (from tint_from, when set)
+	var to := target_fill()
+	if _fill_tw != null and _fill_tw.is_valid():
+		_fill_tw.kill()
+	if _fill_now.a <= 0.0 or UIStyle.reduce_motion or _fill_now.is_equal_approx(to):
+		_fill_now = to
+		queue_redraw()
+		return
+	var from := _fill_now
+	_fill_tw = create_tween()
+	_fill_tw.tween_method(func(k: float):
+		_fill_now = from.lerp(to, k)
+		queue_redraw(), 0.0, 1.0, UIStyle.dur(TINT_FADE)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 
 ## The rect of tab `key` in this widget's coordinates (empty when absent).
@@ -207,6 +256,11 @@ func _get_minimum_size() -> Vector2:
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_READY:
+		# J27: a rebuilt screen fades from the colour it showed before (tint_from).
+		if tint_from.a > 0.0 and _fill_now.a <= 0.0:
+			_fill_now = tint_from
+		_ease_fill()
 	if what == NOTIFICATION_SORT_CHILDREN:
 		fit_child_in_rect(_strip, Rect2(left_margin, 0.0, maxf(0.0, size.x - left_margin - 12.0), tab_height))
 		fit_child_in_rect(_trailing_slot, trailing_rect())
@@ -302,8 +356,18 @@ func _draw() -> void:
 	for p in sil:
 		shadow.append(p + Vector2(0, 3))
 	draw_colored_polygon(shadow, Color(0, 0, 0, 0.28))
-	draw_colored_polygon(sil, pane_fill)
-	UiSurface.draw_poly(self, sil, grain_material, pane_fill, GRAIN)
+	var fill := shown_fill()
+	draw_colored_polygon(sil, fill)
+	UiSurface.draw_poly(self, sil, grain_material, fill, GRAIN)
+	if fill != pane_fill:
+		# J27: a tinted pane keeps a soft dark fall-off toward its foot, so the content still reads.
+		var foot := Rect2(0.0, yt, size.x, size.y - yt)
+		var shade := PackedVector2Array(sil)
+		var cols := PackedColorArray()
+		for p in shade:
+			var k := clampf((p.y - foot.position.y) / maxf(foot.size.y, 1.0), 0.0, 1.0)
+			cols.append(Color(0, 0, 0, 0.32 * k))
+		draw_polygon(shade, cols)
 	if open.size.x > 0.0:
 		var tp := _tab_path(open_x0, open_x1, 1.0, yt - FLARE)
 		var lit := PackedVector2Array(tp)
@@ -410,9 +474,12 @@ class Tab extends Button:
 		_tw = create_tween()
 		_tw.tween_property(self, "glow", 1.0 if on else 0.0, UIStyle.dur(0.14))
 
+	## The face of a tab with no accent (and the base an accent is mixed over).
+	const BASE_FACE := Color(0.075, 0.062, 0.05, 0.97)
+
 	## Fill of the tab face while closed (the accent, darkened, lit by hover).
 	func face_color() -> Color:
-		var base := Color(0.075, 0.062, 0.05, 0.97)
+		var base := BASE_FACE
 		if disabled:
 			return Color(base.darkened(0.2), 0.8)
 		if accent.a <= 0.0:

@@ -267,6 +267,21 @@ func _draft_phase() -> void:
 	await _frames(10)
 	_check("the Power tab opens the Power offer", String(host.series.view_for(0)["draft"]["category"]) == "power")
 	await _shot("draft_02_power_tab")
+	# J27: the open tab keeps its colour and the pane takes it (Spell: green), fading from the last.
+	var sp := _find_button(ov.overlay_box, "", "Draft Spell cards")
+	if sp != null:
+		sp.pressed.emit()
+	await _frames(1)
+	var cat_tabs: FolderTabs = dv._cat_tabs
+	_check("J27 the pane fades from the last tab's colour", cat_tabs != null and not cat_tabs.shown_fill().is_equal_approx(cat_tabs.target_fill()))
+	await get_tree().create_timer(0.5).timeout
+	cat_tabs = dv._cat_tabs
+	_check("J27 the pane takes the open tab's colour", cat_tabs != null and cat_tabs.tint_pane and cat_tabs.shown_fill().is_equal_approx(cat_tabs.target_fill()) and cat_tabs.target_fill().g > cat_tabs.target_fill().r)
+	await _shot("draft_02b_spell_tab")
+	pw = _find_button(ov.overlay_box, "", "Draft Power cards")
+	if pw != null:
+		pw.pressed.emit()
+	await _frames(10)
 	# Change the basic unit mid-draft.
 	var chg := _find_button(ov.overlay_box, "Change")
 	_check("Change basic unit button", chg != null)

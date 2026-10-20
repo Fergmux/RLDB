@@ -38,6 +38,8 @@ var ov: GameSeriesOverlay
 
 ## The Choose basic unit picker (a HousePanel over a dim), or null while closed.
 var _picker_dim: ColorRect
+## J27: the draft category tabs last built (a rebuilt strip fades from their pane colour).
+var _cat_tabs: FolderTabs
 
 
 func _init(overlay: GameSeriesOverlay) -> void:
@@ -378,6 +380,12 @@ func category_tabs(dr: Dictionary) -> FolderTabs:
 	ft.tab_gap = 6.0
 	ft.left_margin = 20.0
 	ft.set_pane_margins(10, 14, 10, 10)
+	# J27 (owner, 22 Oct): the open tab keeps its category colour and the pane takes it; a rebuilt
+	# strip fades from the colour the last one showed.
+	ft.tint_pane = true
+	if _cat_tabs != null and is_instance_valid(_cat_tabs):
+		ft.tint_from = _cat_tabs.shown_fill()
+	_cat_tabs = ft
 	var labels: Dictionary = dr.get("labels", {})
 	var left: Dictionary = dr.get("left", {})
 	for cat in dr.get("categories", []):
