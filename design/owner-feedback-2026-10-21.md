@@ -33,6 +33,7 @@ and have a few more things for you to change". Standing instructions from the 20
 | H25 | "the rules should ben split out into sections like in the game right preview pane, I don't want to have to scroll that middle pane ever" | E deck builder | open |
 | H26 | "also remove the 'in your deck' tag under the card image" | E deck builder | open |
 | H27 | "the in this deck section at the bottom should not have three empty by default, it should show one empty, and fill it when one is in, and add more filled gems when more are added, not this +2 or whatever after the three have been filled" | E deck builder | open |
+| H28 | "ALSO THE ARCAN SUMMON COMPLETE SOUND EFFECT IS A BIT JARRING CAN ME MAKE IT MORE MYSTICAL AND COOL" | F audio | open |
 
 ## Decisions for review
 
