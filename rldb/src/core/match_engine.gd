@@ -12,6 +12,9 @@ signal changed
 const SUMMON_ATTACK_ONLY := "Units summoned in your Setup or Recovery Phase enter in Attack stance; change stance afterwards."
 ## Refusal of a manual stance change outside its timing (B3).
 const STANCE_PHASE_ONLY := "Stance can only be changed in the Setup Phase, or in the Recovery Phase by a unit summoned in it."
+## J25 (owner feedback 2026-10-22): refusal of a manual stance change by a Paralysed unit. A stance
+## change forced by a card effect (EffectOps._op_stance) is not prevented.
+const PARALYSED_STANCE := "Paralysed units cannot change stance."
 
 var first_turn_player: int = 0
 var command_count: int = 0
@@ -319,6 +322,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 			return _ability_check(p, uid, idx, abs[idx])
 		"stance":
 			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
+			if status_count(uid, "paralyse") > 0: return PARALYSED_STANCE
 			if not can_change_stance(uid): return STANCE_PHASE_ONLY
 			if has_flag(uid, "no_defense") and inst["stance"] == "atk": return "This unit cannot be in Defense stance."
 			return ""

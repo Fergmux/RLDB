@@ -25,7 +25,7 @@ const STATUS_HELP := {
 	"burn": "Burn: when this unit attacks, its controller takes Damage equal to Burn, then all Burn is removed.",
 	"pierce": "Pierce: attacking a Defense-stance unit, excess ATK damages the opponent. One stack consumed.",
 	"cleanse": "Cleanse: removes all existing debuffs or prevents an incoming debuff. One stack consumed per use.",
-	"paralyse": "Paralyse: cannot declare an attack or move zones. -1 at the end of its controller's turn.",
+	"paralyse": "Paralyse: cannot declare an attack, move zones or change stance (a stance change forced by a card still happens). -1 at the end of its controller's turn.",
 	"medic": "Medic: at the start of its controller's turn they Heal HP equal to Medic, then -1.",
 	"curse": "Curse: removes all buffs or prevents an incoming buff (not Runes). One stack consumed per use.",
 	"poison": "Poison: at the end of its controller's turn they take Damage equal to Poison, then -1.",

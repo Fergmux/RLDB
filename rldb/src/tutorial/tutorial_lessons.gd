@@ -328,7 +328,7 @@ static func _ritual() -> Dictionary:
 			_do("Open the Ritual summon", "Click your [zone]Extra Deck[/zone] pile, click [card]The Creeping Null[/card] in the list, then click [btn]Summon[/btn].", [{"t": "ritual", "card": "p_null"}]),
 			_do("Choose the material", "Only units with at least 3 Runes are offered.\n\nClick the Zealot to tribute it.", [{"t": "choose", "opt": {"card": "p_zealot"}}]),
 			_do("Choose its zone", "The material leaves the field first, so its zone is free for the Ritual unit.\n\nClick the highlighted zone.", [{"t": "choose", "opt": {"slot": 1}}]),
-			_read("Where the material went", "The Zealot was tributed to your [zone]Spent[/zone] pile. Its Runes were removed as it left the field: Runes never travel with a card.\n\nOn Summon, [card]The Creeping Null[/card] [kw]Paralysed[/kw] the Rival's units: they cannot attack or move zones.", [{"pile": ["me", "spent"]}, {"slot": ["me", "unit", 1]}]),
+			_read("Where the material went", "The Zealot was tributed to your [zone]Spent[/zone] pile. Its Runes were removed as it left the field: Runes never travel with a card.\n\nOn Summon, [card]The Creeping Null[/card] [kw]Paralysed[/kw] the Rival's units: they cannot attack, move zones or change stance.", [{"pile": ["me", "spent"]}, {"slot": ["me", "unit", 1]}]),
 			_do("Enter the Battle Phase", "Click [btn]Go to Battle Phase[/btn].", [{"t": "next_phase"}]),
 			_do("Attack with the Null", "Click [card]The Creeping Null[/card] and click [btn]Attack[/btn].", [{"t": "attack", "card": "p_null"}]),
 			_do("Pick the target", "Click the Rival's [type]Physical[/type] Warrior.\n\nNo Type advantage either way: [stat]40 ATK[/stat] against 8.", [{"t": "choose", "opt": {"card": "o_warrior"}}]),
