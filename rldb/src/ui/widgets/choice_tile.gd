@@ -39,10 +39,11 @@ func _init(title: String = "", caption: String = "", color: Color = UIStyle.GOLD
 	accent = color
 	_compact = compact
 	_box = UIStyle.flat(Color(0, 0, 0, 0), Color(accent, 0.65), 2, 10)
-	_box.content_margin_left = 12
-	_box.content_margin_right = 12
-	_pad_top = 10 if not compact else 7
-	_pad_bottom = 12 if not compact else 7
+	# D5: room inside the frame and its corner ornaments (a third caption line sat on the rim).
+	_box.content_margin_left = 14 if not compact else UIStyle.CONTENT_FLOOR
+	_box.content_margin_right = 14 if not compact else UIStyle.CONTENT_FLOOR
+	_pad_top = 14 if not compact else 10
+	_pad_bottom = 16 if not compact else 10
 	_box.content_margin_top = _pad_top
 	_box.content_margin_bottom = _pad_bottom
 	_box.shadow_color = Color(0, 0, 0, 0.5)

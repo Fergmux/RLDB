@@ -384,10 +384,7 @@ func _plain_stat_tile(pc: PanelContainer, hb: HBoxContainer, left: VBoxContainer
 	num.add_theme_constant_override("outline_size", 4)
 	num.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hb.add_child(num)
-	var sb := pc.get_theme_stylebox("panel") as DepthBox
-	sb.base.content_margin_top = 6
-	sb.base.content_margin_bottom = 6
-	sb.base = sb.base
+	# D5: the tile keeps the md padding of _stat_tile (a 6 px override put the 36 px number on the rim).
 	return pc
 
 

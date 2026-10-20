@@ -79,7 +79,7 @@ func build(row: HBoxContainer, before: Control) -> void:
 	flip_button.pressed.connect(_flip)
 	row.add_child(flip_button)
 	row.move_child(flip_button, before.get_index())
-	panel = HousePanel.new("Spectators", "", Vector2(16, 14), 8)
+	panel = HousePanel.new("Spectators", "", Vector2(UIStyle.sp("lg"), UIStyle.sp("lg")), UIStyle.sp("sm"))   # D5: 16 px popover padding
 	panel.name = "SpectatorsPanel"
 	panel.visible = false
 	panel.z_index = UiLayers.GAME_MENU
@@ -206,10 +206,7 @@ func _row(s: Dictionary) -> Control:
 	var p := PanelContainer.new()
 	var sb := UIStyle.flat(Color(0.1, 0.075, 0.04, 0.85) if not allowed else Color(0.2, 0.15, 0.06, 0.9),
 		Color(UIStyle.GOLD, 0.7) if allowed else Color(UIStyle.BRONZE, 0.55), 1, 8)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 8
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
+	UIStyle.pad(sb, "md")   # D5: list-row padding, 12 px on every side (6-8 px before)
 	p.add_theme_stylebox_override("panel", sb)
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 10)

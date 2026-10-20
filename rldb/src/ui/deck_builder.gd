@@ -1141,10 +1141,7 @@ func _deck_tile(deck_name: String, cards: Array, loaded: bool, starter: bool) ->
 			rim = UIStyle.GOLD_HI
 			width = 2
 		var sb := UIStyle.flat(col, rim, width, 7)
-		sb.content_margin_left = 12
-		sb.content_margin_right = 8
-		sb.content_margin_top = 6
-		sb.content_margin_bottom = 6
+		UIStyle.pad(sb, "md")   # D5: list-row padding, 12 px on every side (6-8 px before)
 		if k != "normal":
 			UIStyle.lift_style(sb, Color(UIStyle.GOLD, 0.28), 7, 0)
 		styles[k] = sb

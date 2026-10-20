@@ -60,7 +60,7 @@ func build(row: HBoxContainer, before: Control) -> void:
 	badge = UnreadBadge.new()
 	button.add_child(badge)
 	badge.position = Vector2(76 - 12, -7)
-	panel = HousePanel.new("Chat", "Players and spectators", Vector2(16, 14), 8)
+	panel = HousePanel.new("Chat", "Players and spectators", Vector2(UIStyle.sp("lg"), UIStyle.sp("lg")), UIStyle.sp("sm"))   # D5: 16 px popover padding
 	panel.name = "ChatPanel"
 	panel.visible = false
 	panel.z_index = UiLayers.GAME_MENU
