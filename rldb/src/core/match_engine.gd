@@ -15,6 +15,10 @@ const STANCE_PHASE_ONLY := "Stance can only be changed in the Setup Phase, or in
 ## J25 (owner feedback 2026-10-22): refusal of a manual stance change by a Paralysed unit. A stance
 ## change forced by a card effect (EffectOps._op_stance) is not prevented.
 const PARALYSED_STANCE := "Paralysed units cannot change stance."
+## J11 (owner feedback 2026-10-22): the plate button's sacrifice confirmation: this answer goes on,
+## Cancel (or Esc) keeps the unit. And the pick's prompt.
+const SACRIFICE_YES := "Sacrifice"
+const SACRIFICE_PICK_PROMPT := "Choose a unit to sacrifice."
 
 var first_turn_player: int = 0
 var command_count: int = 0
@@ -220,6 +224,13 @@ func submit(p: int, cmd: Dictionary) -> String:
 		if e2 == "":
 			_after_command()
 		return e2
+	if t == "trap_prompts":
+		# J6: a seat's own setting, allowed at any time (also during the opponent's turn or a
+		# pending choice); never logged, so the opponent does not learn it.
+		var e3 := set_trap_prompts(p, String(cmd.get("mode", "")))
+		if e3 == "":
+			_after_command()
+		return e3
 	if t == "concede":
 		note("concede", {"p": p})
 		end_game(opp(p), "%s conceded" % pname(p))
@@ -257,6 +268,8 @@ func validate(p: int, cmd: Dictionary) -> String:
 	var t: String = cmd.get("t", "")
 	if t == "next_phase":
 		return ""
+	if t == "sacrifice_pick":
+		return sacrifice_pick_check(p)
 	var uid: int = int(cmd.get("uid", -1))
 	if not cards.has(uid):
 		return "Unknown card."
@@ -329,12 +342,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 		"attack":
 			return _attack_check(p, uid, String(cmd.get("mode", "")))
 		"sacrifice":
-			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
-			if not main: return "Sacrifice is only allowed in the Setup or Recovery Phase (proposal P-21)."
-			if inst["summoned_turn"] == turn: return "A unit summoned this turn cannot be sacrificed."
-			if is_debilitated(uid): return "Debilitated units cannot be sacrificed."
-			if inst["control_until"] != -1: return "A temporarily controlled unit cannot be sacrificed."
-			return ""
+			return sacrifice_check(p, uid)
 		"move":
 			if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
 			if not main: return "Nimble moves are only allowed in the Setup or Recovery Phase."
@@ -392,6 +400,41 @@ func ritual_tribute_targets(p: int, mat: int) -> Array:
 		if category(r) == "ritual" and _extra_timing_check(p, r) == "" and mat in _ritual_materials(p, r):
 			out.append(r)
 	return out
+
+
+## Why player p may not sacrifice unit `uid` now ("" when they may): their own unit on the Field, in
+## the Setup or Recovery Phase (P-21), not summoned this turn, not Debilitated, not borrowed.
+## Turn, pending and stack checks are the caller's (validate).
+func sacrifice_check(p: int, uid: int) -> String:
+	var inst: Dictionary = cards[uid]
+	if inst["ctl"] != p or inst["zone"] != "unit": return "Not your unit."
+	if not (phase in [PHASE_MAIN1, PHASE_MAIN2]): return "Sacrifice is only allowed in the Setup or Recovery Phase (proposal P-21)."
+	if inst["summoned_turn"] == turn: return "A unit summoned this turn cannot be sacrificed."
+	if is_debilitated(uid): return "Debilitated units cannot be sacrificed."
+	if inst["control_until"] != -1: return "A temporarily controlled unit cannot be sacrificed."
+	return ""
+
+
+## J11 (owner feedback 2026-10-22): the units player p could sacrifice now, in Field order.
+func sacrificable_units(p: int) -> Array:
+	return field_units(p).filter(func(u): return sacrifice_check(p, u) == "")
+
+
+## J11: why the plate's "Sacrifice Unit" button cannot start a sacrifice now ("" when it can): no
+## unit on the Field, the phase, or the one reason every unit shares (else a general reason).
+func sacrifice_pick_check(p: int) -> String:
+	var units := field_units(p)
+	if units.is_empty():
+		return "You have no unit on the Field to sacrifice."
+	var reasons := {}
+	for u in units:
+		var why := sacrifice_check(p, u)
+		if why == "":
+			return ""
+		reasons[why] = true
+	if reasons.size() == 1:
+		return String(reasons.keys()[0])
+	return "None of your units can be sacrificed now."
 
 
 func _summon_blocked_by_type(p: int, t: String) -> bool:
@@ -567,6 +610,10 @@ func _execute(p: int, cmd: Dictionary) -> void:
 				{"op": "attack_window"}, {"op": "battle"}], "attack with " + name_of(uid)))
 		"sacrifice":
 			push_frame(make_frame(uid, p, [{"op": "sacrifice", "target": "self"}], "sacrifice " + name_of(uid)))
+		"sacrifice_pick":
+			# J11: the plate's Sacrifice Unit button: pick the unit, confirm, then the same sacrifice.
+			push_frame(make_frame(-1, p, [{"op": "sacrifice_pick", "cancellable": true},
+				{"op": "sacrifice_confirm"}, {"op": "sacrifice", "target": "self"}], "the sacrifice"))
 		"move":
 			push_frame(make_frame(uid, p, [{"op": "pick_slot", "zone": "adjacent", "as": "slot", "cancellable": true},
 				{"op": "move_slot", "slot": "$slot", "nimble": true}], "move " + name_of(uid)))
@@ -766,6 +813,35 @@ func _op_negate(f: Dictionary, op: Dictionary) -> int:
 			other["negated"] = true
 			break
 	return R.CONT
+
+
+## J11 (owner feedback 2026-10-22): which unit the plate's Sacrifice Unit button sacrifices: a
+## cancellable pick among the units that may be sacrificed now. The pick becomes the frame's card.
+func _op_sacrifice_pick(f: Dictionary, op: Dictionary) -> int:
+	var ans: Variant = take_answer(f)
+	if ans != null:
+		f["src"] = int(ans[0])
+		f["label"] = "the sacrifice of " + name_of(f["src"])
+		return R.CONT
+	var opts := []
+	for u in sacrificable_units(f["ctl"]):
+		opts.append(card_option(u))
+	if opts.is_empty():
+		return R.END
+	return ask(f, f["ctl"], "select", SACRIFICE_PICK_PROMPT, opts, 1, 1, op.get("cancellable", true))
+
+
+## J11: the last word before a sacrifice from the plate button (a sacrifice cannot be undone):
+## "Sacrifice" goes on; Cancel (or Esc) ends it and nothing happens.
+func _op_sacrifice_confirm(f: Dictionary, op: Dictionary) -> int:
+	var ans: Variant = take_answer(f)
+	if ans != null:
+		if int(ans[0]) == 1:
+			return R.CONT
+		add_log("", {f["ctl"]: "Cancelled %s." % f["label"]})
+		return R.END
+	return ask(f, f["ctl"], "confirm", "Sacrifice %s for +1 AP?" % name_of(f["src"]),
+		[{"v": 1, "label": SACRIFICE_YES}], 1, 1, true)
 
 
 func _op_sacrifice(f: Dictionary, op: Dictionary) -> int:

@@ -830,6 +830,8 @@ func _render_banner() -> void:
 		if type_choice:
 			b = type_button(String(o["label"]), 15)
 			b.set_meta("type_choice", String(o["label"]))
+		elif pd["kind"] == "confirm" and String(o["label"]) == MatchEngine.SACRIFICE_YES:
+			b = UIStyle.danger_button(label, 14)       # J11: a sacrifice cannot be undone
 		elif pd["kind"] == "attack_target" or (not pick and not decline and (String(o["label"]).begins_with("Activate") or (pd["kind"] == "confirm" and String(o["label"]) == "Yes"))):
 			b = UIStyle.primary_button(label, 14)
 		elif String(o["label"]) == EffectEngine.TRAP_PASS_TURN:

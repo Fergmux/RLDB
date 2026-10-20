@@ -72,8 +72,14 @@ func layout(new_ids: Array, instant: bool) -> void:
 	var step := cw + CARD_GAP
 	if n * cw + (n - 1) * CARD_GAP > SPAN_MAX:
 		step = (SPAN_MAX - cw) / float(n - 1)
+	# J6 / J11: the hand keeps clear of the duel controls under the plate: centred when it fits,
+	# else moved right, and squeezed only when it still would not fit beside them.
+	var left := gs.board.hand_left_min()
+	var room := area.size.x - left - CARD_GAP
+	if left > 0.0 and n > 1 and step * (n - 1) + cw > room:
+		step = maxf((room - cw) / float(n - 1), cw * 0.35)
 	var span := step * (n - 1) + cw
-	var x0 := area.size.x / 2.0 - span / 2.0
+	var x0 := maxf(area.size.x / 2.0 - span / 2.0, left)
 	var top := sy - GameScreen.HAND_H + 6.0
 	var fan := n >= 5 and not UIStyle.reduce_motion
 	var deck := gs.pile_anchor(gs.me(), "draw") if not gs.mv.is_empty() else Vector2(100, sy)

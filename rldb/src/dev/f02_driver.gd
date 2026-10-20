@@ -202,11 +202,18 @@ func _steps() -> void:
 	await _click(tw0.get_global_rect().get_center())
 	await _wait(0.6)
 	_check("F02-10 clicking the card chose it", m.cards[picked]["zone"] == "draw" and m.pending.is_empty())
-	# Sacrifice the Pierce unit to free a zone (also feeds Spent).
+	# Sacrifice the Pierce unit to free a zone (also feeds Spent). J11 (2026-10-22): from the
+	# Sacrifice Unit button under the plate: pick the unit, then confirm.
+	await _click(gs.board.controls.sacrifice_btn.get_global_rect().get_center())
+	await _wait(0.4)
 	await _click(_slot_rect(a, "unit", 4).get_center())
-	await _wait(0.3)
-	await _click_row("Sacrifice")
+	await _wait(0.4)
+	var sac_yes := _find_button(gs.prompt.ctx_banner, MatchEngine.SACRIFICE_YES)
+	_check("J11 sacrifice confirmation offered", sac_yes != null)
+	if sac_yes != null:
+		await _click(sac_yes.get_global_rect().get_center())
 	await _wait(0.6)
+	_check("J11 Pierce unit sacrificed", m.cards[uids["pierce"]]["zone"] == "spent", String(m.cards[uids["pierce"]]["zone"]))
 	# Extra Deck: click-to-act inside the pile popup, then an ordered multi tray.
 	_check("Extra pile stack shows the summon-ready ring", (gs.board.piles[1]["extra"] as PileStack).ready_mark)
 	await _click((gs.board.piles[1]["extra"] as Control).get_global_rect().get_center())

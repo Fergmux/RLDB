@@ -48,6 +48,10 @@ var first_player: int = -1
 ## The choice is saved; readiness is not (a resumed series asks both seats again).
 var first_chosen: bool = false
 var duel_ready: Array = [false, false]
+## J6 (owner feedback 2026-10-22): each seat's Trap response prompt setting for this series
+## (EffectEngine.TRAP_PROMPT_*; "" until the seat's client sends it). Not saved: a client sends its
+## own setting again whenever its view disagrees (a new game, a resumed series, a reconnect).
+var trap_prompts: Array = ["", ""]
 var rng := RandomNumberGenerator.new()
 var history: Array = []              # finished game summaries
 var deck_ready: Array = [false, false]
@@ -241,6 +245,20 @@ func submit(p: int, cmd: Dictionary) -> String:
 		forfeit(p, "%s left the series" % names[p])
 		checkpoint.emit()
 		return ""
+	if t == "trap_prompts":
+		# J6: a seat's Trap response prompt setting, kept for the whole series (every new game
+		# starts with it) and applied to the current game at once.
+		var mode := String(cmd.get("mode", ""))
+		if not (mode in EffectEngine.TRAP_PROMPT_MODES):
+			return "Unknown Trap prompt setting."
+		trap_prompts[p] = mode
+		if game != null and game.winner == -1:
+			err = game.submit(p, cmd)
+			if err == "" and game.winner != -1 and stage == STAGE_GAME:
+				_on_game_over()
+		if err == "":
+			changed.emit()
+		return err
 	match stage:
 		STAGE_GAME:
 			if t == "concede_series":
@@ -556,6 +574,9 @@ func _start_game() -> void:
 	telemetry_ids["game"] = new_telemetry_id()
 	note("game_create", {})
 	game.setup(decks.duplicate(true), first_player, rng.randi(), {"names": names, "start_hp": int(cfg["start_hp"]), "hidden_response_windows": cfg.get("hidden_response_windows", false), "fatigue_damage": int(cfg.get("fatigue_damage", 2))})
+	for p in 2:
+		if trap_prompts[p] != "":
+			game.players[p]["trap_prompts"] = trap_prompts[p]   # J6: the seat's setting carries over
 	_log("Game %d begins. %s goes first." % [game_no, names[first_player]])
 
 
