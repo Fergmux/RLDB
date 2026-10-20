@@ -268,15 +268,13 @@ func text_oversampling() -> float:
 ## hover itself already gives the depth-3 shadow and the soft outer glow. Under reduce motion it
 ## stays in place (the glow alone marks the hover). The card must have a custom_minimum_size.
 func ease_hover(on: bool, k: float = 1.04, rise: float = 4.0) -> void:
-	var old = get_meta("ease_hover_tw", null)
-	if old is Tween and (old as Tween).is_valid():
-		(old as Tween).kill()
 	if UIStyle.reduce_motion or not is_inside_tree():
+		if has_meta("ease_hover_tw") and get_meta("ease_hover_tw") is Tween:
+			(get_meta("ease_hover_tw") as Tween).kill()
 		lift_k = 1.0
 		lift_offset = Vector2.ZERO
 		return
-	var tw := create_tween()
-	set_meta("ease_hover_tw", tw)
+	var tw := UIStyle.restart_tween(self, "ease_hover_tw")
 	tw.set_parallel(true)
 	var tok := "hover" if on else "hover_out"
 	UIStyle.tween_token(tw, self, "lift_k", k if on else 1.0, tok)

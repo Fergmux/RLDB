@@ -402,11 +402,7 @@ func _tilt(cw: CardWidget, on: bool) -> void:
 		return
 	cw.pivot_offset = cw.size / 2.0
 	var side := 1.0 if cw.get_local_mouse_position().x >= cw.size.x / 2.0 else -1.0
-	var old = cw.get_meta("tilt_tw", null)
-	if old is Tween and old.is_valid():
-		old.kill()
-	var tw := cw.create_tween()
-	cw.set_meta("tilt_tw", tw)
+	var tw := UIStyle.restart_tween(cw, "tilt_tw")
 	UIStyle.tween_token(tw, cw, "rotation_degrees", OFFER_TILT_DEG * side if on else 0.0, "hover" if on else "hover_out")
 
 
