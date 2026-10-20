@@ -88,7 +88,9 @@ func _show(e: Dictionary) -> void:
 	var pill := PanelContainer.new()
 	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pill.add_theme_stylebox_override("panel", _pill_style(0.94, accent.lightened(0.15), 16, 18, 3))
-	pill.add_child(_title_label(_caption(e), 18, UIStyle.TEXT, 4))
+	var cap := _title_label(_caption(e), 20, UIStyle.TEXT, 4)
+	pill.add_child(cap)
+	TitleText.apply(cap, TitleText.Tier.HERO, 20)   # D3: "TRAP ACTIVATED" and the other FX banners are T1
 	_fx.add_node(pill, layer)
 	pill.size = pill.get_combined_minimum_size()
 	pill.pivot_offset = pill.size / 2.0

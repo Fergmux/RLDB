@@ -3,8 +3,7 @@ extends Control
 ## Faceted topaz AP gems (D4 "AP gems", design review findings #20 and #21), matching the HP vial.
 ## Drop-in for PlayerPlate.ApGems: the same fields (ap, ap_start, ap_peak), the same
 ## set_values(ap, start, peak, snap) call and the same F02-06 slot policy (capacity_for /
-## filled_for / spent_for), so the plate keeps its inputs. (Named ApGemRow because PlayerPlate
-## has an inner class ApGems until integration replaces it.)
+## filled_for / spent_for), so the plate keeps its inputs. (PlayerPlate uses it as `ap_gems`.)
 ##
 ## Each AP is a 16 px faceted topaz (radial #fff1b0 -> #f2b544 -> #9a6416, dark outline, white glint
 ## top-left) in a 20 px bronze socket. A spent gem leaves a dark cracked socket with a 1 px inner
@@ -311,6 +310,16 @@ func _draw_gem(c: Vector2, r: float, dim: float, alpha: float) -> void:
 		var g := c + light * r * 0.5
 		draw_circle(g, maxf(1.0, r * 0.14), Color(1, 1, 1, 0.95 * alpha * (1.0 - dim)), true, -1.0, true)
 		draw_line(g + Vector2(-r * 0.22, 0), g + Vector2(r * 0.22, 0), Color(1, 1, 1, 0.55 * alpha * (1.0 - dim)), 1.0, true)
+
+
+## X (local px) where the "AP x/y" label ends: the free space for the "+N AP" floater starts here.
+func label_end_x() -> float:
+	var n := slots()
+	var s := row_scale(n)
+	var bold := UIStyle.font_bold()
+	var x := float(n) * _pitch() - GAP * s + 1.0 + LABEL_GAP
+	x += bold.get_string_size("AP", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 5.0
+	return x + bold.get_string_size("%d/%d" % [ap, capacity() if capacity() > 0 else IDLE_SLOTS], HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 
 
 func _draw_label(n: int, s: float, t: float, cap: int) -> void:

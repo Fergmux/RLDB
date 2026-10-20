@@ -350,7 +350,10 @@ func test_g04_exact_payment_has_no_status_line_and_a_smaller_headline() -> void:
 	assert_bool(gs.prompt.banner_sub.visible).is_false()
 	assert_str(gs.prompt.cost_pips.tooltip_text).contains("Pay exactly 3")
 	var px := gs.prompt.banner_title.get_theme_font_size("font_size")
-	assert_bool(px == GamePromptBanner.HEADLINE_PAY_PX or px == GamePromptBanner.HEADLINE_PAY_NARROW_PX).is_true()
+	# H1 WP-2 (review #33): the pay headline is the smaller size, and may step further down (not below
+	# HEADLINE_MIN_PX) to keep a long title within HEADLINE_MAX_LINES lines.
+	assert_int(px).is_less_equal(GamePromptBanner.HEADLINE_PAY_PX)
+	assert_int(px).is_greater_equal(GamePromptBanner.HEADLINE_MIN_PX)
 	gs.selection.pick_option(1)
 	gs.prompt.prompt_sig = 0
 	gs.prompt.render()
@@ -366,4 +369,5 @@ func test_g04_exact_payment_has_no_status_line_and_a_smaller_headline() -> void:
 	assert_bool(gs.prompt.cost_pips.visible).is_false()
 	assert_bool(gs.prompt.banner_sub.visible).is_true()
 	var px2 := gs.prompt.banner_title.get_theme_font_size("font_size")
-	assert_bool(px2 == GamePromptBanner.HEADLINE_PX or px2 == GamePromptBanner.HEADLINE_NARROW_PX).is_true()
+	assert_int(px2).is_less_equal(GamePromptBanner.HEADLINE_PX)
+	assert_int(px2).is_greater_equal(px)   # the regular headline is never smaller than the pay one

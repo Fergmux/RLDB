@@ -1,359 +1,189 @@
 class_name PlayerPlate
 extends PanelContainer
-## Player info plate (match-board.md section 4): name with turn marker, HP bar with number,
-## AP gems and pile chips. Pile chips for the local player are clickable (inspection only).
+## Player info plate (match-board.md section 4; design review #17-#21, D4): the F2 gilded frame
+## (FrameBox), a faceted gold turn gem and the name (TitleText SECTION), the Vial of Life (HpVial) and
+## the topaz AP gems (ApGemRow). Pile chips for the local player are clickable (inspection only).
+##
+## The active player's plate breathes: its rim glows gold on the `breathe` loop (2.4 s) and a GOLD_HI
+## highlight sweeps along its top edge every 6 s; the turn gem pulses with the rim. An inactive plate's
+## rim drops to bronze 60%. While the vial is low on HP the rim turns ember (HpVial.LOW_PLATE_BORDER).
+## Reduce motion: the active rim and the gem are lit, still.
+##
+## AP sound (D6): an AP change announced by an effect ("ap" log fx) is voiced by FxPlayer (ap_gain /
+## ap_loss); any other change the gems show (a card's cost paid, the turn's AP reset) is voiced once
+## by the gems themselves. GameScreen tells the plate which changes the effects announce
+## (claim_ap_sound) before it renders, so one AP change never plays two AP sounds.
 
-## HP bar scale floor: the bar is never scaled to less than this maximum.
+## HP bar scale floor: the vial is never scaled to less than this maximum.
 const DEFAULT_MAX_HP := 60
-## Plate width (F03-06: slimmer than before so it keeps a gap from the zones and piles).
+## Plate width (F03-06: slimmer than before so it keeps a gap from the zones and piles); the vial
+## (HpVial.VIAL_SIZE, 228 px) fills it inside the md padding.
 const PLATE_W := 252.0
+## Rim of an inactive plate (bronze 60%) and of the active one, with the active glow at its peak.
+const RIM_IDLE := Color(0.478, 0.353, 0.188, 0.6)
+const RIM_ACTIVE := Color(0.831, 0.651, 0.29, 0.95)
+const ACTIVE_GLOW := Color(0.941, 0.812, 0.478, 0.34)
+const ACTIVE_GLOW_PX := 11.0
+## Breathing loop of the active rim and the top sweep (motion tokens `breathe` / `sweep`).
+const BREATHE_PERIOD := 2.4
+const SWEEP_PERIOD := 6.0
+const SWEEP_DURATION := 0.9
+## Volume (dB) of the gem's own AP cue (a change no effect announced; quieter than the effect cues).
+const GEM_SFX_DB := -6.0
 
 
-## Animated HP bar with the HP number.
-class HpBar extends Control:
-	## `hp` is the real value; `shown` is what is drawn and tweens towards it (number counts up/down).
-	## Damage leaves a pale ghost segment that drains after a beat; healing shows the gained segment in
-	## green that the fill grows into. `tint` flashes the number red (damage) or green (heal).
-	var hp: int = 0
-	var max_hp: int = DEFAULT_MAX_HP
-	var flash: float = 0.0: set = _set_flash
-	var shown: float = 0.0: set = _set_shown
-	var ghost: float = 0.0: set = _set_ghost
-	var tint: Color = Color(1, 1, 1, 0): set = _set_tint
-	var _tw: Tween
-	var _heal: bool = false
-
-	func _init() -> void:
-		custom_minimum_size = Vector2(0, 26)
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _set_flash(v: float) -> void:
-		flash = v
-		queue_redraw()
-
-	func _set_shown(v: float) -> void:
-		shown = v
-		queue_redraw()
-
-	func _set_ghost(v: float) -> void:
-		ghost = v
-		queue_redraw()
-
-	func _set_tint(v: Color) -> void:
-		tint = v
-		queue_redraw()
-
-	## Sets the real HP and animates the bar and number to it (~0.4 s). `snap` = no animation
-	## (first update, a different player on this plate, reduce motion, not in the tree).
-	func set_hp(v: int, snap: bool = false) -> void:
-		var old := shown
-		hp = v
-		if _tw != null and _tw.is_valid():
-			_tw.kill()
-		if snap or not is_inside_tree() or UIStyle.reduce_motion or is_equal_approx(old, float(v)):
-			shown = float(v)
-			ghost = float(v)
-			tint = Color(1, 1, 1, 0)
-			return
-		var dmg := float(v) < old
-		_heal = not dmg
-		var col := Color("ff5a48") if dmg else UIStyle.GOOD
-		tint = Color(col, 1.0)
-		ghost = maxf(ghost, old) if dmg else float(v)
-		_tw = create_tween().set_parallel(true)
-		_tw.tween_property(self, "shown", float(v), UIStyle.dur(0.4)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
-		_tw.tween_property(self, "tint", Color(col, 0.0), UIStyle.dur(0.6)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-		if dmg:
-			_tw.tween_property(self, "ghost", float(v), UIStyle.dur(0.35)).set_delay(UIStyle.dur(0.35)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-
-	## Rounded segment of the bar `r` between HP values `a` and `b` (skipped when under half a pixel).
-	func _seg(r: Rect2, a: float, b: float, col: Color) -> void:
-		var m := float(maxi(1, max_hp))
-		var x0 := r.position.x + r.size.x * clampf(minf(a, b) / m, 0.0, 1.0)
-		var x1 := r.position.x + r.size.x * clampf(maxf(a, b) / m, 0.0, 1.0)
-		if x1 - x0 < 0.5:
-			return
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = col
-		sb.set_corner_radius_all(mini(5, int((x1 - r.position.x) / 2.0)))
-		draw_style_box(sb, Rect2(x0, r.position.y, x1 - x0, r.size.y))
-
-	func _draw() -> void:
-		var r := Rect2(Vector2.ZERO, size)
-		var sb := UIStyle.flat(Color("120c0b"), Color(UIStyle.BRONZE, 0.8), 1, 6)
-		draw_style_box(sb, r)
-		var frac := clampf(shown / float(maxi(1, max_hp)), 0.0, 1.0)
-		var fill := r.grow(-2.0)
-		var inner := fill
-		fill.size.x *= frac
-		# Ghost segment: damage drains pale red behind the fill; a heal shows the gain in green ahead of it.
-		if ghost > shown + 0.01:
-			_seg(inner, shown, ghost, Color(UIStyle.GOOD, 0.55) if _heal else Color("ffb08a", 0.75))
-		if fill.size.x > 1.0:
-			var rad := mini(5, int(fill.size.x / 2.0))
-			var fb := StyleBoxFlat.new()
-			fb.bg_color = Color("a8372d") if frac > 0.25 else Color("d4412f")
-			fb.set_corner_radius_all(rad)
-			draw_style_box(fb, fill)
-			var hi := StyleBoxFlat.new()
-			hi.bg_color = Color(1, 1, 1, 0.12)
-			hi.corner_radius_top_left = rad
-			hi.corner_radius_top_right = rad
-			draw_style_box(hi, Rect2(fill.position, Vector2(fill.size.x, fill.size.y * 0.45)))
-		if flash > 0.001:
-			draw_style_box(UIStyle.flat(Color(1, 1, 1, flash * 0.5), Color.TRANSPARENT, 0, 6), r)
-		if tint.a > 0.001:
-			draw_style_box(UIStyle.flat(Color(tint, tint.a * 0.18), Color(tint, tint.a * 0.7), 1, 6), r)
-		var col := UIStyle.TEXT if frac > 0.25 else UIStyle.BAD
-		col = col.lerp(Color(tint, 1.0).lightened(0.25), tint.a * 0.85)
-		var font := UIStyle.font_display(700)
-		var fs := 22
-		var txt := "%d" % roundi(shown)
-		var sz := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
-		var pos := Vector2(8, size.y / 2.0 + (font.get_ascent(fs) - font.get_descent(fs)) / 2.0)
-		draw_string_outline(font, pos, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0, 0, 0, 0.7))
-		draw_string(font, pos, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
-		var small := UIStyle.font_bold()
-		draw_string(small, Vector2(8 + sz.x + 5, pos.y - 1), "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(UIStyle.TEXT, 0.7))
-
-
-## Row of AP gems and sockets with the "AP x/y" label.
-class ApGems extends Control:
-	## AP slot display policy (F02-06). The row shows the player's real AP capacity, not a fixed
-	## number of sockets:
-	##   capacity = max(ap_start, ap_peak, ap)  (never negative)
-	## where ap_start is this turn's effective starting allowance (after reset / modifiers such as
-	## Marked by the Abyss) and ap_peak the most AP held this turn. An ordinary 2-AP turn therefore
-	## shows exactly 2 slots; AP gained above the allowance expands the row (no UI cap); spent AP
-	## stays visible as a cracked, dark "spent" socket (capacity - ap) so usage reads at a glance.
-	## Before the first turn (everything 0) no slots are drawn, only "AP 0". Above 10 slots the
-	## gems shrink to stay inside the plate. The next turn recomputes from its own allowance.
-	var ap: int = 0
-	var ap_start: int = 0
-	var ap_peak: int = 0
-
-	const MAX_ROW_W := 190.0   # width budget for the gem row on a 300 px plate
-	const GAIN_T := 0.32       # gem pop when AP is gained (s, before UIStyle.dur)
-	const SPEND_T := 0.3       # gem dims and shrinks into its socket when spent
-	const STAGGER := 0.06      # delay between gems changing in one update
-
-	## Presentation only: per-gem animations, index -> seconds remaining (delay + duration), and the
-	## AP number shown in the label, which counts towards `ap`.
-	var _gain: Dictionary = {}
-	var _spend: Dictionary = {}
-	var _shown_ap: float = 0.0
-	var _txt_pop: float = 0.0
-
-	func _init() -> void:
-		custom_minimum_size = Vector2(0, 18)
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _ready() -> void:
-		set_process(not _gain.is_empty() or not _spend.is_empty())
-
-	## Sets the AP fields and animates the change: gained gems pop in, spent gems dim with a small
-	## shrink, the "AP x/y" number counts. `snap` (or reduce motion / not in tree) = no animation.
-	func set_values(p_ap: int, p_start: int, p_peak: int, snap: bool = false) -> void:
-		var old_filled := filled()
-		var old_ap := ap
-		ap = p_ap
-		ap_start = p_start
-		ap_peak = p_peak
-		var new_filled := filled()
-		if snap or not is_inside_tree() or UIStyle.reduce_motion:
-			_gain.clear()
-			_spend.clear()
-			_shown_ap = float(ap)
-			_txt_pop = 0.0
-			set_process(false)
+## Faceted gold gem marking the player whose turn it is (design review #18): a 12 px cut diamond
+## with lit and shaded facets and a glint, set in a dark socket that shows when it is not lit.
+## `glow` (0..1) is the breathing halo, driven by the plate.
+class TurnGem extends Control:
+	var on: bool = false:
+		set(v):
+			on = v
 			queue_redraw()
-			return
-		var k := 0
-		for i in range(old_filled, new_filled):
-			_spend.erase(i)
-			_gain[i] = UIStyle.dur(GAIN_T + STAGGER * k)
-			k += 1
-		k = 0
-		for i in range(old_filled - 1, new_filled - 1, -1):
-			_gain.erase(i)
-			_spend[i] = UIStyle.dur(SPEND_T + STAGGER * k)
-			k += 1
-		if ap != old_ap:
-			_txt_pop = 1.0
-		set_process(true)
-		queue_redraw()
-
-	func _process(d: float) -> void:
-		for dict in [_gain, _spend]:
-			for i in dict.keys():
-				dict[i] -= d
-				if dict[i] <= 0.0:
-					dict.erase(i)
-		var step := d * maxf(6.0, absf(float(ap) - _shown_ap) * 4.0) / UIStyle.dur(1.0)
-		_shown_ap = move_toward(_shown_ap, float(ap), step)
-		_txt_pop = maxf(0.0, _txt_pop - d / UIStyle.dur(0.3))
-		if _gain.is_empty() and _spend.is_empty() and is_equal_approx(_shown_ap, float(ap)) and _txt_pop <= 0.0:
-			set_process(false)
-		queue_redraw()
-
-	## 0 -> 1 progress of a gem animation (0 while still waiting for its stagger delay).
-	func _prog(rem: float, total: float) -> float:
-		return clampf(1.0 - rem / UIStyle.dur(total), 0.0, 1.0)
-
-	## Slots shown: max(ap_start, ap_peak, ap), never negative.
-	static func capacity_for(p_ap: int, p_start: int, p_peak: int) -> int:
-		return maxi(0, maxi(p_ap, maxi(p_start, p_peak)))
-
-	## Filled (unspent) slots: ap clamped to the capacity.
-	static func filled_for(p_ap: int, p_start: int, p_peak: int) -> int:
-		return clampi(p_ap, 0, capacity_for(p_ap, p_start, p_peak))
-
-	## Spent (cracked socket) slots: capacity - filled.
-	static func spent_for(p_ap: int, p_start: int, p_peak: int) -> int:
-		return capacity_for(p_ap, p_start, p_peak) - filled_for(p_ap, p_start, p_peak)
-
-	## capacity_for() of the current values.
-	func capacity() -> int:
-		return capacity_for(ap, ap_start, ap_peak)
-
-	## filled_for() of the current values.
-	func filled() -> int:
-		return filled_for(ap, ap_start, ap_peak)
-
-	## Label text: "AP 1/2" (or just "AP 0" when there are no slots yet).
-	func ap_text() -> String:
-		return "AP %d/%d" % [ap, capacity()] if capacity() > 0 else "AP %d" % ap
-
-	func _draw() -> void:
-		var amber: Color = UIStyle.COST_COLORS["ap"]
-		var cap := capacity()
-		var n := filled()
-		var pitch := clampf(MAX_ROW_W / float(maxi(cap, 1)), 4.0, 20.0)
-		var rad := minf(8.0, pitch * 0.42)
-		var x := 10.0
-		for i in cap:
-			var c := Vector2(x + pitch / 2.0, size.y / 2.0)
-			if i < n:
-				var g := _prog(_gain[i], GAIN_T) if _gain.has(i) else 1.0
-				if g < 1.0:
-					_socket(c, rad, amber)
-				if g > 0.0:
-					# Pop: overshoots to ~1.35x, then settles; a bright ring expands and fades.
-					var sc := 1.0 + 0.35 * sin(g * PI) if g < 1.0 else 1.0
-					_gem(c, rad * sc * minf(1.0, g * 2.5), amber, minf(1.0, g * 3.0))
-					if g < 1.0:
-						draw_arc(c, rad * (1.0 + 0.9 * g), 0.0, TAU, 24, Color(UIStyle.GOLD_HI, 0.8 * (1.0 - g)), 1.6, true)
-			else:
-				_socket(c, rad, amber)
-				if _spend.has(i):
-					# Spent this update: the gem dims and shrinks into the socket.
-					var k := _prog(_spend[i], SPEND_T)
-					_gem(c, rad * lerpf(1.0, 0.45, k), amber.lerp(amber.darkened(0.6), k), 1.0 - k)
-			x += pitch
-		var font := UIStyle.font_display(700)
-		var shown := roundi(_shown_ap)
-		var txt := "AP %d/%d" % [shown, cap] if cap > 0 else "AP %d" % shown
-		var fs := 16
-		var tp := Vector2(x + 8.0, size.y / 2.0 + 6)
-		if _txt_pop > 0.0:
-			var sc2 := 1.0 + 0.18 * sin(_txt_pop * PI)
-			draw_set_transform(tp, 0.0, Vector2(sc2, sc2))
-			tp = Vector2.ZERO
-		var tcol := amber.lerp(UIStyle.GOLD_HI.lightened(0.3), _txt_pop * 0.8)
-		draw_string_outline(font, tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0, 0, 0, 0.7))
-		draw_string(font, tp, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, tcol)
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-
-	## One AP gem of radius `r` at alpha `a` (skipped when invisible).
-	func _gem(c: Vector2, r: float, amber: Color, a: float) -> void:
-		if r <= 0.2 or a <= 0.0:
-			return
-		draw_circle(c, r, Color(amber.darkened(0.65), a), true, -1.0, true)
-		draw_circle(c, r * 0.8, Color(amber, a), true, -1.0, true)
-		draw_circle(c + Vector2(-0.25, -0.3) * r, r * 0.32, Color(1, 1, 1, 0.35 * a), true, -1.0, true)
-
-	## Spent: dark socket, thin outline and a crack so it never reads as "unfilled".
-	func _socket(c: Vector2, rad: float, amber: Color) -> void:
-		draw_circle(c, rad, Color(0.07, 0.05, 0.04), true, -1.0, true)
-		draw_arc(c, rad - 0.5, 0.0, TAU, 20, Color(amber, 0.4), 1.2, true)
-		if rad >= 4.5:
-			draw_polyline(PackedVector2Array([c + Vector2(-0.1, -0.7) * rad, c + Vector2(0.15, -0.1) * rad,
-				c + Vector2(-0.2, 0.25) * rad, c + Vector2(0.1, 0.75) * rad]), Color(amber, 0.55), 1.0, true)
-
-
-## Gold triangle shown beside the name of the player whose turn it is.
-class TurnMark extends Control:
-	var on: bool = false
+	var glow: float = 1.0:
+		set(v):
+			glow = v
+			queue_redraw()
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(14, 20)
+		custom_minimum_size = Vector2(16, 20)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _draw() -> void:
-		if on:
-			draw_colored_polygon(PackedVector2Array([Vector2(2, 4), Vector2(12, 10), Vector2(2, 16)]), UIStyle.GOLD)
-			draw_polyline(PackedVector2Array([Vector2(2, 4), Vector2(12, 10), Vector2(2, 16), Vector2(2, 4)]), UIStyle.GOLD, 1.0, true)
+		var c := size / 2.0
+		var w := 5.0
+		var h := 6.5
+		var top := c + Vector2(0, -h)
+		var right := c + Vector2(w, 0)
+		var bottom := c + Vector2(0, h)
+		var left := c + Vector2(-w, 0)
+		if not on:
+			# The empty socket: an engraved diamond outline.
+			draw_polyline(PackedVector2Array([top, right, bottom, left, top]), Color(0, 0, 0, 0.55), 2.5, true)
+			draw_polyline(PackedVector2Array([top, right, bottom, left, top]), Color(UIStyle.BRONZE, 0.55), 1.0, true)
+			return
+		var halo := Color(UIStyle.GOLD_HI, 0.12 + 0.2 * glow)
+		draw_circle(c, 8.5 + 1.5 * glow, Color(halo, halo.a * 0.5), true, -1.0, true)
+		draw_circle(c, 6.5 + glow, halo, true, -1.0, true)
+		var dark := Color("2a1a08")
+		draw_colored_polygon(PackedVector2Array([top + Vector2(0, -1), right + Vector2(1, 0), bottom + Vector2(0, 1), left + Vector2(-1, 0)]), dark)
+		var lit := UIStyle.GOLD_HI.lerp(Color.WHITE, 0.15 * glow)
+		draw_colored_polygon(PackedVector2Array([top, left, c]), lit)
+		draw_colored_polygon(PackedVector2Array([top, right, c]), UIStyle.GOLD)
+		draw_colored_polygon(PackedVector2Array([left, bottom, c]), UIStyle.GOLD.darkened(0.25))
+		draw_colored_polygon(PackedVector2Array([right, bottom, c]), UIStyle.BRONZE)
+		draw_circle(c + Vector2(-1.4, -2.6), 1.1, Color(1, 1, 1, 0.9), true, -1.0, true)
 
 
 var name_label: Label
 var next_label: Label
-var hp_bar: HpBar
-var ap_gems: ApGems
-var turn_mark: TurnMark
+## The Vial of Life (HpVial; named hp_bar for the effects that address it).
+var hp_bar: HpVial
+## The topaz AP gems (ApGemRow).
+var ap_gems: ApGemRow
+var turn_mark: TurnGem
+## The plate's F2 frame (its rim, glow and sweep are live).
+var frame: FrameBox
 var _max_hp: int = DEFAULT_MAX_HP
 var _active: bool = false
+var _low: bool = false
 var _tween: Tween
 ## Player shown on this plate at the last update; a different one (seat switch) snaps instead of animating.
 var _who: String = ""
 ## Game (series id + game number) this plate last showed; a new one resets the HP reference.
 var _game_key: String = ""
+## The next AP change is voiced by an effect (FxPlayer); the gems stay silent for it.
+var _ap_claimed: bool = false
+## The gems already voiced the current AP change (one cue per change, however many gems move).
+var _ap_voiced: bool = false
+var _hold_gen: int = 0
+## Plays a sound (name, dB); tests inject a recorder.
+var play_sfx: Callable = func(n: String, db: float) -> void: Sfx.play(n, db)
+## Clock time the active loop started (its sweep phase is measured from it).
+var _active_t0: float = 0.0
 
 
 func _init() -> void:
 	custom_minimum_size = Vector2(PLATE_W, 0)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	add_theme_stylebox_override("panel", UiSurface.box(UIStyle.panel_style(Color(UIStyle.PANEL, 0.94), UIStyle.BRONZE, 10), UiSurface.LEATHER, UIStyle.PANEL_GRAIN))
+	frame = FrameBox.make(Color(UIStyle.PANEL, 0.95), "md", "sm")
+	frame.rim = RIM_IDLE
+	add_theme_stylebox_override("panel", frame)
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # the leather grain tiles
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 1)
+	UIStyle.pad(v, "xs")
 	add_child(v)
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 2)
+	UIStyle.pad(head, "xs")
 	v.add_child(head)
-	turn_mark = TurnMark.new()
+	turn_mark = TurnGem.new()
+	turn_mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(turn_mark)
-	name_label = UIStyle.label("", 19, UIStyle.TEXT, false, true)
+	name_label = UIStyle.label("", 18, UIStyle.TEXT, false, true)
 	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var tt := TitleText.apply(name_label, TitleText.Tier.SECTION, 18)
+	tt.show_underline = false
+	TitleText.apply(name_label, TitleText.Tier.SECTION, 18)   # re-reserve without the underline
 	head.add_child(name_label)
 	next_label = UIStyle.label("", 13, UIStyle.MUTED)
+	next_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(next_label)
-	hp_bar = HpBar.new()
+	hp_bar = HpVial.new()
+	hp_bar.shake_target = self
+	hp_bar.low_hp_changed.connect(_on_low_hp)
 	v.add_child(hp_bar)
-	ap_gems = ApGems.new()
+	ap_gems = ApGemRow.new()
+	ap_gems.gem_gained.connect(_on_gem.bind(true))
+	ap_gems.gem_spent.connect(_on_gem.bind(false))
 	v.add_child(ap_gems)
+	set_process(false)
 
 
-## Refreshes the plate from a player view. `mine` enables pile inspection.
+## Refreshes the plate from a player view. `mine` is the local player (pile inspection, the low-HP
+## heartbeat); `active` is whose turn it is.
 func update_from(pv: Dictionary, active: bool, mine: bool, label_suffix: String, next_text: String) -> void:
 	name_label.text = String(pv["name"]) + label_suffix
 	name_label.add_theme_color_override("font_color", UIStyle.GOLD_HI if active else UIStyle.TEXT)
 	turn_mark.on = active
-	turn_mark.queue_redraw()
-	# HP and AP animate from the previous values (HpBar.set_hp / ApGems.set_values); a different
+	# HP and AP animate from the previous values (HpVial.set_hp / ApGemRow.set_values); a different
 	# player on this plate (hot-seat seat switch, new match) snaps instead.
 	var who := String(pv["name"])
 	var snap := who != _who
 	_who = who
+	hp_bar.is_local = mine
+	hp_bar.my_turn = mine and active
 	_max_hp = maxi(_max_hp, maxi(int(pv["hp"]), DEFAULT_MAX_HP))
-	hp_bar.max_hp = _max_hp
-	hp_bar.set_hp(int(pv["hp"]), snap)
-	hp_bar.queue_redraw()
+	if has_meta(HP_HOLD_META):
+		set_meta(HP_HOLD_META, int(pv["hp"]))   # an effect holds the vial: keep the newest real value
+		hp_bar.max_hp = _max_hp
+	else:
+		hp_bar.set_value(int(pv["hp"]), _max_hp, snap)
 	var ap := int(pv["ap"])
+	_ap_voiced = false
 	ap_gems.set_values(ap, int(pv.get("ap_start", ap)), int(pv.get("ap_peak", ap)), snap)
+	_ap_claimed = false
 	next_label.text = next_text
 	if active != _active:
 		_active = active
+		_active_t0 = _now()
 		pulse()
+	_refresh_frame()
+
+
+## The AP change of the coming update is announced by an effect, which plays its sound (D6): the gems
+## stay silent for it. GameScreen calls it before rendering a view whose effects include an "ap" event
+## for this plate's player.
+func claim_ap_sound() -> void:
+	_ap_claimed = true
+
+
+func _on_gem(_index: int, gained: bool) -> void:
+	var voice := not _ap_claimed and not _ap_voiced
+	_ap_voiced = true   # the rest of this change's gems (staggered) stay silent either way
+	if voice:
+		play_sfx.call("ap_gain" if gained else "ap_loss", GEM_SFX_DB)
 
 
 ## F03-14: call before update_from with a key unique to the game being shown (series id + game
@@ -377,6 +207,98 @@ func reset_hp_max() -> void:
 	_max_hp = DEFAULT_MAX_HP
 
 
+# ---------------------------------------------------------------- HP hold (effects)
+
+## Meta holding the real HP while an effect keeps the vial at an earlier value (B5, the lethal blow).
+const HP_HOLD_META := "fx_hp_real"
+
+
+## Longest an effect may hold the vial (s): a backstop so a lost release never freezes the HP.
+const HP_HOLD_MAX := 12.0
+
+
+## Holds the vial at `shown` HP (the value before a blow the board already shows) until
+## release_hp(); the real value is kept and later updates only refresh it. No-op while already held.
+## After HP_HOLD_MAX seconds the hold snaps to the real value on its own.
+func hold_hp(shown: int) -> void:
+	if has_meta(HP_HOLD_META):
+		return
+	set_meta(HP_HOLD_META, hp_bar.hp)
+	hp_bar.set_hp(shown, true)
+	_hold_gen += 1
+	var gen := _hold_gen
+	if is_inside_tree():
+		get_tree().create_timer(HP_HOLD_MAX).timeout.connect(func() -> void:
+			if is_instance_valid(self) and gen == _hold_gen:
+				release_hp(true))
+
+
+## True while an effect holds the vial.
+func hp_held() -> bool:
+	return has_meta(HP_HOLD_META)
+
+
+## Releases a hold: the vial animates to the real HP (the damage trail), or `snap`s to it (a click
+## skipped the effect). `shatter` breaks the glass instead when the real HP is 0 (the killing blow).
+func release_hp(snap: bool = false, shatter: bool = false) -> void:
+	if not has_meta(HP_HOLD_META):
+		return
+	var real := int(get_meta(HP_HOLD_META))
+	remove_meta(HP_HOLD_META)
+	_hold_gen += 1
+	if shatter and real <= 0 and not snap:
+		hp_bar.shatter()
+	else:
+		hp_bar.set_hp(real, snap)
+
+
+# ---------------------------------------------------------------- frame
+
+func _on_low_hp(low: bool) -> void:
+	_low = low
+	_refresh_frame()
+
+
+## Rim, glow and sweep of the frame now; keeps the breathing loop running only while it shows.
+func _refresh_frame() -> void:
+	var live := _active and not UIStyle.reduce_motion and is_inside_tree()
+	set_process(live)
+	_apply_frame(_now())
+
+
+func _apply_frame(t: float) -> void:
+	var base := HpVial.LOW_PLATE_BORDER if _low else (RIM_ACTIVE if _active else RIM_IDLE)
+	if not _active:
+		frame.rim = base
+		frame.glow = Color(0, 0, 0, 0)
+		frame.sweep = -1.0
+		turn_mark.glow = 0.0
+		return
+	# breathe() is 1 +/- amp (exactly 1 under reduce motion): k runs 0..1 on the 2.4 s loop.
+	var k := clampf((UIStyle.breathe(t - _active_t0, 1.0, UIStyle.dur(BREATHE_PERIOD)) - 0.0) / 2.0, 0.0, 1.0)
+	if UIStyle.reduce_motion:
+		k = 1.0
+	var hi := Color(HpVial.LOW_PLATE_BORDER.lightened(0.35), 1.0) if _low else UIStyle.GOLD_HI
+	frame.rim = base.lerp(hi, 0.5 * k)
+	frame.glow = Color(Color(HpVial.LOW_PLATE_BORDER, 1.0) if _low else ACTIVE_GLOW, ACTIVE_GLOW.a * (0.55 + 0.45 * k))
+	frame.glow_px = ACTIVE_GLOW_PX
+	frame.sweep = -1.0 if UIStyle.reduce_motion else TitleText.sweep_phase(TitleText.SWEEP_LOOP, t - _active_t0 - 0.6, SWEEP_PERIOD, UIStyle.dur(SWEEP_DURATION))
+	turn_mark.glow = k
+
+
+func _process(_d: float) -> void:
+	_apply_frame(_now())
+
+
+func _now() -> float:
+	return float(Time.get_ticks_usec()) / 1000000.0
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_ENTER_TREE:
+		_refresh_frame.call_deferred()
+
+
 ## Brief highlight (turn change / damage).
 func pulse() -> void:
 	if UIStyle.reduce_motion:
@@ -388,13 +310,15 @@ func pulse() -> void:
 	_tween.tween_property(hp_bar, "flash", 0.0, UIStyle.dur(0.3))
 
 
-## Global point for HP change popups: over the right end of the HP bar, never over the player
+## Global point for HP change popups: over the right end of the HP vial, never over the player
 ## name at the top-left of the plate.
 func hp_anchor() -> Vector2:
 	var r := hp_bar.get_global_rect()
 	return Vector2(r.end.x - 56.0, r.get_center().y)
 
 
-## Global point for AP change popups (right of the gem row's centre).
+## Global point for AP change popups ("+1 AP"): the free space right of the gems' "AP x/y" label, so
+## the floater never covers the label it changes.
 func ap_anchor() -> Vector2:
-	return ap_gems.get_global_rect().get_center() + Vector2(60, 0)
+	var r := ap_gems.get_global_rect()
+	return Vector2(r.position.x + ap_gems.label_end_x() + float(UIStyle.sp("xl")) + 20.0, r.get_center().y)

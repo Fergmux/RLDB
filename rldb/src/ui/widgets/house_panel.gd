@@ -143,15 +143,30 @@ func chrome_size() -> Vector2:
 	return Vector2(_box.content_margin_left + _box.content_margin_right, h)
 
 
-## Adds the house headline to the body: a display-face title over a fading gold rule. Returns
-## the title label. `wrap` word-wraps it: use it only on a panel with a set width (a wrapped label
-## in a content-sized panel measures itself one word wide and makes the panel tall).
-func add_headline(text: String, font_size: int = 21, centred: bool = false, rule_h: float = 8.0, wrap: bool = true) -> Label:
+## Headlines at or above this size are screen titles (TitleText SCREEN, T2); smaller ones are
+## section headers (SECTION, T3). Design review 1.4.1 / D3.
+const HEADLINE_SCREEN_PX := 22
+
+
+## Adds the house headline to the body: a display-face title with depth (TitleText, D3) over a
+## fading gold rule. Returns the title label (its TitleText overlay draws it; set `text` and the
+## font size on the label as before). `tier` -1 picks SCREEN for `font_size` >= HEADLINE_SCREEN_PX,
+## else SECTION (whose own underline is left to the house rule). `wrap` word-wraps it: use it only
+## on a panel with a set width (a wrapped label in a content-sized panel measures itself one word
+## wide and makes the panel tall).
+func add_headline(text: String, font_size: int = 21, centred: bool = false, rule_h: float = 8.0, wrap: bool = true, tier: int = -1) -> Label:
 	var t := UIStyle.label(text, font_size, UIStyle.GOLD_HI, wrap, true)
 	t.custom_minimum_size = Vector2(40, 0)
 	if centred:
 		t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.add_child(t)
+	var tr := tier if tier >= 0 else (TitleText.Tier.SCREEN if font_size >= HEADLINE_SCREEN_PX else TitleText.Tier.SECTION)
+	var tt := TitleText.apply(t, tr, font_size)
+	if tr == TitleText.Tier.SECTION:
+		t.add_theme_color_override("font_color", UIStyle.GOLD_HI)
+		tt.show_underline = false   # the house rule below is the underline
+		TitleText.apply(t, tr, font_size)
+		t.add_theme_color_override("font_color", UIStyle.GOLD_HI)
 	body.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.55), true, rule_h))
 	return t
 

@@ -286,7 +286,7 @@ func render() -> void:
 					parts.append("%+d" % m["n"])
 				nxt = "next turn %s AP" % " ".join(parts)
 			pl.begin_game("%s:%d" % [String(gs.view.get("save_id", "local")), int(gs.view.get("game_no", 0))])
-			pl.update_from(pv, active, pidx == p, "", nxt)
+			pl.update_from(pv, active, pidx == p and not gs.is_spectator(), "", nxt)
 			_update_piles(side, pidx, pv)
 	deco.glow_side = -1   # active player is shown by the plate's turn marker, not a table band
 	deco.queue_redraw()

@@ -63,7 +63,7 @@ static func detect(events: Array, name_of: Callable = Callable()) -> Dictionary:
 ## board renders the final HP at once); the impact or a click releases it. FxPlayer.play() calls it.
 func prepare(info: Dictionary) -> void:
 	var pl: PlayerPlate = _fx.screen.plate_of(int(info["opp"]))
-	if is_instance_valid(pl) and not pl.has_meta("fx_hp_real"):
+	if is_instance_valid(pl) and not pl.hp_held():
 		_hold_hp(pl, int(info["d"]))
 
 
@@ -76,7 +76,7 @@ func play(info: Dictionary, events: Array, prev_mv: Dictionary, lethal: Dictiona
 	var pl: PlayerPlate = screen.plate_of(opp)
 	var plate_c: Vector2 = pl.get_global_rect().get_center()
 	var reduced := UIStyle.reduce_motion
-	if not pl.has_meta("fx_hp_real"):
+	if not pl.hp_held():
 		_hold_hp(pl, int(info["d"]))
 	# The Serpent cards: each one's ghost stands in its slot (the slot itself is already empty).
 	var ghosts: Array = []
@@ -213,7 +213,7 @@ func _rise_and_merge(g: CardWidget, slot_c: Vector2, coil: Vector2, delay: float
 func _impact(pl: PlayerPlate, c: Vector2, dmg: int, reach: float, lethal: Dictionary) -> void:
 	Sfx.play("boom", -4.0, 0.0)
 	Sfx.play("damage", 0.0, 0.0)
-	_release_hp(pl)
+	_release_hp(pl, false, not lethal.is_empty())   # a killing strike shatters the vial
 	if is_instance_valid(pl):
 		pl.pulse()
 		_fx.shake(pl, 12.0)
@@ -257,27 +257,24 @@ func _calm(ghosts: Array, pl: PlayerPlate, dmg: int, lethal: Dictionary) -> void
 	tw.tween_interval(0.55)
 	tw.tween_callback(func():
 		Sfx.play("damage", 0.0, 0.0)
-		_release_hp(pl)
+		_release_hp(pl, false, not lethal.is_empty())
 		_fx.damage_number(pl.get_global_rect().get_center(), dmg, WATER, 96)
 		if not lethal.is_empty():
 			_fx.start_game_end(int(lethal["winner"])))
 
 
-## Holds the plate's HP bar at the value before the strike (the board already shows the result); a
-## click (finish_all) or the impact releases it to the real value.
+## Holds the plate's HP vial at the value before the strike (the board already shows the result); a
+## click (finish_all) or the impact releases it to the real value (PlayerPlate.hold_hp).
 func _hold_hp(pl: PlayerPlate, dmg: int) -> void:
-	if not is_instance_valid(pl):
+	if not is_instance_valid(pl) or pl.hp_held():
 		return
-	var real := pl.hp_bar.hp
-	pl.hp_bar.set_hp(real + dmg, true)
-	pl.hp_bar.hp = real
-	pl.set_meta("fx_hp_real", real)
+	pl.hold_hp(pl.hp_bar.hp + dmg)
 	_fx.add_cleanup(_release_hp.bind(pl, true))
 
 
-func _release_hp(pl: PlayerPlate, snap: bool = false) -> void:
-	if not is_instance_valid(pl) or not pl.has_meta("fx_hp_real"):
+## Releases the hold: the vial's damage trail runs from the held value, or it snaps (`snap`, a click);
+## `shatter` breaks the glass when the strike is the killing blow.
+func _release_hp(pl: PlayerPlate, snap: bool = false, shatter: bool = false) -> void:
+	if not is_instance_valid(pl):
 		return
-	var real := int(pl.get_meta("fx_hp_real"))
-	pl.remove_meta("fx_hp_real")
-	pl.hp_bar.set_hp(real, snap)
+	pl.release_hp(snap, shatter)

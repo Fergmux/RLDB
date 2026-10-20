@@ -183,6 +183,7 @@ func render_pause() -> void:
 		(pause_panel as HousePanel).appear()
 	var head := UIStyle.label("Match paused", 26, UIStyle.BAD, true, true)
 	pause_box.add_child(head)
+	TitleText.apply(head, TitleText.Tier.SCREEN, 26)
 	pause_box.add_child(Ornate.Rule.new(Color(UIStyle.BAD, 0.55), true, 10.0))
 	pause_box.add_child(UIStyle.label(net["message"] if net.get("message", "") != "" else "Waiting for the connection to be restored. Nothing can happen until both players are connected.", 14, UIStyle.TEXT, true))
 	if net.get("is_host", false) and gs.view.get("stage", "") == "game" and net.get("claim_in", -1) >= 0:
@@ -214,6 +215,7 @@ func _show_deck() -> void:
 	var head := HBoxContainer.new()
 	pile_box.add_child(head)
 	var tl := UIStyle.label("Your deck (%d cards)" % cards.size(), 18, UIStyle.GOLD_HI, true, true)
+	TitleText.apply(tl, TitleText.Tier.SECTION, 18)
 	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(tl)
 	var close := UIStyle.button("Close", 13)
@@ -309,9 +311,8 @@ func _stage_header(stage: String) -> Control:
 	v.add_theme_constant_override("separation", 4)
 	var t := UIStyle.label(stage_title(stage), 30, UIStyle.GOLD, false, true)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
-	t.add_theme_constant_override("outline_size", 4)
 	v.add_child(t)
+	TitleText.apply(t, TitleText.Tier.SCREEN, 30)   # D3: T2 screen title
 	v.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.8), true, 16.0))
 	var score := func(t: String) -> Label:
 		var sc := UIStyle.label(t, 26, UIStyle.GOLD_HI, false, true)
@@ -551,11 +552,9 @@ func _render_spectator(stage: String) -> void:
 		if forfeit != -1:
 			w = 1 - forfeit
 		var res := UIStyle.label("%s WINS" % String(names[w]).to_upper(), 46, UIStyle.GOLD_HI, true, true)
-		res.add_theme_font_override("font", UIStyle.font_display(700))
-		res.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-		res.add_theme_constant_override("outline_size", 6)
 		res.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		overlay_box.add_child(res)
+		TitleText.apply(res, TitleText.Tier.HERO, 46)
 		overlay_box.add_child(_centred("Series won %d – %d" % [maxi(view["scores"][0], view["scores"][1]), mini(view["scores"][0], view["scores"][1])], 19, UIStyle.TEXT))
 		if forfeit != -1:
 			overlay_box.add_child(_centred("%s left and forfeited the series." % names[forfeit], 16, UIStyle.BAD))
@@ -625,11 +624,10 @@ func _render_over() -> void:
 		w = 1 - forfeit
 	var won: bool = w == gs.me()
 	var res := UIStyle.label("VICTORY" if won else "DEFEAT", 64, UIStyle.GOLD_HI if won else UIStyle.BAD, false, true)
-	res.add_theme_font_override("font", UIStyle.font_display(700))
-	res.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	res.add_theme_constant_override("outline_size", 6)
 	res.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	res.name = "ResultTitle"
 	overlay_box.add_child(res)
+	TitleText.apply(res, TitleText.Tier.HERO if won else TitleText.Tier.HERO_DEFEAT, 64)   # D3 / #64
 	var sub := UIStyle.label("%s wins the series" % view["names"][w], 20, UIStyle.TEXT, true)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	overlay_box.add_child(sub)
@@ -644,7 +642,7 @@ func _render_over() -> void:
 	var nums := [srow.get_child(0).get_child(1), srow.get_child(2).get_child(0)]
 	(nums[1 - w] as Control).modulate.a = LOSER_SCORE_ALPHA
 	overlay_box.add_child(srow)
-	overlay_box.add_child(UIStyle.label("Game history", 16, UIStyle.GOLD, false, true))
+	overlay_box.add_child(GameUi.header("Game history"))
 	for h in view["history"]:
 		var hw: bool = h["winner"] == gs.me()
 		var rowp := PanelContainer.new()

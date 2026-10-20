@@ -286,6 +286,8 @@ func _impact(ctx: Dictionary) -> void:
 	if is_instance_valid(pl):
 		pl.pulse()
 		_fx.shake(pl, 12.0 if killing else 9.0)
+		if killing:
+			pl.release_hp(false, true)   # D4: the killing blow shatters the Vial of Life
 	if killing:
 		Sfx.play("boom", 0.0, 0.0)
 		Sfx.play("impact", 0.0, 0.0)
@@ -335,6 +337,7 @@ func _overflow(ctx: Dictionary, reach: float) -> void:
 	if is_instance_valid(pl):
 		pl.pulse()
 		_fx.shake(pl, 12.0)
+		pl.release_hp(false, true)   # D4: the overflow that ends the game shatters the vial
 		# UI review F12: the struck plate reads above its own blast (the HP drop is the point).
 		var z0 := pl.z_index
 		pl.z_index = UiLayers.FX + 1
@@ -361,6 +364,7 @@ func flourish(info: Dictionary) -> void:
 	var reach := minf(area.size.x, area.size.y)
 	pl.pulse()
 	_fx.shake(pl, 12.0)
+	pl.release_hp(false, true)   # D4: the final blow shatters the vial
 	Sfx.play("boom", -5.0, 0.0)
 	_blast(FxBlast.Look.FINAL, c, tcol, reach * 0.2, 0.95)
 	_fx.burst(FxBurst.Kind.SPARK, c, tcol.lightened(0.5), 26, reach * 0.26, 0.7)

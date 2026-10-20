@@ -208,10 +208,11 @@ func _title(won: bool, series: bool, col: Color) -> Label:
 		text = "%s WINS" % _spectating_winner.to_upper()
 		fs = 84 if series else 72
 	var l := UIStyle.label(text, fs, col.lightened(0.15) if won else col, false, true)
-	l.add_theme_font_override("font", UIStyle.font_display(700))
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	l.add_theme_constant_override("outline_size", 12)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# D3: the T1 hero treatment (metal gradient, outline, two shadows, glow, sweep); the ember
+	# palette for a defeat. A spectator's "X WINS" is the gold hero.
+	var hero := won or _spectating_winner != ""
+	TitleText.apply(l, TitleText.Tier.HERO if hero else TitleText.Tier.HERO_DEFEAT, fs)
 	return l
 
 
@@ -228,8 +229,6 @@ func _sub_label(won: bool, series: bool, view: Dictionary, col: Color) -> Label:
 	else:
 		text = "You win game %d   ·   score %d - %d" % [int(view.get("game_no", 1)), scores[me], scores[1 - me]] if won else "You lose game %d   ·   score %d - %d" % [int(view.get("game_no", 1)), scores[me], scores[1 - me]]
 	var l := UIStyle.label(text, 24, UIStyle.TEXT, false, true)
-	l.add_theme_font_override("font", UIStyle.font_display(600))
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	l.add_theme_constant_override("outline_size", 6)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	TitleText.apply(l, TitleText.Tier.MENU, 24)   # ivory with the T2 outline and shadows
 	return l

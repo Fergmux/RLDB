@@ -42,7 +42,7 @@ func enqueue(text: String, sub: String, col: Color, flare: bool) -> void:
 func show_game_over(winner: int) -> void:
 	var won: bool = winner == _fx.screen.me()
 	_active = true
-	_show_strip("VICTORY" if won else "DEFEAT", "", UIStyle.GOLD_HI if won else Color("e8605a"), won, GAME_OVER_HOLD, true)
+	_show_strip("VICTORY" if won else "DEFEAT", "", UIStyle.GOLD_HI if won else Color("e8605a"), won, GAME_OVER_HOLD, true, not won)
 
 
 func _next() -> void:
@@ -56,7 +56,11 @@ func _next() -> void:
 
 ## Short, click-through pill in the top strip (above the board) so it can never cover a zone the
 ## player has to pick. Slides down, holds, slides back.
-func _show_strip(text: String, sub: String, col: Color, flare: bool, hold: float, final: bool = false) -> void:
+## Banner title size (the T1 hero treatment at strip scale, D3).
+const STRIP_TITLE_PX := 30
+
+
+func _show_strip(text: String, sub: String, col: Color, flare: bool, hold: float, final: bool = false, defeat: bool = false) -> void:
 	var area: Rect2 = _fx.screen.board_global_rect()
 	var layer: Control = _fx.screen.banner_layer
 	var pill := PanelContainer.new()
@@ -66,7 +70,10 @@ func _show_strip(text: String, sub: String, col: Color, flare: bool, hold: float
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 14)
 	pill.add_child(row)
-	row.add_child(_title_label(text, 26, col, 4))
+	var tl := _title_label(text, STRIP_TITLE_PX, col, 4)
+	tl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(tl)
+	TitleText.apply(tl, TitleText.Tier.HERO_DEFEAT if defeat else TitleText.Tier.HERO, STRIP_TITLE_PX)
 	if sub != "":
 		var sl := UIStyle.label(sub, 17, UIStyle.MUTED)
 		sl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

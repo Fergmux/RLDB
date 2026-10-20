@@ -140,8 +140,11 @@ func test_serpent_strike_restores_the_hp_bar_when_skipped() -> void:
 	pl.hp_bar.set_hp(30, true)          # the final state the board shows
 	gs.fx.play(_serpent_events(), {})
 	await await_millis(int(_wait_ms()))
-	assert_int(pl.hp_bar.hp).is_equal(30)
+	# H1 WP-3: the plate holds the vial at the value before the strike and keeps the real HP itself.
+	assert_bool(pl.hp_held()).is_true()
+	assert_int(pl.hp_bar.hp).is_greater(30)
 	gs.fx.finish_all()
+	assert_bool(pl.hp_held()).is_false()
 	assert_int(pl.hp_bar.hp).is_equal(30)
 	assert_float(pl.hp_bar.shown).is_equal(30.0)
 
