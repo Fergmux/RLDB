@@ -509,7 +509,31 @@ static func _strip_status_prefix(help: String) -> String:
 	return body.substr(0, 1).to_upper() + body.substr(1)
 
 
-## Caption colour of a rules timing ("On Summon", "Once per turn", ...).
+## Caption colour of a rules timing ("On Summon", "Once per turn", ...). Public for the card tooltip
+## (H8), which colours its sections the same way.
+static func timing_color(k: String) -> Color:
+	return _timing_color(k)
+
+
+## The colour of status `key`'s section: buffs GOOD, debuffs BAD, Runes RUNE_BLUE (as in the panel).
+static func status_color(key: String) -> Color:
+	if key == "rune":
+		return UIStyle.RUNE_BLUE
+	return UIStyle.GOOD if CardDB.is_buff(key) else UIStyle.BAD
+
+
+## The stylebox of a rule / status block: dark ink with a BLOCK_BAR_W accent bar in `col` (alpha
+## `bar_a`) at the left and `pad` px of padding. Shared with the card tooltip (H8).
+static func block_style(col: Color, bar_a: float, pad: int) -> StyleBoxFlat:
+	var sb := UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(col, bar_a), 0, 4)
+	sb.border_width_left = BLOCK_BAR_W
+	sb.content_margin_left = BLOCK_BAR_W + pad
+	sb.content_margin_right = pad
+	sb.content_margin_top = pad
+	sb.content_margin_bottom = pad
+	return sb
+
+
 static func _timing_color(k: String) -> Color:
 	match k:
 		"Condition", "Materials", "Activates": return UIStyle.RUNE_BLUE
@@ -617,16 +641,10 @@ func _flow() -> HFlowContainer:
 ## empty zero-separation VBoxContainer (its first child) for the content.
 func _block(col: Color, bar_a: float) -> PanelContainer:
 	var pc := PanelContainer.new()
-	var sb := UIStyle.flat(Color(UIStyle.PANEL_INK, 0.85), Color(col, bar_a), 0, 4)
-	sb.border_width_left = BLOCK_BAR_W
 	# D5: the text keeps the 12 px content floor from the block's edges (it sat 3-6 px from them);
 	# the compact pile rows keep the 8 px chip scale.
 	var pad := UIStyle.CONTENT_FLOOR if not compact else UIStyle.sp("sm")
-	sb.content_margin_left = BLOCK_BAR_W + pad
-	sb.content_margin_right = pad
-	sb.content_margin_top = pad
-	sb.content_margin_bottom = pad
-	pc.add_theme_stylebox_override("panel", sb)
+	pc.add_theme_stylebox_override("panel", block_style(col, bar_a, pad))
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 2)
 	pc.add_child(vb)

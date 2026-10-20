@@ -379,6 +379,7 @@ func _pile_row(c: Dictionary) -> Control:
 	row.add_theme_stylebox_override("panel", sb)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.tooltip_text = CardWidget.tooltip_for(c) + "\n\nRight-click to inspect"   # D15: no Inspect button
+	row.set_meta(&"tip_card", c)   # H8: the coloured card tooltip
 	var editable := pile_zone != DRAFT_ZONE   # draft picks are read-only (but can still be inspected)
 	if editable:
 		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
