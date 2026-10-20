@@ -12,6 +12,7 @@ import random
 import struct
 import sys
 import wave
+from collections import deque
 
 SR = 44100
 PEAK_DBFS = -6.0
@@ -564,18 +565,155 @@ def s_arcane_shimmer(r):
     return finish(mix(scale(grains, 0.8), scale(glass, 0.35), scale(air, 0.25)), tail_kw=dict(wet=0.5, extra_s=0.4, delay_s=0.045))
 
 
+def hall(x, wet=0.4, predelay_s=0.02, rt60=2.0, damp=6000.0, extra_s=1.0):
+    """A smoother, longer 'hall' than tail(): four damped parallel combs and two all-passes (Schroeder),
+    after a pre-delay. Appends `extra_s` of decay. Used where a long airy tail must not flutter."""
+    n = len(x) + n_samples(extra_s)
+    src = list(x) + [0.0] * (n - len(x))
+    pd = n_samples(predelay_s)
+    a = 1.0 - math.exp(-TWO_PI * damp / SR)
+    acc = [0.0] * n
+    for ms in (29.7, 37.1, 41.1, 43.7):
+        d = int(ms * SR / 1000.0)
+        g = 10.0 ** (-3.0 * (ms / 1000.0) / rt60)
+        buf = [0.0] * n
+        lp = 0.0
+        for i in range(n):
+            inp = src[i - pd] if i >= pd else 0.0
+            fed = buf[i - d] if i >= d else 0.0
+            lp += a * (fed - lp)
+            buf[i] = inp + g * lp
+            acc[i] += fed
+    y = acc
+    for ms, g in ((5.0, 0.7), (1.7, 0.7)):
+        d = int(ms * SR / 1000.0)
+        out = [0.0] * n
+        for i in range(n):
+            xd = y[i - d] if i >= d else 0.0
+            yd = out[i - d] if i >= d else 0.0
+            out[i] = -g * y[i] + xd + g * yd
+        y = out
+    k = wet * 0.25
+    return [s + k * v for s, v in zip(src, y)]
+
+
+def _glass_voice(r, f, sec, start_s, attack_s, decay_s):
+    """A glass-harmonica voice: three slowly drifting, detuned near-sines (a slow chorus), swelling in
+    with a raised-cosine attack at `start_s` and dying away exponentially. No hit, no click."""
+    n = n_samples(sec)
+    out = [0.0] * n
+    s0, na = n_samples(start_s), max(1, n_samples(attack_s))
+    for cents in (-6.0, 0.0, 7.0):
+        base = f * 2.0 ** (cents / 1200.0)
+        lfo_w = TWO_PI * r.uniform(0.22, 0.45) / SR
+        lfo_ph = r.uniform(0.0, TWO_PI)
+        ph = r.uniform(0.0, TWO_PI)
+        for i in range(s0, n):
+            ph += TWO_PI * base * (1.0 + 0.0018 * math.sin(lfo_ph + lfo_w * i)) / SR
+            out[i] += math.sin(ph) + 0.12 * math.sin(2.0 * ph) + 0.035 * math.sin(3.0 * ph)
+    for i in range(n):
+        j = i - s0
+        if j < 0:
+            out[i] = 0.0
+            continue
+        g = math.exp(-j / SR / decay_s)
+        if j < na:
+            g *= 0.5 - 0.5 * math.cos(math.pi * j / na)
+        out[i] *= g / 3.0
+    return out
+
+
+def taper(x, out_s):
+    """Rounds the last `out_s` seconds of `x` down to silence (a raised-cosine fade), so a voice that is
+    still ringing when its buffer ends dies away instead of stopping with a click."""
+    y = list(x)
+    n, nf = len(y), min(len(y), max(1, n_samples(out_s)))
+    for i in range(nf):
+        y[n - 1 - i] *= 0.5 - 0.5 * math.cos(math.pi * i / nf)
+    return y
+
+
+def smooth_limit(x, reduce_db, look_s=0.01, release_s=0.3):
+    """A clean look-ahead peak limiter: pulls the loudest peaks down by `reduce_db` with a gain that
+    falls ahead of each peak and recovers slowly, so it lowers the crest factor without the
+    harmonics of soft-clip."""
+    n = len(x)
+    pk = max(abs(v) for v in x) or 1.0
+    thr = pk * 10.0 ** (-reduce_db / 20.0)
+    req = [min(1.0, thr / abs(v)) if v else 1.0 for v in x]
+    w = max(1, n_samples(look_s))
+    # Minimum of the required gain over +-w (a sliding window minimum, monotonic deque).
+    win = [1.0] * n
+    dq = deque()
+    for i in range(n + w):
+        if i < n:
+            while dq and req[dq[-1]] >= req[i]:
+                dq.pop()
+            dq.append(i)
+        c = i - w
+        while dq and dq[0] < c - w:
+            dq.popleft()
+        if 0 <= c < n:
+            win[c] = req[dq[0]]
+    rel = 1.0 - math.exp(-1.0 / (release_s * SR))
+    g, gains = 1.0, [0.0] * n
+    for i in range(n):
+        g = min(win[i], g + (1.0 - g) * rel)
+        gains[i] = g
+    # Round the gain's corners with a moving average no wider than the look-ahead.
+    h = max(1, w // 2)
+    acc = sum(gains[0:h])
+    out = [0.0] * n
+    for i in range(n):
+        if i + h < n:
+            acc += gains[i + h]
+        if i - h - 1 >= 0:
+            acc -= gains[i - h - 1]
+        cnt = min(n - 1, i + h) - max(0, i - h) + 1
+        out[i] = x[i] * acc / cnt
+    return out
+
+
 def s_arcane_impact(r):
-    """D8 Arcane climax: the lattice shatters: glass bursts, a bright bell chord and a sub thump."""
+    """D8 Arcane climax (H28: mystical, not jarring): the lattice resolves into light. An open Dsus2
+    glass-harmonica chord (D-A-E-A-D, inside the shimmer's C pentatonic, so the build-up resolves into
+    it) blooms upward voice by voice with slow chorus, under a soft glass 'ting', a warm sub bloom,
+    a breath of air and a sparkle that climbs and fades; all of it rings out into a long airy hall.
+    No noise bursts, no soft-clip, no hit: the softest attack that still lands on the flash."""
+    sec = 2.0
+    chord = [0.0] * n_samples(sec)
+    # (freq, start, attack, decay, amp): the low voices first, the top voices bloom in after.
+    for f, st, at, dec, amp in ((293.66, 0.0, 0.03, 1.5, 0.85), (440.0, 0.02, 0.035, 1.3, 0.75),
+                                (659.25, 0.045, 0.04, 1.1, 0.62), (880.0, 0.075, 0.05, 0.95, 0.5),
+                                (1174.66, 0.11, 0.06, 0.8, 0.4)):
+        chord = mix(chord, scale(_glass_voice(r, f, sec, st, at, dec), amp))
+    # A high halo (A6) swells in slowly over the bloom: the light that hangs in the air after the flash.
+    chord = taper(mix(chord, scale(_glass_voice(r, 1760.0, sec, 0.05, 0.35, 0.7), 0.16)), 0.7)
+    # A soft glass 'ting' marks the instant: pure sines with a 6 ms rounded attack.
+    ting = taper(mix(scale(tone(1318.5, 1.3, 0.34, ((1, 1), (2.0, 0.08)), 0.006), 0.26),
+                     scale(tone(1760.0, 1.3, 0.28, ((1, 1),), 0.006), 0.2)), 0.4)
+    # Sub bloom for weight: D2 settling from a touch above, with an 80 ms swell (no punch).
+    ns = n_samples(1.6)
+    sub = taper(mul(sweep(82.0, 73.42, 1.6), [(0.5 - 0.5 * math.cos(math.pi * min(1.0, i / n_samples(0.08)))) * math.exp(-i / SR / 0.5)
+                                              for i in range(ns)]), 0.5)
+    # A breath of air, swelling then fading (filtered, never a burst).
+    na = n_samples(1.2)
+    air = taper(mul(lowpass2(highpass(noise(r, 1.2), 3000.0), 8000.0),
+                    [(min(1.0, i / n_samples(0.07)) ** 2) * math.exp(-i / SR / 0.35) for i in range(na)]), 0.4)
+    # The sparkle climbs through the pentatonic and thins out.
     parts = []
-    for i in range(34):
-        off = (i / 34.0) ** 1.6 * 0.28
-        dur = r.uniform(0.008, 0.03)
-        b = mul(highpass(noise(r, dur), r.uniform(2500, 6000)), env_exp(n_samples(dur), dur * 0.3, 0.0003))
-        parts.append((off, scale(b, math.exp(-off / 0.12))))
-    shards = mix(*parts)
-    chord = mix(*[(0.005 * k, scale(bell(f, 1.2, 0.35), 0.5)) for k, f in enumerate((659.25, 830.61, 987.77, 1318.5))])
-    sub = mul(sweep(95.0, 38.0, 0.6), env_exp(n_samples(0.6), 0.16, 0.002))
-    return finish(softclip(mix(scale(shards, 0.7), scale(chord, 1.2), scale(sub, 1.1)), 2.4), tail_kw=dict(wet=0.45, extra_s=0.4, delay_s=0.05))
+    for k in range(16):
+        off = 0.06 + 0.95 * (k / 15.0) ** 1.35
+        f = PENTA[min(len(PENTA) - 1, k * len(PENTA) // 16)] * r.choice((1.0, 1.0, 1.0025))
+        g = 0.4 * math.exp(-off / 0.55) * r.uniform(0.75, 1.0)
+        parts.append((off, scale(taper(tone(f, 0.7, r.uniform(0.09, 0.16), ((1, 1), (2.0, 0.06)), 0.004), 0.2), g)))
+    sparkle = mix(*parts)
+    x = mix(scale(chord, 1.0), scale(ting, 1.0), scale(sub, 0.5), scale(air, 0.08), scale(sparkle, 1.0))
+    x = hall(x, wet=0.55, predelay_s=0.022, rt60=2.2, damp=6500.0, extra_s=0.35)
+    # Level the dense bloom (several voices peak together) so its loudness matches the other climaxes.
+    x = smooth_limit(x, 4.0)
+    # A long, smooth fade so the hall dies away instead of stopping.
+    return finish(taper(x, 0.7), rev=False)
 
 
 def s_fusion_vortex(r):
@@ -829,13 +967,17 @@ PEAK = {"chat": -12.0, "click_primary": -11.0, "click_secondary": -12.0, "back":
         "ap_gain": -10.0, "ap_loss": -11.0, "card_slam": -7.5, "sacrifice": -8.0,
         "ui_hover": -21.0, "panel_open": -13.5, "panel_close": -14.5, "tab": -13.0,
         "toggle_on": -14.0, "toggle_off": -14.5, "hp_low_heartbeat": -7.0,
-        "card_hover": -22.0, "reward_reveal": -12.0, "reward_pick": -11.0, "step_done": -13.0}
+        "card_hover": -22.0, "reward_reveal": -12.0, "reward_pick": -11.0, "step_done": -13.0,
+        # H28: a sustained chord reads quieter than a hit at the same peak; -4.5 dBFS puts its
+        # loudest 400 ms near fusion_impact (about -15 vs -14 LUFS) and keeps the summed set piece (shimmer +
+        # this + card_slam) at about -1.4 dBFS (the old one: -2).
+        "arcane_impact": -4.5}
 
 
 # Hard duration caps (seconds); longer renders are trimmed and re-faded.
 MAX_LEN = {"boom": 1.6, "charge": 1.4, "victory_big": 2.6, "exhaust": 1.3, "fuse": 1.3, "ritual": 1.4, "arcane": 1.3, "victory": 1.4, "defeat": 1.4, "turn": 0.9, "heal": 0.9, "summon": 0.8,
            "fusion_vortex": 1.0, "fusion_impact": 1.8, "ritual_choir": 1.7, "ritual_impact": 2.0, "arcane_shimmer": 1.4,
-           "arcane_impact": 1.8, "card_slam": 0.6, "serpent_coil": 1.6, "serpent_strike": 1.6, "sacrifice": 1.2,
+           "arcane_impact": 2.4, "card_slam": 0.6, "serpent_coil": 1.6, "serpent_strike": 1.6, "sacrifice": 1.2,
            "ap_gain": 0.6, "ap_loss": 0.45,
            "ui_hover": 0.12, "panel_open": 0.55, "panel_close": 0.35, "tab": 0.2, "toggle_on": 0.16, "toggle_off": 0.16,
            "hp_low_heartbeat": 0.75, "card_hover": 0.14, "reward_reveal": 0.9, "reward_pick": 0.6, "step_done": 0.6}
