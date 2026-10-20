@@ -16,6 +16,8 @@ var conn_label: Label
 var game_menu: PanelContainer
 ## The settings popup.
 var settings_popup: PanelContainer
+## The in-game menu's buttons by key (settings, spectators, concede, return, stop, quit).
+var items: Dictionary = {}
 var _dialog_root: ConfirmDialog
 
 
@@ -47,6 +49,9 @@ func build_top_strip() -> void:
 	menu_b.custom_minimum_size = Vector2(76, 30)
 	menu_b.pressed.connect(toggle)
 	row.add_child(menu_b)
+	# A1 / A2: Chat sits right before Menu; the spectator badge (and Watch button) before Chat.
+	gs.chat.build(row, menu_b)
+	gs.spectate.build(row, gs.chat.button)
 
 
 ## Builds the in-game menu and the settings popup (hidden).
@@ -58,14 +63,21 @@ func build_popups() -> void:
 	game_menu.z_index = UiLayers.GAME_MENU
 	gs.add_child(game_menu)
 	var gmv := menu_plate.body
-	for it in [["Settings", func(): game_menu.visible = false; _show_popup(settings_popup)],
-			["Concede game", func(): game_menu.visible = false; _confirm_concede()],
-			["Return to menu", func(): confirm_forfeit(false)],
-			["Quit to desktop", func(): confirm_forfeit(true)]]:
-		var gb := UIStyle.button(it[0], 16)
+	# A2: "Spectators" for online players, "Stop watching" instead of conceding / returning for a
+	# spectator (refresh_items shows the right set for the current view).
+	for it in [["settings", "Settings", func(): game_menu.visible = false; _show_popup(settings_popup)],
+			["spectators", "Spectators", func(): game_menu.visible = false; gs.spectate.toggle_list()],
+			["concede", "Concede game", func(): game_menu.visible = false; _confirm_concede()],
+			["return", "Return to menu", func(): confirm_forfeit(false)],
+			["stop", "Stop watching", func(): confirm_forfeit(false)],
+			["quit", "Quit to desktop", func(): confirm_forfeit(true)]]:
+		var gb := UIStyle.button(it[1], 16)
+		gb.name = "Menu_" + String(it[0])
 		gb.custom_minimum_size = Vector2(230, 42)
-		gb.pressed.connect(it[1])
+		gb.pressed.connect(it[2])
 		gmv.add_child(gb)
+		items[it[0]] = gb
+	refresh_items()
 	# Settings
 	var set_plate := HousePanel.new("Settings", "Interface", Vector2(16, 14), 6)
 	settings_popup = set_plate
@@ -108,24 +120,55 @@ func layout_popups(w: float) -> void:
 	game_menu.position = Vector2(w - gs.sidebar_w - game_menu.get_combined_minimum_size().x - 10.0, GameScreen.TOP_H + 4.0)
 
 
-## Connection state in the top strip (network games only).
+## Connection state in the top strip (network games only). A1 (owner feedback 20 Oct): a healthy
+## connection shows nothing (no "Connected (steam)"); only a pause or a missing opponent is named.
 func update_conn() -> void:
 	var net: Dictionary = gs.view.get("net", {})
 	if net.is_empty():
 		conn_label.text = ""
 	elif net.get("paused", false):
 		conn_label.text = "● Paused"
-	elif not net.get("opponent_connected", true):
+	elif not net.get("opponent_connected", true) and not gs.is_spectator():
 		conn_label.text = "● Opponent not connected"
 	else:
-		conn_label.text = "● Connected (%s)" % net.get("transport", "net")
-	conn_label.add_theme_color_override("font_color", UIStyle.BAD if (net.get("paused", false) or not net.get("opponent_connected", true)) and not net.is_empty() else UIStyle.MUTED)
+		conn_label.text = ""
+	conn_label.visible = conn_label.text != ""
+	conn_label.add_theme_color_override("font_color", UIStyle.BAD)
+	refresh_items()
+
+
+## Shows the in-game menu buttons that fit this screen: a spectator gets Settings, Stop watching and
+## Quit; an online player also gets Spectators (with the count).
+func refresh_items() -> void:
+	if items.is_empty():
+		return
+	var spec := gs.is_spectator()
+	var n: int = gs.view.get("net", {}).get("spectators", []).size()
+	(items["spectators"] as Button).visible = gs.is_network() and not spec
+	(items["spectators"] as Button).text = "Spectators (%d)" % n if n > 0 else "Spectators"
+	(items["concede"] as Button).visible = not spec
+	(items["return"] as Button).visible = not spec
+	(items["stop"] as Button).visible = spec
+
+
+## Hides every top-strip popover (menu, settings, chat, spectators) before another opens.
+func close_popups() -> void:
+	game_menu.visible = false
+	settings_popup.visible = false
+	if gs.chat.panel != null:
+		gs.chat.panel.visible = false
+	if gs.spectate.panel != null:
+		gs.spectate.panel.visible = false
 
 
 ## Opens or closes the in-game menu (closes the settings popup).
 func toggle() -> void:
 	Sfx.play("select")
 	settings_popup.visible = false
+	if gs.chat.panel != null:
+		gs.chat.panel.visible = false
+	if gs.spectate.panel != null:
+		gs.spectate.panel.visible = false
 	if game_menu.visible:
 		game_menu.visible = false
 	else:
@@ -148,6 +191,9 @@ func confirm_forfeit(quit: bool) -> void:
 	game_menu.visible = false
 	var verb := "quit" if quit else "leave"
 	var net: Dictionary = gs.view.get("net", {})
+	if gs.is_spectator():
+		_leave(quit, "")     # A2: a spectator leaves freely; nothing is sent, nothing forfeited
+		return
 	if not gs.has_live_series() or net.get("host_gone", false):
 		_leave(quit, "")     # nothing to keep or forfeit (or the host is gone: nobody to tell)
 		return

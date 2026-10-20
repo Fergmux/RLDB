@@ -94,6 +94,10 @@ var menu: GameMenu
 var overlays: GameSeriesOverlay
 ## Right-click card inspection and pile browser component (F03-01 / F03-02).
 var inspect: GameInspect
+## A1 in-game chat (online only).
+var chat: GameChat
+## A2 spectating: badges, the Spectators list, the live cursor.
+var spectate: GameSpectate
 
 var _fx_seq: int = -1
 var _fx_game: int = -99
@@ -123,6 +127,8 @@ func _init() -> void:
 	menu = GameMenu.new(self)
 	overlays = GameSeriesOverlay.new(self)
 	inspect = GameInspect.new(self)
+	chat = GameChat.new(self)
+	spectate = GameSpectate.new(self)
 
 
 func _ready() -> void:
@@ -169,6 +175,8 @@ func attach(c: SeatClient) -> void:
 	client = c
 	client.view_changed.connect(_on_view)
 	client.status_changed.connect(_on_status)
+	chat.attach(c)
+	spectate.attach(c)
 	inspect.close_all()
 	selected_uid = -1
 	peek_uid = -1
@@ -237,6 +245,8 @@ func _relayout() -> void:
 	prompt.place_tray()
 	overlays.layout_pause(w, h)
 	menu.layout_popups(w)
+	chat.layout(w)
+	spectate.layout(w)
 	hand.layout([], true)
 	board.place_opp_hand()
 	overlays.place_modals()
@@ -346,7 +356,7 @@ func _maybe_coin_flip() -> void:
 	board.opp_hand_box.modulate.a = 0.0
 	coin.finished.connect(_deal_after_coin)
 	coin.tree_exiting.connect(_deal_after_coin)   # backstop: the coin removed early
-	coin.play(String(pv(first)["name"]), String(pv(1 - first)["name"]), first == me())
+	coin.play(String(pv(first)["name"]), String(pv(1 - first)["name"]), first == me() and not is_spectator())
 
 
 ## Shows the hands once the coin flip is done: mine dealt in from the draw pile, the opponent's
@@ -401,6 +411,7 @@ func render_all() -> void:
 	overlays.render()
 	overlays.render_pause()
 	action_row.refresh()
+	spectate.render()
 	if details.is_drafting():
 		details.show_draft()
 	elif details.pile_zone != "":
@@ -441,6 +452,8 @@ func send(cmd: Dictionary) -> void:
 func locked() -> bool:
 	if not _held.is_empty():
 		return true   # a spotlight is showing; the board is not the current state yet
+	if is_spectator():
+		return true   # A2: a spectator only watches
 	if mv.is_empty() or view.get("stage", "") != "game" or mv["winner"] != -1:
 		return true
 	if not mv.get("pending", {}).is_empty() or mv.get("resolving", false):
@@ -452,7 +465,7 @@ func locked() -> bool:
 ## True while a modal, popup, menu or pause covers the board (no hover).
 func hover_blocked() -> bool:
 	return overlays.overlay.visible or overlays.pile_popup.visible or menu.settings_popup.visible or menu.game_menu.visible \
-		or overlays.pause_dim.visible or mv.is_empty() or inspect.is_open() or details.method_picker_open()
+		or overlays.pause_dim.visible or mv.is_empty() or inspect.is_open() or details.method_picker_open() or over_side_popover()
 
 
 ## True for a hot-seat series (both players at this screen).
@@ -463,6 +476,20 @@ func is_hotseat() -> bool:
 ## True in a networked (LAN / Steam) series.
 func is_network() -> bool:
 	return view.has("net")
+
+
+## A2: true when this screen watches a networked series as a spectator.
+func is_spectator() -> bool:
+	return bool(view.get("spectator", false)) or bool(view.get("net", {}).get("spectator", false))
+
+
+## A2: true while the mouse is over the chat box or the Spectators list (no board hover there).
+func over_side_popover() -> bool:
+	var m := get_local_mouse_position()
+	for p in [chat.panel, spectate.panel]:
+		if p != null and p.visible and Rect2(p.position, p.size).has_point(m):
+			return true
+	return false
 
 
 ## True while a series is being played on this screen (leaving it unsaved would forfeit).
@@ -494,6 +521,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and is_visible_in_tree() and chat.is_open():
+		# A1: Esc closes the chat box first; while typing, no key is a game shortcut.
+		if (event as InputEventKey).keycode == KEY_ESCAPE and not event.echo:
+			chat.close_box()
+			get_viewport().set_input_as_handled()
+			return
+		if chat.typing():
+			return
 	if event is InputEventKey and event.pressed and not event.echo and is_visible_in_tree():
 		var ke := event as InputEventKey
 		if ke.keycode in GameKeyboard.GAME_KEYS and keyboard.handle_key(ke):
@@ -514,6 +549,7 @@ func _process(_d: float) -> void:
 	if not is_visible_in_tree():
 		return
 	targeting.update_arrow()
+	spectate.process()
 	if not hover.forced:
 		hover.update(get_global_mouse_position())
 	preview.update()

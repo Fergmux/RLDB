@@ -277,6 +277,11 @@ func render() -> void:
 	if stage != "over":
 		overlay_box.add_child(_stage_header(stage))
 	_fixed_height = false
+	if gs.is_spectator():
+		_render_spectator(stage)
+		place_modals()
+		_fit_overlay()
+		return
 	match stage:
 		"decks": _render_decks()
 		"rewards": rewards.render()
@@ -306,7 +311,8 @@ func _stage_header(stage: String) -> Control:
 		var sc := UIStyle.label(t, 26, UIStyle.GOLD_HI, false, true)
 		sc.add_theme_font_override("font", UIStyle.font_display(700))
 		return sc
-	v.add_child(score_row(_seat_plate(String(view["names"][0]), gs.me() == 0), _seat_plate(String(view["names"][1]), gs.me() == 1),
+	var spec := gs.is_spectator()
+	v.add_child(score_row(_seat_plate(String(view["names"][0]), gs.me() == 0 and not spec), _seat_plate(String(view["names"][1]), gs.me() == 1 and not spec),
 		view["scores"], score, 14))
 	return v
 
@@ -384,6 +390,12 @@ func refresh() -> void:
 
 ## Title of a series stage ("" for the game itself).
 func stage_title(stage: String) -> String:
+	if gs.is_spectator():
+		match stage:
+			"decks": return "The players are choosing decks" if gs.view.get("deck_mode", "starter") == "starter" else "The players are drafting"
+			"rewards": return "Game %d complete — rewards" % gs.view["game_no"]
+			"first_player": return "Next game"
+			"over": return "Series over"
 	match stage:
 		"decks": return "Choose your deck" if gs.view.get("deck_mode", "starter") == "starter" else "Draft your deck"
 		"rewards": return "Game %d complete — rewards" % gs.view["game_no"]
@@ -521,6 +533,77 @@ func _render_first() -> void:
 	overlay_box.add_child(start)
 	if opp_ready and not gs.is_hotseat():
 		overlay_box.add_child(_centred("%s is ready." % opp, 15, UIStyle.GOOD))
+
+
+## A2: what a spectator sees between duels: each player's public progress as a ready plate, the
+## last result and, at the end, the winner (no Victory / Defeat: the spectator did not play). Only
+## "Stop watching" / "Back to main menu" can be pressed; nothing is sent to the host.
+func _render_spectator(stage: String) -> void:
+	var view := gs.view
+	var names: Array = view["names"]
+	if stage == "over":
+		var w := 0 if int(view["scores"][0]) > int(view["scores"][1]) else 1
+		var forfeit: int = int(view.get("forfeit_by", -1))
+		if forfeit != -1:
+			w = 1 - forfeit
+		var res := UIStyle.label("%s WINS" % String(names[w]).to_upper(), 46, UIStyle.GOLD_HI, true, true)
+		res.add_theme_font_override("font", UIStyle.font_display(700))
+		res.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+		res.add_theme_constant_override("outline_size", 6)
+		res.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		overlay_box.add_child(res)
+		overlay_box.add_child(_centred("Series won %d – %d" % [maxi(view["scores"][0], view["scores"][1]), mini(view["scores"][0], view["scores"][1])], 19, UIStyle.TEXT))
+		if forfeit != -1:
+			overlay_box.add_child(_centred("%s left and forfeited the series." % names[forfeit], 16, UIStyle.BAD))
+		overlay_box.add_child(score_row(UIStyle.label(names[0], 20, UIStyle.TEXT, false, true), UIStyle.label(names[1], 20, UIStyle.TEXT, false, true),
+			view["scores"], func(t: String) -> Label: return UIStyle.label(t, 40, UIStyle.GOLD, false, true), 18))
+		for h in view.get("history", []):
+			overlay_box.add_child(_centred("Game %d — %s won (turn %d, HP %d–%d)" % [h["game"], names[h["winner"]], h["turns"], h["hp"][0], h["hp"][1]], 15, UIStyle.MUTED))
+		var b := UIStyle.primary_button("Back to main menu", 17)
+		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		b.pressed.connect(func(): gs.back_to_menu.emit())
+		overlay_box.add_child(b)
+		return
+	var line := game_result_line()
+	if line != "" and stage != "decks":
+		overlay_box.add_child(_centred(line, 17, UIStyle.TEXT))
+	var title := ""
+	var sub := ""
+	var chips := []
+	match stage:
+		"decks":
+			title = "Deck choice"
+			sub = "The duel starts once both players have locked in a deck."
+			var dp: Array = view.get("draft_progress", [])
+			for p in 2:
+				var ready: bool = bool(view["deck_ready"][p])
+				var prog := ""
+				if not ready and dp.size() == 2 and int(dp[p].get("total", 0)) > 0:
+					prog = " (%d / %d picks)" % [int(dp[p]["step"]), int(dp[p]["total"])]
+				chips.append({"text": "%s: %s" % [names[p], "deck ready" if ready else "choosing" + prog], "done": ready})
+		"rewards":
+			title = "Choosing rewards"
+			sub = "Each player picks new cards for their deck. You will see the next duel when it starts."
+			var rd: Array = view.get("rewards_done", [false, false])
+			for p in 2:
+				chips.append({"text": "%s: %s" % [names[p], "done" if rd[p] else "choosing"], "done": bool(rd[p])})
+		"first_player":
+			var nx: Dictionary = view.get("next", {})
+			var loser := int(view.get("last_loser", 0))
+			title = "Game %d" % (int(view["game_no"]) + 1)
+			if bool(nx.get("first_chosen", false)):
+				var fp := int(nx.get("first_player", 0))
+				sub = "%s will go first." % names[fp]
+			else:
+				sub = "%s lost the last game and is choosing who goes first." % names[loser]
+			var rdy: Array = nx.get("ready", [false, false])
+			for p in 2:
+				chips.append({"text": "%s: %s" % [names[p], "ready" if rdy[p] else "not ready yet"], "done": bool(rdy[p])})
+	var wp := WaitPlate.new(title, sub, chips)
+	wp.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	wp.custom_minimum_size = Vector2(minf(460.0, overlay_box.custom_minimum_size.x), 0)
+	overlay_box.add_child(wp)
+	overlay_box.add_child(_centred("You are spectating. The players make every choice here.", 14, GameChat.SPECTATOR_COLOR))
 
 
 ## A centred, wrapping label for the stage modal.

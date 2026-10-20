@@ -457,6 +457,16 @@ def s_deck_remove(r):
     return finish(lowpass(x, 4500), tail_kw=dict(wet=0.1, extra_s=0.05))
 
 
+def s_chat(r):
+    # A1 chat message while the chat box is closed: two soft rising glass bells over a faint
+    # parchment flick, quieter than a game notice so it never competes with play.
+    flick = lowpass(highpass(mul(noise(r, 0.05), env_exp(n_samples(0.05), 0.012, 0.001)), 1800), 6000)
+    b1 = bell(1318.5, 0.35, 0.09)
+    b2 = bell(1760.0, 0.45, 0.13)
+    x = mix(scale(flick, 0.35), (0.0, scale(b1, 0.55)), (0.085, scale(b2, 0.7)))
+    return finish(lowpass(x, 7000), tail_kw=dict(wet=0.3, extra_s=0.18))
+
+
 SOUNDS = [
     ("card_draw", s_card_draw), ("card_play", s_card_play), ("card_set", s_card_set),
     ("summon", s_summon), ("select", s_select), ("confirm", s_confirm),
@@ -469,10 +479,11 @@ SOUNDS = [
     ("boom", s_boom), ("charge", s_charge),
     ("click_primary", s_click_primary), ("click_secondary", s_click_secondary), ("back", s_back),
     ("deck_add", s_deck_add), ("deck_remove", s_deck_remove),
+    ("chat", s_chat),
 ]
 
 # Per-sound peak level (dBFS); default PEAK_DBFS. UI clicks sit well under the game sounds.
-PEAK = {"click_primary": -11.0, "click_secondary": -12.0, "back": -10.5, "deck_add": -10.0, "deck_remove": -10.5}
+PEAK = {"chat": -12.0, "click_primary": -11.0, "click_secondary": -12.0, "back": -10.5, "deck_add": -10.0, "deck_remove": -10.5}
 
 
 # Hard duration caps (seconds); longer renders are trimmed and re-faded.

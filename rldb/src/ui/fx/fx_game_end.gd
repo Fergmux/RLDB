@@ -17,6 +17,8 @@ const LEN_GAME_LOSS := 2.1
 const LEN_SERIES_LOSS := 3.0
 
 var _active := false
+## A2: the winner's name when a spectator watches (neutral wording, the winning look); "" otherwise.
+var _spectating_winner := ""
 
 
 ## True while the presentation is on screen.
@@ -53,7 +55,9 @@ static func length_for(won: bool, series: bool) -> float:
 ## Plays the presentation for the seat being shown: `winner` is the winning seat index.
 func start(winner: int) -> void:
 	var screen: Control = _fx.screen
-	var won: bool = winner == screen.me()
+	var spectating: bool = bool(screen.call("is_spectator")) if screen.has_method("is_spectator") else false
+	var won: bool = winner == screen.me() or spectating
+	_spectating_winner = String(screen.view.get("names", ["", ""])[clampi(winner, 0, 1)]) if spectating else ""
 	var view: Dictionary = screen.view
 	var series: bool = String(view.get("stage", "")) == "over"
 	_active = true
@@ -135,7 +139,7 @@ func start(winner: int) -> void:
 			bursts.append([1.25, burst_at + Vector2(0, -field.size.y * 0.2), 30, 300.0])
 		for b in bursts:
 			tw.tween_callback(func(): _fx.burst(FxBurst.Kind.SPARK, b[1], WIN.lightened(0.25), b[2], b[3], 0.8)).set_delay(d.call(b[0]))
-		tw.tween_callback(func(): screen.plate_of(screen.me()).pulse()).set_delay(d.call(0.2))
+		tw.tween_callback(func(): screen.plate_of(winner).pulse()).set_delay(d.call(0.2))
 		# A slow breath while it holds.
 		tw.tween_property(title, "scale", Vector2(1.04, 1.04), d.call(0.8)).set_delay(d.call(0.7)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	else:
@@ -200,6 +204,9 @@ func _hgrad(g: Gradient, h: int) -> GradientTexture2D:
 func _title(won: bool, series: bool, col: Color) -> Label:
 	var text := ("SERIES VICTORY" if series else "VICTORY") if won else ("SERIES LOST" if series else "DEFEAT")
 	var fs := (104 if series else 88) if won else (80 if series else 72)
+	if _spectating_winner != "":
+		text = "%s WINS" % _spectating_winner.to_upper()
+		fs = 84 if series else 72
 	var l := UIStyle.label(text, fs, col.lightened(0.15) if won else col, false, true)
 	l.add_theme_font_override("font", UIStyle.font_display(700))
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
@@ -212,7 +219,11 @@ func _sub_label(won: bool, series: bool, view: Dictionary, col: Color) -> Label:
 	var scores: Array = view.get("scores", [0, 0])
 	var me: int = int(view.get("you", 0))
 	var text := ""
-	if series:
+	if _spectating_winner != "":
+		var hi := maxi(int(scores[0]), int(scores[1]))
+		var lo := mini(int(scores[0]), int(scores[1]))
+		text = ("Series won %d - %d" % [hi, lo]) if series else ("Game %d   ·   score %d - %d" % [int(view.get("game_no", 1)), scores[0], scores[1]])
+	elif series:
 		text = "You win the series %d - %d" % [scores[me], scores[1 - me]] if won else "Your opponent wins the series %d - %d" % [scores[1 - me], scores[me]]
 	else:
 		text = "You win game %d   ·   score %d - %d" % [int(view.get("game_no", 1)), scores[me], scores[1 - me]] if won else "You lose game %d   ·   score %d - %d" % [int(view.get("game_no", 1)), scores[me], scores[1 - me]]

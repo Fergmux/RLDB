@@ -57,6 +57,15 @@ func _ready() -> void:
 			_status.text = "Steam did not answer the search. Check that Steam is online and try again.")
 
 
+## A2: the button text for a lobby of `members` (host included): an open seat is joined, a full
+## table is watched ("Watch <host>'s game · N watching").
+static func lobby_label(host: String, members: int) -> String:
+	if members < 2:
+		return "Join %s's lobby (%d/2 players)" % [host, maxi(members, 1)]
+	var watching := members - 2
+	return "Watch %s's game · %s" % [host, "%d watching" % watching if watching > 0 else "no spectators yet"]
+
+
 ## Lists `lobbies` (dicts with id, host, members); an empty list says none were found.
 func show_lobbies(lobbies: Array) -> void:
 	_done = true
@@ -68,7 +77,9 @@ func show_lobbies(lobbies: Array) -> void:
 	_status.text = "Found %d lobby(s)." % lobbies.size()
 	for l in lobbies:
 		var host := String(l["host"]) if String(l["host"]) != "" else "Unknown"
-		var b := UIStyle.primary_button("Join %s's lobby (%d/2)" % [host, l["members"]], 15)
+		var b := UIStyle.primary_button(lobby_label(host, int(l["members"])), 15)
+		if int(l["members"]) >= 2:
+			b.tooltip_text = "Both seats are taken: you join as a spectator and can chat."
 		b.custom_minimum_size = Vector2(0, 40)
 		var id: int = l["id"]
 		b.pressed.connect(func(): queue_free(); join_chosen.emit(id))

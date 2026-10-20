@@ -12,7 +12,7 @@ const NAMES: PackedStringArray = [
 	"card_draw", "card_play", "card_set", "summon", "select", "confirm", "cancel", "deny",
 	"attack", "impact", "damage", "heal", "destroy", "buff", "debuff", "turn", "phase",
 	"notice", "victory", "defeat", "exhaust", "fuse", "ritual", "arcane", "victory_big",
-	"boom", "charge", "click_primary", "click_secondary", "back", "deck_add", "deck_remove",
+	"boom", "charge", "click_primary", "click_secondary", "back", "deck_add", "deck_remove", "chat",
 ]
 ## F22 / F25: UI sounds. One user action makes exactly one UI sound: within one frame only the request
 ## with the highest priority plays (a later, higher one stops the earlier voice, a lower or equal one is
