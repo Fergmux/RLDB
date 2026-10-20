@@ -218,7 +218,7 @@ func _impact(pl: PlayerPlate, c: Vector2, dmg: int, reach: float, lethal: Dictio
 		pl.pulse()
 		_fx.shake(pl, 12.0)
 		var z0 := pl.z_index
-		pl.z_index = UiLayers.FX + 1   # the struck plate reads above its own blast (UI review F12)
+		pl.z_index = FxPlayer.STRUCK_PLATE_Z   # the struck plate reads above its own blast (UI review F12)
 		_fx.add_cleanup(func(): if is_instance_valid(pl): pl.z_index = z0)
 		var zt := _fx.new_tween()
 		zt.tween_interval(UIStyle.dur(1.2))
