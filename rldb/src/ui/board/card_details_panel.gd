@@ -36,6 +36,15 @@ var text_scale: float = 1.0
 ## Deck-construction rendering (F19): ATK / DEF tiles show one prominent printed value with no
 ## Base / Current split (they cannot differ outside a match). Off everywhere in a match.
 var construction: bool = false
+## H24 (owner, 21 Oct: "atk/def section should be smaller, text is fine"): construction stat tiles
+## drawn slim, the same 17 / 36 px caption and value in a short tile (SLIM_PAD_X / SLIM_PAD_Y
+## padding, the value's empty ascent and descent trimmed). The deck builder sets it; off elsewhere.
+var slim_stats: bool = false
+const SLIM_PAD_X := 12
+const SLIM_PAD_Y := 4
+## Override of the rule / status blocks' padding (px; -1 = the D5 default). The deck builder
+## tightens it when a long card would not otherwise fit its pane.
+var block_pad: int = -1
 ## Section ids in the order they were built by the last show_* call (used by tests).
 var sections: Array[String] = []
 ## #43: open with a wide crop of the card's art (the match sidebar). Off in the other panels.
@@ -313,6 +322,11 @@ func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	sb.base.set_border_width_all(1)
 	if compact:
 		UIStyle.pad(sb, "sm", "xs")
+	elif construction and slim_stats:
+		sb.base.content_margin_left = SLIM_PAD_X
+		sb.base.content_margin_right = SLIM_PAD_X
+		sb.base.content_margin_top = SLIM_PAD_Y
+		sb.base.content_margin_bottom = SLIM_PAD_Y
 	elif construction:
 		UIStyle.pad(sb, "md", "md")   # D5: the construction tile's 36 px number keeps its 12 px
 	else:
@@ -379,8 +393,9 @@ func _plain_stat_tile(pc: PanelContainer, hb: HBoxContainer, left: VBoxContainer
 		left.add_child(_lbl("Varies", SMALL, UIStyle.MUTED, false, false, false))
 	var num := Label.new()
 	num.text = "?" if value == null else str(value)
-	num.add_theme_font_override("font", UIStyle.font_display(700))
-	num.add_theme_font_size_override("font_size", _fs(36) if not compact else 24)
+	var num_px := _fs(36) if not compact else 24
+	num.add_theme_font_override("font", slim_digits(num_px) if slim_stats else UIStyle.font_display(700))
+	num.add_theme_font_size_override("font_size", num_px)
 	num.add_theme_color_override("font_color", UIStyle.GOLD_HI if value == null else UIStyle.TEXT)
 	num.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	num.add_theme_constant_override("outline_size", 4)
@@ -388,6 +403,23 @@ func _plain_stat_tile(pc: PanelContainer, hb: HBoxContainer, left: VBoxContainer
 	hb.add_child(num)
 	# D5: the tile keeps the md padding of _stat_tile (a 6 px override put the 36 px number on the rim).
 	return pc
+
+
+static var _slim_fonts: Dictionary = {}
+
+
+## H24: the stat value's Cinzel 700 with its line box trimmed to the digits for a `px` px value.
+## Cinzel's digits are cap height (about 0.7 em on the baseline), so the 1.39 em line box carries
+## about 0.22 em of empty ascent and 0.39 em of empty descent; trimming them keeps the glyphs at
+## the same size and shortens the tile.
+static func slim_digits(px: int) -> Font:
+	if not _slim_fonts.has(px):
+		var fv := FontVariation.new()
+		fv.base_font = UIStyle.font_display(700)
+		fv.set_spacing(TextServer.SPACING_TOP, -roundi(px * 0.2))
+		fv.set_spacing(TextServer.SPACING_BOTTOM, -roundi(px * 0.33))
+		_slim_fonts[px] = fv
+	return _slim_fonts[px]
 
 
 func _build_rules(c: Dictionary) -> void:
@@ -644,6 +676,8 @@ func _block(col: Color, bar_a: float) -> PanelContainer:
 	# D5: the text keeps the 12 px content floor from the block's edges (it sat 3-6 px from them);
 	# the compact pile rows keep the 8 px chip scale.
 	var pad := UIStyle.CONTENT_FLOOR if not compact else UIStyle.sp("sm")
+	if block_pad >= 0:
+		pad = block_pad
 	pc.add_theme_stylebox_override("panel", block_style(col, bar_a, pad))
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 2)

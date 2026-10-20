@@ -741,6 +741,7 @@ func _build_preview(body: HBoxContainer) -> void:
 	sc.set_content(inner)
 	_details = CardDetailsPanel.new()
 	_details.construction = true
+	_details.slim_stats = true   # H24: short ATK / DEF tiles, same text size
 	inner.add_child(_details)
 	# Always-shown facts (design review #80): the Rules placeholder of a vanilla card, the copies
 	# in this deck as gem sockets that fill on add, the kind and cost line.
