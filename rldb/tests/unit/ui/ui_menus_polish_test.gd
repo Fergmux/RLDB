@@ -153,14 +153,35 @@ func test_kind_text_names_category_and_cost() -> void:
 	assert_str(PreviewFacts.kind_text({})).is_equal("")
 
 
-func test_copy_gems_fill_and_overflow() -> void:
+## H27 (21 Oct): one empty socket at 0 copies, then one filled gem per copy and no empty one.
+func test_copy_gems_one_empty_then_one_gem_per_copy() -> void:
 	var g: PreviewFacts.CopyGems = auto_free(PreviewFacts.CopyGems.new())
-	g.set_count(2)
-	assert_int(g._row.filled).is_equal(2)
-	assert_str(g._more.text).is_equal("")
-	g.set_count(5)
-	assert_int(g._row.filled).is_equal(PreviewFacts.SOCKETS)
-	assert_str(g._more.text).is_equal("+2")
+	g.set_count(0)
+	assert_int(PreviewFacts.CopyGems.sockets_for(g.count)).is_equal(1)
+	assert_int(PreviewFacts.CopyGems.filled_for_count(g.count)).is_equal(0)
+	for n in [1, 2, 3, 7]:
+		g.set_count(n)
+		assert_int(PreviewFacts.CopyGems.sockets_for(g.count)).is_equal(n)
+		assert_int(PreviewFacts.CopyGems.filled_for_count(g.count)).is_equal(n)
+
+
+## H27: never a "+N" label; up to the deck cap (99 copies) the gems wrap and shrink inside the
+## row's fixed height and width (no overflow, so the details pane never scrolls).
+func test_copy_gems_fit_the_row_up_to_the_deck_cap() -> void:
+	var g: PreviewFacts.CopyGems = auto_free(PreviewFacts.CopyGems.new())
+	g.size = Vector2(240, PreviewFacts.CopyGems.ROW_H)
+	g.set_count(DeckStore.MAX_CARDS)
+	assert_int(g.get_child_count()).is_equal(0)
+	var l := PreviewFacts.CopyGems.layout(DeckStore.MAX_CARDS, 240.0)
+	assert_int(int(l["rows"])).is_less_equal(PreviewFacts.CopyGems.ROWS)
+	assert_float(PreviewFacts.CopyGems.block_h(int(l["rows"]), float(l["k"]))).is_less_equal(PreviewFacts.CopyGems.ROW_H)
+	var last := g.gem_centre(DeckStore.MAX_CARDS - 1, DeckStore.MAX_CARDS)
+	assert_float(last.x).is_less_equal(240.0)
+	assert_float(last.y).is_less_equal(PreviewFacts.CopyGems.ROW_H)
+	# A handful of copies keeps the full AP gem size on one row.
+	var few := PreviewFacts.CopyGems.layout(4, 240.0)
+	assert_float(float(few["k"])).is_equal(1.0)
+	assert_int(int(few["rows"])).is_equal(1)
 
 
 func test_rules_placeholder_only_without_rules() -> void:
