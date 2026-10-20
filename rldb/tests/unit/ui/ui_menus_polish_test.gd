@@ -214,3 +214,23 @@ func test_ambient_motes_rest_under_reduce_motion() -> void:
 	assert_vector(m.mote_state(0, 1.0)["pos"]).is_not_equal(m.mote_state(0, 4.0)["pos"])
 	UIStyle.reduce_motion = true
 	assert_vector(m.mote_state(0, 1.0)["pos"]).is_equal(m.mote_state(0, 4.0)["pos"])
+
+
+# ---------------------------------------------------------------- privacy screen (#68)
+
+## Regression: the hand-over screen sat under the coin flip and game-end layers, so a coin flip
+## played over the "Pass to" plate and its veil showed the board layout through it.
+func test_privacy_backdrop_covers_the_board_fx_layers() -> void:
+	var b: PrivacyBackdrop = auto_free(PrivacyBackdrop.new())
+	for layer in [UiLayers.COIN_FLIP, UiLayers.GAME_END, UiLayers.PILE_POPUP, UiLayers.FX]:
+		assert_int(b.z_index).is_greater(layer)
+	assert_int(b.z_index).is_less(UiLayers.GAME_MENU)
+	assert_int(b.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+
+
+func test_privacy_sigil_rests_under_reduce_motion() -> void:
+	var b: PrivacyBackdrop = auto_free(PrivacyBackdrop.new())
+	b.clock = func() -> float: return 30.0
+	assert_float(b.sigil_angle()).is_greater(0.0)
+	UIStyle.reduce_motion = true
+	assert_float(b.sigil_angle()).is_equal(0.0)

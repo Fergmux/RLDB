@@ -75,6 +75,8 @@ func press(text: String) -> bool:
 
 var _panel: HousePanel
 var _focus_button: Button
+## The SCREEN-tier headline (D3); it sweeps once when the dialog opens.
+var _headline: TitleText
 
 
 ## The button holding the default keyboard focus (the cancel when a danger choice is offered).
@@ -108,8 +110,9 @@ func _build(title: String, text: String, list: Array, tag: String) -> void:
 	_panel.custom_minimum_size = Vector2(PANEL_W, 0)
 	cc.add_child(_panel)
 	var v := _panel.body
-	_panel.add_headline(title, 26, true, 12.0)
+	_headline = TitleText.apply(_panel.add_headline(title, 26, true, 12.0), TitleText.Tier.SCREEN, 26)
 	var m := UIStyle.label(text, 16, UIStyle.TEXT, true)
+	m.add_theme_constant_override("line_spacing", 5)
 	m.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(m)
 	var stacked := list.size() > 2
@@ -165,3 +168,5 @@ func _button(c: Dictionary, stacked: bool) -> Button:
 
 func _appear() -> void:
 	_panel.appear()
+	if _headline != null:
+		_headline.play_sweep()

@@ -12,6 +12,11 @@ const PANEL_W := 560.0
 ## The list scrolls inside the plate above this share of the window height.
 const LIST_MAX_SHARE := 0.6
 const ROW_H := 42.0
+## The sync line's size (design review #94: 12 px or more, MUTED).
+const FOOT_FONT := 13
+
+## The SCREEN-tier headline (D3).
+var headline: TitleText
 
 
 ## Opens the dialog as a full-rect child of `parent` and returns it. `facts` (empty) means the
@@ -22,12 +27,15 @@ static func open(parent: Node, facts: Array = []) -> StatsDialog:
 	d._build(facts if not facts.is_empty() else PlayerStats.facts())
 	parent.add_child(d)
 	d._panel.appear()
+	d.headline.play_sweep()
 	Telemetry.refresh_stats()
 	return d
 
 
+## Closes the dialog with the panel_close cue (design review #106).
 func close() -> void:
 	if not is_queued_for_deletion():
+		Sfx.play("panel_close")
 		queue_free()
 
 
@@ -68,7 +76,7 @@ func _process(delta: float) -> void:
 func _apply_sync(info: Dictionary) -> void:
 	_seen_state = String(info["state"]) + sync_text(info)
 	_sync_label.text = sync_text(info)
-	_sync_label.add_theme_color_override("font_color", UIStyle.MUTED if info["state"] == "synced" else UIStyle.TEXT_DIM)
+	_sync_label.add_theme_color_override("font_color", UIStyle.MUTED if info["state"] == "synced" else Color(UIStyle.MUTED, 0.85))
 	_sync_dot.state = String(info["state"])
 	_sync_dot.queue_redraw()
 	_panel.set_tag(source_label(String(info["state"])))
@@ -94,12 +102,12 @@ func _build(facts: Array) -> void:
 	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(cc)
 	var info := StatsSync.describe()
-	_panel = HousePanel.new("Statistics", source_label(String(info["state"])), Vector2(26, 22), 12)
+	_panel = HousePanel.new("Statistics", source_label(String(info["state"])), Vector2(28, 24), UIStyle.sp("md"))
 	_panel.arm = 18.0
 	_panel.custom_minimum_size = Vector2(PANEL_W, 0)
 	cc.add_child(_panel)
 	var v := _panel.body
-	_panel.add_headline("Your statistics", 26, true, 12.0)
+	headline = TitleText.apply(_panel.add_headline("Your statistics", 26, true, 12.0), TitleText.Tier.SCREEN, 26)
 	_list_holder = VBoxContainer.new()
 	_list_holder.add_theme_constant_override("separation", 0)
 	v.add_child(_list_holder)
@@ -114,12 +122,14 @@ func _build(facts: Array) -> void:
 	v.add_child(foot)
 	_sync_dot = SyncDot.new()
 	foot.add_child(_sync_dot)
-	_sync_label = UIStyle.label("", 12, UIStyle.TEXT_DIM)
+	_sync_label = UIStyle.label("", FOOT_FONT, UIStyle.MUTED)
 	_sync_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	foot.add_child(_sync_label)
 	_apply_sync(info)
-	var close_btn := UIStyle.primary_button("Close", 15)
-	close_btn.custom_minimum_size = Vector2(170, 40)
+	# Close is a secondary everywhere (design review #89): 44 px, 160 wide.
+	var close_btn := UIStyle.size_button(UIStyle.secondary_button("Close", 15), "standard")
+	close_btn.name = "Close"
+	close_btn.custom_minimum_size.x = 160
 	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close_btn.pressed.connect(close)
 	v.add_child(close_btn)
@@ -131,9 +141,9 @@ func _fill(facts: Array) -> void:
 		_list_holder.remove_child(c)
 		c.queue_free()
 	if facts.is_empty():
-		var e := UIStyle.label("Finish a duel and your record, favourite cards and best streaks will appear here.", 16, UIStyle.TEXT_DIM, true)
-		e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		e.custom_minimum_size = Vector2(PANEL_W - 80, 0)
+		# Illustrated empty state (design review #96): an engraved trophy, a title and the sentence.
+		var e := EngravedIcon.empty_state("trophy", "No duels yet", "Finish a duel and your record, favourite cards and best streaks will appear here.", "", Callable(), PANEL_W - 96.0)
+		e.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		_list_holder.add_child(e)
 		return
 	var list := VBoxContainer.new()
@@ -162,10 +172,7 @@ func _row(f: Dictionary, shaded: bool) -> Control:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(1, 1, 1, 0.035) if shaded else Color(0, 0, 0, 0)
 	sb.set_corner_radius_all(6)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 4
-	sb.content_margin_bottom = 4
+	UIStyle.pad(sb, "md", "xs")
 	pc.add_theme_stylebox_override("panel", sb)
 	pc.custom_minimum_size = Vector2(0, ROW_H)
 	var h := HBoxContainer.new()
