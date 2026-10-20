@@ -287,6 +287,10 @@ func test_draft_picks_record_offers_with_counts_and_completion() -> void:
 		if i == 0:
 			# 2026-10-18: no draft setup; the record opens with the first pick.
 			assert_str(String(items["draft_%s_d0" % sid]["state"])).is_equal("open")
+	# J30: the record completes when the seat confirms its selections, not on the last pick.
+	assert_str(String(items["draft_%s_d0" % sid]["state"])).is_equal("open")
+	for p in 2:
+		s.submit(p, {"t": "draft_confirm"})
 	var d: Dictionary = items["draft_%s_d0" % sid]["body"]["draft"]
 	assert_str(String(items["draft_%s_d0" % sid]["state"])).is_equal("ready")
 	assert_str(String(d["status"])).is_equal("complete")

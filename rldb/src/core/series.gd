@@ -424,7 +424,7 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 			deck_ready[p] = true
 			note("deck_locked", {"p": p, "source": "custom", "name": ""})
 			_log("%s locks in a custom deck." % names[p])
-		"draft_category", "draft_pick", "draft_basic":
+		"draft_category", "draft_pick", "draft_basic", "draft_confirm":
 			if cfg["deck_mode"] != "draft":
 				return "This series uses custom decks, not a draft."
 			var e := _draft_command(p, cmd)
@@ -458,6 +458,9 @@ func _new_draft() -> Dictionary:
 ##   {"t": "draft_category", "category": c}  open category c (any with picks left)
 ##   {"t": "draft_pick", "index": i}         take card i of the open category's offer
 ##   {"t": "draft_basic", "basic_type": T, "basic_race": R}  change the basic unit (any time)
+##   {"t": "draft_confirm"}                  J30: lock the drafted deck in (every card drafted)
+## J30 (owner, 22 Oct): the last pick only completes the draft; the deck locks in on
+## draft_confirm, so the basic unit can still be changed after every card is drafted.
 func _draft_command(p: int, cmd: Dictionary) -> String:
 	var st: Dictionary = draft[p]
 	match String(cmd["t"]):
@@ -475,8 +478,20 @@ func _draft_command(p: int, cmd: Dictionary) -> String:
 				return "Choose a Type and a Race for your basic unit."
 			st["basic"] = basic
 		"draft_pick":
+			if draft_complete(p):
+				return "Every card is drafted. Confirm your selections."
 			return _draft_pick(p, int(cmd.get("index", -1)))
+		"draft_confirm":
+			if not draft_complete(p):
+				return "Draft every card first (%d of %d drafted)." % [int(st["step"]), int(st["total"])]
+			_finish_draft(p)
 	return ""
+
+
+## J30: true once seat p has drafted every card (its deck locks in on draft_confirm).
+func draft_complete(p: int) -> bool:
+	var st: Dictionary = draft[p]
+	return not st.is_empty() and int(st.get("step", 0)) >= int(st.get("total", 0))
 
 
 func _finish_draft(p: int) -> void:
@@ -546,7 +561,10 @@ func _draft_pick(p: int, index: int) -> String:
 				st["current"] = c
 				break
 	if st["step"] >= st["total"]:
-		_finish_draft(p)
+		# J30: complete, not locked in: the seat confirms (and may still change its basic unit).
+		st["current"] = ""
+		st["offer"] = []
+		_log("%s has drafted every card." % names[p])
 	else:
 		_ensure_offer(p)
 	return ""
@@ -836,12 +854,12 @@ func _draft_view(p: int) -> Dictionary:
 		"basic_copies": int(cfg["draft"]["basic_copies"]), "basic_options": basic_options(),
 		"basic_types": CardDB.ELEMENTS, "basic_races": basic_races(),
 		"labels": DRAFT_LABELS.duplicate(),
-		"step": st["step"], "total": st["total"],
+		"step": st["step"], "total": st["total"], "complete": draft_complete(p),
 		"category": dcat, "category_label": DRAFT_LABELS.get(dcat, dcat.capitalize()),
 		"quota": quota.duplicate(),
 		"composition": draft_composition_text(quota),
 		"offer": st["offer"].map(func(i): return card_summary(i)), "picked": st["picked"].map(func(i): return card_summary(i)),
-		"opponent": {"setup_done": true, "step": opp["step"], "total": opp["total"]}}
+		"opponent": {"setup_done": true, "step": opp["step"], "total": opp["total"], "complete": draft_complete(1 - p)}}
 
 
 ## Card summaries of every basic unit (the Type x Race pickers' previews).

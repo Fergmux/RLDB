@@ -107,7 +107,11 @@ func _waiting(box: VBoxContainer) -> void:
 		{"text": "%s: deck locked in" % String(view["names"][p]), "done": true},
 		{"text": "%s: %s" % [String(view["names"][1 - p]), "deck locked in" if opp_ready else opp_doing], "done": opp_ready},
 	]
-	var wp := WaitPlate.new("Deck locked in", "You will play %s.\nWaiting for your opponent…" % String(view["deck_name"]) if not opp_ready else "You will play %s.\nStarting soon…" % String(view["deck_name"]), chips)
+	# A drafted deck reads "your drafted deck (15 cards)", not its stored name "Drafted deck".
+	var deck_txt := String(view["deck_name"])
+	if String(view.get("deck_mode", "")) == "draft":
+		deck_txt = "your drafted deck (%d cards)" % view.get("deck", []).size()
+	var wp := WaitPlate.new("Deck locked in", "You will play %s.\nWaiting for your opponent…" % deck_txt if not opp_ready else "You will play %s.\nStarting soon…" % deck_txt, chips)
 	box.add_child(wp)
 
 
@@ -301,7 +305,9 @@ func _draft(box: VBoxContainer) -> void:
 	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	strip.add_child(pips)
 	# The draft's progress line is a SECTION header (D3: gold, a hard dark shadow).
-	var pick := UIStyle.label("Pick %d of %d" % [mini(int(dr["step"]) + 1, int(dr["total"])), dr["total"]], 18, UIStyle.GOLD, false, true)
+	var complete := bool(dr.get("complete", false))
+	var line := ("All %d cards drafted" % int(dr["total"])) if complete else ("Pick %d of %d" % [mini(int(dr["step"]) + 1, int(dr["total"])), dr["total"]])
+	var pick := UIStyle.label(line, 18, UIStyle.GOLD, false, true)
 	pick.name = "PickLine"
 	pick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	strip.add_child(pick)
@@ -314,6 +320,12 @@ func _draft(box: VBoxContainer) -> void:
 	# Category folder tabs (the basic unit at the right of the strip) joined to the pane with the offer.
 	var ft := category_tabs(dr)
 	box.add_child(ft)
+	if complete:
+		# J30 (owner, 22 Oct): every card drafted; the deck locks in only on Confirm selections,
+		# so the basic unit can still be changed first.
+		ft.pane.add_child(confirm_pane(dr))
+		_offer_sig = 0
+		return
 	# Review #56: the offer is the screen's one decision, so the cards are large, 48 px apart and
 	# centred in the pane; a hover lifts and tilts a card; a new offer flips in card by card.
 	var row := HBoxContainer.new()
@@ -379,7 +391,8 @@ func category_tabs(dr: Dictionary) -> FolderTabs:
 	ft.select(String(dr["category"]), false)
 	ft.tab_selected.connect(func(key: String): ov.gs.send({"t": "draft_category", "category": key}))
 	var b: Dictionary = dr.get("basic", {})
-	if not b.is_empty() and int(dr.get("basic_copies", 0)) > 0:
+	# J30: once every card is drafted the pane shows the basic unit with its own Change button.
+	if not b.is_empty() and int(dr.get("basic_copies", 0)) > 0 and not bool(dr.get("complete", false)):
 		# Review #58: an F4 chip at 13 px and a small secondary, 24 px from the frame (FolderTabs).
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", UIStyle.sp("md"))
@@ -396,6 +409,94 @@ func category_tabs(dr: Dictionary) -> FolderTabs:
 		row.add_child(change)
 		ft.set_trailing(row)
 	return ft
+
+
+## J30: card size of the basic unit in the draft-complete pane.
+const CONFIRM_CARD := Vector2(176, 264)
+## J30: width of the Confirm selections button.
+const CONFIRM_W := 300.0
+
+
+## J30: the pane shown once every card is drafted: the basic unit's card (with its Change button)
+## beside a summary of the picks per category and the hero "Confirm selections" button, which
+## sends `draft_confirm` and locks the deck in.
+func confirm_pane(dr: Dictionary) -> Control:
+	var gs := ov.gs
+	var center := CenterContainer.new()
+	center.name = "DraftComplete"
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", UIStyle.sp("xxxl"))
+	center.add_child(row)
+	var b: Dictionary = dr.get("basic", {})
+	var copies := int(dr.get("basic_copies", 0))
+	if not b.is_empty() and copies > 0:
+		var bcol := VBoxContainer.new()
+		bcol.add_theme_constant_override("separation", UIStyle.sp("sm"))
+		bcol.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(bcol)
+		var cw := CardWidget.new().setup(MatchView.summary_view(b), "big")
+		cw.name = "BasicCard"
+		cw.custom_minimum_size = CONFIRM_CARD
+		cw.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		cw.right_pressed.connect(gs.inspect.inspect_widget)
+		bcol.add_child(cw)
+		var cap := UIStyle.label("Basic unit \u00d7%d" % copies, 14, UIStyle.TEXT_DIM)
+		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		bcol.add_child(cap)
+		var change := UIStyle.size_button(UIStyle.secondary_button("Change basic unit", 14), "small")
+		change.name = "ChangeBasicComplete"
+		change.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		change.tooltip_text = "Choose a different Type and Race for your basic units before you confirm."
+		change.pressed.connect(func(): _open_picker(dr))
+		bcol.add_child(change)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", UIStyle.sp("md"))
+	col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	col.custom_minimum_size.x = 380.0
+	row.add_child(col)
+	var title := UIStyle.label("Your draft is complete", 24, UIStyle.GOLD, false, true)
+	TitleText.apply(title, TitleText.Tier.SECTION, 24)
+	col.add_child(title)
+	var note := UIStyle.label("Review your picks in the list on the right. You can still change your basic unit; confirm to lock your deck in.", 15, UIStyle.TEXT_DIM, true)
+	note.custom_minimum_size.x = 380.0
+	col.add_child(note)
+	var chips := HFlowContainer.new()
+	chips.name = "DraftedCounts"
+	chips.add_theme_constant_override("h_separation", UIStyle.sp("sm"))
+	chips.add_theme_constant_override("v_separation", UIStyle.sp("sm"))
+	var counts := drafted_counts(dr.get("picked", []))
+	var labels: Dictionary = dr.get("labels", {})
+	for cat in dr.get("categories", []):
+		var n := int(counts.get(cat, 0))
+		var chip := UIStyle.chip("%d %s" % [n, String(labels.get(cat, String(cat).capitalize()))], UIStyle.CATEGORY_COLORS.get(String(cat), UIStyle.BRONZE), 15)
+		chip.custom_minimum_size.y = 28.0
+		chips.add_child(chip)
+	if not b.is_empty() and copies > 0:
+		chips.add_child(UIStyle.chip("%d %s" % [copies, String(b["name"])], UIStyle.type_color(String(b.get("type", ""))), 15))
+	col.add_child(chips)
+	col.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.45), true, 10.0))
+	var total := int(dr.get("total", 0)) + copies
+	var confirm := UIStyle.size_button(UIStyle.primary_button("Confirm selections", 18), "hero")
+	confirm.name = "ConfirmSelections"
+	confirm.custom_minimum_size.x = CONFIRM_W
+	confirm.tooltip_text = "Lock in your %d-card deck. You cannot change it after this." % total
+	confirm.set_meta(Sfx.BUTTON_META, "confirm")
+	confirm.pressed.connect(func(): gs.send({"t": "draft_confirm"}))
+	col.add_child(confirm)
+	return center
+
+
+## J30: the number of drafted cards per draft category (Fusion, Ritual and Arcane count as Extra).
+static func drafted_counts(picked: Array) -> Dictionary:
+	var out := {}
+	for c in picked:
+		var cat := String(c.get("category", ""))
+		if cat in Series.EXTRA_CATEGORIES:
+			cat = "extra"
+		out[cat] = int(out.get(cat, 0)) + 1
+	return out
 
 
 ## Width of a draft offer card for a window `h` px tall (the modal has to fit a short window).
@@ -450,6 +551,8 @@ func _opponent_doing(dr: Dictionary) -> String:
 	var od: Dictionary = dr.get("opponent", {})
 	if od.is_empty():
 		return "drafting…"
+	if bool(od.get("complete", false)):
+		return "has drafted every card, confirming…"   # J30
 	return "is drafting (pick %d of %d)…" % [mini(int(od["step"]) + 1, int(od["total"])), int(od["total"])]
 
 

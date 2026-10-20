@@ -241,7 +241,10 @@ func series_command(s: Series) -> Dictionary:
 			if s.deck_ready[me]:
 				return {}
 			if s.cfg["deck_mode"] == "draft":
-				# The bot keeps the default basic unit and drafts the open category each time.
+				# The bot keeps the default basic unit and drafts the open category each time; J30:
+				# once every card is drafted it confirms at once.
+				if s.draft_complete(me):
+					return {"t": "draft_confirm"}
 				s._ensure_offer(me)
 				return {"t": "draft_pick", "index": rng.randi_range(0, maxi(0, s.draft[me]["offer"].size() - 1))}
 			return {"t": "pick_starter", "index": rng.randi_range(0, s.starters.size() - 1)}   # random deck

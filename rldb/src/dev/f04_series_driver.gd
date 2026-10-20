@@ -23,6 +23,11 @@ func run(main_node: Node, dir: String) -> void:
 	if FileAccess.file_exists(DeckStore.PATH):
 		saved_file = FileAccess.get_file_as_string(DeckStore.PATH)
 	DeckStore._write([])
+	if "--draft-only" in OS.get_cmdline_user_args():
+		# Only the draft screens (J26-J30): -- --f04-series-shots=<dir> --no-steam --draft-only
+		await _draft_phase()
+		_restore_decks(saved_file)
+		return
 	main._start_local({"seed": 4242, "best_of": 3, "deck_mode": "starter", "names": ["Ana", "Ben"]})
 	await _frames(8)
 	host = main.local_host
@@ -222,6 +227,11 @@ func run(main_node: Node, dir: String) -> void:
 	await _shot("series_08_first_player")
 	await _g01_g05_hotseat(loser)
 	await _draft_phase()
+	_restore_decks(saved_file)
+
+
+## Puts the saved-deck file back as it was before the run (or removes the run's), then quits.
+func _restore_decks(saved_file: String) -> void:
 	DeckStore._write([])
 	if saved_file != "":
 		var f := FileAccess.open(DeckStore.PATH, FileAccess.WRITE)
@@ -283,22 +293,54 @@ func _draft_phase() -> void:
 	_view_seat(1)
 	await _frames(10)
 	await _shot("draft_08_seat1")
-	# Seat 0 finishes drafting; it then waits for seat 1.
+	# Seat 0 drafts every card. J30: the deck is not locked in yet; the Confirm selections pane shows.
 	_view_seat(0)
 	var guard := 0
-	while not host.series.deck_ready[0] and guard < 60:
+	while not host.series.draft_complete(0) and guard < 60:
 		host.handle(0, {"t": "draft_pick", "index": 0})
 		guard += 1
+	await _frames(12)
+	_check("J30 the last pick does not lock the deck in", not host.series.deck_ready[0])
+	var confirm := _find_button(ov.overlay_box, "Confirm selections")
+	_check("J30 Confirm selections shown once every card is drafted", confirm != null and not confirm.disabled)
+	_check("J30 draft modal inside the window", get_viewport().get_visible_rect().grow(1).encloses(ov.overlay.get_global_rect()), str(ov.overlay.get_global_rect()))
+	await _shot("draft_08b_complete")
+	# J30: the basic unit can still change after every card is drafted.
+	var chg2 := _find_button(ov.overlay_box, "Change basic unit")
+	_check("J30 Change basic unit on the complete pane", chg2 != null)
+	if chg2 != null:
+		chg2.pressed.emit()
+	await _frames(10)
+	var pk2 := _find_picker(gs)
+	if pk2 != null:
+		pk2.choose("Light", "Warrior")
+		await _frames(4)
+		var use2 := _find_button(dv._picker_dim, "Use ")
+		if use2 != null:
+			use2.pressed.emit()
+	await _frames(12)
+	_check("J30 basic changed after the draft is complete", int(host.series.draft[0]["basic"]) == Series.basic_for("Light", "Warrior") and not host.series.deck_ready[0])
+	await _shot("draft_08c_complete_basic_changed")
+	confirm = _find_button(ov.overlay_box, "Confirm selections")
+	if confirm != null:
+		confirm.pressed.emit()
 	await _frames(10)
 	_check("F06 seat 0 deck drafted", host.series.deck_ready[0] and host.series.decks[0].size() == 15, str(host.series.decks[0].size()))
-	_check("F06-06 three chosen basics", host.series.decks[0].count(Series.basic_for("Dark", "Dragon")) == 3)
+	_check("F06-06 three chosen basics", host.series.decks[0].count(Series.basic_for("Light", "Warrior")) == 3)
 	_view_seat(0)        # hot-seat follows the seat that still has to act; look at seat 0's wait
 	await _frames(6)
 	await _shot("draft_09_waiting")
 	# Rewards: Change basic units after a game.
-	while not host.series.deck_ready[1] and guard < 200:
+	while not host.series.draft_complete(1) and guard < 200:
 		host.handle(1, {"t": "draft_pick", "index": 0})
 		guard += 1
+	# J30: seat 1 has drafted every card but not yet confirmed; seat 0 waits on it.
+	_view_seat(0)
+	await _frames(8)
+	await _shot("draft_09b_seat1_complete")   # hot-seat shows the seat that still has to act
+	_check("J30 seat 0 sees the other seat confirming", bool(host.series.view_for(0)["draft"]["opponent"]["complete"]) and dv._opponent_doing(host.series.view_for(0)["draft"]).contains("confirming"))
+	_check("J30 the series waits for the other seat's confirm", host.series.stage == Series.STAGE_DECKS)
+	host.handle(1, {"t": "draft_confirm"})
 	await _frames(6)
 	host.handle(host.series.game.active, {"t": "concede"})
 	await _frames(6)

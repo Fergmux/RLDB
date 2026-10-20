@@ -134,9 +134,10 @@ func test_draft_builds_deck_from_category_quotas() -> void:
 	s.setup({"seed": 5, "deck_mode": "draft"})
 	for p in 2:
 		var guard := 0
-		while not s.deck_ready[p] and guard < 50:
+		while not s.draft_complete(p) and guard < 50:
 			assert_str(s.submit(p, {"t": "draft_pick", "index": 0})).is_empty()
 			guard += 1
+		assert_str(s.submit(p, {"t": "draft_confirm"})).is_empty()   # J30
 	assert_str(s.stage).is_equal(Series.STAGE_GAME)
 	assert_int(s.decks[0].size()).is_equal(15)   # J26: 3 basic copies + 9 main picks + 3 extra
 
@@ -144,9 +145,10 @@ func test_draft_builds_deck_from_category_quotas() -> void:
 func _draft_all(s: Series) -> void:
 	for p in 2:
 		var guard := 0
-		while not s.deck_ready[p] and guard < 100:
+		while not s.draft_complete(p) and guard < 100:
 			assert_str(s.submit(p, {"t": "draft_pick", "index": 0})).is_empty()
 			guard += 1
+		assert_str(s.submit(p, {"t": "draft_confirm"})).is_empty()   # J30
 
 
 func test_f03_10_configured_draft_counts_are_used_and_shown() -> void:
