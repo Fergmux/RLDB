@@ -96,7 +96,7 @@ func _steps() -> void:
 	await _shot("01_board_start")
 	_check_proportions("F02-03 proportions at start")
 	var pv: Dictionary = gs.view["match"]["players"][a]
-	_check("F02-06 two-AP start shows two slots", PlayerPlate.ApGems.capacity_for(int(pv["ap"]), int(pv["ap_start"]), int(pv["ap_peak"])) == 2,
+	_check("F02-06 two-AP start shows two slots", ApGemRow.capacity_for(int(pv["ap"]), int(pv["ap_start"]), int(pv["ap_peak"])) == 2,
 		"ap %s start %s peak %s" % [pv["ap"], pv["ap_start"], pv["ap_peak"]])
 	_check("F02-11 hand unit highlighted as ready", _w_hand(uids["h_water"]).is_ready_on())
 	_check("F02-11 Defense unit not advertised in Main 1", not _w_slot(o, "unit", 1).is_ready_on())
@@ -146,14 +146,14 @@ func _steps() -> void:
 	var dw := _w_slot(a, "unit", 3)
 	_check("F02-03 Defense card rotated 3:2", dw.rotated and dw.size.x > dw.size.y, str(dw.size))
 	pv = gs.view["match"]["players"][a]
-	_check("F02-06 spend one: 1 filled + 1 spent of 2", PlayerPlate.ApGems.capacity_for(int(pv["ap"]), int(pv["ap_start"]), int(pv["ap_peak"])) == 2 and int(pv["ap"]) == 1)
+	_check("F02-06 spend one: 1 filled + 1 spent of 2", ApGemRow.capacity_for(int(pv["ap"]), int(pv["ap_start"]), int(pv["ap_peak"])) == 2 and int(pv["ap"]) == 1)
 	await _shot("05_defense_rotated_ap_spent")
 	# Extra AP above the allowance (display expands, no cap).
 	m.change_ap(a, 4, " (dev)")
 	host.broadcast()
 	await _wait(0.6)
 	pv = gs.view["match"]["players"][a]
-	_check("F02-06 AP above allowance expands slots", PlayerPlate.ApGems.capacity_for(int(pv["ap"]), int(pv["ap_start"]), int(pv["ap_peak"])) == 5, "ap %s peak %s" % [pv["ap"], pv["ap_peak"]])
+	_check("F02-06 AP above allowance expands slots", ApGemRow.capacity_for(int(pv["ap"]), int(pv["ap_start"]), int(pv["ap_peak"])) == 5, "ap %s peak %s" % [pv["ap"], pv["ap_peak"]])
 	await _shot("05b_ap_above_allowance")
 	# F02-04 short ability label + F02-07 direct board targeting.
 	await _click(_slot_rect(a, "unit", 4).get_center())

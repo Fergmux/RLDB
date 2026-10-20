@@ -116,6 +116,10 @@ var max_hp: int = DEFAULT_MAX_HP:
 		else:
 			_max_t0 = -INF
 		_refresh()
+## The number shown now (PlayerPlate.HpBar compatibility: `shown`).
+var shown: float:
+	get:
+		return shown_number()
 ## White pulse over the glass (PlayerPlate.pulse tweens it 0 -> 0.6 -> 0).
 var flash: float = 0.0:
 	set(v):
@@ -414,7 +418,9 @@ func set_hp(v: int, snap: bool = false) -> void:
 	var t := _now()
 	var level := liquid_level(t)
 	var number := shown_number(t)
-	var old := hp
+	# The value the vial is showing (normally `hp`; an effect that held the vial at an earlier value
+	# and set `hp` back to the real one is measured from what is shown, so its blow still animates).
+	var old := roundi(_settled_level) if _has_value else hp
 	hp = v
 	if snap or not _has_value or not is_inside_tree():
 		_has_value = true
@@ -701,8 +707,11 @@ func _step_shake(t: float) -> void:
 		off = Vector2(sin(e * 95.0), cos(e * 71.0) * 0.5) * SHAKE_PX * decay * decay
 	else:
 		_shake_t0 = -INF
-	_body.position = off
-	_over.position = off
+	# A shake target that contains the vial already carries it: the vial's own layers stay put then,
+	# so the glass never moves twice as far as its plate.
+	var carried := shake_target != null and is_instance_valid(shake_target) and shake_target.is_ancestor_of(self)
+	_body.position = Vector2.ZERO if carried else off
+	_over.position = Vector2.ZERO if carried else off
 	if shake_target != null and is_instance_valid(shake_target):
 		shake_target.position = _shake_target_base + off
 

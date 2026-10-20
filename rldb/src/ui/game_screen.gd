@@ -38,6 +38,8 @@ var banner_layer: Control
 var hover_layer: Control
 ## Targeting arrow layer.
 var arrow: ArrowLayer
+## Red screen-edge pulse on the struck plate's side for a big hit (D4, HpVial.big_hit).
+var hit_vignette: HpVial.HitVignette
 ## Hot-seat: the seat switch waits until this time (msec) so an animation that belongs to the
 ## current seat (end-of-turn discard) finishes on its own screen.
 var fx_hold_until: int = 0
@@ -153,6 +155,13 @@ func _ready() -> void:
 	add_child(arrow)
 	fx_layer = passive_layer()
 	fx_layer.z_index = UiLayers.FX
+	hit_vignette = HpVial.HitVignette.new()
+	hit_vignette.z_index = UiLayers.FX
+	add_child(hit_vignette)
+	for pl in board.plates:
+		var plate: PlayerPlate = pl
+		plate.hp_bar.big_hit.connect(func(_amount: int) -> void:
+			hit_vignette.pulse(plate.get_global_rect().get_center().x < get_global_rect().get_center().x))
 	overlays.build_pause()
 	overlays.build_modals()
 	menu.build_popups()
@@ -288,6 +297,7 @@ func _on_view(v: Dictionary) -> void:
 	if not spots.is_empty() and not prev_mv.is_empty():
 		_hold_for_spotlight(spots, events.filter(func(e): return e["k"] != "spotlight"))
 		return
+	_claim_ap_sounds(events)
 	render_all()
 	prompt.show_log_toasts()
 	_maybe_coin_flip()
@@ -332,10 +342,21 @@ func _release_held() -> void:
 	_held_gen += 1
 	mv = h["mv"]
 	prev_mv = h["prev"]
+	_claim_ap_sounds(h["events"])
 	render_all()
 	prompt.show_log_toasts()
 	if not (h["events"] as Array).is_empty():
 		fx.play(h["events"], h["prev"])
+
+
+## D6: the AP changes the effects announce ("ap" fx, FxPlayer plays ap_gain / ap_loss) are claimed on
+## the plates before they render, so their gems stay silent for them: one sound per AP change.
+func _claim_ap_sounds(events: Array) -> void:
+	if mv.is_empty():
+		return
+	for e in events:
+		if String(e.get("k", "")) == "ap" and int(e.get("p", -1)) in [0, 1]:
+			plate_of(int(e["p"])).claim_ap_sound()
 
 
 ## Game 1 of a series starts with a coin flip naming who goes first (once per series).

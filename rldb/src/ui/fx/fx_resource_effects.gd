@@ -27,8 +27,7 @@ func hp(p: int, d: int, quiet: bool = false) -> void:
 	if not quiet:
 		_fx.float_text(("+%d" % d) if heal else ("%d" % d), UIStyle.GOOD if heal else Color("ff6b5e"), pl.hp_anchor(), 28, 22.0, 0.7)
 	pl.pulse()
-	if not heal:
-		_fx.shake(pl, 5.0)
+	# The Vial of Life shakes its plate itself on damage (HpVial.shake_target), so no second shake here.
 	_hp_flourish(pl, heal, absi(d))
 
 
@@ -37,11 +36,13 @@ func ap(p: int, d: int) -> void:
 	if d == 0:
 		return
 	var pl: PlayerPlate = _fx.screen.plate_of(p)
-	_fx.float_text(("%+d AP" % d), UIStyle.COST_COLORS["ap"] if d > 0 else AP_LOSS_COL.lightened(0.3), pl.ap_anchor(), 17, 22.0, 0.7, true, false)
+	# Floats in the free space right of the "AP x/y" label (PlayerPlate.ap_anchor), rising only a little
+	# so it never crosses the label or the vial above it.
+	_fx.float_text(("%+d AP" % d), UIStyle.COST_COLORS["ap"] if d > 0 else AP_LOSS_COL.lightened(0.3), pl.ap_anchor(), 17, 10.0, 0.8, true, false)
 	_ap_flourish(pl, d > 0)
 
 
-## HP flourish on `pl`'s bar: a heal sends green motes up from it under a bright sweep running along
+## HP flourish on `pl`'s vial: a heal sends green motes up from it under a bright sweep running along
 ## the bar; damage throws red sparks off the end of the fill. Bigger changes throw more.
 func _hp_flourish(pl: PlayerPlate, heal: bool, amount: int) -> void:
 	var r := pl.hp_bar.get_global_rect()
@@ -50,7 +51,7 @@ func _hp_flourish(pl: PlayerPlate, heal: bool, amount: int) -> void:
 		_fx.burst(FxBurst.Kind.EMBER, Vector2(r.position.x + r.size.x * 0.5, r.position.y + 4.0), HEAL_COL, n, r.size.x * 0.55, 0.8)
 		_sweep(r, HEAL_COL)
 	else:
-		var frac := clampf(float(pl.hp_bar.hp) / float(maxi(1, pl.hp_bar.max_hp)), 0.0, 1.0)
+		var frac := HpVial.fraction(float(pl.hp_bar.hp), float(pl.hp_bar.max_hp))
 		var edge := Vector2(r.position.x + r.size.x * frac, r.get_center().y)
 		_fx.burst(FxBurst.Kind.SPARK, edge, HURT_COL.lightened(0.2), n, 40.0 + float(amount), 0.4)
 		_fx.burst(FxBurst.Kind.EMBER, edge, Color("ffb08a"), maxi(4, n / 2), 36.0, 0.55)

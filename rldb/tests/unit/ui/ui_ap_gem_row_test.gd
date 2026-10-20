@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## WP-3 / D4: the topaz AP gem row. The F02-06 slot policy (the same as PlayerPlate.ApGems), the
+## WP-3 / D4: the topaz AP gem row. The F02-06 slot policy (F02-06, the plate's former ApGems), the
 ## idle sockets before the first turn, the pop curve and the gain / spend signals on an injected clock.
 
 var _rm: bool
@@ -32,14 +32,17 @@ func _row(ap: int, start: int, peak: int) -> ApGemRow:
 	return g
 
 
-func test_policy_matches_the_plate_gems() -> void:
-	for c in [[2, 2, 2], [1, 2, 2], [0, 2, 2], [3, 2, 4], [5, 2, 5], [14, 2, 14], [0, 0, 0], [-1, 0, 0]]:
-		var a: int = c[0]
-		var s: int = c[1]
-		var p: int = c[2]
-		assert_int(ApGemRow.capacity_for(a, s, p)).is_equal(PlayerPlate.ApGems.capacity_for(a, s, p))
-		assert_int(ApGemRow.filled_for(a, s, p)).is_equal(PlayerPlate.ApGems.filled_for(a, s, p))
-		assert_int(ApGemRow.spent_for(a, s, p)).is_equal(PlayerPlate.ApGems.spent_for(a, s, p))
+func test_policy_matches_the_f02_06_slot_rule() -> void:
+	# [ap, start, peak] -> [capacity, filled, spent] (F02-06, formerly PlayerPlate.ApGems).
+	var cases := [[[2, 2, 2], [2, 2, 0]], [[1, 2, 2], [2, 1, 1]], [[0, 2, 2], [2, 0, 2]], [[3, 2, 4], [4, 3, 1]],
+		[[5, 2, 5], [5, 5, 0]], [[14, 2, 14], [14, 14, 0]], [[0, 0, 0], [0, 0, 0]], [[-1, 0, 0], [0, 0, 0]]]
+	for c in cases:
+		var a: int = c[0][0]
+		var s: int = c[0][1]
+		var p: int = c[0][2]
+		assert_int(ApGemRow.capacity_for(a, s, p)).is_equal(int(c[1][0]))
+		assert_int(ApGemRow.filled_for(a, s, p)).is_equal(int(c[1][1]))
+		assert_int(ApGemRow.spent_for(a, s, p)).is_equal(int(c[1][2]))
 
 
 func test_before_the_first_turn_shows_two_idle_sockets() -> void:

@@ -207,6 +207,17 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 		serpent_owned[int(serpent["hp"])] = true
 		for j in serpent["destroys"]:
 			serpent_owned[int(j)] = true
+	if not lethal.is_empty() and (serpent.is_empty() or int(serpent["hp"]) != int(lethal["hp"])):
+		# D4: the loser's vial holds its value until the killing blow lands, then shatters (FxStrike).
+		var lp: PlayerPlate = screen.plate_of(int(lethal["loser"]))
+		if is_instance_valid(lp) and not lp.hp_held():
+			# The HP before the batch (the damage can exceed what was left); else the real HP plus the blow.
+			var before := lp.hp_bar.hp + int(lethal["d"])
+			var pls: Array = prev_mv.get("players", [])
+			if int(lethal["loser"]) < pls.size():
+				before = int(pls[int(lethal["loser"])].get("hp", before))
+			lp.hold_hp(before)
+			add_cleanup(func() -> void: if is_instance_valid(lp): lp.release_hp(true))
 	var mats := {}   # player -> material events of the special summon that follows (F03-17 / D8)
 	for i in events.size():
 		var e: Dictionary = events[i]
