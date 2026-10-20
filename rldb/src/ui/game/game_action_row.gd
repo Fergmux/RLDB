@@ -185,7 +185,9 @@ func run_action(uid: int, a: Dictionary) -> void:
 	clear()
 	var it := gs.selection.item_for_uid(uid)
 	var hv := gs.hover.hv
-	if not it.is_empty() and not (not hv.is_empty() and hv["uid"] == uid):
+	if not it.is_empty() and it["kind"] == "hand":
+		gs.hover.release_hand(uid)          # D2: back to normal size at once, off the trap zones
+	elif not it.is_empty() and not (not hv.is_empty() and hv["uid"] == uid):
 		gs.hover.unlift(it)
 	Sfx.play("confirm")
 	gs.send(cmd)

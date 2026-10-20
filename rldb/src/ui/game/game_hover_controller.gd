@@ -41,13 +41,35 @@ func zone_choice() -> bool:
 	return not pd.is_empty() and bool(pd.get("mine", false)) and String(pd.get("kind", "")) == "slot"
 
 
+## D2: uid of the hand card being summoned / set while its zone is chosen (-1: none). That card stays at
+## its normal size for the whole choice so its hover lift never covers the zones being picked.
+func placing_hand_uid() -> int:
+	if not zone_choice():
+		return -1
+	var pd := gs.pending()
+	var uid := int(pd.get("placing_uid", gs.acting_uid))
+	return uid if gs.hand.items.has(uid) else -1
+
+
+## D2: drops the lift of hand card `uid` at once (it was just chosen to be summoned or set).
+func release_hand(uid: int) -> void:
+	if not hv.is_empty() and int(hv.get("uid", -9)) == uid:
+		clear()
+	elif gs.hand.items.has(uid):
+		var it: Dictionary = gs.hand.items[uid]
+		unlift(make_item("h:%d" % uid, it["widget"], it["holder"], uid, "hand", true))
+
+
 ## Visible card under global point m (hand cards topmost first), skipping `exclude_key`.
 ## `field`: false leaves the board's cards out (F06 zone choice).
 func items_under(m: Vector2, exclude_key: String, field: bool = true) -> Dictionary:
 	var hand := gs.hand
+	var placing := placing_hand_uid()
 	# Hand cards: topmost (last) first.
 	for i in range(hand.order.size() - 1, -1, -1):
 		var uid: int = hand.order[i]
+		if uid == placing:
+			continue
 		var it: Dictionary = hand.items[uid]
 		var h: Control = it["holder"]
 		if "h:%d" % uid != exclude_key and h.get_global_rect().has_point(m):
@@ -73,6 +95,10 @@ func update(m: Vector2) -> void:
 	if gs.hover_blocked():
 		if not hv.is_empty():
 			clear()
+		return
+	var placing := placing_hand_uid()
+	if placing != -1 and not hv.is_empty() and int(hv.get("uid", -9)) == placing:
+		clear()          # D2: the card being summoned shrinks back at once, even under a forced hover
 		return
 	var prompt := gs.prompt
 	var on_row := gs.action_row.stack_rect().grow(3.0).has_point(m) or (prompt.tray.visible and prompt.tray.get_global_rect().has_point(m)) \
