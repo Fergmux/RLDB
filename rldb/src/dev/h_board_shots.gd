@@ -87,6 +87,7 @@ func _stage() -> void:
 	TB.card(m, a, 1, "spent")
 	TB.card(m, a, 110, "spent")
 	TB.card(m, a, 172, "extra")
+	TB.set_card(m, a, 49, 0)   # an own face-down set card: its name plate is the pile plates' model (H15)
 	# The opponent's Draw pile runs dry (its cards go to Exhaust): an empty pile beside full ones.
 	var od: Array = m.players[o]["draw"]
 	for uid in od.duplicate():

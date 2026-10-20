@@ -5,9 +5,12 @@ extends Control
 ## pixels above it. Used for Draw, Extra, Spent and Exhaust beside the unit zones. Clicking emits
 ## `pressed` when `clickable`.
 ##
-## Design review #24: the count sits on a struck bronze medallion (an embossed number on a coin) at
-## the top card's centre, and the pile's name on an F4 bronze plate at its foot. An empty pile is an
-## inlaid recess with the engraved, dashed outline of a card back and a smaller medallion showing 0.
+## Design review #24: the count sits on a struck bronze medallion (an embossed number on a coin). H4
+## (owner feedback 2026-10-21): it is centred on the top card itself, ignoring the name plate, and is
+## exactly the size of the ring on the card back (CardBack.draw_art), so it sits in that ring. H15: the
+## pile's name is on the same plate as the name of a face-down set card (CardFaceParts.name_plate), at
+## the pile's foot. An empty pile is an inlaid recess with the engraved, dashed outline of a card back;
+## H18: its medallion keeps the size and place it has on a full pile (only toned down), showing 0.
 ## The number counts to a new value (`count` token) and the medallion pulses when it changes.
 
 signal pressed(zone: String)
@@ -20,22 +23,24 @@ const CARDS_PER_LAYER := 3.0
 const RADIUS := 6
 ## Base width the card-back art is authored at (CardWidget "back" kind).
 const BACK_BASE_W := 90.0
-## Count font size (a full pile; an empty one uses COUNT_FS_EMPTY on its 28 px medallion).
-const COUNT_FS := 20
-const COUNT_FS_EMPTY := 15
-## Medallion radius (px): a full pile's, an empty pile's (28 px across).
-const MEDAL_R := 18.0
-const MEDAL_R_EMPTY := 14.0
+## Count font size as a share of the medallion radius.
+const COUNT_FS_K := 1.1
+## The card back's ring around its emblem (CardBack.draw_art): the art inset (base px), the emblem
+## size as a share of the inset art's short side and the ring's share of that size.
+const BACK_INSET := 5.0
+const BACK_EMBLEM_K := 0.34
+const BACK_RING_K := 0.8
 ## The medallion's bronze: face (top-lit to bottom), rim and the dark number struck into it.
 const MEDAL_TOP := Color("c79a52")
 const MEDAL_BOTTOM := Color("6e4f26")
 const MEDAL_RIM := Color("f0cf7a")
 const MEDAL_INK := Color("2a1a08")
-## Name plate: height, its largest / smallest label font size and the F4 plate colour.
-const PLATE_H := 20.0
-const TITLE_FS := 11
-const TITLE_FS_MIN := 8
-const PLATE_COL := Color("b08446")
+## Name plate (H15: the face-down set card's, CardLayouts.draw_set_name): its height and side inset
+## and the gap below it (base px), its largest / smallest label font size (base px) and the bronze stripe.
+const PLATE_H := 22.0
+const PLATE_INSET := 5.0
+const PLATE_FS := 10.5
+const PLATE_FS_MIN := 9.0
 ## Empty pile: the engraved dashed outline (bronze 30%), its dash and gap (px).
 const OUTLINE := Color(0.478, 0.353, 0.188, 0.3)
 const DASH := 6.0
@@ -62,7 +67,8 @@ var _hover: bool = false
 var _pop: float = 0.0: set = _set_pop
 var _pop_tw: Tween
 var _count_tw: Tween
-var _plate_box: DepthBox
+## Drawing context for the shared card-part painters (the name plate).
+var _pt: CardPainter
 
 
 func _init() -> void:
@@ -70,7 +76,7 @@ func _init() -> void:
 	set_process(false)   # only while the ready glow animates
 	mouse_entered.connect(func() -> void: _hover = true; queue_redraw())
 	mouse_exited.connect(func() -> void: _hover = false; queue_redraw())
-	_plate_box = UIStyle.chip_style(PLATE_COL, 4)
+	_pt = CardPainter.new(self)
 
 
 ## Updates the count, clickability and ready glow; a changed count counts up or down on the medallion and
@@ -139,6 +145,40 @@ func top_center() -> Vector2:
 	return get_global_rect().get_center() - Vector2(0, maxi(_layers() - 1, 0) * LAYER_STEP)
 
 
+## Scale of the card-back geometry for a pile `w` px wide (the back art's base width).
+static func back_scale(w: float) -> float:
+	return w / BACK_BASE_W
+
+
+## Radius of the ring on a card back drawn in `card` (CardBack.draw_art): the medallion's radius.
+static func medal_radius(card: Rect2) -> float:
+	var inner := card.grow(-BACK_INSET * back_scale(card.size.x))
+	return minf(inner.size.x, inner.size.y) * BACK_EMBLEM_K * BACK_RING_K
+
+
+## The top card's rect: the pile rect raised by every back layer above the first (the pile rect
+## itself for an empty pile and a one-layer pile).
+func top_rect() -> Rect2:
+	var r := Rect2(Vector2.ZERO, size)
+	r.position.y -= float(maxi(_layers() - 1, 0)) * LAYER_STEP
+	return r
+
+
+## Local centre and radius of the count medallion: {"c": Vector2, "r": float}. Always the centre of the
+## top card and the back's ring radius, full or empty (H4 / H18).
+func medal_geometry() -> Dictionary:
+	var top := top_rect()
+	return {"c": top.get_center(), "r": medal_radius(top)}
+
+
+## Local rect of the name plate at the foot of the top card (H15).
+func plate_rect() -> Rect2:
+	var top := top_rect()
+	var s := back_scale(top.size.x)
+	var h := PLATE_H * s
+	return Rect2(top.position.x + PLATE_INSET * s, top.end.y - h - PLATE_INSET * s, top.size.x - 2.0 * PLATE_INSET * s, h)
+
+
 ## Number of back layers drawn for the current count (0 = empty pile).
 func _layers() -> int:
 	if count <= 0:
@@ -165,8 +205,7 @@ func _draw() -> void:
 		draw_style_box(b, r)
 		if i == n - 1:
 			CardBack.draw_art(self, r, r.size.x / BACK_BASE_W)   # the same back as every card
-	var top := card
-	top.position.y -= float(maxi(n - 1, 0)) * LAYER_STEP
+	var top := top_rect()
 	if _hover and clickable:
 		var h := StyleBoxFlat.new()
 		h.draw_center = false
@@ -184,9 +223,10 @@ func _draw() -> void:
 		# Same animated glow and breathing badge as a ready CardWidget (F03-21, #25).
 		CardOverlays.ready_glow(self, top, 9.0, 1.0, CardOverlays.ready_pulse())
 		CardOverlays.ready_badge_draw(self, top, 1.0, CardOverlays.ready_pulse())
-	var c := top.get_center() - Vector2(0, PLATE_H * 0.35)
-	medallion(self, c, MEDAL_R if n > 0 else MEDAL_R_EMPTY, displayed_count(), COUNT_FS if n > 0 else COUNT_FS_EMPTY, 1.0 + 0.16 * _pop, n == 0)
-	_draw_plate(top)
+	var mg := medal_geometry()
+	var mr: float = mg["r"]
+	medallion(self, mg["c"], mr, displayed_count(), roundi(mr * COUNT_FS_K), 1.0 + 0.16 * _pop, n == 0)
+	_draw_plate()
 
 
 # An empty pile: an inlaid recess (as an empty zone, #22) with the engraved dashed outline of a card.
@@ -252,25 +292,10 @@ static func medallion(ci: CanvasItem, c: Vector2, r: float, num: int, fs: int, k
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-# The F4 bronze name plate at the foot of the top card.
-func _draw_plate(top: Rect2) -> void:
-	var pr := Rect2(Vector2(top.position.x + 5.0, top.end.y - PLATE_H - 5.0), Vector2(top.size.x - 10.0, PLATE_H))
-	var sh := StyleBoxFlat.new()
-	sh.bg_color = Color(0, 0, 0, 0)
-	sh.shadow_color = Color(0, 0, 0, 0.5)
-	sh.shadow_size = 3
-	sh.shadow_offset = Vector2(0, 1)
-	sh.set_corner_radius_all(4)
-	draw_style_box(sh, pr)
-	draw_style_box(UIStyle.flat(Color(0.06, 0.05, 0.04, 0.92), Color(0, 0, 0, 0), 0, 4), pr)
-	draw_style_box(_plate_box, pr)
-	var tf := UIStyle.font_display(600)
-	var tfs := TITLE_FS
-	var label := title.to_upper()
-	while tfs > TITLE_FS_MIN and tf.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x > pr.size.x - 8:
-		tfs -= 1
-	var tw := tf.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x
-	var base_y := pr.position.y + PLATE_H / 2.0 + (tf.get_ascent(tfs) - tf.get_descent(tfs)) / 2.0
-	var tp := Vector2(pr.position.x + (pr.size.x - tw) / 2.0, base_y)
-	draw_string(tf, tp + Vector2(0, 1), label, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(0, 0, 0, 0.8))
-	draw_string(tf, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, UIStyle.TEXT)
+# H15: the face-down set card's name plate (dark metal plate, gold rim, bronze stripe, Cinzel name) at
+# the foot of the top card, scaled like the back art.
+func _draw_plate() -> void:
+	var pr := plate_rect()
+	_pt.s = back_scale(size.x)
+	_pt.view = {"name": title}
+	CardFaceParts.name_plate(_pt, pr, PLATE_FS, 0.0, 0.0, UIStyle.CATEGORY_COLORS.get("", UIStyle.BRONZE), PLATE_FS_MIN, true)
