@@ -194,11 +194,11 @@ func _build_stats(c: Dictionary) -> void:
 	row.add_child(_stat_tile("DEF", c.get("def"), c.get("printed_def")))
 	var flags := _flow()
 	if c.get("zone", "") == "unit":
-		flags.add_child(_chip("Attack stance" if c.get("stance", "atk") == "atk" else "Defense stance", UIStyle.SELECT))
+		flags.add_child(_chip("Attack stance" if c.get("stance", "atk") == "atk" else "Defense stance", UIStyle.STATE_STEEL))
 		if c.get("protected", false):
 			flags.add_child(_chip("Protected", UIStyle.GOOD))
 		if c.get("protecting", false):
-			flags.add_child(_chip("Protecting", UIStyle.SELECT))
+			flags.add_child(_chip("Protecting", UIStyle.STATE_STEEL))
 		var cu = c.get("controlled_until", -1)
 		if cu != null and int(cu) != -1:
 			flags.add_child(_chip("Controlled until end of turn %d" % int(cu), UIStyle.BAD))

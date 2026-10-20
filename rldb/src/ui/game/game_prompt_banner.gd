@@ -70,6 +70,10 @@ const SKIP_TIP := "Let this one go. You are asked again at the next chance to re
 const PASS_TURN_TIP := "Stop offering me Traps until this turn ends."
 ## Prompt kinds whose options are a vertical list (accept first, decline last) rather than a flow.
 const LIST_KINDS := ["trap_response", "confirm", "order"]
+## Stance answers (#34): full-width 44 px plates with the card badge glyph, Attack in the ember
+## family and Defense in steel, so the two answers read apart at a glance.
+const STANCE_FAMILY := {"Attack stance": "danger", "Defense stance": "steel"}
+const STANCE_H := 44.0
 ## G09: gap between a card and the toast about it, the toast pointer's length, its fade-in (s), and
 ## how long after a command a refusal is still taken to be about that command's card (ms).
 const TOAST_GAP := 10.0   # clears the ready badge over a board card
@@ -90,6 +94,9 @@ var banner_title: Label
 var banner_sub: RichTextLabel
 ## Banner buttons (skip, confirm ...).
 var banner_btns: HFlowContainer
+## Row under the buttons holding the Cancel link (design review #34: the escape hatch is a text
+## link, 16 px under the answers, not a button of the same weight).
+var cancel_row: HBoxContainer
 ## Banner flow of option buttons.
 var banner_flow: HFlowContainer
 ## Grid of a Type choice's buttons (a direct child of the panel body, hidden otherwise). Its column
@@ -207,6 +214,10 @@ func build() -> void:
 	banner_btns.add_theme_constant_override("h_separation", 6)
 	banner_btns.add_theme_constant_override("v_separation", 6)
 	bcol.add_child(banner_btns)
+	cancel_row = HBoxContainer.new()
+	cancel_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	cancel_row.visible = false
+	bcol.add_child(cancel_row)
 	# F02-10 pile tray: cards offered only for this choice; click a card to choose it.
 	tray = HousePanel.new("Choose a card", "", Vector2(TRAY_PAD, TRAY_PAD), 8)
 	tray.visible = false
@@ -755,6 +766,8 @@ func _render_banner() -> void:
 	ctx_banner.visible = on
 	_animate_banner(on, int(pd.get("id", -1)) if on else -1)
 	GameUi.clear(banner_btns)
+	GameUi.clear(cancel_row)
+	cancel_row.visible = false
 	GameUi.clear(banner_flow)
 	banner_flow.visible = false
 	GameUi.clear(banner_list)
@@ -800,7 +813,7 @@ func _render_banner() -> void:
 	var type_choice := is_type_choice(pd)
 	if type_choice and not pick:
 		row = type_grid
-	elif not pick and (String(pd["kind"]) in LIST_KINDS or _has_decline(pd)):
+	elif not pick and (String(pd["kind"]) in LIST_KINDS or _has_decline(pd) or String(pd["kind"]) == "stance"):
 		row = banner_list
 	var declines: Array[Button] = []
 	for o in pd["options"]:
@@ -818,9 +831,11 @@ func _render_banner() -> void:
 			b = UIStyle.primary_button(label, 14)
 		elif String(o["label"]) == EffectEngine.TRAP_PASS_TURN:
 			b = UIStyle.wine_button(label, 14)        # D13: the third, "stand down" answer
+		elif STANCE_FAMILY.has(String(o["label"])):
+			b = stance_button(label, String(o["label"]))
 		else:
 			b = UIStyle.button(label, 14)
-		b.custom_minimum_size = Vector2(0, OPTION_H + (6 if type_choice else 0))
+		b.custom_minimum_size = Vector2(0, maxf(b.custom_minimum_size.y, OPTION_H + (6 if type_choice else 0)))
 		b.set_meta("option", idx)
 		b.pressed.connect(gs.selection.pick_option.bind(idx))
 		b.mouse_entered.connect(func(): gs.targeting.hover_opt = idx)
@@ -864,10 +879,11 @@ func _render_banner() -> void:
 	if type_choice:
 		even_type_widths(row)
 	if pd["cancellable"] and not gs.view.has("tutorial"):   # a forced tutorial step has no Cancel button
-		var x := UIStyle.button("Cancel", 14)
-		x.custom_minimum_size = Vector2(0, OPTION_H)
+		var x := TextLink.make("Cancel", 13)
+		x.name = "CancelLink"
 		x.pressed.connect(gs.selection.cancel)
-		banner_btns.add_child(x)
+		cancel_row.add_child(x)
+		cancel_row.visible = true
 	place_banner()
 
 
@@ -1066,6 +1082,45 @@ static func _contrast(a: Color, b: Color) -> float:
 ## Fill of a Type button: the Type colour at `v` of its brightness and 80% of its saturation.
 static func type_fill(col: Color, v: float) -> Color:
 	return Color.from_hsv(col.h, col.s * 0.8, col.v * v)
+
+
+## A stance answer (#34): `label` on a full-width 44 px plate in its STANCE_FAMILY colour with the
+## card's stance glyph (the ATK diamond or the DEF shield) on the left.
+static func stance_button(label: String, option: String) -> Button:
+	var b := UIStyle.style_button(UIStyle.button(label, 15), String(STANCE_FAMILY.get(option, "secondary")))
+	b.custom_minimum_size = Vector2(0, STANCE_H)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for st in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		if b.has_theme_stylebox_override(st):
+			b.get_theme_stylebox(st).content_margin_left = 38
+	var g := StanceGlyph.new(option == "Defense stance")
+	g.anchor_top = 0.5
+	g.anchor_bottom = 0.5
+	g.offset_left = 12
+	g.offset_right = 30
+	g.offset_top = -9
+	g.offset_bottom = 9
+	b.add_child(g)
+	return b
+
+
+## The stance glyph of a stance answer: the ATK diamond or the DEF shield of the card badges.
+class StanceGlyph extends Control:
+	var defense := false
+
+	func _init(def: bool) -> void:
+		defense = def
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var r := Rect2(Vector2.ZERO, size)
+		var col := Color("9fb6d6") if defense else Color("e8705a")
+		var pts := CardGeometry.shield_pts(r) if defense else CardGeometry.diamond_pts(r)
+		var rim := PackedVector2Array(pts)
+		rim.append(pts[0])
+		draw_colored_polygon(pts, col.darkened(0.35))
+		draw_colored_polygon(CardGeometry.shield_pts(r.grow(-3.0)) if defense else CardGeometry.diamond_pts(r.grow(-3.0)), col)
+		draw_polyline(rim, Color(1, 1, 1, 0.75), 1.2, true)
 
 
 ## A Type declaration button: a deep tint of the Type's colour with a rim in the full colour

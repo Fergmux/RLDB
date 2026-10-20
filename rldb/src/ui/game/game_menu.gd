@@ -5,6 +5,10 @@ extends RefCounted
 ## confirmation dialogs for leaving or conceding.
 
 const SETTINGS_W := 400.0
+## In-game menu items that end the game (Danger family, design review #14).
+const DANGER_ITEMS := ["concede", "quit"]
+## Gap between the Menu button strip and the popups under it.
+const POPUP_GAP := 8.0
 
 ## The host screen this component works on.
 var gs: GameScreen
@@ -57,7 +61,9 @@ func build_top_strip() -> void:
 ## Builds the in-game menu and the settings popup (hidden).
 func build_popups() -> void:
 	# In-game menu (Menu button / Esc): Settings, Concede, Return to menu, Quit to desktop.
-	var menu_plate := HousePanel.new("Menu", "Esc", Vector2(14, 14), 8)
+	# Design review #14: 16 px inset, 12 px between items, a divider before the destructive group,
+	# which uses the Danger family (Concede game, Quit to desktop).
+	var menu_plate := HousePanel.new("Menu", "Esc", Vector2(UIStyle.sp("lg"), UIStyle.sp("lg")), UIStyle.sp("md"))
 	game_menu = menu_plate
 	game_menu.visible = false
 	game_menu.z_index = UiLayers.GAME_MENU
@@ -71,8 +77,13 @@ func build_popups() -> void:
 			["return", "Return to menu", func(): confirm_forfeit(false)],
 			["stop", "Stop watching", func(): confirm_forfeit(false)],
 			["quit", "Quit to desktop", func(): confirm_forfeit(true)]]:
-		var gb := UIStyle.button(it[1], 16)
-		gb.name = "Menu_" + String(it[0])
+		var key := String(it[0])
+		if key == "concede":
+			var rule := Ornate.Rule.new(Color(UIStyle.GOLD, 0.45), true, 10.0)
+			rule.name = "DestructiveDivider"
+			gmv.add_child(rule)
+		var gb := UIStyle.danger_button(it[1], 16) if key in DANGER_ITEMS else UIStyle.secondary_button(it[1], 16)
+		gb.name = "Menu_" + key
 		gb.custom_minimum_size = Vector2(230, 42)
 		gb.pressed.connect(it[2])
 		gmv.add_child(gb)
@@ -115,9 +126,9 @@ func layout(w: float) -> void:
 func layout_popups(w: float) -> void:
 	settings_popup.reset_size()
 	var sw := maxf(SETTINGS_W, settings_popup.get_combined_minimum_size().x)
-	settings_popup.position = Vector2(w - gs.sidebar_w - sw - 10.0, GameScreen.TOP_H + 4.0)
+	settings_popup.position = Vector2(w - gs.sidebar_w - sw - 10.0, GameScreen.TOP_H + POPUP_GAP)
 	game_menu.reset_size()
-	game_menu.position = Vector2(w - gs.sidebar_w - game_menu.get_combined_minimum_size().x - 10.0, GameScreen.TOP_H + 4.0)
+	game_menu.position = Vector2(w - gs.sidebar_w - game_menu.get_combined_minimum_size().x - 10.0, GameScreen.TOP_H + POPUP_GAP)
 
 
 ## Connection state in the top strip (network games only). A1 (owner feedback 20 Oct): a healthy
@@ -267,10 +278,11 @@ func dialog() -> ConfirmDialog:
 	return null
 
 
-## Opens the shared confirmation dialog over the screen (one at a time).
-func _dialog(title: String, text: String, confirm: String, on_yes: Callable, tag: String = "Leave game") -> void:
+## Opens the shared confirmation dialog over the screen (one at a time). `style` is the confirm's
+## button family ("danger" for a step that cannot be undone: Keep playing then holds the focus).
+func _dialog(title: String, text: String, confirm: String, on_yes: Callable, tag: String = "Leave game", style: String = "primary") -> void:
 	close_dialog()
-	_dialog_root = ConfirmDialog.open(gs, title, text, confirm, on_yes, "Keep playing", tag)
+	_dialog_root = ConfirmDialog.open(gs, title, text, confirm, on_yes, "Keep playing", tag, style)
 	gs.hover.clear()
 
 
@@ -285,7 +297,7 @@ func close_dialog() -> bool:
 
 
 func _confirm_concede() -> void:
-	_dialog("Concede this game?", "Your opponent wins this game; the series continues.", "Concede", func(): gs.send({"t": "concede"}), "Concede")
+	_dialog("Concede this game?", "Your opponent wins this game; the series continues.", "Concede", func(): gs.send({"t": "concede"}), "Concede", "danger")
 
 
 ## Music and sound-effect volume sliders with mute boxes (game settings and main menu).

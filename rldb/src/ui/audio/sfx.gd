@@ -16,6 +16,9 @@ const NAMES: PackedStringArray = [
 	# D8 / B5 / D6 (2026-10-20): the summon set pieces, the Serpents' strike, sacrifice and AP changes.
 	"fusion_vortex", "fusion_impact", "ritual_choir", "ritual_impact", "arcane_shimmer", "arcane_impact",
 	"card_slam", "serpent_coil", "serpent_strike", "sacrifice", "ap_gain", "ap_loss",
+	# H1 WP-1 / WP-3 (design review 1.4.6): UI feedback cues and the low-HP heartbeat. A missing file
+	# is silent (_stream_for returns null), so a name may be registered before its sound exists.
+	"ui_hover", "panel_open", "panel_close", "tab", "toggle_on", "toggle_off", "hp_low_heartbeat",
 ]
 ## F22 / F25: UI sounds. One user action makes exactly one UI sound: within one frame only the request
 ## with the highest priority plays (a later, higher one stops the earlier voice, a lower or equal one is
@@ -23,8 +26,17 @@ const NAMES: PackedStringArray = [
 ## deck edit) never both play, wherever either comes from.
 const UI_PRIORITY := {
 	"select": 0, "click_secondary": 1, "click_primary": 2,
+	"tab": 2, "toggle_on": 2, "toggle_off": 2, "panel_open": 3, "panel_close": 3,
 	"deck_add": 3, "deck_remove": 3, "cancel": 3, "confirm": 3, "deny": 4, "back": 5,
 }
+## Hover cue (design review 1.4.6): at most one per HOVER_MIN_MS, pitch +/- HOVER_JITTER, quiet. It
+## is not a UI action sound (it never replaces or blocks a click) and skips the game-sound limiter.
+const HOVER_SFX := "ui_hover"
+const HOVER_MIN_MS := 60
+const HOVER_JITTER := 0.04
+const HOVER_DB := 0.0
+## Button meta: "none" silences a button's hover cue.
+const HOVER_META := "sfx_hover"
 ## Button meta overriding the automatic click: a sound name, or "none" for silence.
 const BUTTON_META := "sfx"
 ## Button meta set by UIStyle.primary_button: the gold family (else gold-filled styles are detected).
@@ -54,6 +66,9 @@ static var _ui_frame: int = -1
 static var _ui_prio: int = -1
 static var _ui_voice: AudioStreamPlayer = null
 static var _hook: ButtonHook = null
+static var _last_hover_ms: int = -100000
+## Hover cues actually started (bounded; tests).
+static var debug_hover: Array[String] = []
 
 
 ## Wires every BaseButton entering the tree to its click (see button_sound). Connected once.
@@ -64,6 +79,10 @@ class ButtonHook extends RefCounted:
 	func on_pressed(b: BaseButton) -> void:
 		if is_instance_valid(b) and not b.disabled:
 			Sfx.play(Sfx.button_sound(b), 0.0, 0.03)
+
+	func on_hovered(b: BaseButton) -> void:
+		if is_instance_valid(b):
+			Sfx.hover(b)
 
 
 ## Plays sound `name` at `volume_db` with random pitch jitter (+/- fraction).
@@ -112,12 +131,42 @@ static func _reset_ui() -> void:
 	debug_ui.clear()
 
 
-## The click a button makes (F25): its BUTTON_META override, "back" for Back / Cancel / Close / Exit /
-## Leave, the gold "click_primary" for primary (gold) buttons and menu items, else "click_secondary".
+## The hover cue of button `b` (ui_hover), rate-limited to one per HOVER_MIN_MS. Silent for a
+## disabled button or one whose HOVER_META is "none". Returns true when it played.
+static func hover(b: BaseButton) -> bool:
+	if b.disabled or String(b.get_meta(HOVER_META, "")) == "none":
+		return false
+	return hover_at(Time.get_ticks_msec())
+
+
+## The hover rate limit at clock `now_ms` (injectable for tests): true (and records it) when the
+## last hover cue is at least HOVER_MIN_MS old; the sound starts when the tree is available.
+static func hover_at(now_ms: int) -> bool:
+	if now_ms - _last_hover_ms < HOVER_MIN_MS:
+		return false
+	_last_hover_ms = now_ms
+	debug_hover.append(HOVER_SFX)
+	if debug_hover.size() > 200:
+		debug_hover.remove_at(0)
+	_start(HOVER_SFX, HOVER_DB, HOVER_JITTER, false)
+	return true
+
+
+## Forgets the hover limiter (tests).
+static func _reset_hover() -> void:
+	_last_hover_ms = -100000
+	debug_hover.clear()
+
+
+## The click a button makes (F25): its BUTTON_META override, toggle_on / toggle_off for check boxes
+## and toggle switches, "back" for Back / Cancel / Close / Exit / Leave, the gold "click_primary" for
+## primary (gold) buttons and menu items, else "click_secondary".
 static func button_sound(b: BaseButton) -> String:
 	if b.has_meta(BUTTON_META):
 		var v := String(b.get_meta(BUTTON_META))
 		return "" if v == "none" else v
+	if b is CheckBox or b is CheckButton:
+		return "toggle_on" if b.button_pressed else "toggle_off"
 	var text := ""
 	if b is MenuItem:
 		text = (b as MenuItem).label_text
@@ -176,6 +225,7 @@ static func wire_button(n: Node) -> void:
 		return
 	n.set_meta("_sfx_wired", true)
 	(n as BaseButton).pressed.connect(_hook.on_pressed.bind(n))
+	(n as BaseButton).mouse_entered.connect(_hook.on_hovered.bind(n))
 
 
 static func _start(name: String, volume_db: float, pitch_jitter: float, limit: bool = true) -> AudioStreamPlayer:

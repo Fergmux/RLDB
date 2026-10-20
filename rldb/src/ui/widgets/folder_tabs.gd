@@ -316,6 +316,7 @@ class Tab extends Button:
 		tooltip_text = String(opts.get("tooltip", ""))
 		focus_mode = Control.FOCUS_NONE
 		flat = true
+		set_meta(Sfx.BUTTON_META, "tab")   # the leather-flap thump (design review 1.4.6)
 		for st in ["normal", "hover", "pressed", "disabled", "focus", "hover_pressed"]:
 			add_theme_stylebox_override(st, StyleBoxEmpty.new())
 		mouse_default_cursor_shape = Control.CURSOR_ARROW if disabled else Control.CURSOR_POINTING_HAND

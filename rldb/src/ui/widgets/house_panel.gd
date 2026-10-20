@@ -54,6 +54,8 @@ var arm: float = 14.0:
 		queue_redraw()
 ## Draw the faint diagonal weave over the body.
 var weave: bool = true
+## appear() plays the panel_open cue.
+var open_sound: bool = true
 
 var _box: StyleBoxFlat
 var _col: VBoxContainer
@@ -232,11 +234,14 @@ func _settle(w: float, gen: int) -> void:
 		last = h
 
 
-## Opening animation of a modal: fades in and pops from 92 % with a gold flare that settles.
-## Nothing moves under reduced motion (the panel simply shows at rest).
+## Opening animation of a modal: fades in and pops from 92 % with a gold flare that settles, with
+## the panel_open cue (design review #106). Nothing moves under reduced motion (the panel simply
+## shows at rest); the cue still plays.
 func appear() -> void:
 	_kill()
 	_rest()
+	if is_inside_tree() and open_sound:
+		Sfx.play("panel_open")
 	if UIStyle.reduce_motion or not is_inside_tree():
 		return
 	modulate.a = 0.0

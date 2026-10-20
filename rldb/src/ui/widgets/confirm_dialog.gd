@@ -7,6 +7,12 @@ extends Control
 ## Two choices (`open`) sit side by side: confirm, then cancel. Three or more (`open_choices`,
 ## G01: Save and quit / Forfeit and quit / Keep playing) stack as one column of equal buttons in
 ## the order given, so long labels never crowd the plate.
+##
+## Button hierarchy (design review 1.4.4, #69-#71): a "primary" choice is the gold family, a
+## "danger" choice (Concede, Delete, Forfeit: cannot be undone) the ember family, and every other
+## choice (Cancel, Keep playing) the iron secondary. When a danger choice is offered, the cancel
+## choice holds the keyboard focus, so Enter keeps the player safe; otherwise the confirm does.
+## Spacing: 20 px from the message to the buttons, 24 px under them, 44 px buttons, 160 px wide.
 
 const PANEL_W := 420.0
 ## Dim over everything behind the dialog: strong enough that a gold-rimmed modal underneath (a
@@ -14,16 +20,23 @@ const PANEL_W := 420.0
 const DIM_ALPHA := 0.7
 ## Width of each stacked button in a dialog with three or more choices.
 const STACK_W := 280.0
+## Side-by-side buttons: minimum width and height (design review #71).
+const BUTTON_W := 160.0
+const BUTTON_H := 44.0
+## Message-to-buttons gap and the padding under the button row.
+const TEXT_TO_BUTTONS := 20
+const BOTTOM_PAD := 24
 
 ## The choices as built: [{text, style, action}] (dev drivers and tests read it).
 var choices: Array = []
 
 
 ## Opens a dialog as a full-rect child of `parent` (above its other content) and returns it.
-## `tag` is the header strip title of the house plate (F06-01).
+## `tag` is the header strip title of the house plate (F06-01). `style` is the confirm's family:
+## "primary", or "danger" for a step that cannot be undone (the cancel then holds the focus).
 static func open(parent: Node, title: String, text: String, confirm: String, on_yes: Callable,
-		cancel: String = "Keep playing", tag: String = "Confirm") -> ConfirmDialog:
-	return open_choices(parent, title, text, [choice(confirm, on_yes, "primary"), choice(cancel)], tag)
+		cancel: String = "Keep playing", tag: String = "Confirm", style: String = "primary") -> ConfirmDialog:
+	return open_choices(parent, title, text, [choice(confirm, on_yes, style), choice(cancel)], tag)
 
 
 ## Opens a dialog with any number of `choices` (made with `choice`). A choice without an action
@@ -42,9 +55,12 @@ static func choice(text: String, action: Callable = Callable(), style: String = 
 	return {"text": text, "action": action, "style": style}
 
 
-## Closes the dialog without running any action.
-func close() -> void:
+## Closes the dialog without running any action. `cue` plays panel_close (a dismissal: the dim or a
+## cancel choice); a choice with an action closes silently and keeps its own click.
+func close(cue: bool = true) -> void:
 	if not is_queued_for_deletion():
+		if cue:
+			Sfx.play("panel_close")
 		queue_free()
 
 
@@ -58,6 +74,20 @@ func press(text: String) -> bool:
 
 
 var _panel: HousePanel
+var _focus_button: Button
+
+
+## The button holding the default keyboard focus (the cancel when a danger choice is offered).
+func focus_button() -> Button:
+	return _focus_button
+
+
+## The button of choice `text`, or null.
+func button_for(text: String) -> Button:
+	for b in find_children("*", "Button", true, false):
+		if (b as Button).text == text:
+			return b
+	return null
 
 
 func _build(title: String, text: String, list: Array, tag: String) -> void:
@@ -73,7 +103,7 @@ func _build(title: String, text: String, list: Array, tag: String) -> void:
 	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(cc)
-	_panel = HousePanel.new(tag, "", Vector2(26, 22), 12)
+	_panel = HousePanel.new(tag, "", Vector2(26, BOTTOM_PAD), 12)
 	_panel.arm = 18.0
 	_panel.custom_minimum_size = Vector2(PANEL_W, 0)
 	cc.add_child(_panel)
@@ -88,37 +118,49 @@ func _build(title: String, text: String, list: Array, tag: String) -> void:
 	row.add_theme_constant_override("separation", 10 if stacked else 12)
 	if stacked:
 		row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		var gap := Control.new()
-		gap.custom_minimum_size = Vector2(0, 2)
-		v.add_child(gap)
+	# The body separation (12) plus this spacer is the 20 px message-to-buttons gap.
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, TEXT_TO_BUTTONS - 12)
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(gap)
 	v.add_child(row)
+	var has_danger := list.any(func(c): return String(c.get("style", "")) == "danger")
+	var first_confirm: Button = null
 	for c in list:
 		var b := _button(c, stacked)
 		row.add_child(b)
+		var is_cancel := not (c.get("action", Callable()) as Callable).is_valid()
+		if has_danger and is_cancel and _focus_button == null:
+			_focus_button = b
+		if not has_danger and not is_cancel and first_confirm == null:
+			first_confirm = b
+	if _focus_button == null:
+		_focus_button = first_confirm
+
+
+func _ready() -> void:
+	if _focus_button != null:
+		_focus_button.grab_focus()
 
 
 func _button(c: Dictionary, stacked: bool) -> Button:
 	var style := String(c.get("style", ""))
-	var b := UIStyle.primary_button(String(c["text"]), 15) if style == "primary" else UIStyle.button(String(c["text"]), 15)
-	if style == "danger":
-		# The theme's plain styles resolve once the button is in the tree.
-		b.ready.connect(func(): _danger(b), CONNECT_ONE_SHOT)
-	b.custom_minimum_size = Vector2(STACK_W, 42) if stacked else Vector2(170 if style == "primary" else 150, 40)
+	var b: Button
+	match style:
+		"primary":
+			b = UIStyle.primary_button(String(c["text"]), 15)
+		"danger":
+			b = UIStyle.danger_button(String(c["text"]), 15)
+		_:
+			b = UIStyle.secondary_button(String(c["text"]), 15)
+	b.focus_mode = Control.FOCUS_ALL   # keyboard: Tab / arrows move, Enter presses (cancel by default)
+	b.custom_minimum_size = Vector2(STACK_W, BUTTON_H) if stacked else Vector2(BUTTON_W, BUTTON_H)
 	var act: Callable = c.get("action", Callable())
 	b.pressed.connect(func():
-		close()
+		close(not act.is_valid())
 		if act.is_valid():
 			act.call())
 	return b
-
-
-## Plain button restyled with a red rim and text: a choice that cannot be undone (forfeiting).
-static func _danger(b: Button) -> void:
-	for st in ["normal", "hover", "pressed"]:
-		var rim := UIStyle.BAD if st != "normal" else Color(UIStyle.BAD, 0.75)
-		b.add_theme_stylebox_override(st, UiSurface.restyled(b.get_theme_stylebox(st), func(d: StyleBoxFlat): d.border_color = rim))
-	b.add_theme_color_override("font_color", UIStyle.BAD.lightened(0.35))
-	b.add_theme_color_override("font_hover_color", UIStyle.BAD.lightened(0.5))
 
 
 func _appear() -> void:
