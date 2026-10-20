@@ -114,5 +114,18 @@ func test_name_fit_shrinks_first_then_condenses_within_the_plate() -> void:
 	assert_float(font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, int(fit[0])).x * float(fit[1])).is_less_equal(75.01)
 
 
+# ---------------------------------------------------------------- H21 kind line on the left
+
+func test_spell_trap_and_power_kind_line_is_left_aligned_like_the_race() -> void:
+	# Shimmer Serum (Spell), Magic Cylinder (Trap), Marked by the Abyss (Power).
+	for id in [182, 45, 149]:
+		var v := _view(id)
+		var kind_name := String(UIStyle.CATEGORY_NAMES[v["category"]])
+		var w := _widget(v, "hand")
+		var rows := (await _trace(w)).filter(func(r): return r[0] == "line" and String(r[1]) == kind_name)
+		assert_int(rows.size()).is_equal(1)
+		assert_int(int(rows[0][5])).is_equal(HORIZONTAL_ALIGNMENT_LEFT)
+
+
 func test_selected_card_stays_under_the_fx_vignette() -> void:
 	assert_int(CardWidget.SELECTED_Z).is_less(FxPlayer.VIGNETTE_Z)

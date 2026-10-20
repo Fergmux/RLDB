@@ -85,7 +85,8 @@ static func draw_tall(pt: CardPainter, _big: bool = false) -> void:
 	if is_unit:
 		CardFaceParts.race_type_line(pt, pt.p(ln[0], ln[1]), float(ln[2]) * s, float(ln[3]) * s, line_fs)
 	else:
-		pt.text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(pt.view.get("category", ""), ""), pt.p(ln[0], ln[1]), line_fs, UIStyle.MUTED, float(ln[2]) * s, HORIZONTAL_ALIGNMENT_CENTER, float(ln[3]) * s)
+		# H21: the kind (Spell, Trap, Power) sits on the left, where a unit shows its race.
+		pt.text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(pt.view.get("category", ""), ""), pt.p(ln[0], ln[1]), line_fs, UIStyle.MUTED, float(ln[2]) * s, HORIZONTAL_ALIGNMENT_LEFT, float(ln[3]) * s)
 	# Rules text well: the whole text always fits, the size steps down until it does (user feedback).
 	var t: Array = g["text"]
 	var rules := CardText.card_text(pt.view)
