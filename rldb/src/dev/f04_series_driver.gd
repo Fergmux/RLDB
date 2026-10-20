@@ -136,8 +136,8 @@ func run(main_node: Node, dir: String) -> void:
 		{"i": 0, "label": "Activate Rushed Recklessly (Trap)"}, {"i": 1, "label": "Skip"}, {"i": 2, "label": "Pass for the rest of this turn"}]}, true))
 	await _fake(gs, "prompt_04_multi", base.merged({"kind": "select", "prompt": "Choose up to 3 cards in your Spent pile to return to your Draw pile in the order you want", "max": 3, "min": 2, "options": [
 		{"i": 0, "label": "Dragon of the Cave"}, {"i": 1, "label": "Basic Warrior"}, {"i": 2, "label": "The Sweeper"}, {"i": 3, "label": "Krakeshin"}]}, true))
-	await _fake(gs, "prompt_05_short", base.merged({"kind": "mode", "prompt": "Stance?", "options": [{"i": 0, "label": "Attack"}, {"i": 1, "label": "Defense"}]}, true))
-	await _fake(gs, "prompt_06_long_title", base.merged({"kind": "mode", "prompt": "Choose a stance for Bastion Wyrm, the Eternal Guardian of the Obsidian Citadel.", "options": [{"i": 0, "label": "Attack"}, {"i": 1, "label": "Defense"}]}, true))
+	await _fake(gs, "prompt_05_short", base.merged({"kind": "stance", "prompt": "Stance?", "options": [{"i": 0, "label": "Attack stance"}, {"i": 1, "label": "Defense stance"}]}, true))
+	await _fake(gs, "prompt_06_long_title", base.merged({"kind": "stance", "prompt": "Choose a stance for Bastion Wyrm, the Eternal Guardian of the Obsidian Citadel.", "options": [{"i": 0, "label": "Attack stance"}, {"i": 1, "label": "Defense stance"}]}, true))
 	# Waiting for the opponent: the centre notice.
 	gs.mv["pending"] = {}
 	gs.prompt.prompt_sig = 0
