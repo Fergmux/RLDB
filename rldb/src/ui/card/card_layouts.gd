@@ -59,8 +59,12 @@ static func draw_square(pt: CardPainter) -> void:
 	# H14: the full name on one line, shrunk then condensed to fit (never ellipsised).
 	CardFaceParts.name_plate(pt, _r(pt, g["banner"]), g["f_name"], 0.0, 0.0, pt.accent(), g["f_name_min"], true)
 	if _is_unit(pt):
-		CardStatBadge.draw(pt, _r(pt, g["atk"]), true, g["f_stat"])
-		CardStatBadge.draw(pt, _r(pt, g["def"]), false, g["f_stat"])
+		# H20: a small engraved fleuron between the ATK and DEF gems fills the bottom strip.
+		var a := _r(pt, g["atk"])
+		var d := _r(pt, g["def"])
+		flourish(pt.ci, Vector2((a.end.x + d.position.x) / 2.0, a.get_center().y), 14.0 * pt.s, pt.s, FLEURON)
+		CardStatBadge.draw(pt, a, true, g["f_stat"])
+		CardStatBadge.draw(pt, d, false, g["f_stat"])
 	CardFaceParts.gem(pt, pt.p(g["gem"][0], g["gem"][1]), float(g["gem_r"]) * pt.s, pt.fs(g["f_gem"]))
 
 
@@ -138,6 +142,8 @@ static func draw_set_name(pt: CardPainter) -> void:
 
 ## #75: the vanilla card's filigree (bronze 40%).
 const FLOURISH := Color(0.478, 0.353, 0.188, 0.4)
+## H20: the field unit's fleuron between its ATK and DEF gems (gold, a little brighter than FLOURISH).
+const FLEURON := Color(0.83, 0.65, 0.29, 0.55)
 ## Inlaid empty zone (#22): a darker recess under a thin share of the zone tint, the inner shadow's
 ## depth and alpha, the dark rim and the gold lip on the lit bottom / right edges.
 const ZONE_RECESS_A := 0.16

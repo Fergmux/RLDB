@@ -37,6 +37,68 @@ static func frame(pt: CardPainter, radius: float) -> void:
 	UiSurface.draw_round(ci, Rect2(inset, inset, pt.ps.x - 2 * inset, pt.ps.y - 2 * inset), maxf(0.0, (radius - 3.0) * s), UiSurface.PEBBLE, BODY, BODY_GRAIN, BODY_TILE * s)
 	pt.vgrad(Rect2(inset, inset, pt.ps.x - 2 * inset, pt.ps.y - 2 * inset), Color(pt.accent().darkened(0.7), 0.45), Color(0, 0, 0, 0.45))
 	ci.draw_line(Vector2(radius * s, 3.5 * s), Vector2(pt.ps.x - radius * s, 3.5 * s), Color(UIStyle.GOLD_HI, 0.4), maxf(1.0, s), true)
+	_bevel(pt, radius)
+
+
+## H20 (21 Oct): depth on the kind-coloured frame: the border is bevelled (a lit line along its top
+## and left runs, a shade along its bottom and right), a fine gold filet runs inside it, and each
+## corner wears a small gilded cap with a stud, like the metal corners of a bound book.
+static func _bevel(pt: CardPainter, radius: float) -> void:
+	var ci := pt.ci
+	var s := pt.s
+	var w := pt.ps.x
+	var h := pt.ps.y
+	var rad := radius * s
+	var bw := maxf(2.0, 2.8 * s)
+	var e := bw * 0.3
+	var lw := maxf(1.0, 0.7 * s)
+	var lit := Color(pt.accent().lightened(0.5), 0.75)
+	var shade := Color(0, 0, 0, 0.45)
+	ci.draw_line(Vector2(rad, e), Vector2(w - rad, e), lit, lw, true)
+	ci.draw_line(Vector2(e, rad), Vector2(e, h - rad), Color(lit, lit.a * 0.7), lw, true)
+	ci.draw_line(Vector2(rad, h - e), Vector2(w - rad, h - e), shade, lw, true)
+	ci.draw_line(Vector2(w - e, rad), Vector2(w - e, h - rad), shade, lw, true)
+	pt.ring(Color(UIStyle.GOLD, FILET_A), lw, Rect2(bw, bw, w - 2.0 * bw, h - 2.0 * bw), maxf(1.0, rad - bw))
+	if s < CORNER_MIN_S:
+		return
+	# Gilded corner caps: an arc riding the border round each corner, a stud at its middle.
+	var cw := bw * 0.95
+	for i in 4:
+		var cc := [Vector2(rad, rad), Vector2(w - rad, rad), Vector2(w - rad, h - rad), Vector2(rad, h - rad)][i] as Vector2
+		var a0 := PI + float(i) * PI / 2.0
+		var r_mid := rad - bw / 2.0
+		ci.draw_arc(cc, r_mid, a0 - 0.12, a0 + PI / 2.0 + 0.12, 8, Color(0, 0, 0, 0.55), cw + 1.2, true)
+		ci.draw_arc(cc, r_mid, a0 - 0.12, a0 + PI / 2.0 + 0.12, 8, CardJewel.METAL if i < 2 else CardJewel.METAL_LO, cw, true)
+		ci.draw_arc(cc, r_mid + cw * 0.25, a0 + 0.1, a0 + PI / 2.0 - 0.1, 8, Color(CardJewel.METAL_HI, 0.7 if i == 0 else 0.4), maxf(0.6, cw * 0.3), true)
+		var sp := cc + Vector2(cos(a0 + PI / 4.0), sin(a0 + PI / 4.0)) * r_mid
+		ci.draw_circle(sp, cw * 0.62, Color(0, 0, 0, 0.6), true, -1.0, true)
+		ci.draw_circle(sp, cw * 0.45, CardJewel.METAL_HI, true, -1.0, true)
+
+
+## H20: the name plate as a forged bar: a lit top edge and a shaded foot inside its gold border, and a
+## gilded stud riveted on each end (on the border, so the name keeps all its room).
+static func _plate_trim(pt: CardPainter, rect: Rect2) -> void:
+	var ci := pt.ci
+	var s := pt.s
+	var lw := maxf(1.0, 0.6 * s)
+	var r := 4.0 * s
+	ci.draw_line(Vector2(rect.position.x + r, rect.position.y + 1.6 * s), Vector2(rect.end.x - r, rect.position.y + 1.6 * s), Color(1, 0.95, 0.8, 0.16), lw, true)
+	ci.draw_line(Vector2(rect.position.x + r, rect.end.y - 1.2 * s), Vector2(rect.end.x - r, rect.end.y - 1.2 * s), Color(0, 0, 0, 0.45), lw, true)
+	if s < CORNER_MIN_S:
+		return
+	var d := maxf(1.6, 2.1 * s)
+	for x in [rect.position.x + 0.6 * s, rect.end.x - 0.6 * s]:
+		var c := Vector2(x, rect.get_center().y)
+		var dia := CardGeometry.poly(c, d, 4, 0.0)
+		ci.draw_colored_polygon(CardGeometry.grow_pts(dia, c, maxf(0.8, 0.7 * s)), Color(0, 0, 0, 0.7))
+		ci.draw_polygon(dia, PackedColorArray([CardJewel.METAL, CardJewel.METAL_LO, CardJewel.METAL_LO, CardJewel.METAL_HI]))
+		ci.draw_circle(c + Vector2(-0.35, -0.35) * d, maxf(0.5, d * 0.22), Color(1, 1, 1, 0.75), true, -1.0, true)
+
+
+## Alpha of the gold filet inside the frame border (H20).
+const FILET_A := 0.42
+## Card scale below which the corner caps are left out (too small to read; keeps tiny cards cheap).
+const CORNER_MIN_S := 0.6
 
 
 ## Name plate. The full name always shows on one line (H14 / H19, 21 Oct: it replaced the two-line
@@ -49,6 +111,7 @@ static func name_plate(pt: CardPainter, rect: Rect2, fs_max: float, reserve_l: f
 	pt.round_rect(rect, PLATE, 4.0 * s, Color(UIStyle.GOLD, 0.65), maxf(1.0, s))
 	UiSurface.draw_round(ci, rect.grow(-maxf(1.0, s)), 3.0 * s, UiSurface.METAL, PLATE, PLATE_GRAIN, PLATE_TILE * s, rect.position)
 	ci.draw_rect(Rect2(rect.position.x + 3 * s, rect.end.y - 3.0 * s, rect.size.x - 6 * s, 2.0 * s), stripe)
+	_plate_trim(pt, rect)
 	var font := UIStyle.font_display(600)
 	var avail := rect.size.x - (reserve_l + reserve_r) * s - 6.0 * s
 	var nm: String = pt.view["name"]
