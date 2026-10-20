@@ -541,7 +541,7 @@ func _draw() -> void:
 func _draw_empty_zone(pt: CardPainter, ls: Vector2) -> void:
 	var vp := get_viewport()
 	var os := vp.get_oversampling() if vp != null else 1.0
-	var base := ZoneMesh.for_zone(size_kind, ls, os, not highlighted)
+	var base := ZoneMesh.for_zone(size_kind, ls, os, not highlighted, self_modulate)
 	_zone_merged = base != null
 	if base == null:
 		CardLayouts.draw_empty(pt, ls, highlighted)

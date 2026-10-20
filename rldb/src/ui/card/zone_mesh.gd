@@ -8,7 +8,8 @@ extends RefCounted
 ## position; nothing has to be re-baked when it moves, and a modulate (the dims) applies as before.
 ## Only the animated zone pick is still drawn live, between the recess and the mark as before.
 ##
-## Meshes are shared per (kind, size, oversampling, mark): on the board all zones of one kind share one.
+## Meshes are shared per (kind, size, oversampling, mark, self_modulate): on the board all zones of one
+## kind and dim share one. (The modulate matters only to the anti-aliased lines; see MeshPen._prim.)
 
 ## Turn it off to draw every empty zone live (pixel comparisons: the old path).
 static var enabled := true
@@ -22,17 +23,18 @@ static var builds := 0
 
 
 ## The recorded static layers of an empty zone of `kind` and `size` drawn at `oversampling` (the canvas
-## item's viewport oversampling), with the engraved mark when `mark`. null when ZoneMesh is off or the
-## drawing cannot be recorded exactly (the caller then draws live).
-static func for_zone(kind: String, size: Vector2, oversampling: float, mark: bool) -> MeshPen:
+## item's viewport oversampling), with the engraved mark when `mark`, drawn under `modulate` (the
+## item's self_modulate). null when ZoneMesh is off or the drawing cannot be recorded exactly (the
+## caller then draws live).
+static func for_zone(kind: String, size: Vector2, oversampling: float, mark: bool, modulate: Color = Color.WHITE) -> MeshPen:
 	if not enabled or size.x < 1.0 or size.y < 1.0:
 		return null
-	var key := "%s|%.4f|%.4f|%.5f|%d" % [kind, size.x, size.y, oversampling, int(mark)]
+	var key := "%s|%.4f|%.4f|%.5f|%d|%s" % [kind, size.x, size.y, oversampling, int(mark), modulate.to_html()]
 	if _cache.has(key):
 		return _cache[key]
 	if _cache.size() >= CACHE_MAX:
 		_cache.clear()
-	var pen := MeshPen.new(oversampling)
+	var pen := MeshPen.new(oversampling, modulate)
 	var pt := CardPainter.new(null)
 	pt.pen = pen
 	pt.size_kind = kind

@@ -15,10 +15,13 @@ extends SceneTree
 
 var main: Control
 var out_dir := ""
+## `--verbose`: print a sample of the differing pixels.
+var verbose := false
 var _res := ""
 
 
 func _initialize() -> void:
+	verbose = "--verbose" in OS.get_cmdline_user_args()
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--diff-out="):
 			out_dir = a.split("=", true, 1)[1]
@@ -58,6 +61,8 @@ func _run() -> void:
 			w.hovered = true
 			first = false
 	await _compare("picked", zones)
+	if "--noise-probe" in OS.get_cmdline_user_args():
+		await _noise_probe(zones)
 	for w: CardWidget in zones:
 		w.hovered = false
 		w.set_marks(false, false)
@@ -130,33 +135,152 @@ func _compare(state: String, zones: Array, merged_first: bool = false) -> void:
 		nb = zones.filter(func(w: CardWidget) -> bool: return w.is_zone_merged()).size()
 		db = await _draws()
 		merged = await _grab()
+	# Control: a second live frame. What differs between the two live frames is the scene's own
+	# noise floor (anything still animating), not the merge.
+	ZoneMesh.enabled = false
+	_redraw_all(zones)
+	await _frames(6)
+	var live2 := await _grab()
+	ZoneMesh.enabled = true
+	_redraw_all(zones)
+	await _frames(6)
 	var masks: Array = []
 	for w: CardWidget in zones:
 		var r := _screen_rect(w).grow(3)
 		masks.append(Rect2i(Vector2i(r.position.floor()), Vector2i(r.size.ceil()) + Vector2i.ONE))
-	var diff := Image.create(live.get_width(), live.get_height(), false, Image.FORMAT_RGB8)
-	var total := 0
-	var any := 0
-	var over2 := 0
-	var worst := 0
+	var res := _diff(live, merged, masks, live2)
+	var ctl := _diff(live, live2, masks)
+	var st: Dictionary = res[0]
+	var cs: Dictionary = ctl[0]
+	var tot := maxf(st["total"], 1)
+	print("DIFF %s %s: zones=%d merged=%d draw_calls live=%.0f merged=%.0f zone_px=%d differ=%d (%.3f%%) over_2=%d (%.3f%%) max=%d/255 | control live-vs-live differ=%d (%.3f%%) max=%d/255 | on pixels the old code draws the same twice: differ=%d (%.3f%%) max=%d/255" % [
+		_res, state, zones.size(), nb, dl, db, st["total"], st["any"], 100.0 * st["any"] / tot, st["over2"],
+		100.0 * st["over2"] / tot, st["worst"], cs["any"], 100.0 * cs["any"] / tot, cs["worst"],
+		st["stable_any"], 100.0 * st["stable_any"] / tot, st["stable_worst"]])
+	if out_dir != "":
+		DirAccess.make_dir_recursive_absolute(out_dir)
+		_save(live, "%s_%s_live.jpg" % [_res, state])
+		_save(merged, "%s_%s_merged.jpg" % [_res, state])
+		_save(res[1], "%s_%s_diff.jpg" % [_res, state])
+		_save(ctl[1], "%s_%s_control_diff.jpg" % [_res, state])
+
+
+## Diagnostics: live frames of the picked state against each other, with the zones' per-frame redraw
+## on and then off.
+func _noise_probe(zones: Array) -> void:
+	ZoneMesh.enabled = false
+	_redraw_all(zones)
+	var masks: Array = []
+	for w: CardWidget in zones:
+		var r := _screen_rect(w).grow(3)
+		masks.append(Rect2i(Vector2i(r.position.floor()), Vector2i(r.size.ceil()) + Vector2i.ONE))
+	await _frames(6)
+	var a := await _grab()
+	for gap in [1, 30]:
+		await _frames(gap)
+		var b := await _grab()
+		var st: Dictionary = _diff(a, b, masks)[0]
+		print("DIFF noise redraw-on gap=%d differ=%d max=%d" % [gap, st["any"], st["worst"]])
+	for w: CardWidget in zones:
+		w.set_process(false)
+	await _frames(6)
+	a = await _grab()
+	for gap in [1, 30]:
+		await _frames(gap)
+		var b := await _grab()
+		var st: Dictionary = _diff(a, b, masks)[0]
+		print("DIFF noise redraw-off gap=%d differ=%d max=%d" % [gap, st["any"], st["worst"]])
+	_redraw_all(zones)
+	await _frames(3)
+	var b2 := await _grab()
+	var st2: Dictionary = _diff(a, b2, masks)[0]
+	print("DIFF noise redraw-off then one redraw differ=%d max=%d" % [st2["any"], st2["worst"]])
+	var tws := get_processed_tweens()
+	for tw in tws:
+		tw.pause()
+	await _frames(4)
+	var e := await _grab()
+	await _frames(3)
+	var f := await _grab()
+	print("DIFF noise with %d tweens paused differ=%d" % [tws.size(), _diff(e, f, masks)[0]["any"]])
+	for tw in tws:
+		if tw.is_valid():
+			tw.play()
+	var all_off: Array = []
+	var pr: Dictionary = {}
+	_collect_proc(root, pr)
+	for k in pr:
+		all_off.append_array(pr[k])
+	for n: Node in all_off:
+		n.set_process(false)
+	for tw in get_processed_tweens():
+		tw.pause()
+	await _frames(4)
+	var g := await _grab()
+	await _frames(3)
+	var h := await _grab()
+	print("DIFF noise with every _process and tween stopped differ=%d" % _diff(g, h, masks)[0]["any"])
+	for n: Node in all_off:
+		n.set_process(true)
+	for tw in get_processed_tweens():
+		tw.play()
+	# Which processing items make the flicker: stop each script's _process in turn.
+	var procs: Dictionary = {}
+	_collect_proc(root, procs)
+	for script_name in procs:
+		for n: Node in procs[script_name]:
+			n.set_process(false)
+		await _frames(4)
+		var c := await _grab()
+		await _frames(3)
+		var d := await _grab()
+		var st3: Dictionary = _diff(c, d, masks)[0]
+		print("DIFF noise without %s (%d nodes) differ=%d" % [script_name, procs[script_name].size(), st3["any"]])
+		for n: Node in procs[script_name]:
+			n.set_process(true)
+	ZoneMesh.enabled = true
+
+
+func _collect_proc(n: Node, out: Dictionary) -> void:
+	if n.is_processing():
+		var sc: Script = n.get_script()
+		var k := sc.resource_path.get_file() if sc != null else n.get_class()
+		if not out.has(k):
+			out[k] = []
+		out[k].append(n)
+	for c in n.get_children(true):
+		_collect_proc(c, out)
+
+
+## [{"total", "any", "over2", "worst", "stable_any", "stable_worst"}, diff image] of `a` against `b`
+## over the rects `masks`. With `ref` (a second frame of `a`'s code), stable_* count only the pixels
+## where `a` and `ref` agree exactly (the GPU's own frame-to-frame flicker left out).
+func _diff(a_img: Image, b_img: Image, masks: Array, ref: Image = null) -> Array:
+	var diff := Image.create(a_img.get_width(), a_img.get_height(), false, Image.FORMAT_RGB8)
+	var st := {"total": 0, "any": 0, "over2": 0, "worst": 0, "stable_any": 0, "stable_worst": 0}
 	var seen := {}
 	for m: Rect2i in masks:
-		var cl := m.intersection(Rect2i(0, 0, live.get_width(), live.get_height()))
+		var cl := m.intersection(Rect2i(0, 0, a_img.get_width(), a_img.get_height()))
 		for y in range(cl.position.y, cl.end.y):
 			for x in range(cl.position.x, cl.end.x):
 				var k := y * 65536 + x
 				if seen.has(k):
 					continue
 				seen[k] = true
-				total += 1
-				var a := live.get_pixel(x, y)
-				var b := merged.get_pixel(x, y)
+				st["total"] += 1
+				var a := a_img.get_pixel(x, y)
+				var b := b_img.get_pixel(x, y)
 				var d := maxi(maxi(absi(a.r8 - b.r8), absi(a.g8 - b.g8)), absi(a.b8 - b.b8))
 				if d > 0:
-					any += 1
+					st["any"] += 1
+					if ref != null and ref.get_pixel(x, y).to_rgba32() == a.to_rgba32():
+						st["stable_any"] += 1
+						st["stable_worst"] = maxi(st["stable_worst"], d)
+						if verbose and st["stable_any"] % 40 == 1:
+							print("DIFF px (%d,%d) live=%s merged=%s" % [x, y, a.to_html(false), b.to_html(false)])
 				if d > 2:
-					over2 += 1
-				worst = maxi(worst, d)
+					st["over2"] += 1
+				st["worst"] = maxi(st["worst"], d)
 				# Readable at a glance: 1/255 white, 2/255 yellow, more red; the live frame faint behind.
 				var shade := Color(a.r, a.g, a.b) * 0.18
 				diff.set_pixel(x, y, shade if d == 0 else (Color.WHITE if d == 1 else (Color.YELLOW if d == 2 else Color.RED)))
@@ -166,14 +290,7 @@ func _compare(state: String, zones: Array, merged_first: bool = false) -> void:
 		for y in range(cl.position.y, cl.end.y):
 			diff.set_pixel(cl.position.x, y, Color(0.25, 0.25, 0.6))
 			diff.set_pixel(cl.end.x - 1, y, Color(0.25, 0.25, 0.6))
-	print("DIFF %s %s: zones=%d merged=%d draw_calls live=%.0f merged=%.0f zone_px=%d differ=%d (%.3f%%) over_2=%d (%.3f%%) max=%d/255" % [
-		_res, state, zones.size(), nb, dl, db, total, any, 100.0 * any / maxf(total, 1), over2,
-		100.0 * over2 / maxf(total, 1), worst])
-	if out_dir != "":
-		DirAccess.make_dir_recursive_absolute(out_dir)
-		_save(live, "%s_%s_live.jpg" % [_res, state])
-		_save(merged, "%s_%s_merged.jpg" % [_res, state])
-		_save(diff, "%s_%s_diff.jpg" % [_res, state])
+	return [st, diff]
 
 
 func _save(img: Image, name: String) -> void:

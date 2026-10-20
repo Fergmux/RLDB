@@ -9,7 +9,9 @@ extends RefCounted
 ## scene/main/canvas_item.cpp and servers/rendering/renderer_canvas_cull.cpp, 4.6-stable): the same
 ## vertices, colours and triangle order. The GPU blends the triangles of one draw call in submission
 ## order, so the result is the same pixels as the separate draw calls, not an approximation of them.
-## Primitive (draw_line) colours are rounded to half floats, as the canvas renderer stores them.
+## Primitive (draw_line) colours: the canvas renderer stores them as half(colour x the item's modulate)
+## on the CPU, where polygon colours are multiplied by the modulate on the GPU; the pen stores
+## half(colour x `modulate`) / `modulate`, so the GPU's product is the renderer's value again.
 ##
 ## What it cannot reproduce exactly (a StyleBoxFlat with a shadow, skew or expand margin; textures)
 ## sets `unsupported`: the caller then draws live.
@@ -24,12 +26,15 @@ var colors := PackedColorArray()
 var indices := PackedInt32Array()
 ## The oversampling the recorded canvas item is drawn with (StyleBoxFlat scales its feather by it).
 var oversampling := 1.0
+## The modulate the recording will be drawn under (the canvas item's self_modulate; see _quad).
+var modulate := Color.WHITE
 ## Something was drawn that this pen cannot reproduce exactly.
 var unsupported := false
 
 
-func _init(p_oversampling: float = 1.0) -> void:
+func _init(p_oversampling: float = 1.0, p_modulate: Color = Color.WHITE) -> void:
 	oversampling = p_oversampling if p_oversampling > 0.0 else 1.0
+	modulate = p_modulate
 
 
 ## Appends the recording to canvas item `ci` as one triangle array (nothing when empty).
@@ -59,34 +64,50 @@ func _strip(pts: PackedVector2Array, cols: PackedColorArray) -> void:
 		indices.append(base + k + 2)
 
 
-## A canvas "primitive" quad: triangles (0, 1, 2) and (0, 2, 3), colours as half floats.
+## A canvas "primitive" quad: triangles (0, 1, 2) and (0, 2, 3), colours as the renderer packs them.
 func _quad(a: Vector2, b: Vector2, c: Vector2, d: Vector2, ca: Color, cb: Color, cc: Color, cd: Color) -> void:
-	_tri_list(PackedVector2Array([a, b, c, d]), PackedColorArray([_half(ca), _half(cb), _half(cc), _half(cd)]),
+	_tri_list(PackedVector2Array([a, b, c, d]), PackedColorArray([_prim(ca), _prim(cb), _prim(cc), _prim(cd)]),
 		PackedInt32Array([0, 1, 2, 0, 2, 3]))
 
 
-static func _half(c: Color) -> Color:
-	return Color(_h(c.r), _h(c.g), _h(c.b), _h(c.a))
+static var _f32 := PackedFloat32Array([0.0])
 
 
-## `v` rounded to the nearest IEEE half float (round half to even, as packHalf2x16 does on the CPU).
+## `v` rounded to a 32-bit float (the engine's real_t).
+static func _f(v: float) -> float:
+	_f32[0] = v
+	return _f32[0]
+
+
+## A primitive vertex colour: half(c x modulate), divided back by the modulate the GPU applies.
+func _prim(c: Color) -> Color:
+	var m := modulate
+	return Color(_dm(_h(c.r * m.r), m.r), _dm(_h(c.g * m.g), m.g), _dm(_h(c.b * m.b), m.b), _dm(_h(c.a * m.a), m.a))
+
+
+static func _dm(v: float, m: float) -> float:
+	return v / m if m != 0.0 else 0.0
+
+
+## `v` as Math::make_half_float stores it (core/math/math_funcs.h): from a 32-bit float, the mantissa
+## truncated to 10 bits (toward zero, no rounding), and anything under 2^-14 flushed to zero.
 static func _h(v: float) -> float:
-	if v == 0.0 or is_nan(v) or is_inf(v):
-		return v
-	var a := absf(v)
+	var f := _f(v)
+	if f == 0.0 or is_nan(f) or is_inf(f):
+		return f
+	var a := absf(f)
+	if a < pow(2.0, -14):
+		return 0.0
+	if a >= 65536.0:
+		return signf(f) * INF
 	var e := floori(log(a) / log(2.0))
 	# log() can be off by one ulp at exact powers of two.
 	if pow(2.0, e) > a:
 		e -= 1
 	elif pow(2.0, e + 1) <= a:
 		e += 1
-	e = maxi(e, -14)   # subnormals share the smallest exponent
 	var q := pow(2.0, e - 10)
-	var n := a / q
-	var r := roundf(n)
-	if absf(n - floorf(n) - 0.5) < 1e-12:
-		r = floorf(n) if int(floorf(n)) % 2 == 0 else floorf(n) + 1.0
-	return signf(v) * r * q
+	return signf(f) * floorf(a / q) * q
 
 
 # ---------------------------------------------------------------- CanvasItem drawing API
@@ -545,13 +566,14 @@ func _rrect(style: Rect2, cr: Array[float], ring: Rect2, inner: Rect2, inner_col
 			var io := (ad + 1) * ci + d
 			if border:
 				io *= 2
-			var ang := (ci + d / float(ad)) * (PI / 2.0) + PI
-			var co := cos(ang)
-			var si := sin(ang)
-			vp[io] = Vector2(icr[ci] * co * isc[ci].x + inner_pts[ci].x, icr[ci] * si * isc[ci].y + inner_pts[ci].y)
+			# real_t is a 32-bit float in the engine: round where the C++ stores one.
+			var ang := _f((ci + d / float(ad)) * _f(PI / 2.0) + PI)
+			var co := _f(cos(ang))
+			var si := _f(sin(ang))
+			vp[io] = Vector2(_f(_f(_f(icr[ci] * co) * isc[ci].x) + inner_pts[ci].x), _f(_f(_f(icr[ci] * si) * isc[ci].y) + inner_pts[ci].y))
 			vc[io] = inner_col
 			if border:
-				vp[io + 1] = Vector2(rcr[ci] * co * rsc[ci].x + outer_pts[ci].x, rcr[ci] * si * rsc[ci].y + outer_pts[ci].y)
+				vp[io + 1] = Vector2(_f(_f(_f(rcr[ci] * co) * rsc[ci].x) + outer_pts[ci].x), _f(_f(_f(rcr[ci] * si) * rsc[ci].y) + outer_pts[ci].y))
 				vc[io + 1] = outer_col
 	points.append_array(vp)
 	colors.append_array(vc)
