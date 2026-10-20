@@ -18,7 +18,7 @@ const CACHE_MAX := 64
 
 ## key -> MeshPen (null when the zone cannot be recorded exactly).
 static var _cache: Dictionary = {}
-## Meshes recorded so far (tests).
+## Meshes recorded since the last clear() (tests, perf probes).
 static var builds := 0
 
 
@@ -49,6 +49,7 @@ static func for_zone(kind: String, size: Vector2, oversampling: float, mark: boo
 	return out
 
 
-## Drops every recorded mesh.
+## Drops every recorded mesh (and resets `builds`).
 static func clear() -> void:
 	_cache.clear()
+	builds = 0

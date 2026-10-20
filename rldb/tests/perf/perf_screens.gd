@@ -21,9 +21,16 @@ extends SceneTree
 ## in RENDER_TOTAL_DRAW_CALLS_IN_FRAME is its subtree's share.
 ## `--zone-mesh-off` (J31 follow-up) draws the empty zones live, one draw call per primitive, as before
 ## ZoneMesh: the same build measured before and after.
+## `--budget` (J31 follow-up) fails the run (exit code 1, "PERF BUDGET FAIL") when an idle screen issues
+## more draw calls than DRAW_CALL_BUDGET. Before the empty zones were merged (ZoneMesh) the duel issued
+## ~4040; after, ~1300. The budgets leave ~30-50% headroom over the 22 Oct numbers.
 ## "--perf-shots" only makes main.gd use the dev save folders (no real saves are touched).
 
 const WARM := 90
+## Draw calls per frame allowed on each idle screen with `--budget` (22 Oct, 1600x1000: decks 1832,
+## duel_idle ~1300, rewards ~2160, draft 1686; before ZoneMesh: 4182 / 4040 / ~4900 / 4034).
+const DRAW_CALL_BUDGET := {"menu": 400, "decks": 2500, "duel_idle": 2000, "rewards": 3000, "draft": 2400}
+var _budget_failed := false
 const SAMPLE := 400
 const PLAY_COMMANDS := 120
 
@@ -84,7 +91,7 @@ func _run() -> void:
 	await _frames(240)
 	await _measure("duel_idle")
 	if "--quick" in OS.get_cmdline_user_args():
-		quit()
+		quit(1 if _budget_failed else 0)
 		return
 	if attribute:
 		_hook_draws(root)
@@ -112,7 +119,7 @@ func _run() -> void:
 	main.call("_start_local", {"seed": 777, "best_of": 3, "deck_mode": "draft", "names": ["Ana", "Ben"]})
 	await _frames(240)
 	await _measure("draft")
-	quit()
+	quit(1 if _budget_failed else 0)
 
 
 func _on_frame_start() -> void:
@@ -219,6 +226,13 @@ func _report(label: String, s: Dictionary) -> void:
 		label, n, avg, 1000.0 / maxf(avg, 0.001), dt[int(n * 0.95)], s["proc"] / k, s["rcpu"] / k,
 		s["gpu"] / k, s["draws"] / k, Performance.get_monitor(Performance.OBJECT_NODE_COUNT),
 		s["scr"] / k, s["rnd"] / k, s["oth"] / k, ZoneMesh.builds])
+	if "--budget" in OS.get_cmdline_user_args() and DRAW_CALL_BUDGET.has(label):
+		var dc: float = s["draws"] / k
+		var lim: int = DRAW_CALL_BUDGET[label]
+		print("PERF budget %-10s draw_calls=%.0f limit=%d %s" % [label, dc, lim, "ok" if dc <= lim else "FAIL"])
+		if dc > lim:
+			print("PERF BUDGET FAIL %s: %.0f draw calls > %d" % [label, dc, lim])
+			_budget_failed = true
 	# The slowest 5% of frames: where their time goes (work in scripts / render, or waiting elsewhere).
 	var fr: Array = s["frames"]
 	if fr.size() >= 20:
