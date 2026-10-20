@@ -19,12 +19,19 @@ var selected: bool = false:
 		selected = v
 		queue_redraw()
 var _hover := 0.0
+## Hover lift (design review #52): 0 at rest, 1 under the pointer (selection alone does not lift).
+var _lift := 0.0
+## Rise of a hovered tile (px).
+const LIFT_PX := 3.0
+const PAD_V := 14
 ## False until the first frame: the rim and glow then start at their resting state instead of
 ## easing in from nothing (G02: a re-rendered list never flashes its hover or selection glow).
 var _primed := false
+var _lift_want := 0.0
 var _box: StyleBoxFlat
 var _root: VBoxContainer
 var _brow: HBoxContainer
+var _sig: HBoxContainer
 var _tog: Button
 var _main: Array = []
 var _extra: Array = []
@@ -38,8 +45,8 @@ func _init(d: Dictionary = {}) -> void:
 	_box = UIStyle.flat(Color(0, 0, 0, 0), UIStyle.BRONZE, 2, 10)
 	_box.content_margin_left = 16
 	_box.content_margin_right = 16
-	_box.content_margin_top = 14
-	_box.content_margin_bottom = 14
+	_box.content_margin_top = PAD_V
+	_box.content_margin_bottom = PAD_V
 	_box.shadow_color = Color(0, 0, 0, 0.5)
 	_box.shadow_size = 8
 	_box.shadow_offset = Vector2(0, 3)
@@ -113,6 +120,7 @@ func _build(d: Dictionary) -> void:
 	var keys := GameSeriesOverlay._key_cards(main, extra)
 	if not keys.is_empty():
 		var sig := HBoxContainer.new()
+		_sig = sig
 		sig.add_theme_constant_override("separation", 5)
 		sig.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		root.add_child(sig)
@@ -258,10 +266,15 @@ func _process(delta: float) -> void:
 	var want := 1.0 if h != null and (h == self or is_ancestor_of(h)) else 0.0
 	var tgt := 1.0 if selected else want
 	var cur := _hover
+	if want > 0.5 and _lift_want < 0.5 and _primed:
+		Sfx.hover_item()   # #52: the whole tile is the choice, so it answers the pointer
+	_lift_want = want
 	_hover = move_toward(_hover, tgt, delta * 8.0)
+	var lcur := _lift
+	_lift = move_toward(_lift, 0.0 if UIStyle.reduce_motion else want, delta / maxf(UIStyle.motion("hover"), 0.01))
 	if UIStyle.reduce_motion or not _primed:
 		_hover = tgt
-	if _hover != cur or not _primed:
+	if _hover != cur or _lift != lcur or not _primed:
 		_primed = true
 		_apply_rim()
 
@@ -271,12 +284,34 @@ func _apply_rim() -> void:
 	queue_redraw()
 	_box.border_color = UIStyle.BRONZE.lerp(UIStyle.GOLD_HI if selected else UIStyle.GOLD, _hover)
 	_box.shadow_color = Color(0, 0, 0, 0.5).lerp(Color(UIStyle.GOLD, 0.34), _hover)
-	_box.shadow_size = int(lerpf(8.0, 16.0, _hover))
-	_box.shadow_offset = Vector2(0, lerpf(3.0, 0.0, _hover))
+	# The lift: the frame and its shadow rise (expand margins), the content follows (content margins)
+	# and _draw moves its fill with them. Whole pixels, so the text never shimmers.
+	var px := lift_px()
+	_box.shadow_size = int(lerpf(8.0, 16.0, _hover)) + int(px * 2.0)
+	_box.shadow_offset = Vector2(0, lerpf(3.0, 0.0, _hover) + px)
+	if _box.expand_margin_top != px:
+		_box.expand_margin_top = px
+		_box.expand_margin_bottom = -px
+		_box.content_margin_top = PAD_V - px
+		_box.content_margin_bottom = PAD_V + px
+	# The signature-card strip brightens 10% under the pointer.
+	if _sig != null:
+		var b := 1.0 + 0.1 * _lift
+		_sig.modulate = Color(b, b, b, 1.0)
+
+
+## The tile's current rise in whole px (0 at rest and under reduce motion).
+func lift_px() -> float:
+	return roundf(_ease_lift(_lift) * LIFT_PX)
+
+
+static func _ease_lift(t: float) -> float:
+	return 1.0 - (1.0 - t) * (1.0 - t)   # QUAD OUT
 
 
 func _draw() -> void:
 	var hv := _hover
+	draw_set_transform(Vector2(0, -lift_px()))
 	var top := Color("2d2722").lerp(Color("3a3021"), hv)
 	var bot := Color("1a1714").lerp(Color("231c11"), hv)
 	var rad := 9.0

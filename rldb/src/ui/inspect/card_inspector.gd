@@ -26,11 +26,17 @@ var _card: Dictionary = {}
 var _on_closed: Callable = Callable()
 var _closing: bool = false
 var _panel: HousePanel
+var _dim: ColorRect
 var _card_box: Control
 var _card_widget: CardWidget
 var _details: CardDetailsPanel
 var _scroll: ScrollContainer
 var _sig: int = 0
+## Where the card came from (global rect; empty: no fly) and the flying copy while it moves.
+var _from: Rect2 = Rect2()
+var _ghost: CardWidget
+## The fly takes most of card_move (design review #87: about 300 ms).
+const FLY_K := 0.8
 
 
 ## True when `card` may be shown: a visible card view (not empty, not a hidden/face-down
@@ -40,12 +46,15 @@ static func is_inspectable(card: Dictionary) -> bool:
 
 
 ## Opens an inspector as a full-rect child of `parent` showing `card`. Returns it, or null when
-## the card is not inspectable. `on_closed` is called once after it closes.
-static func open(parent: Node, card: Dictionary, on_closed: Callable = Callable()) -> CardInspector:
+## the card is not inspectable. `on_closed` is called once after it closes. `from` (a global rect,
+## optional) is where the card was on screen: the big card flies out of it and back into it on close
+## (design review #87).
+static func open(parent: Node, card: Dictionary, on_closed: Callable = Callable(), from: Rect2 = Rect2()) -> CardInspector:
 	if parent == null or not is_inspectable(card):
 		return null
 	var ins := CardInspector.new()
 	ins._on_closed = on_closed
+	ins._from = from
 	ins._build()
 	parent.add_child(ins)
 	ins.show_card(card)
@@ -133,17 +142,35 @@ func show_card(c: Dictionary) -> void:
 	_scroll.set_deferred("scroll_vertical", keep if same_card else 0)
 
 
-## Closes the inspector (idempotent), then runs the on_closed callback.
+## Closes the inspector (idempotent), then runs the on_closed callback. It counts as closed at once
+## (open_count, closed); on screen it fades out with `panel_out` while the card flies back to where
+## it came from, then frees itself. Hidden at once when not in the tree.
 func close() -> void:
 	if _closing:
 		return
 	_closing = true
 	_stack.erase(self)
-	visible = false
 	closed.emit()
 	if _on_closed.is_valid():
 		_on_closed.call()
-	queue_free()
+	if not is_inside_tree():
+		visible = false
+		queue_free()
+		return
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for ch in find_children("*", "Control", true, false):
+		(ch as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	Sfx.play("panel_close")
+	var tw := create_tween()
+	tw.set_parallel(true)
+	if UIStyle.reduce_motion:
+		tw.tween_property(self, "modulate:a", 0.0, UIStyle.motion("reduced"))
+	else:
+		UIStyle.tween_token(tw, _panel, "modulate:a", 0.0, "panel_out")
+		UIStyle.tween_token(tw, _dim, "modulate:a", 0.0, "panel_out")
+		if _fly(_card_widget.get_global_rect(), _from, false) != null:
+			tw.tween_interval(UIStyle.motion("card_move") * FLY_K)
+	tw.chain().tween_callback(queue_free)
 
 
 func _exit_tree() -> void:
@@ -156,6 +183,7 @@ func _build() -> void:
 	z_index = UiLayers.CARD_INSPECTOR
 	z_as_relative = false
 	var dim := ColorRect.new()
+	_dim = dim
 	dim.color = Color(0, 0, 0, 0.7)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.gui_input.connect(func(ev):
@@ -238,11 +266,70 @@ func _layout_card() -> void:
 
 
 func _appear() -> void:
-	if UIStyle.reduce_motion or not is_inside_tree():
+	if not is_inside_tree():
 		return
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, UIStyle.dur(0.12))
+	# The panel's own appear plays panel_open and its motion (a 120 ms fade under reduce motion).
 	_panel.appear()
+	if UIStyle.reduce_motion:
+		return
+	_dim.modulate.a = 0.0
+	UIStyle.tween_token(create_tween(), _dim, "modulate:a", 1.0, "hover")
+	if _from.size.x < 4.0:
+		return
+	# The card flies from its place on the board once the panel is laid out (next frame).
+	_card_widget.modulate.a = 0.0
+	await get_tree().process_frame
+	if not is_instance_valid(self) or _closing:
+		return
+	var ps := _panel.scale
+	_panel.scale = Vector2.ONE     # the card's resting rect, not the one inside the panel's pop
+	var to := _card_widget.get_global_rect()
+	_panel.scale = ps
+	if _fly(_from, to, true) == null:
+		_card_widget.modulate.a = 1.0
+
+
+## A copy of the big card moving from global rect `a` to `b` along a short arc (`card_move`): on
+## arrival (`landing`) the real card shows and the copy goes. Null when there is nothing to fly.
+func _fly(a: Rect2, b: Rect2, landing: bool) -> CardWidget:
+	if a.size.x < 4.0 or b.size.x < 4.0 or UIStyle.reduce_motion or not is_inside_tree():
+		return null
+	if _ghost != null and is_instance_valid(_ghost):
+		_ghost.queue_free()
+	var g := CardWidget.new()
+	_ghost = g
+	g.auto_hover = false
+	g.show_tooltip = false
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var face := _card_widget.view.duplicate()
+	g.setup(face, "big")
+	add_child(g)
+	var big := b if landing else a
+	GameUi.resize_card(g, big.size)
+	var inv := get_global_transform().affine_inverse()
+	var k_a := a.size.x / big.size.x
+	var k_b := b.size.x / big.size.x
+	g.pivot_offset = Vector2.ZERO
+	var p0 := inv * a.position
+	var p1 := inv * b.position
+	g.position = p0
+	g.scale = Vector2(k_a, k_a)
+	if not landing:
+		_card_widget.modulate.a = 0.0
+	var d := UIStyle.motion("card_move") * FLY_K
+	var apex := (p0 + p1) / 2.0 + Vector2(0, -40.0)
+	var tw := g.create_tween()
+	tw.set_parallel(true)
+	tw.tween_method(func(t: float) -> void:
+		if is_instance_valid(g):
+			g.position = p0.lerp(apex, t).lerp(apex.lerp(p1, t), t), 0.0, 1.0, d).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(g, "scale", Vector2(k_b, k_b), d).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	tw.chain().tween_callback(func() -> void:
+		if landing and is_instance_valid(_card_widget):
+			_card_widget.modulate.a = 1.0
+		if is_instance_valid(g):
+			g.queue_free())
+	return g
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

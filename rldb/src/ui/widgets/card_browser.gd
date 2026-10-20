@@ -460,7 +460,11 @@ func _make_cell(d: Dictionary) -> Control:
 		w.tooltip_text += "\n\nImplementation: %s" % status
 	w.pressed.connect(func(_w): _on_click(id))
 	w.right_pressed.connect(func(_w): card_inspected.emit(id))
-	w.mouse_entered.connect(func(): card_hovered.emit(id))
+	w.mouse_entered.connect(func():
+		w.ease_hover(true)
+		card_hovered.emit(id))
+	w.mouse_exited.connect(func(): w.ease_hover(false))
+	w.hover_sound = true
 	c.add_child(w)
 	if status != "full":
 		var warn := PanelContainer.new()

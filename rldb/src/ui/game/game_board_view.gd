@@ -29,6 +29,10 @@ var gs: GameScreen
 var table: Control
 ## Decorative lines and glow between the two sides.
 var deco: BoardDeco
+## Table dust motes and their light cone (#23), as fractions of the play field.
+var dust: AmbientMotes
+const DUST_COUNT := 10
+const DUST_SHAFT := Rect2(0.3, 0.0, 0.4, 1.0)
 ## Layer the cards of this view live on.
 var layer: Control
 ## [top plate, bottom plate]
@@ -83,6 +87,12 @@ func build_table() -> void:
 	table.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	table.clip_contents = true
 	gs.add_child(table)
+	# #23: the table is never perfectly still: a few warm dust motes drift in a soft centre light
+	# cone (resting, faint, under reduce motion). Under the zones and cards; click-through.
+	dust = AmbientMotes.dust(DUST_COUNT)
+	dust.shaft = DUST_SHAFT
+	dust.shaft_color = AmbientMotes.DUST_COLOR
+	table.add_child(dust)
 
 
 ## Builds the decoration, every zone slot, the plates, piles and the opponent hand.

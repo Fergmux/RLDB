@@ -21,6 +21,12 @@ const GAP := 14.0
 const SCROLLBAR_W := 16.0
 const CARD_MIN_W := 170.0
 const CARD_MAX_W := 300.0
+## The opening deal (#90): per-card step (s), the start scale, the rise without a source (px) and the
+## card_draw level.
+const DEAL_STEP := 0.03
+const DEAL_SCALE := 0.4
+const DEAL_RISE := 60.0
+const DEAL_DB := -8.0
 
 var _title: String = ""
 var _hint: String = ""
@@ -40,7 +46,8 @@ var _empty: Label
 
 ## Opens a browser as a full-rect child of `parent` listing `cards` (visible card views).
 ## `title` should carry the pile name; the count is appended. `hint` is a muted line beside it.
-static func open(parent: Node, title: String, cards: Array, hint: String = "", on_closed: Callable = Callable()) -> PileBrowser:
+## `from` (global point, optional) is the pile on the board: the cards deal out of it (#90).
+static func open(parent: Node, title: String, cards: Array, hint: String = "", on_closed: Callable = Callable(), from: Vector2 = Vector2.INF) -> PileBrowser:
 	if parent == null:
 		return null
 	var b := PileBrowser.new()
@@ -52,7 +59,48 @@ static func open(parent: Node, title: String, cards: Array, hint: String = "", o
 	b.set_cards(cards)
 	b._relayout()
 	b._panel.appear()
+	b.deal_in(from)
 	return b
+
+
+## The opening deal (design review #90): the cards appear one after another (`stagger` 30 ms), each
+## gliding from `from` (the pile on the board, a global point; default: a short rise) to its place
+## and growing from 0.4, with one soft card_draw. Under reduce motion they fade in together. Waits
+## one frame for the grid to place them. Returns false when there is nothing to deal.
+func deal_in(from: Vector2 = Vector2.INF) -> bool:
+	var ws := _grid.get_children()
+	if ws.is_empty() or not is_inside_tree():
+		return false
+	for w in ws:
+		(w as Control).modulate.a = 0.0
+	if UIStyle.reduce_motion:
+		var tr := create_tween().set_parallel(true)
+		for w in ws:
+			tr.tween_property(w, "modulate:a", 1.0, UIStyle.motion("reduced"))
+		return true
+	await get_tree().process_frame
+	if not is_instance_valid(self) or _closing:
+		return false
+	Sfx.play("card_draw", DEAL_DB)
+	var tw := create_tween().set_parallel(true)
+	var d := UIStyle.motion("card_move")
+	for i in ws.size():
+		var w := ws[i] as CardWidget
+		if not is_instance_valid(w):
+			continue
+		var c := w.get_global_rect().get_center()
+		var off := (from - c) if from.is_finite() else Vector2(0, DEAL_RISE)
+		off = get_global_transform().basis_xform_inv(off)
+		var at := DEAL_STEP * i
+		w.pivot_offset = w.size / 2.0
+		tw.tween_callback(func() -> void:
+			if is_instance_valid(w):
+				w.fx_offset = off
+				w.scale = Vector2(DEAL_SCALE, DEAL_SCALE)
+				w.modulate.a = 1.0).set_delay(UIStyle.dur(at))
+		tw.tween_property(w, "fx_offset", Vector2.ZERO, d).from(off).set_delay(UIStyle.dur(at)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(w, "scale", Vector2.ONE, d).from(Vector2(DEAL_SCALE, DEAL_SCALE)).set_delay(UIStyle.dur(at)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	return true
 
 
 ## Best grid for `n` cards of 2:3 shape in `avail` px: returns {"cols", "w", "scroll"}. Prefers the
@@ -92,6 +140,10 @@ func set_cards(cards: Array) -> void:
 		w.setup(c, "big")
 		w.mouse_default_cursor_shape = Control.CURSOR_ARROW
 		w.right_pressed.connect(_on_card_right)
+		# #90: the cards answer the pointer like every other card list (a small lift and the paper slide).
+		w.hover_sound = true
+		w.mouse_entered.connect(func(): w.ease_hover(true, 1.03, 4.0))
+		w.mouse_exited.connect(func(): w.ease_hover(false, 1.03, 4.0))
 		_grid.add_child(w)
 	_empty.visible = cards.is_empty()
 	_update_title()
@@ -144,7 +196,7 @@ func _update_title() -> void:
 
 func _on_card_right(w: CardWidget) -> void:
 	# Opens over the browser; the browser itself stays untouched underneath.
-	CardInspector.open(self, w.view)
+	CardInspector.open(self, w.view, Callable(), w.get_global_rect())
 
 
 func _build() -> void:

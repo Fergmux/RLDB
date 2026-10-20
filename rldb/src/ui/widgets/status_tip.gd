@@ -17,6 +17,11 @@ const FONT_SIZE := 15
 const DETAIL_FONT_SIZE := 14
 ## Width the effect section wraps at.
 const DETAIL_W := 320.0
+## F5 tooltip (design review 1.4.3 / #104): parchment-dark body with a light leather grain, a 4 px
+## radius and a 6 px pointer notch toward the source.
+const BODY := Color("1b1712")
+const GRAIN := 0.3
+const NOTCH := 6.0
 
 static var _tip: StatusTip
 
@@ -25,6 +30,8 @@ var _label: Label
 var _detail_box: PanelContainer
 var _detail: Label
 var _owner_id: int = 0
+var _notch: Notch
+var _motion: Tween
 
 
 ## Shows `text` next to `anchor` (a screen-space rect, normally the icon: a rect in the owner's local
@@ -64,14 +71,13 @@ func _init() -> void:
 	layer = LAYER
 	_panel = PanelContainer.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := UIStyle.flat(Color(0.035, 0.03, 0.025, 0.97), Color(UIStyle.GOLD, 0.6), 1, 6)
-	sb.content_margin_left = 9
-	sb.content_margin_right = 9
-	sb.content_margin_top = 4
-	sb.content_margin_bottom = 5
-	sb.shadow_color = Color(0, 0, 0, 0.6)
-	sb.shadow_size = 6
-	_panel.add_theme_stylebox_override("panel", sb)
+	var sb := UIStyle.flat(Color(BODY, 0.98), Color(UIStyle.GOLD, 0.6), 1, 4)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 5
+	sb.content_margin_bottom = 6
+	UIStyle.lift(sb, UIStyle.DEPTH_FLOATING)
+	_panel.add_theme_stylebox_override("panel", UiSurface.box(sb, UiSurface.LEATHER, GRAIN))
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 5)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -86,9 +92,31 @@ func _init() -> void:
 	v.add_child(_detail_box)
 	_panel.visible = false
 	add_child(_panel)
+	_notch = Notch.new()
+	_panel.add_child(_notch)
+
+
+## The pointer notch: a small gold-edged triangle on the tip's edge, pointing at the source.
+class Notch extends Control:
+	## True: on the bottom edge pointing down (the tip is above its source); false: on top, pointing up.
+	var down := true
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		top_level = true   # the PanelContainer must not stretch it over the tip
+		custom_minimum_size = Vector2.ZERO
+
+	func _draw() -> void:
+		var n := StatusTip.NOTCH
+		var c := Vector2(size.x / 2.0, 0.0)
+		var d := 1.0 if down else -1.0
+		var pts := PackedVector2Array([c + Vector2(-n, 0), c + Vector2(n, 0), c + Vector2(0, n * d)])
+		draw_colored_polygon(pts, StatusTip.BODY)
+		draw_polyline(PackedVector2Array([pts[0], pts[2], pts[1]]), Color(UIStyle.GOLD, 0.6), 1.0, true)
 
 
 func _show(owner: Control, text: String, anchor: Rect2, detail: String) -> void:
+	var was_hidden := not _panel.visible
 	_owner_id = owner.get_instance_id()
 	_label.text = text
 	_label.visible = text != ""
@@ -100,8 +128,21 @@ func _show(owner: Control, text: String, anchor: Rect2, detail: String) -> void:
 	_panel.size = sz
 	var a := anchor
 	var vp := owner.get_viewport_rect().size
-	var pos := Vector2(a.get_center().x - sz.x / 2.0, a.position.y - sz.y - GAP)
-	if pos.y < 4.0:
-		pos.y = a.end.y + GAP     # no room above: below the icon
+	var gap := GAP + NOTCH
+	var pos := Vector2(a.get_center().x - sz.x / 2.0, a.position.y - sz.y - gap)
+	var above := pos.y >= 4.0
+	if not above:
+		pos.y = a.end.y + gap     # no room above: below the icon
 	pos.x = clampf(pos.x, 4.0, maxf(4.0, vp.x - sz.x - 4.0))
 	_panel.position = pos
+	# The notch points at the source (its x follows the anchor even when the tip was clamped).
+	var nx := clampf(a.get_center().x - pos.x, 10.0, sz.x - 10.0)
+	_notch.down = above
+	_notch.position = pos + Vector2(nx - NOTCH, sz.y - 1.0 if above else 1.0)
+	_notch.size = Vector2(NOTCH * 2.0, 0.0)
+	_notch.queue_redraw()
+	# tooltip_in (140 ms, no overshoot; a 120 ms fade under reduce motion) for a fresh tip only.
+	if was_hidden:
+		if _motion != null and _motion.is_valid():
+			_motion.kill()
+		_motion = UIStyle.tween_in(_panel, "tooltip_in")

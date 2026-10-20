@@ -10,6 +10,8 @@ const R := 15.0
 var left: int = 0
 ## Total picks.
 var total: int = 0
+## Per-gem scale while the gems pop in (empty: all at rest).
+var _pop: Array = []
 
 
 ## Width needed for `n` gems.
@@ -20,6 +22,35 @@ static func width_for(n: int) -> float:
 func _init() -> void:
 	custom_minimum_size = Vector2(0, 36)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+## Rewards reveal (design review #63): the remaining gems pop in one after another (scale 0 -> 1.15
+## -> 1, BACK OUT), `step` s apart after `delay`. Under reduce motion they are simply there.
+func pop_in(delay: float = 0.0, step: float = 0.06) -> void:
+	_pop = []
+	if UIStyle.reduce_motion or not is_inside_tree() or left <= 0:
+		queue_redraw()
+		return
+	for i in left:
+		_pop.append(0.0)
+	queue_redraw()
+	var tw := create_tween()
+	tw.set_parallel(true)
+	for i in left:
+		var idx := i
+		var setter := func(v: float) -> void:
+			if idx < _pop.size():
+				_pop[idx] = v
+				queue_redraw()
+		tw.tween_method(setter, 0.0, 1.0, UIStyle.motion("panel_in")).set_delay(UIStyle.dur(delay + step * i)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_callback(func() -> void:
+		_pop = []
+		queue_redraw())
+
+
+## True while the pop-in is running (tests).
+func popping() -> bool:
+	return not _pop.is_empty()
 
 
 static func _hex(c: Vector2, r: float) -> PackedVector2Array:
@@ -35,7 +66,8 @@ func _draw() -> void:
 	for i in total:
 		var c := Vector2(STEP / 2.0 + i * STEP, size.y / 2.0)
 		if i < left:
-			draw_gem(self, c, R, amber)
+			var k := float(_pop[i]) if i < _pop.size() else 1.0
+			draw_gem(self, c, R * k, amber, clampf(k * 1.5, 0.0, 1.0))
 		else:
 			draw_socket(self, c, R)
 

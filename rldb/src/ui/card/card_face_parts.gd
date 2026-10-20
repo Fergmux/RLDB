@@ -23,9 +23,10 @@ static func frame(pt: CardPainter, radius: float) -> void:
 	var ci := pt.ci
 	var s := pt.s
 	var sb := pt.sbox(BODY, pt.accent(), maxi(2, roundi(2.8 * s)), roundi(radius * s))
-	sb.shadow_color = Color(0, 0, 0, 0.5)
-	sb.shadow_size = roundi((14.0 if pt.hover else 7.0) * s)
-	sb.shadow_offset = pt.shadow_off(3.0 * s)
+	# Depth 2 at rest, depth 3 while hovered (design review #32): the shadow grows and falls further.
+	sb.shadow_color = Color(0, 0, 0, 0.6 if pt.hover else 0.5)
+	sb.shadow_size = roundi((16.0 if pt.hover else 7.0) * s)
+	sb.shadow_offset = pt.shadow_off((7.0 if pt.hover else 3.0) * s)
 	ci.draw_style_box(sb, Rect2(Vector2.ZERO, pt.ps))
 	var inset := 3.0 * s
 	UiSurface.draw_round(ci, Rect2(inset, inset, pt.ps.x - 2 * inset, pt.ps.y - 2 * inset), maxf(0.0, (radius - 3.0) * s), UiSurface.PEBBLE, BODY, BODY_GRAIN, BODY_TILE * s)

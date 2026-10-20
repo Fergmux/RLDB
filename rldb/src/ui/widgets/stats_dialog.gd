@@ -17,6 +17,13 @@ const FOOT_FONT := 13
 
 ## The SCREEN-tier headline (D3).
 var headline: TitleText
+## Headline facts that wear a small gold gem beside their value (design review #95).
+const GEM_FACTS := ["Win rate", "Best win streak"]
+## Values that count up on open: a plain count, a percentage, "n turns" / "n damage", "w - l" and
+## "a of b". Anything else (times, card and deck names) appears as it is.
+const COUNT_RE := "^\\d+(%| turns| damage)?$|^\\d+ - \\d+$|^\\d+ of \\d+$"
+## The rows that animate in on open: [row, value label, final text] (empty when nothing animates).
+var _intro: Array = []
 
 
 ## Opens the dialog as a full-rect child of `parent` and returns it. `facts` (empty) means the
@@ -28,6 +35,7 @@ static func open(parent: Node, facts: Array = []) -> StatsDialog:
 	parent.add_child(d)
 	d._panel.appear()
 	d.headline.play_sweep()
+	d.count_up()
 	Telemetry.refresh_stats()
 	return d
 
@@ -112,7 +120,7 @@ func _build(facts: Array) -> void:
 	_list_holder.add_theme_constant_override("separation", 0)
 	v.add_child(_list_holder)
 	_seen_rev = PlayerStats.revision
-	_fill(facts)
+	_fill(facts, true)
 	# Sync line: a status dot and where the record lives.
 	var foot := HBoxContainer.new()
 	foot.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -135,8 +143,53 @@ func _build(facts: Array) -> void:
 	v.add_child(close_btn)
 
 
-## (Re)builds the fact list (or the empty-state line) inside the plate.
-func _fill(facts: Array) -> void:
+## True when fact value `v` counts up on open (see COUNT_RE).
+static func counts_up(v: String) -> bool:
+	var re := RegEx.create_from_string(COUNT_RE)
+	return re.search(v) != null
+
+
+## `v` with every number scaled by `k` (0..1) and rounded: the frame of a count-up. Values that do
+## not count up are returned unchanged.
+static func count_text(v: String, k: float) -> String:
+	if not counts_up(v):
+		return v
+	var re := RegEx.create_from_string("\\d+")
+	var out := ""
+	var at := 0
+	for m in re.search_all(v):
+		out += v.substr(at, m.get_start() - at) + str(roundi(float(m.get_string()) * clampf(k, 0.0, 1.0)))
+		at = m.get_end()
+	return out + v.substr(at)
+
+
+## The opening ceremony (design review #95): the rows fade in one after another (`stagger`) and each
+## value counts up from zero (`count`, QUART OUT). Under reduce motion everything is shown at once.
+## Returns the tween, or null when nothing animates.
+func count_up() -> Tween:
+	var rows := _intro
+	_intro = []
+	if rows.is_empty() or UIStyle.reduce_motion or not is_inside_tree():
+		return null
+	var tw := create_tween().set_parallel(true)
+	for i in rows.size():
+		var row: Control = rows[i][0]
+		var val: Label = rows[i][1]
+		var final := String(rows[i][2])
+		var at := UIStyle.motion("stagger") * i
+		row.modulate.a = 0.0
+		UIStyle.tween_token(tw, row, "modulate:a", 1.0, "hover").set_delay(at)
+		if counts_up(final):
+			val.text = count_text(final, 0.0)
+			tw.tween_method(func(k: float) -> void:
+				if is_instance_valid(val):
+					val.text = count_text(final, k), 0.0, 1.0, UIStyle.motion("count")).set_delay(at).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	return tw
+
+
+## (Re)builds the fact list (or the empty-state line) inside the plate. `intro`: the rows are kept
+## for the opening count-up (a refresh while open shows the new values at once).
+func _fill(facts: Array, intro: bool = false) -> void:
 	for c in _list_holder.get_children():
 		_list_holder.remove_child(c)
 		c.queue_free()
@@ -148,8 +201,12 @@ func _fill(facts: Array) -> void:
 		return
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 0)
+	_intro = []
 	for i in facts.size():
-		list.add_child(_row(facts[i], i % 2 == 1))
+		var row := _row(facts[i], i % 2 == 1)
+		list.add_child(row)
+		if intro:
+			_intro.append([row, row.get_meta("value_label"), String(facts[i]["value"])])
 	var max_h := maxf(260.0, parent_height() * LIST_MAX_SHARE)
 	if facts.size() * ROW_H > max_h:
 		var sa := ScrollArea.new()
@@ -189,12 +246,29 @@ func _row(f: Dictionary, shaded: bool) -> Control:
 		d.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		d.custom_minimum_size = Vector2(120, 0)
 		left.add_child(d)
+	if String(f["label"]) in GEM_FACTS:
+		var gem := Gem.new()
+		gem.name = "Gem"
+		h.add_child(gem)
 	var val := UIStyle.label(String(f["value"]), 17, UIStyle.GOLD_HI)
+	val.name = "Value"
 	val.add_theme_font_override("font", UIStyle.font_bold())
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(val)
+	pc.set_meta("value_label", val)
 	return pc
+
+
+## A small faceted gold gem marking a headline fact (the rewards' gem language, #95).
+class Gem extends Control:
+	func _init() -> void:
+		custom_minimum_size = Vector2(18, 18)
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		PickPips.draw_gem(self, size / 2.0, 7.0, UIStyle.GOLD)
 
 
 

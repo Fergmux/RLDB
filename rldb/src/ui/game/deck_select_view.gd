@@ -322,6 +322,7 @@ func _draft(box: VBoxContainer) -> void:
 		var cw := CardWidget.new().setup(MatchView.summary_view(c), "big")
 		cw.custom_minimum_size = card
 		cw.tooltip_text = "Pick %s" % c["name"]
+		cw.hover_sound = true
 		var idx: int = i
 		cw.pressed.connect(func(_w): gs.send({"t": "draft_pick", "index": idx}))
 		cw.right_pressed.connect(gs.inspect.inspect_widget)

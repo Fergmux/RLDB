@@ -767,6 +767,39 @@ def s_hp_low_heartbeat(r):
     return finish(lowpass(softclip(x, 1.3), 900), tail_kw=dict(wet=0.12, extra_s=0.15, damp=900.0))
 
 
+# ---------------------------------------------------------------- H1 WP-9 motion and sound pass
+def s_card_hover(r):
+    """Card hover (design review #32): a soft paper slide, a card lifted off the felt, about 60 ms."""
+    n = n_samples(0.06)
+    slide = mul(bandpass_sweep(noise(r, 0.06), 1500, 3400, q=1.1), [math.sin(math.pi * i / n) ** 1.6 for i in range(n)])
+    body = mul(lowpass(noise(r, 0.03), 900), env_exp(n_samples(0.03), 0.008, 0.002))
+    return finish(lowpass(mix(scale(slide, 0.8), scale(body, 0.25)), 6000), tail_kw=dict(wet=0.05, extra_s=0.03))
+
+
+def s_reward_reveal(r):
+    """Rewards open (#63): a rising three-note glass-and-brass chime over a soft shimmer, about 600 ms."""
+    notes = (659.25, 880.0, 1174.66)
+    x = mix(*[(0.09 * k, scale(bell(f, 0.5, 0.16), 0.55 - 0.08 * k)) for k, f in enumerate(notes)])
+    n = n_samples(0.45)
+    shimmer = mul(highpass(noise(r, 0.45), 7000), [math.sin(math.pi * i / n) ** 2 for i in range(n)])
+    return finish(mix(x, (0.05, scale(shimmer, 0.05))), tail_kw=dict(wet=0.35, extra_s=0.25))
+
+
+def s_reward_pick(r):
+    """A reward taken (#62): a cut gem set in its socket: a bright two-partial ping on a brass tick."""
+    ping = tone(1567.98, 0.4, 0.12, ((1, 1), (2.76, 0.25), (5.4, 0.08)), 0.0008)
+    low = tone(783.99, 0.35, 0.14, ((1, 1), (2, 0.3)), 0.002)
+    tick = mul(highpass(noise(r, 0.01), 3500), env_exp(n_samples(0.01), 0.0015, 0.0002))
+    return finish(mix(scale(tick, 0.5), scale(low, 0.45), (0.012, scale(ping, 0.7))), tail_kw=dict(wet=0.3, extra_s=0.2))
+
+
+def s_step_done(r):
+    """Tutorial step complete: a small bright chime, a rising fourth, quiet and short."""
+    a = bell(1046.5, 0.3, 0.08)
+    b = bell(1396.91, 0.4, 0.12)
+    return finish(mix(scale(a, 0.6), (0.07, scale(b, 0.75))), tail_kw=dict(wet=0.3, extra_s=0.18))
+
+
 SOUNDS = [
     ("card_draw", s_card_draw), ("card_play", s_card_play), ("card_set", s_card_set),
     ("summon", s_summon), ("select", s_select), ("confirm", s_confirm),
@@ -787,13 +820,16 @@ SOUNDS = [
     ("sacrifice", s_sacrifice), ("ap_gain", s_ap_gain), ("ap_loss", s_ap_loss),
     ("ui_hover", s_ui_hover), ("panel_open", s_panel_open), ("panel_close", s_panel_close), ("tab", s_tab),
     ("toggle_on", s_toggle_on), ("toggle_off", s_toggle_off), ("hp_low_heartbeat", s_hp_low_heartbeat),
+    ("card_hover", s_card_hover), ("reward_reveal", s_reward_reveal), ("reward_pick", s_reward_pick),
+    ("step_done", s_step_done),
 ]
 
 # Per-sound peak level (dBFS); default PEAK_DBFS. UI clicks sit well under the game sounds.
 PEAK = {"chat": -12.0, "click_primary": -11.0, "click_secondary": -12.0, "back": -10.5, "deck_add": -10.0, "deck_remove": -10.5,
         "ap_gain": -10.0, "ap_loss": -11.0, "card_slam": -7.5, "sacrifice": -8.0,
         "ui_hover": -21.0, "panel_open": -13.5, "panel_close": -14.5, "tab": -13.0,
-        "toggle_on": -14.0, "toggle_off": -14.5, "hp_low_heartbeat": -7.0}
+        "toggle_on": -14.0, "toggle_off": -14.5, "hp_low_heartbeat": -7.0,
+        "card_hover": -22.0, "reward_reveal": -12.0, "reward_pick": -11.0, "step_done": -13.0}
 
 
 # Hard duration caps (seconds); longer renders are trimmed and re-faded.
@@ -802,7 +838,7 @@ MAX_LEN = {"boom": 1.6, "charge": 1.4, "victory_big": 2.6, "exhaust": 1.3, "fuse
            "arcane_impact": 1.8, "card_slam": 0.6, "serpent_coil": 1.6, "serpent_strike": 1.6, "sacrifice": 1.2,
            "ap_gain": 0.6, "ap_loss": 0.45,
            "ui_hover": 0.12, "panel_open": 0.55, "panel_close": 0.35, "tab": 0.2, "toggle_on": 0.16, "toggle_off": 0.16,
-           "hp_low_heartbeat": 0.75}
+           "hp_low_heartbeat": 0.75, "card_hover": 0.14, "reward_reveal": 0.9, "reward_pick": 0.6, "step_done": 0.6}
 
 
 def write_wav(path, x):

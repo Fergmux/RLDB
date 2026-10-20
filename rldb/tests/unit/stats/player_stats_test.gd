@@ -189,7 +189,8 @@ func test_dialog_lists_every_fact_and_closes_on_escape() -> void:
 	var root := Control.new()
 	add_child(root)
 	var d := StatsDialog.open(root)
-	await get_tree().process_frame
+	# WP-9 (#95): the values count up on open; read them once the count has landed.
+	await await_millis(int((UIStyle.motion("count") + UIStyle.motion("stagger") * 12.0 + 0.2) * 1000.0))
 	var texts := []
 	for l in d.find_children("*", "Label", true, false):
 		texts.append((l as Label).text)

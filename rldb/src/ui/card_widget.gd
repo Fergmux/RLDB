@@ -50,6 +50,9 @@ var show_label: bool = false
 var auto_hover: bool = true
 ## Native tooltip with name and rules text (off on the match board, where details live in the sidebar).
 var show_tooltip: bool = true
+## Hover cue (design review #32 / #76): the pointer entering a shown card plays Sfx.hover_card (the
+## paper slide, rate-limited). Off by default: the screens that list cards for picking turn it on.
+var hover_sound: bool = false
 var hovered: bool = false: set = _set_hovered
 var fx_flash: float = 0.0: set = _set_flash
 var fx_glow: Color = Color(1, 1, 1, 0): set = _set_glow
@@ -106,7 +109,12 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	mouse_entered.connect(func(): _self_hover = auto_hover; _mouse_in = true; queue_redraw())
+	mouse_entered.connect(func():
+		_self_hover = auto_hover
+		_mouse_in = true
+		if hover_sound and not view.is_empty():
+			Sfx.hover_card()
+		queue_redraw())
 	mouse_exited.connect(func(): _self_hover = false; _mouse_in = false; StatusTip.hide_for(self); queue_redraw())
 	# Godot turns processing on at ready because _process exists: only redraw per frame while animating.
 	_update_process()
@@ -253,6 +261,26 @@ func text_oversampling() -> float:
 		return 0.0
 	var vp := get_viewport()
 	return (vp.get_oversampling() if vp != null else 1.0) * k
+
+
+## Rest -> hover lift of a card shown in a list (catalogue, pile browser; design review #76 / #90):
+## it rises `rise` px and grows to `k` with the `hover` token, and settles with `hover_out`; the
+## hover itself already gives the depth-3 shadow and the soft outer glow. Under reduce motion it
+## stays in place (the glow alone marks the hover). The card must have a custom_minimum_size.
+func ease_hover(on: bool, k: float = 1.04, rise: float = 4.0) -> void:
+	var old = get_meta("ease_hover_tw", null)
+	if old is Tween and (old as Tween).is_valid():
+		(old as Tween).kill()
+	if UIStyle.reduce_motion or not is_inside_tree():
+		lift_k = 1.0
+		lift_offset = Vector2.ZERO
+		return
+	var tw := create_tween()
+	set_meta("ease_hover_tw", tw)
+	tw.set_parallel(true)
+	var tok := "hover" if on else "hover_out"
+	UIStyle.tween_token(tw, self, "lift_k", k if on else 1.0, tok)
+	UIStyle.tween_token(tw, self, "lift_offset", Vector2(0, -rise) if on else Vector2.ZERO, tok)
 
 
 func _set_hovered(v: bool) -> void:
