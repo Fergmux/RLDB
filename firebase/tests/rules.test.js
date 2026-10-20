@@ -106,7 +106,10 @@ test('oversized and malformed payloads are denied', async () => {
   const p = (id) => doc(db, `users/alice/submissions/${id}`);
   await assertSucceeds(setDoc(p('game_edge'), submission('alice', 'game', { body: 'x'.repeat(200000) })));
   await assertFails(setDoc(p('game_big'), submission('alice', 'game', { body: 'x'.repeat(200001) })));
-  await assertFails(setDoc(p('game_v2'), submission('alice', 'game', { schema_version: 2 })));
+  // Schema v2 (20 Oct 2026: turn times) is accepted beside v1; anything else is not.
+  await assertSucceeds(setDoc(p('game_v2'), submission('alice', 'game', { schema_version: 2 })));
+  await assertFails(setDoc(p('game_v3'), submission('alice', 'game', { schema_version: 3 })));
+  await assertFails(setDoc(p('game_v0'), submission('alice', 'game', { schema_version: 0 })));
   await assertFails(setDoc(p('game_env'), submission('alice', 'game', { env: 'staging' })));
   await assertFails(setDoc(p('game_mode'), submission('alice', 'game', { mode: 'tutorial' })));
   await assertFails(setDoc(p('game_hash'), submission('alice', 'game', { content_hash: 'XYZ' })));
@@ -236,5 +239,170 @@ test('review: the rules file has no unconditional allow', () => {
   assert.ok(!/if\s+true/.test(src));
   assert.ok(!/allow[^;]*if\s+request\.auth\s*!=\s*null\s*;/.test(src));
   const allows = src.match(/allow [^:]+:/g);
-  assert.deepEqual(allows, ['allow create:', 'allow get:', 'allow list, update, delete:', 'allow read, write:']);
+  assert.deepEqual(allows, ['allow create:', 'allow get:', 'allow list, update, delete:',
+    'allow get:', 'allow create, update:', 'allow list, delete:',
+    'allow get:', 'allow create:', 'allow update:', 'allow list, delete:', 'allow read, write:']);
+});
+
+
+// ------------------------------------------------------------------ cloud statistics (C1)
+// stats_links/{uid} claims one Steam-ID hash; player_stats/{hash} is readable and writable only
+// by a uid whose link names it. Unverified by design (owner decision 20 Oct 2026): any anonymous
+// uid may claim any hash, so these tests prove the shape, size and claim checks, not identity.
+
+const H1 = '0123456789abcdef0123456789abcdef';
+const H2 = 'fedcba9876543210fedcba9876543210';
+const carol = () => env.authenticatedContext('carol', { firebase: { sign_in_provider: 'password' } }).firestore();
+
+function link(hash, over = {}) {
+  return Object.assign({ steam_hash: hash, linked_at: serverTimestamp() }, over);
+}
+
+function stats(uid, hash, over = {}) {
+  return Object.assign({
+    schema_version: 1, steam_hash: hash, uid, rev: 1, enc: 'gzip64', raw_len: 120,
+    updated_at: serverTimestamp(), body: 'H4sIAAAAAAAA',
+  }, over);
+}
+
+async function linkAs(db, uid, hash) {
+  await assertSucceeds(setDoc(doc(db, `stats_links/${uid}`), link(hash)));
+}
+
+test('stats: a uid links its own hash, reads it back, and nobody else reads its link', async () => {
+  await linkAs(alice(), 'alice', H1);
+  await assertSucceeds(getDoc(doc(alice(), 'stats_links/alice')));
+  await assertFails(getDoc(doc(bob(), 'stats_links/alice')));
+  await assertFails(getDoc(doc(anon(), 'stats_links/alice')));
+  // Re-linking (another Steam account on this install) is an update, still checked.
+  await assertSucceeds(setDoc(doc(alice(), 'stats_links/alice'), link(H2)));
+});
+
+test('stats: links are refused for other uids, bad hashes, extra fields and client times', async () => {
+  await assertFails(setDoc(doc(bob(), 'stats_links/alice'), link(H1)));
+  await assertFails(setDoc(doc(anon(), 'stats_links/alice'), link(H1)));
+  await assertFails(setDoc(doc(carol(), 'stats_links/carol'), link(H1)));          // not anonymous
+  await assertFails(setDoc(doc(alice(), 'stats_links/alice'), link('76561198000000042')));   // raw Steam ID
+  await assertFails(setDoc(doc(alice(), 'stats_links/alice'), link(H1.toUpperCase())));
+  await assertFails(setDoc(doc(alice(), 'stats_links/alice'), link(H1 + 'aa')));
+  await assertFails(setDoc(doc(alice(), 'stats_links/alice'), link(H1, { verified: true })));
+  await assertFails(setDoc(doc(alice(), 'stats_links/alice'), link(H1, { linked_at: new Date(0) })));
+  await assertFails(setDoc(doc(alice(), 'stats_links/alice'), { steam_hash: H1 }));
+  await linkAs(alice(), 'alice', H1);
+  await assertFails(deleteDoc(doc(alice(), 'stats_links/alice')));
+  await assertFails(getDocs(collection(alice(), 'stats_links')));
+});
+
+test('stats: the linked uid creates, reads and updates its stats with rev + 1', async () => {
+  await linkAs(alice(), 'alice', H1);
+  const ref = doc(alice(), `player_stats/${H1}`);
+  await assertSucceeds(setDoc(ref, stats('alice', H1)));
+  await assertSucceeds(getDoc(ref));
+  await assertSucceeds(setDoc(ref, stats('alice', H1, { rev: 2 })));
+  // A second computer (another uid) claims the same hash and continues the record.
+  await linkAs(bob(), 'bob', H1);
+  await assertSucceeds(getDoc(doc(bob(), `player_stats/${H1}`)));
+  await assertSucceeds(setDoc(doc(bob(), `player_stats/${H1}`), stats('bob', H1, { rev: 3 })));
+});
+
+test('stats: a link and the first stats write may share one commit', async () => {
+  const { writeBatch } = require('firebase/firestore');
+  const db = alice();
+  const b = writeBatch(db);
+  b.set(doc(db, 'stats_links/alice'), link(H1));
+  b.set(doc(db, `player_stats/${H1}`), stats('alice', H1));
+  await assertSucceeds(b.commit());
+});
+
+test('stats: unlinked, wrongly linked and unauthenticated callers can neither read nor write', async () => {
+  await linkAs(alice(), 'alice', H1);
+  await assertSucceeds(setDoc(doc(alice(), `player_stats/${H1}`), stats('alice', H1)));
+  // bob has no link; then a link to a different hash.
+  await assertFails(getDoc(doc(bob(), `player_stats/${H1}`)));
+  await assertFails(setDoc(doc(bob(), `player_stats/${H1}`), stats('bob', H1, { rev: 2 })));
+  await linkAs(bob(), 'bob', H2);
+  await assertFails(getDoc(doc(bob(), `player_stats/${H1}`)));
+  await assertFails(setDoc(doc(bob(), `player_stats/${H1}`), stats('bob', H1, { rev: 2 })));
+  await assertFails(getDoc(doc(anon(), `player_stats/${H1}`)));
+  await assertFails(setDoc(doc(anon(), `player_stats/${H2}`), stats('x', H2)));
+  // Non-anonymous accounts are not game installs.
+  await assertFails(setDoc(doc(carol(), 'stats_links/carol'), link(H1)));
+  await assertFails(getDoc(doc(carol(), `player_stats/${H1}`)));
+});
+
+test('stats: spoofed paths and fields are refused', async () => {
+  await linkAs(alice(), 'alice', H1);
+  const p = (h) => doc(alice(), `player_stats/${h}`);
+  await assertFails(setDoc(p(H1), stats('bob', H1)));                       // uid field is not the caller
+  await assertFails(setDoc(p(H1), stats('alice', H2)));                     // body hash differs from the path
+  await assertFails(setDoc(p(H2), stats('alice', H2)));                     // path hash not linked
+  await assertFails(setDoc(p('76561198000000042'), stats('alice', '76561198000000042')));   // raw Steam ID path
+  await assertFails(setDoc(doc(alice(), `player_stats/${H1}/x/y`), stats('alice', H1)));    // nested path
+  await assertFails(setDoc(doc(alice(), `users/alice/player_stats/${H1}`), stats('alice', H1)));
+});
+
+test('stats: schema, revision and size are enforced', async () => {
+  await linkAs(alice(), 'alice', H1);
+  const ref = doc(alice(), `player_stats/${H1}`);
+  await assertFails(setDoc(ref, stats('alice', H1, { rev: 2 })));            // create must be rev 1
+  await assertFails(setDoc(ref, stats('alice', H1, { schema_version: 2 })));
+  await assertFails(setDoc(ref, stats('alice', H1, { enc: 'zip' })));
+  await assertFails(setDoc(ref, stats('alice', H1, { raw_len: 4194305 })));
+  await assertFails(setDoc(ref, stats('alice', H1, { raw_len: '120' })));
+  await assertFails(setDoc(ref, stats('alice', H1, { updated_at: new Date() })));
+  await assertFails(setDoc(ref, stats('alice', H1, { body: { duels: [] } })));
+  await assertFails(setDoc(ref, stats('alice', H1, { admin: true })));
+  const missing = stats('alice', H1);
+  delete missing.raw_len;
+  await assertFails(setDoc(ref, missing));
+  await assertFails(setDoc(ref, stats('alice', H1, { body: 'x'.repeat(200001) })));   // oversized
+  await assertSucceeds(setDoc(ref, stats('alice', H1, { body: 'x'.repeat(200000) })));
+  // Updates: exactly rev + 1, same checks.
+  await assertFails(setDoc(ref, stats('alice', H1, { rev: 1 })));
+  await assertFails(setDoc(ref, stats('alice', H1, { rev: 3 })));
+  await assertFails(updateDoc(ref, { body: 'xx' }));                          // no rev / time
+  await assertFails(setDoc(ref, stats('alice', H1, { rev: 2, body: 'x'.repeat(200001) })));
+  await assertSucceeds(setDoc(ref, stats('alice', H1, { rev: 2 })));
+});
+
+test('stats: never listed, queried or deleted by any client', async () => {
+  await linkAs(alice(), 'alice', H1);
+  await assertSucceeds(setDoc(doc(alice(), `player_stats/${H1}`), stats('alice', H1)));
+  await assertFails(getDocs(collection(alice(), 'player_stats')));
+  await assertFails(getDocs(collection(bob(), 'player_stats')));
+  await assertFails(deleteDoc(doc(alice(), `player_stats/${H1}`)));
+  await assertFails(getDocs(collectionGroup(alice(), 'player_stats')));
+});
+
+test('REST: the Godot sync protocol (link, read, create, precondition update, lost race)', async () => {
+  const a = await signUp();
+  const root = `projects/${PROJECT}/databases/(default)/documents`;
+  const linkW = { writes: [{ update: { name: `${root}/stats_links/${a.localId}`, fields: { steam_hash: { stringValue: H1 } } },
+    updateTransforms: [{ fieldPath: 'linked_at', setToServerValue: 'REQUEST_TIME' }] }] };
+  assert.equal((await commit(a.idToken, linkW)).status, 200);
+  const url = `http://${FS_HOST}/v1/${root}/player_stats/${H1}`;
+  const auth = { headers: { Authorization: `Bearer ${a.idToken}` } };
+  assert.equal((await fetch(url, auth)).status, 404);
+  const fields = (rev) => ({ schema_version: { integerValue: '1' }, steam_hash: { stringValue: H1 }, uid: { stringValue: a.localId },
+    rev: { integerValue: String(rev) }, enc: { stringValue: 'gzip64' }, raw_len: { integerValue: '50' }, body: { stringValue: 'H4sIAAAA' } });
+  const write = (rev, pre) => ({ writes: [{ update: { name: `${root}/player_stats/${H1}`, fields: fields(rev) },
+    updateTransforms: [{ fieldPath: 'updated_at', setToServerValue: 'REQUEST_TIME' }], currentDocument: pre }] });
+  const created = await commit(a.idToken, write(1, { exists: false }));
+  assert.equal(created.status, 200, JSON.stringify(created.json));
+  const t1 = created.json.writeResults[0].updateTime;
+  assert.ok(t1);
+  const got = await fetch(url, auth);
+  assert.equal(got.status, 200);
+  assert.equal((await got.json()).updateTime, t1);
+  const second = await commit(a.idToken, write(2, { updateTime: t1 }));
+  assert.equal(second.status, 200, JSON.stringify(second.json));
+  // A writer still holding the old version loses the race with a precondition failure.
+  const stale = await commit(a.idToken, write(3, { updateTime: t1 }));
+  assert.notEqual(stale.status, 200);
+  console.log(`stale precondition status: ${stale.status} ${stale.json.error && stale.json.error.status}`);
+  assert.ok(['FAILED_PRECONDITION', 'ABORTED', 'ALREADY_EXISTS'].includes(stale.json.error && stale.json.error.status) || stale.status === 409);
+  // Another uid that never linked this hash is refused with 403.
+  const b = await signUp();
+  assert.equal((await fetch(url, { headers: { Authorization: `Bearer ${b.idToken}` } })).status, 403);
+  assert.equal((await commit(b.idToken, write(3, { updateTime: second.json.writeResults[0].updateTime }))).status, 403);
 });

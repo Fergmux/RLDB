@@ -1,10 +1,18 @@
-# RLDB telemetry schema v1: records and field dictionary
+# RLDB telemetry schema v1 and v2: records and field dictionary
 
-Status: implemented 17 Oct 2026 (production batch, Stage 3). Source of truth for
+Status: v1 implemented 17 Oct 2026 (production batch, Stage 3); v2 added 20 Oct 2026 (owner
+feedback C2: game and turn time). Source of truth for
 `rldb/src/telemetry/telemetry_collector.gd` (producer), `firebase/firestore.rules` (envelope
 validation) and `firebase/tools/lib/reconcile.js` / `metrics.js` (consumer). Any change to a field
-meaning bumps `schema_version`. The rules accept only `schema_version == 1`, so v2 needs a rules
-deploy first.
+meaning bumps `schema_version`. The rules accept `schema_version` 1 and 2 (deployed 20 Oct 2026),
+and reconcile and metrics read both.
+
+## 0. Version history
+
+| Version | Date | Changes |
+|---|---|---|
+| 1 | 17 Oct 2026 | First release. |
+| 2 | 20 Oct 2026 | `game.turn_times`, `game.turn_ms`, `game.turn_times_truncated`, `game.clock`; `decks[seat].name` for structure decks. Additive only: every v1 field keeps its meaning. A v1 record has no turn times; metrics leave it out of turn-time figures (never count it as zero) but still use its `active_ms` for duel length. |
 
 ## 1. Document envelope (validated by the security rules)
 
@@ -12,7 +20,7 @@ Path: `users/{uid}/submissions/{docId}`. Created once, never updated or deleted 
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | int | `1` |
+| `schema_version` | int | `1` or `2` (new records are `2`) |
 | `kind` | string | `profile`, `session`, `draft`, `reward`, `game`, `gclient` or `series`. `docId` must start with `<kind>_` |
 | `env` | string | `dev`, `playtest`, `production` or `test`, stamped when the record is queued (never re-labelled later) |
 | `build` | string ≤ 48 | `telemetry_config.json` build, plus `-editor` in editor runs |
@@ -49,6 +57,39 @@ Document ids: `game_<game_id>`, `gclient_<game_id>`, `draft_<draft_id>`,
 `reward_<series_id>_g<n>_s<seat>`, `series_<series_id>`, `session_<session_id>`,
 `profile_<participant_id>`.
 
+## 2b. Cloud statistics (C1, 20 Oct 2026; not a submission)
+
+The player's own statistics (Decks > Statistics) are kept per Steam account, separately from the
+submissions above. They are self-reported and never feed the competitive metrics.
+
+`stats_links/{uid}` (one per anonymous uid; create or update by its owner):
+
+| Field | Type | Meaning |
+|---|---|---|
+| `steam_hash` | 32 lowercase hex | The salted Steam-ID hash (`Telemetry.hash_steam_id`) this install claims. Unverified |
+| `linked_at` | timestamp | Server `REQUEST_TIME` |
+
+`player_stats/{steam_hash}` (read and written only by a uid whose link names `steam_hash`):
+
+| Field | Type | Meaning |
+|---|---|---|
+| `schema_version` | int | `1` (the stats document format; independent of the submission schema) |
+| `steam_hash` | 32 hex | Equals the document id |
+| `uid` | string | The last writer's anonymous uid (equals the auth uid) |
+| `rev` | int | `1` on create, previous `+ 1` on every update |
+| `enc` | `gzip64` or `json` | Body encoding: base64 of a gzip stream (the client writes `gzip64`) |
+| `raw_len` | int ≤ 4 MiB | Length of the decoded JSON |
+| `updated_at` | timestamp | Server `REQUEST_TIME` |
+| `body` | string ≤ 200,000 chars | The shared record below |
+
+Shared record (decoded body): {version: 2, duels: [row], series: [row], devices: {device id: {draft_picks: {card id: n},
+drafts_completed}}}. A duel row is {id (16 hex), t (unix s), s (order within the second), mode, won (bool or null for
+hot-seat), turns, ms (duel time), tms (time of your own turns), tn (your turns), deck (deck name ≤ 40), cards (your
+starting deck {id: copies}), plays {id: n}, summons, spells, damage, best_hit}; a series row is {id, t, s, mode, won,
+score}. At most 500 duels and 300 series (the newest), 16 device counter sets and 160 cards per map; the client
+trims the oldest rows until the encoded body fits. Merge rules: rows are a grow-only set by id; each device's
+counters have one writer and merge by maximum (a CRDT), so the order of syncing never changes the result.
+
 ## 3. Bodies
 
 ### profile / session
@@ -80,7 +121,16 @@ actions: [{kind: "type", category, offered}, {kind: "add", selected, index}, {ki
 - `participants[seat]`: {seat, kind: `human` | `bot`, link: `profile` | `guest` | `remote` | `bot`, participant_id, steam_hash?, steam_link?}
 - `decks[seat]` (frozen when the duel starts): {snapshot_id, seat, participant, source: `prebuilt` | `custom` | `draft`
   (`+series_changes` from duel 2 on, or after a resume), base_source, main: {id: copies}, extra: {id: copies},
-  basic_units: {id: copies}, main_size, extra_size, size, fingerprint (16 hex), duel_index}
+  basic_units: {id: copies}, main_size, extra_size, size, fingerprint (16 hex), duel_index,
+  name (v2: the structure-deck name for `prebuilt`, fixed game content, ≤ 40 chars; `""` otherwise. A custom deck's
+  name is the player's own free text and is never sent)}
+- v2 timing in `game` (host wall clock, `now_ms` of the collector):
+  - `turn_times`: [[turn number, seat, active ms], ...], one entry per completed turn, at most 600 per duel
+    (`turn_times_truncated` counts the rest). A turn runs from its `turn` event to the next one (or the end of the
+    duel), so the opponent's trap responses inside it count towards it. Disconnect pauses inside a turn are left out.
+    The turn still running when a duel is abandoned has no entry.
+  - `turn_ms`: [seat 0 total, seat 1 total] of the entries above (including truncated ones).
+  - `clock`: `"host_wall"` (what measured the times).
 - `counters[seat][card id]`: {draws, hand_entries, draw_opps, draw_opps_played, hand_plays, plays, plays_by_kind{kind: n},
   activations, activations_by_kind{"<kind>:<result>": n}, special_summons}
 - `totals[seat]`: {turns_taken, ap_granted, ap_unspent, ap_spent_on_plays, damage_taken, healing, draws, hand_entries,
@@ -153,3 +203,14 @@ rewards_per_game}.
 | Two reports, agreement or conflict | gclient vs game | `NetSession._s2c_view` (client) |
 | Optional summaries (turns, AP, damage/healing, specials) | totals | `change_hp`, turn notes |
 | Response latency, attacks | not measured (marked `unmeasured`) | none: avoids invasive timing hooks |
+| Game time and turn time per seat and turn number (v2) | game.active_ms, game.turn_times, game.turn_ms | `MatchEngine` `turn` note, `GameCore.end_game`, `NetSession` pause |
+| Structure deck played (v2, for by-deck metrics) | decks[seat].name | `Series` deck_locked |
+
+## 6. Metrics derived from v2 (firebase/tools/lib/metrics.js `timing`)
+
+- `game_length`: summary {n, mean, median, p10, p90, min, max} of canonical `active_ms`, a 2-minute histogram
+  (to 60 min, then open-ended), and summaries by mode, by deck key and by number of turns.
+- `turn_time.all | human | bot`: summary, a 10-second histogram (to 5 min, then open-ended), by turn number (30+
+  grouped) and by order (first / second player). `by_mode`, `by_deck` (human turns) and `by_seat`.
+- Deck key (`reconcile.deckKey`): `prebuilt:<structure deck name>` (v2), else `custom`, `draft`, `prebuilt` (v1) or
+  `unknown`. The `deck` filter keeps duels where either seat used it, and only that seat's turns.

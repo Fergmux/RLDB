@@ -99,6 +99,16 @@ func test_environment_resolution_defaults() -> void:
 	assert_str(TelemetryConfig.resolve_environment("production", none, none, true)).is_equal("production")
 
 
+func test_script_runs_resolve_to_test_whatever_their_arguments() -> void:
+	# Regression (20 Oct 2026): a windowed `-s` driver whose arguments had no "shots" / "driver"
+	# token resolved to dev / live and synced the test stats file to a real Steam account.
+	var none := PackedStringArray()
+	var s := PackedStringArray(["--path", ".", "-s", "res://src/dev/stats_clock_shots.gd"])
+	assert_str(TelemetryConfig.resolve_environment("auto", PackedStringArray(["C:/out/stats", "1600x900"]), s, true)).is_equal("test")
+	assert_str(TelemetryConfig.resolve_environment("auto", none, PackedStringArray(["--script", "x.gd"]), false)).is_equal("test")
+	assert_str(TelemetryConfig.resolve(PackedStringArray(["C:/out/stats"]), s).target).is_equal("none")
+
+
 func test_test_environment_never_targets_the_live_project_by_default() -> void:
 	var c := TelemetryConfig.resolve(PackedStringArray(["--telemetry-env=test"]), PackedStringArray())
 	assert_str(c.target).is_equal("none")

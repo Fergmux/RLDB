@@ -1,11 +1,18 @@
 rules_version = '2';
-// RLDB gameplay telemetry, schema v1 (docs/telemetry/schema-v1.md). Spark plan: no backend, so
-// game clients write directly, but ONLY immutable submissions into their own folder:
+// RLDB gameplay telemetry, schema v1 and v2 (docs/telemetry/schema-v1.md). Spark plan: no
+// backend, so game clients write directly, but ONLY to these paths:
 //
 //   users/{uid}/submissions/{docId}   create-once by the signed-in owner `uid`; schema and size
 //                                     checked here; never updated or deleted by a client; the
 //                                     owner may get (not list) its own documents, which the
 //                                     uploader uses to tell a lost acknowledgement from a refusal.
+//   stats_links/{uid}                 cloud statistics (C1, 20 Oct 2026): an anonymous uid claims
+//                                     ONE Steam-ID hash {steam_hash, linked_at}. Unverified by
+//                                     design (owner decision): a modified client can claim any
+//                                     hash; it is never used for match authority or metrics.
+//   player_stats/{hash}               the player's own statistics, readable and writable only by a
+//                                     uid whose link names `hash`; strict fields, bounded body,
+//                                     revision +1 on every update; never listed or deleted.
 //
 // Everything else is denied to every client, including canonical_games, aggregates and admin
 // state. The owner's admin tool (firebase/tools/) uses Google IAM credentials through the Admin
@@ -36,7 +43,7 @@ service cloud.firestore {
       let d = request.resource.data;
       return d.keys().hasOnly(fieldNames())
         && d.keys().hasAll(fieldNames())
-        && d.schema_version is int && d.schema_version == 1
+        && d.schema_version is int && d.schema_version in [1, 2]
         && d.uid is string && d.uid == uid
         && d.kind is string && d.kind in kinds()
         && docId.matches(d.kind + '_[A-Za-z0-9_-]{1,120}')
@@ -56,6 +63,68 @@ service cloud.firestore {
         && validSubmission(uid, docId);
       allow get: if request.auth != null && request.auth.uid == uid;
       allow list, update, delete: if false;
+    }
+
+    // ---- cloud statistics (C1)
+
+    function anonymous() {
+      return request.auth != null && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function steamHash(h) {
+      return h is string && h.matches('[0-9a-f]{32}');
+    }
+
+    function linkPath() {
+      return /databases/$(database)/documents/stats_links/$(request.auth.uid);
+    }
+
+    // The caller's link names `hash` now (reads) or after this write (a link and its first stats
+    // write may share one commit).
+    function linkedTo(hash) {
+      return exists(linkPath()) && get(linkPath()).data.steam_hash == hash;
+    }
+
+    function linkedAfter(hash) {
+      return existsAfter(linkPath()) && getAfter(linkPath()).data.steam_hash == hash;
+    }
+
+    function statsFields() {
+      return ['schema_version', 'steam_hash', 'uid', 'rev', 'enc', 'raw_len', 'updated_at', 'body'];
+    }
+
+    function validStats(hash) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(statsFields())
+        && d.keys().hasAll(statsFields())
+        && d.schema_version is int && d.schema_version == 1
+        && d.steam_hash == hash
+        && d.uid is string && d.uid == request.auth.uid
+        && d.rev is int && d.rev >= 1 && d.rev < 1000000000
+        && d.enc is string && d.enc in ['gzip64', 'json']
+        && d.raw_len is int && d.raw_len >= 2 && d.raw_len <= 4194304
+        && d.updated_at == request.time
+        && d.body is string && d.body.size() >= 2 && d.body.size() <= 200000;
+    }
+
+    match /stats_links/{uid} {
+      allow get: if anonymous() && request.auth.uid == uid;
+      allow create, update: if anonymous()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['steam_hash', 'linked_at'])
+        && request.resource.data.keys().hasAll(['steam_hash', 'linked_at'])
+        && steamHash(request.resource.data.steam_hash)
+        && request.resource.data.linked_at == request.time;
+      allow list, delete: if false;
+    }
+
+    match /player_stats/{hash} {
+      allow get: if anonymous() && steamHash(hash) && linkedTo(hash);
+      allow create: if anonymous() && steamHash(hash) && linkedAfter(hash)
+        && validStats(hash) && request.resource.data.rev == 1;
+      allow update: if anonymous() && steamHash(hash) && linkedAfter(hash)
+        && validStats(hash) && request.resource.data.rev == resource.data.rev + 1;
+      allow list, delete: if false;
     }
 
     // Default: no client access to anything else (canonical games, aggregates, admin data).

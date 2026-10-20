@@ -19,6 +19,16 @@ var duel := {}
 var client_game := -1
 var client_series_done := false
 var client_sid := ""
+## Clock in ms (tests inject a fake one).
+var now_ms: Callable = func() -> int: return Time.get_ticks_msec()
+## Own-turn timing of the current duel: the seat whose turn runs, when it started, and the totals
+## of the turns played from this computer (hot-seat: both seats).
+var turn_seat := -1
+var turn_started := 0
+var own_ms := 0
+var own_turns := 0
+## Network client: the last turn number seen in a view.
+var client_turn := -1
 
 
 ## Starts recording `s`. `role`: "local" (bot / hot-seat) or "host" (network host, seat 0).
@@ -50,7 +60,8 @@ func on_series_event(s: Series, kind: String, data: Dictionary) -> void:
 		"game_create":
 			engine = s.game
 			engine.stats_observer = self
-			started_ms = Time.get_ticks_msec()
+			started_ms = now_ms.call()
+			_reset_turns()
 			duel = {"plays": {}, "summons": 0, "spells": 0, "damage": 0, "best_hit": 0}
 		"draft_pick":
 			if int(data["p"]) in seats:
@@ -70,6 +81,8 @@ func on_core_event(m: Object, kind: String, data: Dictionary) -> void:
 		return
 	var local := seats.is_empty() or int(data.get("p", -1)) in seats
 	match kind:
+		"turn":
+			_turn_begins(int(data["p"]))
 		"play":
 			if not local or not m.cards.has(int(data["uid"])):
 				return
@@ -93,11 +106,31 @@ func _finish_duel(s: Series) -> void:
 		return
 	var w: int = s.game.winner
 	var seat: int = seats[0] if not seats.is_empty() else 0
+	_turn_begins(-1)
 	PlayerStats.record_duel({"mode": mode, "won": (w == seat) if not seats.is_empty() else null,
-		"turns": int(s.game.turn), "ms": Time.get_ticks_msec() - started_ms, "deck": _deck_name(s, seat),
+		"turns": int(s.game.turn), "ms": now_ms.call() - started_ms, "tms": own_ms, "tn": own_turns, "deck": _deck_name(s, seat),
 		"cards": _multiset(s.decks[seat]) if not seats.is_empty() else {}, "plays": duel["plays"],
 		"summons": duel["summons"], "spells": duel["spells"], "damage": duel["damage"], "best_hit": duel["best_hit"]})
 	duel = {}
+
+
+func _reset_turns() -> void:
+	turn_seat = -1
+	turn_started = 0
+	own_ms = 0
+	own_turns = 0
+	client_turn = -1
+
+
+## Closes the running turn (counted when it was played from this computer) and starts seat
+## `p`'s (-1: the duel ended).
+func _turn_begins(p: int) -> void:
+	var now: int = now_ms.call()
+	if turn_seat != -1 and (seats.is_empty() or turn_seat in seats):
+		own_ms += maxi(0, now - turn_started)
+		own_turns += 1
+	turn_seat = p
+	turn_started = now
 
 
 static func _deck_name(s: Series, seat: int) -> String:
@@ -126,11 +159,15 @@ func _on_view(v: Dictionary) -> void:
 		client_game = -1
 		client_series_done = false
 		started_ms = 0
+		_reset_turns()
 	var you := int(v.get("you", 1)) if (v.get("you") is int or v.get("you") is float) else 1
 	var hist = v.get("history", [])
 	if not (hist is Array) or String(v.get("stage", "")) == "game":
-		if String(v.get("stage", "")) == "game" and started_ms == 0:
-			started_ms = Time.get_ticks_msec()
+		if String(v.get("stage", "")) == "game":
+			if started_ms == 0:
+				started_ms = now_ms.call()
+				_reset_turns()
+			_client_turn(v, you)
 		return
 	for h in hist:
 		if not (h is Dictionary):
@@ -145,12 +182,28 @@ func _on_view(v: Dictionary) -> void:
 				var cid = c.get("id", -1) if c is Dictionary else c
 				if cid is int or cid is float:
 					deck.append(int(cid))
+		if started_ms > 0:
+			_turn_begins(-1)
 		PlayerStats.record_duel({"mode": mode, "won": int(h.get("winner", -1)) == you, "turns": int(h.get("turns", 0)),
-			"ms": (Time.get_ticks_msec() - started_ms) if started_ms > 0 else 0, "cards": _multiset(deck),
+			"ms": (now_ms.call() - started_ms) if started_ms > 0 else 0, "tms": own_ms, "tn": own_turns, "cards": _multiset(deck),
 			"deck": "Draft deck" if String(v.get("deck_mode", "")) == "draft" else String(v.get("deck_name", ""))})
 		started_ms = 0
+		_reset_turns()
 	if String(v.get("stage", "")) == "over" and not client_series_done and v.get("scores") is Array:
 		var sc: Array = v["scores"]
 		if sc.size() == 2:
 			client_series_done = true
 			PlayerStats.record_series(mode, int(sc[you]) > int(sc[1 - you]), sc)
+
+
+## Network client: a new turn number in the match view starts that seat's turn (only this
+## seat's own turns are counted).
+func _client_turn(v: Dictionary, you: int) -> void:
+	seats = [you]
+	var mv = v.get("match", null)
+	if not (mv is Dictionary) or not (mv.get("turn") is int or mv.get("turn") is float):
+		return
+	var t := int(mv["turn"])
+	if t != client_turn and (mv.get("active") is int or mv.get("active") is float):
+		client_turn = t
+		_turn_begins(int(mv["active"]))

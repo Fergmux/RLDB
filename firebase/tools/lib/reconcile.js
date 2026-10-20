@@ -12,6 +12,11 @@
 const crypto = require('node:crypto');
 
 const KINDS = ['profile', 'session', 'draft', 'reward', 'game', 'gclient', 'series'];
+// Schema v2 (20 Oct 2026) adds game.turn_times / turn_ms and the structure-deck name; v1 records
+// stay valid and simply carry no turn times.
+const SCHEMA_VERSIONS = [1, 2];
+const MAX_TURN_TIMES = 2000;
+const DAY_MS = 86400000;
 const ENVS = ['playtest', 'production', 'dev', 'test'];
 const NETWORK_MODES = ['lan', 'steam'];
 
@@ -35,14 +40,21 @@ const counterOk = (v) => isObj(v) && isCount(v.plays) && isCount(v.activations) 
 const seatCountersOk = (m) => isObj(m) && Object.keys(m).every((k) => CARD_RE.test(k) && counterOk(m[k]));
 const oppOk = (o) => Array.isArray(o) && o.length >= 7 && isSeat(o[1]) && isCardId(o[2]);
 const strOk = (v) => v === undefined || v === null || (typeof v === 'string' && v.length <= 64);
+const isMs = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= DAY_MS;
+const turnTimeOk = (t) => Array.isArray(t) && t.length === 3 && Number.isInteger(t[0]) && t[0] >= 0 && t[0] <= 100000 && isSeat(t[1]) && isMs(t[2]);
+// v2 timing fields are optional (absent in v1) but strictly typed when present.
+const timingOk = (g) => (g.turn_times === undefined || (Array.isArray(g.turn_times) && g.turn_times.length <= MAX_TURN_TIMES && g.turn_times.every(turnTimeOk)))
+  && (g.turn_ms === undefined || (Array.isArray(g.turn_ms) && g.turn_ms.length === 2 && g.turn_ms.every(isMs)))
+  && (g.active_ms === undefined || g.active_ms === null || (typeof g.active_ms === 'number' && Number.isFinite(g.active_ms)));
+const deckNameOk = (d) => d.name === undefined || (typeof d.name === 'string' && d.name.length <= 40);
 
 function validBody(kind, b) {
   switch (kind) {
     case 'game': {
       const g = b.game;
-      return isObj(g) && isId(g.game_id) && strOk(g.outcome) && strOk(g.reason)
+      return isObj(g) && isId(g.game_id) && strOk(g.outcome) && strOk(g.reason) && timingOk(g)
         && Array.isArray(b.participants) && b.participants.length === 2 && b.participants.every((p) => p === null || isObj(p))
-        && Array.isArray(b.decks) && b.decks.length === 2 && b.decks.every(deckOk)
+        && Array.isArray(b.decks) && b.decks.length === 2 && b.decks.every((d) => deckOk(d) && deckNameOk(d))
         && Array.isArray(b.counters) && b.counters.length <= 2 && b.counters.every(seatCountersOk)
         && Array.isArray(b.opportunities) && b.opportunities.every(oppOk);
     }
@@ -72,7 +84,7 @@ function validBody(kind, b) {
 function normalize(raw) {
   const d = raw.data || {};
   const base = { uid: raw.uid, id: raw.id };
-  if (d.schema_version !== 1) return { ok: false, reason: 'schema_version', ...base };
+  if (!SCHEMA_VERSIONS.includes(d.schema_version)) return { ok: false, reason: 'schema_version', ...base };
   if (!KINDS.includes(d.kind)) return { ok: false, reason: 'kind', ...base };
   if (!ENVS.includes(d.env)) return { ok: false, reason: 'env', ...base };
   if (d.uid !== raw.uid) return { ok: false, reason: 'uid_mismatch', ...base };
@@ -91,7 +103,19 @@ function normalize(raw) {
   if (d.kind === 'gclient' && raw.id !== `gclient_${body.gclient.game_id}`) return { ok: false, reason: 'doc_id', ...base };
 
   if (d.kind === 'game' && body.game.outcome === 'in_progress') return { ok: false, reason: 'in_progress', ...base };
+  rec.schema_version = d.schema_version;
   return { ok: true, rec };
+}
+
+/**
+ * The "deck" a seat played, for by-deck metrics: `prebuilt:<structure deck name>` (v2, fixed game
+ * content), else the deck source (`custom`, `draft`, `prebuilt` for v1) or `unknown`.
+ */
+function deckKey(deck) {
+  if (!isObj(deck)) return 'unknown';
+  if (typeof deck.name === 'string' && deck.name && /^[\w .,'&:()-]{1,40}$/.test(deck.name)) return `prebuilt:${deck.name}`;
+  const src = String(deck.base_source || deck.source || '').replace(/\+series_changes$/, '');
+  return ['custom', 'draft', 'prebuilt'].includes(src) ? src : 'unknown';
 }
 
 function sameArray(a, b) {
@@ -167,6 +191,11 @@ function reconcile(recs) {
       outcome: host ? g.outcome : g.outcome, decisive, winner, reason: host ? g.reason : (g.forfeit ? 'forfeit' : 'unknown'),
       turns: Number(g.turns), duel_index: Number(g.duel_index), series_id: String(g.series_id || ''),
       first_player: Number(g.first_player), active_ms: host ? Number(g.active_ms) : null,
+      // v2 timing summary (null for v1 reports and client-only duels).
+      turn_ms: host && Array.isArray(g.turn_ms) ? g.turn_ms.map(Number) : null,
+      timed_turns: host && Array.isArray(g.turn_times) ? g.turn_times.length : null,
+      decks: host ? host.body.decks.map(deckKey) : [null, null],
+      seat_kinds: host ? host.body.participants.map((p) => (p && p.kind === 'bot' ? 'bot' : 'human')) : ['human', 'human'],
       players, detail_source: host ? 'authority' : 'client',
       content_hash: src.content_hash, build: src.build,
       ended_at: Number(g.ended_at || src.created_at), received_at: Math.max(...[...auth, ...client].map((r) => r.received_at)),
@@ -198,4 +227,4 @@ function reconcileAll(raws) {
   return out;
 }
 
-module.exports = { validBody, normalize, reconcile, reconcileAll, disagreements, NETWORK_MODES };
+module.exports = { validBody, normalize, reconcile, reconcileAll, disagreements, deckKey, NETWORK_MODES, SCHEMA_VERSIONS };

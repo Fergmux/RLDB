@@ -11,6 +11,8 @@ var side_root: Control
 var turn_title: Label
 ## Secondary turn text.
 var turn_note: Label
+## Game and turn clock beside the turn title (C2).
+var clock_view: DuelClockView
 ## Phase indicator.
 var pips: PhasePips
 ## Turn-bar row: the phase button, or the state chip while a choice is pending.
@@ -56,9 +58,17 @@ func build() -> void:
 	var tv := VBoxContainer.new()
 	tv.add_theme_constant_override("separation", 6)
 	tp.add_child(tv)
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 10)
+	tv.add_child(title_row)
 	turn_title = UIStyle.label("", 19, UIStyle.TEXT, false, true)
 	turn_title.clip_text = true
-	tv.add_child(turn_title)
+	turn_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	turn_title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	title_row.add_child(turn_title)
+	clock_view = DuelClockView.new()
+	clock_view.visible = false
+	title_row.add_child(clock_view)
 	pips = PhasePips.new()
 	tv.add_child(pips)
 	brow = HBoxContainer.new()
@@ -123,6 +133,11 @@ func render_turnbar() -> void:
 	log_panel.visible = not mv.is_empty()
 	series_panel.visible = not in_game
 	gs.menu.update_conn()
+	var clk := DuelClock.for_view(view) if in_game else null
+	if clk != null:
+		clk.observe(view)
+	if clock_view.clock != clk:
+		clock_view.set_clock(clk)
 	if not in_game:
 		# Between games / before the first game nothing of the finished game's turn state is shown.
 		turn_title.text = gs.overlays.stage_title(stage) if stage != "" else "Series"

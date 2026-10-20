@@ -1,6 +1,7 @@
 # RLDB gameplay telemetry (Firebase Spark plan)
 
-Implemented 17 Oct 2026 (production batch Stage 3, package A3). Records: [schema-v1.md](schema-v1.md).
+Implemented 17 Oct 2026 (production batch Stage 3, package A3); schema v2 (game and turn time) and cloud player
+statistics added 20 Oct 2026 (owner feedback C1, C2). Records: [schema-v1.md](schema-v1.md).
 Player disclosure: [privacy.md](privacy.md). Specification: `design/firebase-game-statistics-request-2026-10-17.md`,
 overridden by `design/production-batch-owner-answers-2026-10-17.md` (Spark only, direct writes, indefinite
 retention, default-on setting, environment labels).
@@ -106,7 +107,7 @@ Records already uploaded stay until the owner runs `delete-uid`.
 | Exported build | `playtest` | live |
 | Exported `RLDB-dev.exe` (any executable named `*-dev`), written to `build/windows-dev/` by `addons/rldb_export` beside every Windows export | `dev` | live |
 | Public release | set `"environment": "production"` in `rldb/data/telemetry_config.json` for that build | live |
-| GdUnit, dev drivers (`*shots*`, `*driver*`), `--telemetry-env=test` | `test` | none (add `--telemetry-emulator` or `--telemetry-live`) |
+| GdUnit, every `-s` script run (dev drivers, tools), user args with `shots` / `driver`, `--telemetry-env=test` | `test` | none (add `--telemetry-emulator` or `--telemetry-live`) |
 
 - Every Windows export (editor or `--export-release`) writes two builds from the same files: `build/windows/RLDB.exe` (`playtest`) and `build/windows-dev/RLDB-dev.exe` (`dev`). The name check beats the shipped `environment` value, so the dev copy stays `dev` in a production build; `dev.cfg` and `--telemetry-env=` still override it. `RLDB.exe --telemetry-status` prints the label a build uses and quits.
 - The environment is stamped on every record when it is queued, so a later build never relabels old records.
@@ -132,14 +133,22 @@ godot --headless --path . -s res://src/dev/telemetry_tool.gd -- --sim-series --t
 godot --headless --path . -s res://src/dev/telemetry_tool.gd -- --purge
 ```
 
-## Security rules (deployed 17 Oct 2026; `firebase/firestore.rules`, sha256 `2fcd870c…bfa0`)
+## Security rules (deployed 20 Oct 2026; `firebase/firestore.rules`, committed LF file sha256 `1c4235c7…5708`)
 
 - `users/{uid}/submissions/{docId}`:
   - **create** only if `request.auth.uid == uid`, all 11 envelope fields are present and nothing else, `uid`
-    equals the path uid, the kind, environment and mode are from fixed lists, `docId` starts with `<kind>_`, the
-    content hash is 64 hex, `received_at == request.time`, and `body` is a string of 2 to 200,000 characters;
+    equals the path uid, `schema_version` is 1 or 2, the kind, environment and mode are from fixed lists, `docId`
+    starts with `<kind>_`, the content hash is 64 hex, `received_at == request.time`, and `body` is a string of 2 to
+    200,000 characters;
   - **get** only by the owner;
   - **list, update and delete** always denied.
+- `stats_links/{uid}` (cloud statistics): **create / update** only by that uid signed in **anonymously**, with
+  exactly {steam_hash (32 lowercase hex), linked_at == request.time}; **get** by that uid; **list, delete** denied.
+- `player_stats/{hash}`: **get** only by an anonymous uid whose link names `hash`; **create** (rev 1) and
+  **update** (rev = previous + 1) only by such a uid (checked with `getAfter`, so a link and the first write may
+  share one commit), with exactly the 8 fields of [schema-v1.md §2b](schema-v1.md), `steam_hash` equal to the path,
+  `uid` equal to the caller, `updated_at == request.time` and a body of 2 to 200,000 characters; **list, delete**
+  denied.
 - Every other path, including `canonical_games`, `aggregates` and `admin`, is denied to every client. The Admin
   SDK bypasses rules, so the admin tool is tested separately (`firebase/tests/admin.test.js`).
 - `firestore.indexes.json` exempts the large `body` strings from single-field indexing, which saves storage.
@@ -148,11 +157,17 @@ godot --headless --path . -s res://src/dev/telemetry_tool.gd -- --purge
 
 Install once with `cd firebase && npm install`. Java 21 must be on PATH for the emulators.
 
+- Everything except the end-to-end runs: `npm test` (fixture tests, then rules and admin tests on the emulators).
 - Rules and admin tests on the emulators:
   `npx firebase emulators:exec --only firestore,auth --project rldb-b5593 "node --test --test-concurrency=1 tests/rules.test.js tests/admin.test.js"`
-- Godot end-to-end on the emulators:
-  `npx firebase emulators:exec --only firestore,auth --project rldb-b5593 "node tests/e2e_godot.js"`
-- Fixture metric tests (no emulator): `node --test tools/test/metrics.test.js`
+- Godot end-to-end on the emulators (`npm run test:e2e`): `tests/e2e_godot.js` (a bot draft series, uploaded and
+  reconciled, with turn times) and `tests/e2e_stats.js` (two simulated computers sync one Steam account's statistics
+  through the real client: 2 + 1 duels give 3 on both).
+- Fixture metric tests (no emulator): `node --test tools/test/*.test.js` (`timing.test.js` covers schema v2).
+- Players' cloud statistics: `node tools/rldb-admin.js player-stats` (one summary line per player: duels, W-L, average
+  duel and turn; one read per player document) or `player-stats <hash>` (the decoded record). These are
+  self-reported under an unverified link. `delete-stats <hash> [--confirm]` erases one record and every link to it;
+  `delete-uid --confirm` now also erases the record that uid's link names.
 - Deploy: `firebase deploy --only firestore:rules,firestore:indexes --project rldb-b5593`
 - **Admin credentials** (choice: IAM via Application Default Credentials, *not* an allowlisted email/password
   account). Run `gcloud auth application-default login` with the owner Google account, or set
@@ -202,6 +217,11 @@ That totals about 88 KB of body, roughly 100 KB stored with overhead. A network 
   documents (about 4,500 series). Beyond that, run it on alternate days, or add an incremental mode or export
   (future work).
 - Admin writes: only changed canonical games plus one aggregate per run.
+- Cloud statistics (C1): about 2 reads per game start (the stats read plus the rules' link check) and per Statistics
+  dialog refresh (at most once a minute), 1 write per changed record (a finished duel or series, debounced 4 s),
+  plus 1 link write once per install and Steam account. One document per player; its body is gzip + base64, about
+  350 characters for 3 duels and an estimated 50 to 90 KB at the 500-duel cap (hard cap 200,000 characters), so 1,000
+  active players use under 90 MB. 20 players × 10 duels/day is about 200 writes and 500 reads/day (1 % of quota).
 - Monthly cost: £0 (Spark, no billing enabled). Quota exhaustion only pauses uploads, which back off and resume
   the next day with nothing lost locally, within the 400-item / 8 MiB outbox budget.
 
@@ -211,12 +231,47 @@ That totals about 88 KB of body, roughly 100 KB stored with overhead. A network 
   token. It is per install, not per human: a reinstall or second device is a new profile, and the metrics say
   "profiles", not "players".
 - Hot-seat: seat 0 is the profile; seat 1 is an unlinked guest (`guest_<series id>`). Bots are `kind: "bot"`.
+- The Steam hash is computed once Steam is up. Until 20 Oct 2026 the service booted before `SteamBridge.init()`, so
+  `steam_hash` was always empty in released records; it now boots after Steam and also picks up a Steam client that
+  starts later.
 - **A verified Steam link is not possible on Spark.** It would need a trusted server that checks a Steam auth
   ticket with a publisher Web API key, plus the owner's own App ID; the game uses Spacewar 480. The fallback is a
   salted one-way hash of the Steam ID marked `steam_link: "unverified"`. It is used for grouping only, never as
   proof: any client can send any value. Because SteamIDs are enumerable and the salt ships in the game, anyone
   holding both the salt and the data can reverse it. Adding a verified link later (own App ID plus a trusted
   service) needs no change to what is collected.
+
+## Cloud statistics (owner feedback C1, 20 Oct 2026)
+
+The player's own statistics (Decks > Statistics, `PlayerStats`) follow their Steam account to any computer.
+
+- **Identity: an unverified Steam link (owner decision).** The key is the salted one-way hash of the Steam ID the
+  client reports. It is never the raw Steam ID. Any modified client can claim any hash (`stats_links/{uid}`) and so
+  read or overwrite that player's statistics; the owner accepted this for statistics only. Nothing in these
+  documents is used for match authority, the competitive metrics or the website's duel statistics.
+- **Client** (`rldb/src/stats/stats_sync.gd`, ticked by the Telemetry node, one request at a time): link the uid to
+  the hash once (remembered in `user://telemetry/stats_sync.cfg`), read `player_stats/{hash}` at start-up and when
+  the dialog opens (at most once a minute), merge it into the local record, and write back whenever the shared part
+  differs, with an `updateTime` precondition (`exists=false` for the first write). A lost race (another computer
+  wrote first) is a precondition failure: read, merge, write again. Offline, 408, 429 and 5xx back off like the
+  uploader; three refusals in a row stop the cloud copy for that run. Never blocks, never shows an error.
+- **Merge** (`PlayerStats.merge`, a CRDT): duels and series are grow-only sets of rows with random ids (the newest 500
+  and 300 kept); draft counters are kept per writer (each local file has its own device id) and merged by maximum.
+  Merging is commutative and idempotent, so two computers converge whatever the order. A cloud copy is sanitised
+  field by field before it is merged (it may have been written by a modified client).
+- **Local copy** (`user://player_stats.json`) stays the offline cache and works without any network. Old v1 files
+  migrate in place. If another Steam account signs in on the same computer, the current record is set aside in
+  `player_stats_<hash>.json` and that account's own record becomes active, so accounts never mix. A record that was
+  never linked is adopted by the first account.
+- **Fallbacks: local only** without Steam, with sharing off, with the kill switch, or in any automated run (the
+  service never syncs `PlayerStats.TEST_PATH`, and every `-s` run resolves to `test` with no target).
+- **Dialog**: the plate's corner reads "Synced" or "This computer"; a status line under the list (gold dot: "Synced
+  with your Steam account · 2 min ago"; slow amber pulse: syncing or waiting to go online; bronze ring: "Kept on this
+  computer only · <reason>"). The list refreshes in place when a merge arrives.
+- **Opt-out**: turning sharing off stops syncing at once. The cloud copy is not deleted automatically (like
+  submissions); the owner erases it with `delete-stats <hash>` or `delete-uid <uid>`.
+- Dev tool: `telemetry_tool.gd -- --stats-sync --telemetry-emulator --machine=a --fake-steam=<id> [--duels=n] [--wipe]`
+  simulates one computer (its own identity, settings and stats file).
 
 ## Retention
 

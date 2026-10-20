@@ -6,6 +6,8 @@
   "scripts": {
     "test:unit": "node --test tools/test/*.test.js",
     "test:rules": "firebase emulators:exec --only firestore,auth --project rldb-b5593 \"node --test --test-concurrency=1 tests/rules.test.js tests/admin.test.js\"",
+    "test:e2e": "firebase emulators:exec --only firestore,auth --project rldb-b5593 \"node tests/e2e_godot.js && node tests/e2e_stats.js\"",
+    "test": "npm run test:unit && npm run test:rules",
     "admin": "node tools/rldb-admin.js"
   },
   "devDependencies": {
