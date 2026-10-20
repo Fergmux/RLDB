@@ -22,12 +22,28 @@ func test_card_tooltip_has_one_coloured_block_per_rules_part() -> void:
 	assert_float(bar.b).is_equal_approx(want.b, 0.01)
 
 
-func test_card_tooltip_status_blocks_use_buff_and_debuff_colours() -> void:
-	var t: Control = auto_free(StatusHelp.card_tooltip(MatchView.def_view(151)))
-	var st := _blocks(t, "TipStatus")
-	assert_int(st.size()).is_greater_equal(1)
-	var bar := ((st[0] as PanelContainer).get_theme_stylebox("panel") as StyleBoxFlat).border_color
-	assert_float(bar.r).is_equal_approx(UIStyle.BAD.r, 0.01)
+func test_card_tooltip_has_no_status_descriptions() -> void:
+	# J16 (owner, 22 Oct): the card tooltip no longer explains the statuses its text names (they
+	# confused); the details panel's status words still explain themselves on hover.
+	# Arrange: Ultimate Dragon names a status in its rules
+	var v := MatchView.def_view(151)
+	var key: String = StatusHelp.keys_in(CardText.card_text(v))[0]
+	var help := CardDetailsPanel._strip_status_prefix(StatusHelp.describe(key))
+	# Act
+	var t: Control = auto_free(StatusHelp.tooltip_for_card(v, CardText.tooltip_for(v) + "\n\nRight-click to inspect"))
+	# Assert
+	assert_array(_blocks(t, "TipStatus")).is_empty()
+	var labels := t.find_children("*", "Label", true, false).map(func(l): return String((l as Label).text))
+	for l in labels:
+		assert_str(String(l)).not_contains(help)
+
+
+func test_card_widget_tooltip_with_other_text_adds_no_status_section() -> void:
+	# J16: a card's tooltip whose text is not its own card text falls back to the plain tooltip, never
+	# to one with a status-description section.
+	var v := MatchView.def_view(151)
+	var key: String = StatusHelp.keys_in(CardText.card_text(v))[0]
+	assert_object(StatusHelp.tooltip_for_card(v, "Apply 1 %s" % key.capitalize())).is_null()
 
 
 func test_card_tooltip_keeps_caller_lines_around_the_card() -> void:

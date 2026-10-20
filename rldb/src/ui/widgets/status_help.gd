@@ -165,9 +165,9 @@ static func tooltip(text: String) -> Control:
 
 
 ## H8 (owner, 21 Oct): the rich tooltip of card view `v`, coloured like the details panel: the name
-## (gold, in the title face) over a kind line, one block per rules part with its timing caption in the
-## panel's timing colour and the same accent bar, then a block per status the card names (buff green,
-## debuff red, Rune blue). `prefix` / `suffix` are the caller's own lines around the card text (a
+## (gold, in the title face) over a kind line, then one block per rules part with its timing caption in
+## the panel's timing colour and the same accent bar. J16 (owner, 22 Oct): no blocks describing the
+## statuses the card names. `prefix` / `suffix` are the caller's own lines around the card text (a
 ## role caption, "Right-click to inspect"), shown plainly above / below. Hidden cards get none (null).
 static func card_tooltip(v: Dictionary, prefix: String = "", suffix: String = "") -> Control:
 	if v.is_empty() or bool(v.get("hidden", false)) or not v.has("name"):
@@ -195,13 +195,6 @@ static func card_tooltip(v: Dictionary, prefix: String = "", suffix: String = ""
 		var k := String(p.get("k", ""))
 		var c := CardDetailsPanel.timing_color(k)
 		col.add_child(_tip_block(k.to_upper(), String(p.get("t", "")), c, "TipRule"))
-	var keys := keys_in(CardText.card_text(v))
-	for key in keys:
-		var help := describe(String(key))
-		var at := help.find(": ")
-		var title := help.substr(0, at) if at > 0 else String(key).capitalize()
-		var body := CardDetailsPanel._strip_status_prefix(help)
-		col.add_child(_tip_block(title.to_upper(), body, CardDetailsPanel.status_color(String(key)), "TipStatus"))
 	if suffix.strip_edges() != "":
 		col.add_child(_tip_label(suffix.strip_edges(), 13, UIStyle.MUTED))
 	return col
@@ -260,15 +253,15 @@ static func _tip_block(caption: String, body: String, col: Color, name: String) 
 
 ## The card tooltip for a control showing card `v` whose tooltip text is `for_text`: the coloured
 ## card tooltip when the text holds the card's own tooltip (with the caller's lines around it), else
-## the plain status-section tooltip (or null).
+## the default tooltip (null) for a card, or the plain status-section tooltip when no card is shown.
+## J16 (owner, 22 Oct): a card's tooltip never describes statuses.
 static func tooltip_for_card(v: Dictionary, for_text: String) -> Control:
 	if not v.is_empty() and not bool(v.get("hidden", false)) and v.has("name"):
 		var own := CardText.tooltip_for(v)
 		var at := for_text.find(own) if own != "" else -1
 		if at >= 0:
-			var t := card_tooltip(v, for_text.substr(0, at), for_text.substr(at + own.length()))
-			if t != null:
-				return t
+			return card_tooltip(v, for_text.substr(0, at), for_text.substr(at + own.length()))
+		return null
 	return tooltip(for_text)
 
 
