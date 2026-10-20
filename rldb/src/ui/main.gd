@@ -124,6 +124,9 @@ func _parse_cmdline() -> void:
 		if a.begins_with("--f04-series-shots="):
 			_run_driver("res://src/dev/f04_series_driver.gd", a.split("=", true, 1)[1])
 			return
+		if a.begins_with("--duelui-shots="):
+			_run_driver("res://src/dev/duel_ui_release_driver.gd", a.split("=", true, 1)[1])
+			return
 		if a.begins_with("--f02-shots="):
 			_run_driver("res://src/dev/f02_driver.gd", a.split("=", true, 1)[1])
 			return
