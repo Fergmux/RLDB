@@ -81,7 +81,7 @@ func test_a_v1_file_migrates_with_its_duels_and_draft_counters() -> void:
 	var f := FileAccess.open(PlayerStats.PATH, FileAccess.WRITE)
 	f.store_string(JSON.stringify(v1))
 	f.close()
-	PlayerStats.reload()
+	PlayerStats.forget()
 	var d := PlayerStats.load_data()
 	assert_int(d["duels"].size()).is_equal(1)
 	assert_int(d["series"].size()).is_equal(1)
@@ -90,7 +90,7 @@ func test_a_v1_file_migrates_with_its_duels_and_draft_counters() -> void:
 	var id := String(d["duels"][0]["id"])
 	assert_str(id).has_length(16)
 	# The new ids were saved with the migration: reloading keeps them (no duplicates on sync).
-	PlayerStats.reload()
+	PlayerStats.forget()
 	assert_str(String(PlayerStats.load_data()["duels"][0]["id"])).is_equal(id)
 	assert_int(int(PlayerStats.load_data()["version"])).is_equal(2)
 
@@ -141,7 +141,7 @@ func test_two_steam_accounts_on_one_computer_keep_separate_records() -> void:
 func test_rows_recorded_in_the_same_second_keep_their_order() -> void:
 	for won in [true, false, true, true]:
 		PlayerStats.record_duel({"mode": "bot", "won": won, "turns": 5})
-	PlayerStats.reload()
+	PlayerStats.forget()
 	var w: Array = PlayerStats.load_data()["duels"].map(func(r): return r["won"])
 	assert_array(w).is_equal([true, false, true, true])
 

@@ -178,6 +178,10 @@ func setup(cfg: TelemetryConfig, transport = null) -> void:
 func _maybe_start_sync() -> void:
 	if stats_sync != null or config == null or not config.active() or not bool(config.stats_sync.get("enabled", true)):
 		return
+	if PlayerStats.PATH == PlayerStats.TEST_PATH:
+		# Automated runs record into the test file: it must never reach anyone's cloud copy.
+		StatsSync.set_status("local", "automated run")
+		return
 	if not share_enabled():
 		StatsSync.set_status("local", "statistics sharing is off")
 		return

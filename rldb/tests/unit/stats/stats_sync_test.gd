@@ -34,6 +34,7 @@ func after_test() -> void:
 	Telemetry.SETTINGS_PATH = saved_settings
 	Telemetry.steam_id_provider = saved_provider
 	Telemetry.instance = null
+	PlayerStats.PATH = PlayerStats.TEST_PATH
 	PlayerStats.clear()
 	_wipe(ROOT)
 	StatsSync.set_status("local")
@@ -298,7 +299,15 @@ func _config() -> TelemetryConfig:
 	return c
 
 
+## The service tests stand in for a player's install: a scratch stats file, not TEST_PATH (which
+## the service refuses to sync, see the regression test above).
+func _as_player_install() -> void:
+	PlayerStats.PATH = ROOT.path_join("player_stats.json")
+	PlayerStats.forget()
+
+
 func test_without_steam_statistics_stay_local_only() -> void:
+	_as_player_install()
 	Telemetry.steam_id_provider = func() -> int: return 0
 	var t: Telemetry = auto_free(Telemetry.new())
 	t.setup(_config(), TelemetryFakeTransport.new())
@@ -310,6 +319,7 @@ func test_without_steam_statistics_stay_local_only() -> void:
 func test_steam_that_comes_up_after_start_up_still_starts_the_sync() -> void:
 	# Regression (20 Oct 2026): Telemetry booted before SteamBridge.init(), so the Steam hash was
 	# always empty and no record ever carried it. The service now picks Steam up when it appears.
+	_as_player_install()
 	var steam := [0]
 	Telemetry.steam_id_provider = func() -> int: return steam[0]
 	var t: Telemetry = auto_free(Telemetry.new())
@@ -322,7 +332,23 @@ func test_steam_that_comes_up_after_start_up_still_starts_the_sync() -> void:
 	assert_str(t.collector.steam_hash).is_equal(t.steam_hash)
 
 
+func test_the_test_stats_file_is_never_synced_even_with_a_live_target() -> void:
+	# Regression (20 Oct 2026): automated runs record into PlayerStats.TEST_PATH; that file must
+	# never reach a cloud copy, whatever target the configuration resolved to.
+	assert_str(PlayerStats.PATH).is_equal(PlayerStats.TEST_PATH)
+	Telemetry.steam_id_provider = func() -> int: return 76561198000000042
+	var cfg := _config()
+	cfg.target = "live"
+	var t: Telemetry = auto_free(Telemetry.new())
+	t.setup(cfg, TelemetryFakeTransport.new())
+	assert_object(t.stats_sync).is_null()
+	t._process(1.1)
+	assert_object(t.stats_sync).is_null()
+	assert_str(String(StatsSync.describe()["state"])).is_equal("local")
+
+
 func test_turning_sharing_off_stops_the_sync_and_says_local_only() -> void:
+	_as_player_install()
 	Telemetry.steam_id_provider = func() -> int: return 76561198000000042
 	var t: Telemetry = auto_free(Telemetry.new())
 	t.setup(_config(), TelemetryFakeTransport.new())

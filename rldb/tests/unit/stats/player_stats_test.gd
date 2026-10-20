@@ -146,7 +146,7 @@ func test_facts_summarise_record_streaks_cards_and_decks() -> void:
 	PlayerStats.record_draft_pick(33)
 	PlayerStats.record_draft_pick(33)
 	PlayerStats.record_draft_done()
-	PlayerStats.reload()   # the facts come from the saved file
+	PlayerStats.forget()   # the facts come from the saved file
 	var f := PlayerStats.facts()
 	assert_str(String(_fact(f, "Duels played")["value"])).is_equal("8")
 	assert_str(String(_fact(f, "Duels played")["detail"])).is_equal("6 online, 1 vs bot, 1 hot-seat")

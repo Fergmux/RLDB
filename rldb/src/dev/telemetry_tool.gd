@@ -117,10 +117,6 @@ func _prepare_machine(args: PackedStringArray) -> void:
 		elif a == "--wipe":
 			wipe = true
 	var dir := "user://telemetry_e2e_%s" % m
-	# Godot 4.6 runs a class's static initialisers at its first static call, overwriting any
-	# static var assigned before it: touch both classes first, then point them at this computer.
-	PlayerStats.reload()
-	Telemetry._live()
 	Telemetry.DIR = dir
 	Telemetry.SETTINGS_PATH = dir.path_join("ui_settings.cfg")
 	PlayerStats.PATH = "user://telemetry_e2e_%s_stats.json" % m
@@ -129,7 +125,7 @@ func _prepare_machine(args: PackedStringArray) -> void:
 		for f in ["credential_emulator.cfg", "state.cfg", "emulator/stats_sync.cfg", "ui_settings.cfg"]:
 			if FileAccess.file_exists(dir.path_join(f)):
 				DirAccess.remove_absolute(ProjectSettings.globalize_path(dir.path_join(f)))
-	PlayerStats.reload()
+	PlayerStats.forget()
 	Telemetry.steam_id_provider = func() -> int: return steam
 
 

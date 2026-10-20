@@ -93,7 +93,8 @@ static func resolve_environment(req: String, args: PackedStringArray, all_args: 
 	if req in ENVIRONMENTS:
 		return req
 	for a in all_args:
-		if a.contains("GdUnitCmdTool") or a.contains("gdUnit4"):
+		# Every `-s` script run (dev drivers, tools, GdUnit) is a test run, whatever its arguments.
+		if a.contains("GdUnitCmdTool") or a.contains("gdUnit4") or a == "-s" or a == "--script":
 			return "test"
 	for a in args:
 		if a.contains("shots") or a.contains("driver"):

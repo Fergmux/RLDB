@@ -82,8 +82,10 @@ static func save() -> void:
 		f.store_string(JSON.stringify(load_data()))
 
 
-## Forgets the cached copy (tests, or after the file was replaced).
-static func reload() -> void:
+## Forgets the cached copy (tests, or after the file was replaced). Not named `reload`: on a
+## class, `PlayerStats.reload()` resolves to the built-in Script.reload(), which re-runs every
+## static initialiser (PATH, revision) instead of calling a static function of that name.
+static func forget() -> void:
 	_cache = {}
 	revision += 1
 
