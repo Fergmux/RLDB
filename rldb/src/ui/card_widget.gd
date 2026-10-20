@@ -32,6 +32,10 @@ const EMPTY_SIZES := {"board": Vector2(128, 128), "trap": Vector2(128, 85), "pow
 const ART_DIR := CardArt.ART_DIR
 const UNIT_CATS := ["basic_unit", "unit", "fusion", "ritual", "arcane"]
 const BIG_KINDS := ["hand", "big", "mini", "back"]
+## H12: z_index (relative to the card's parent) of a selected card, so its corner brackets draw
+## above neighbouring zones and the board. Below the FX vignette (FxPlayer.VIGNETTE_Z) and every
+## UiLayers overlay, which must still cover it.
+const SELECTED_Z := 3
 
 var view: Dictionary = {}
 var size_kind: String = "board"
@@ -94,6 +98,10 @@ var _pv_value := 0
 var _pv_bonus := 0
 ## Drawing context: the state snapshot and scaled primitives every card part draws with.
 var _paint := CardPainter.new(self)
+## Internal child the state overlays are drawn on (see _init).
+var _overlay: Control
+## Face redraws so far (tests: an animated overlay must not repaint the face).
+var face_draws := 0
 
 
 func _init() -> void:
@@ -106,6 +114,14 @@ func _init() -> void:
 	# A `scale` on the card or above it (FX pulses, the deck builder click, a scaled sidebar) changes the
 	# on-screen text size: redraw so the glyphs are rasterised for it (see _screen_text_k).
 	set_notify_transform(true)
+	# Performance (21 Oct): the state overlays (selection brackets, target / ready glow, FX flash, order
+	# badge) live on an internal child canvas item, drawn over the face. The per-frame redraw of an
+	# animated overlay repaints only it, never the face (frame, art, text, gems).
+	_overlay = Control.new()
+	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.texture_filter = texture_filter
+	_overlay.draw.connect(_draw_overlay)
+	add_child(_overlay, false, Node.INTERNAL_MODE_FRONT)
 
 
 func _ready() -> void:
@@ -166,12 +182,17 @@ func set_marks(is_target: bool, is_selected: bool, is_dimmed: bool = false, soft
 	highlighted = is_target
 	selected = is_selected
 	dimmed = is_dimmed
+	# H12: the selection brackets reach outside the card; raised, they draw over the next zone, pile
+	# and board ornament (drawn later in tree order) instead of under them.
+	z_index = SELECTED_Z if is_selected else 0
 	if is_dimmed:
 		self_modulate = Color(0.55, 0.55, 0.55, 1.0)
 	elif soft_dim:
 		self_modulate = Color(0.8, 0.8, 0.8, 1.0)
 	else:
 		self_modulate = Color.WHITE
+	# self_modulate does not reach children: the overlay takes the same dim.
+	_overlay.self_modulate = self_modulate
 	_update_process()
 	queue_redraw()
 
@@ -351,12 +372,12 @@ func _on_rect_changed() -> void:
 
 func _set_flash(v: float) -> void:
 	fx_flash = v
-	queue_redraw()
+	_overlay.queue_redraw()
 
 
 func _set_glow(v: Color) -> void:
 	fx_glow = v
-	queue_redraw()
+	_overlay.queue_redraw()
 
 
 func _set_order(v: int) -> void:
@@ -372,7 +393,11 @@ func _update_process() -> void:
 
 
 func _process(_d: float) -> void:
-	queue_redraw()
+	# An empty zone's pick glow is part of its face; a card's animated states are all overlays.
+	if view.is_empty():
+		queue_redraw()
+	else:
+		_overlay.queue_redraw()
 
 
 func _notification(what: int) -> void:
@@ -458,7 +483,9 @@ func _exit_tree() -> void:
 # ---------------------------------------------------------------- main draw
 
 func _draw() -> void:
+	face_draws += 1
 	var pt := _paint
+	pt.ci = self
 	pt.view = view
 	pt.size_kind = size_kind
 	pt.rotated = rotated
@@ -482,7 +509,7 @@ func _draw() -> void:
 		pt.reset_transform()
 		pt.hover = pt.hover or (highlighted and _mouse_in)
 		CardLayouts.draw_empty(pt, ls, highlighted)
-		CardOverlays.draw(pt, self)
+		_overlay.queue_redraw()
 		return
 	pt.cr = _card_rect_in(ls)
 	pt.ps = Vector2(pt.cr.size.y, pt.cr.size.x) if rotated else pt.cr.size
@@ -502,7 +529,17 @@ func _draw() -> void:
 			"hand", "mini", "big": CardLayouts.draw_tall(pt)
 			_: CardLayouts.draw_square(pt)
 	pt.reset_transform()
+	_overlay.queue_redraw()
+
+
+## Draws the state overlays (CardOverlays) on the internal overlay item from the painter snapshot the
+## last face draw took (rect, scale, lift).
+func _draw_overlay() -> void:
+	var pt := _paint
+	pt.ci = _overlay
+	pt.reset_transform()
 	CardOverlays.draw(pt, self)
+	pt.ci = self
 
 
 ## Tests (F05-03): records every text draw's layout (text, font size, face-space position, paragraph

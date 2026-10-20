@@ -51,6 +51,26 @@ static func draw_pip(ci: CanvasItem, type: String, center: Vector2, radius: floa
 	draw_icon(ci, type, center, radius * PIP_ICON_K)
 
 
+## H17 (21 Oct): the card-face pip as a jewel in a gilded setting (the AP gems' look): a metal bezel,
+## a dark enamel well tinted by the type colour, the icon, then a curved glass highlight and a glint.
+## Same footprint as draw_pip (outer radius `radius * PIP_K`).
+static func draw_pip_jewel(ci: CanvasItem, type: String, center: Vector2, radius: float) -> void:
+	var s := maxf(0.5, radius / 8.0)
+	var outer := CardGeometry.poly(center, radius * PIP_K, 24, 0.0)
+	CardJewel.drop_shadow(ci, outer, center, s * 0.8)
+	var inner := CardJewel.setting(ci, outer, center, maxf(1.3, radius * 0.2), s)
+	var ir := center.distance_to(inner[0])
+	var tint := UIStyle.type_color(type)
+	var cols := PackedColorArray()
+	for p in inner:
+		var t := clampf((p.y - (center.y - ir)) / (2.0 * ir), 0.0, 1.0)
+		cols.append(PIP_BACKING.lerp(Color(tint.darkened(0.55), 1.0), 0.35 * (1.0 - t)))
+	ci.draw_polygon(inner, cols)
+	draw_icon(ci, type, center, radius * PIP_ICON_K * 0.92)
+	ci.draw_arc(center, ir * 0.8, PI * 1.08, PI * 1.42, 8, Color(1, 1, 1, 0.32), maxf(1.0, ir * 0.13), true)
+	CardJewel.sparkle(ci, center + CardJewel.LIGHT.normalized() * ir * 0.62, maxf(0.8, ir * 0.12), 0.8)
+
+
 ## Small Control that shows one type icon (for panels, deck builder rows, etc).
 class TypeBadge extends Control:
 	## Damage type shown ("" = typeless ring); setting it redraws.

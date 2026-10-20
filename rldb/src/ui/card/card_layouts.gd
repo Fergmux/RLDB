@@ -20,15 +20,25 @@ const TEXT_WELL := Color(0.847, 0.8, 0.69, 0.07)
 
 ## Geometry (base units): rects are [x, y, w, h], points [x, y]; "gem_r" is the cost gem radius.
 ## "icons" is [x0, x1, bottom y, icon size, rows].
-const FIELD := {"art": [3, 3, 79, 79], "banner": [2, 73, 81, 19], "gem": [12, 12], "gem_r": 9.0, "pip": [73, 12],
+const FIELD := {"art": [3, 3, 79, 79], "banner": [2, 73, 81, 19], "gem": [12.5, 12.5], "gem_r": 9.8, "pip": [72.5, 12.5],
 	"icons": [4, 81, 72, 14.0, 2], "atk": [1, 93, 36, 34], "def": [48, 93, 36, 34], "text": [5, 94, 75, 31],
-	"f_name": 10.5, "f_name_min": 9.0, "f_gem": 12.0, "f_stat": 17.0, "f_text": 8.5}
+	"f_name": 10.5, "f_name_min": 9.0, "f_gem": 12.5, "f_stat": 17.0, "f_text": 8.5}
 const TALL := {"art": [4, 4, 112, 112], "banner": [2, 100, 116, 19], "gem": [16, 16], "gem_r": 11.5, "pip": [104, 16],
 	"icons": [6, 114, 98, 13.0, 2], "icons_unit": [35, 85, 98, 13.0, 3], "atk": [0, 66, 36, 34], "def": [84, 67, 36, 33],
 	"line": [6, 120, 108, 10], "text": [4, 131, 112, 45],
 	"f_name": 12.5, "f_name_min": 8.0, "f_gem": 14.0, "f_stat": 18.0, "f_line": 9.5, "f_text": 10.0}
 ## Smallest rules-text size, as a fraction of the layout's text size.
 const TEXT_MIN_K := 0.5
+
+
+## H16: corner radius (px) of the art window: concentric with the card's outer corner `frame_radius`
+## (base units) at the window's inset, plus ART_RADIUS_EXTRA so the round reads at board size.
+static func art_radius(pt: CardPainter, frame_radius: float, g: Dictionary) -> float:
+	return maxf(1.0, (frame_radius - float(g["art"][0]) + ART_RADIUS_EXTRA) * pt.s)
+
+
+## Extra rounding (base units) of the art window over the concentric radius.
+const ART_RADIUS_EXTRA := 0.75
 
 
 static func _is_unit(pt: CardPainter) -> bool:
@@ -43,14 +53,18 @@ static func _r(pt: CardPainter, a: Array) -> Rect2:
 static func draw_square(pt: CardPainter) -> void:
 	var g := FIELD
 	CardFaceParts.frame(pt, RADIUS_SMALL)
-	CardArt.draw(pt, _r(pt, g["art"]))
+	CardArt.draw(pt, _r(pt, g["art"]), art_radius(pt, RADIUS_SMALL, g))
 	_art_corners(pt, g)
 	_icons(pt, g["icons"], 0.0)
-	# #26: one line at 9 px or more on the field, ellipsised past that.
+	# H14: the full name on one line, shrunk then condensed to fit (never ellipsised).
 	CardFaceParts.name_plate(pt, _r(pt, g["banner"]), g["f_name"], 0.0, 0.0, pt.accent(), g["f_name_min"], true)
 	if _is_unit(pt):
-		CardStatBadge.draw(pt, _r(pt, g["atk"]), true, g["f_stat"])
-		CardStatBadge.draw(pt, _r(pt, g["def"]), false, g["f_stat"])
+		# H20: a small engraved fleuron between the ATK and DEF gems fills the bottom strip.
+		var a := _r(pt, g["atk"])
+		var d := _r(pt, g["def"])
+		flourish(pt.ci, Vector2((a.end.x + d.position.x) / 2.0, a.get_center().y), 14.0 * pt.s, pt.s, FLEURON)
+		CardStatBadge.draw(pt, a, true, g["f_stat"])
+		CardStatBadge.draw(pt, d, false, g["f_stat"])
 	CardFaceParts.gem(pt, pt.p(g["gem"][0], g["gem"][1]), float(g["gem_r"]) * pt.s, pt.fs(g["f_gem"]))
 
 
@@ -58,14 +72,14 @@ static func draw_square(pt: CardPainter) -> void:
 static func draw_power(pt: CardPainter) -> void:
 	var g := FIELD
 	CardFaceParts.frame(pt, RADIUS_SMALL)
-	CardArt.draw(pt, _r(pt, g["art"]))
+	CardArt.draw(pt, _r(pt, g["art"]), art_radius(pt, RADIUS_SMALL, g))
 	_icons(pt, g["icons"], 0.0)
 	CardFaceParts.name_plate(pt, _r(pt, g["banner"]), g["f_name"], 0.0, 0.0, pt.accent(), g["f_name_min"], true)
 	var txt := CardText.card_text(pt.view)
 	if txt != "":
 		var t: Array = g["text"]
 		var tp := CardTextLayout.fit_para(txt, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(CardPainter.MIN_FS - 1, pt.fs(g["f_text"] * 0.7)), float(t[2]) * pt.s, float(t[3]) * pt.s)
-		pt.para_text(tp, pt.p(t[0], t[1]), Color(UIStyle.TEXT, 0.9), txt)
+		pt.para_text(tp, pt.p(t[0], t[1]), Color(UIStyle.TEXT, 0.9), CardTextLayout.shown_text(tp, txt))
 	CardFaceParts.gem(pt, pt.p(g["gem"][0], g["gem"][1]), float(g["gem_r"]) * pt.s, pt.fs(g["f_gem"]))
 
 
@@ -76,7 +90,7 @@ static func draw_tall(pt: CardPainter, _big: bool = false) -> void:
 	var s := pt.s
 	var is_unit := _is_unit(pt)
 	CardFaceParts.frame(pt, RADIUS_TALL)
-	CardArt.draw(pt, _r(pt, g["art"]))
+	CardArt.draw(pt, _r(pt, g["art"]), art_radius(pt, RADIUS_TALL, g))
 	_art_corners(pt, g)
 	_icons(pt, g["icons_unit"] if is_unit else g["icons"], 0.5)
 	# Race / Type line (units) or the card kind (Spells, Traps, Powers).
@@ -85,7 +99,8 @@ static func draw_tall(pt: CardPainter, _big: bool = false) -> void:
 	if is_unit:
 		CardFaceParts.race_type_line(pt, pt.p(ln[0], ln[1]), float(ln[2]) * s, float(ln[3]) * s, line_fs)
 	else:
-		pt.text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(pt.view.get("category", ""), ""), pt.p(ln[0], ln[1]), line_fs, UIStyle.MUTED, float(ln[2]) * s, HORIZONTAL_ALIGNMENT_CENTER, float(ln[3]) * s)
+		# H21: the kind (Spell, Trap, Power) sits on the left, where a unit shows its race.
+		pt.text_at(UIStyle.font_italic(), UIStyle.CATEGORY_NAMES.get(pt.view.get("category", ""), ""), pt.p(ln[0], ln[1]), line_fs, UIStyle.MUTED, float(ln[2]) * s, HORIZONTAL_ALIGNMENT_LEFT, float(ln[3]) * s)
 	# Rules text well: the whole text always fits, the size steps down until it does (user feedback).
 	var t: Array = g["text"]
 	var rules := CardText.card_text(pt.view)
@@ -94,7 +109,7 @@ static func draw_tall(pt: CardPainter, _big: bool = false) -> void:
 	pt.round_rect(_r(pt, t), TEXT_WELL, 3.0 * s)
 	if rules != "":
 		var tp := CardTextLayout.fit_para(rules, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(5, pt.fs(g["f_text"] * TEXT_MIN_K)), (float(t[2]) - 6.0) * s, (float(t[3]) - 3.0) * s)
-		pt.para_text(tp, pt.p(float(t[0]) + 3.0, float(t[1]) + 1.5), UIStyle.TEXT, rules)
+		pt.para_text(tp, pt.p(float(t[0]) + 3.0, float(t[1]) + 1.5), UIStyle.TEXT, CardTextLayout.shown_text(tp, rules))
 	else:
 		# No rules (Basic Units, #75): a small engraved filigree with a diamond, never a lone glyph that
 		# reads as a missing asset.
@@ -127,6 +142,8 @@ static func draw_set_name(pt: CardPainter) -> void:
 
 ## #75: the vanilla card's filigree (bronze 40%).
 const FLOURISH := Color(0.478, 0.353, 0.188, 0.4)
+## H20: the field unit's fleuron between its ATK and DEF gems (gold, a little brighter than FLOURISH).
+const FLEURON := Color(0.83, 0.65, 0.29, 0.55)
 ## Inlaid empty zone (#22): a darker recess under a thin share of the zone tint, the inner shadow's
 ## depth and alpha, the dark rim and the gold lip on the lit bottom / right edges.
 const ZONE_RECESS_A := 0.16
