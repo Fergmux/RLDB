@@ -143,6 +143,27 @@ func render_turnbar() -> void:
 			tip = a["reason"]
 	var chip := ""
 	var chip_mine := false
+	var spec := gs.is_spectator()
+	var actor: String = gs.pv(int(pd.get("player", mv["active"])))["name"] if not pd.is_empty() else owner_name
+	if spec:
+		# A2: a spectator is told who is acting; there is never a button to press.
+		if mv["winner"] != -1:
+			chip = "Game over"
+		elif not pd.is_empty():
+			chip = ("%s is responding…" if pd["kind"] == "trap_response" else "%s is choosing…") % actor
+		elif mv["resolving"]:
+			chip = "Resolving…"
+		else:
+			chip = "%s's turn" % owner_name
+		state_chip.visible = true
+		phase_btn.visible = false
+		state_label.text = chip
+		state_label.add_theme_color_override("font_color", UIStyle.MUTED)
+		var waiting_s: bool = not pd.is_empty() and mv["winner"] == -1
+		gs.prompt.show_wait(chip if waiting_s else "")
+		turn_note.text = "SNEAKY SNUNDAY: card-effect gains/losses reversed (not Damage or Healing)" if mv["reversal"] else ""
+		turn_note.visible = turn_note.text != ""
+		return
 	if mv["winner"] != -1:
 		chip = "Game over"
 	elif not pd.is_empty():
@@ -192,7 +213,7 @@ func render_series() -> void:
 	for p in 2:
 		var row := HBoxContainer.new()
 		series_box.add_child(row)
-		var nm := UIStyle.label(String(names[p]) + ("  (you)" if p == gs.me() else ""), 17, UIStyle.TEXT, false, true)
+		var nm := UIStyle.label(String(names[p]) + ("  (you)" if p == gs.me() and not gs.is_spectator() else ""), 17, UIStyle.TEXT, false, true)
 		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		nm.clip_text = true
 		row.add_child(nm)

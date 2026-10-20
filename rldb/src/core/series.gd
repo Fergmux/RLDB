@@ -793,6 +793,30 @@ func view_for(p: int) -> Dictionary:
 	return v
 
 
+## A2: what a spectator of the series sees, oriented to seat `orient`. The match is the spectator
+## redaction (MatchView.build_spectator; `as_seat` = the player who allowed this spectator to see
+## their cards, or -1). Between duels only public progress is given: no deck lists, starter
+## choices, draft offers, reward offers or telemetry ids, so a spectator watches and never picks.
+func spectator_view(orient: int, as_seat: int = -1) -> Dictionary:
+	var v := {"you": clampi(orient, 0, 1), "stage": stage, "scores": scores.duplicate(), "game_no": game_no,
+		"best_of": cfg["best_of"], "names": names.duplicate(), "series_log": series_log.duplicate(),
+		"history": history.duplicate(true), "last_loser": last_loser, "deck_mode": cfg["deck_mode"],
+		"deck_ready": deck_ready.duplicate(), "forfeit_by": forfeit_by, "save_id": save_id,
+		"at_checkpoint": at_checkpoint(), "mode": String(cfg.get("mode", "")), "spectator": true}
+	if game != null:
+		v["match"] = MatchView.build_spectator(game, orient, as_seat)
+	match stage:
+		STAGE_DECKS:
+			if cfg["deck_mode"] != "starter":
+				v["draft_progress"] = [0, 1].map(func(p): return {"step": draft[p].get("step", 0), "total": draft[p].get("total", 0)})
+		STAGE_REWARDS:
+			v["rewards_done"] = [bool(rewards[0].get("done", false)), bool(rewards[1].get("done", false))]
+		STAGE_FIRST:
+			v["next"] = {"first_chosen": first_chosen, "first_player": first_player if first_chosen else -1,
+				"ready": duel_ready.duplicate()}
+	return v
+
+
 ## Seat p's draft: its basic unit (and the Type and Race choices), the picks left per category,
 ## the open category and its offer. Of the other seat only the progress is shown, never its
 ## offer or picks (hidden info).

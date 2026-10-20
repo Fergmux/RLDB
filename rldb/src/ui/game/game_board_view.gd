@@ -45,6 +45,10 @@ var opp_hand_n: int = -1
 var ready_uids: Dictionary = {}
 ## Card my current pick belongs to (kept lit while everything else dims), or -1.
 var src_uid: int = -1
+## A2: face-down hand of the bottom player on a spectator's screen (and its caption).
+var own_backs_box: Control
+var own_backs_label: Label
+var _own_backs_key := ""
 var _y0: float = 0.0
 var _ux: float = 0.0
 
@@ -247,7 +251,8 @@ func place_opp_hand() -> void:
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.position = Vector2(i * step, 0)
 		opp_hand_box.add_child(b)
-	opp_hand_count_label.text = "Opponent hand" if not gs.mv.is_empty() else ""
+	opp_hand_count_label.text = "" if gs.mv.is_empty() else ("%s's hand" % String(gs.pv(1 - gs.me())["name"]) if gs.is_spectator() else "Opponent hand")
+	opp_hand_count_label.reset_size()
 
 
 ## Renders both halves of the board, the plates, piles, my hand and the opponent hand count.
@@ -285,13 +290,63 @@ func render() -> void:
 	if on != opp_hand_n:
 		opp_hand_n = on
 		place_opp_hand()
+	if have:
+		opp_hand_count_label.text = "%s's hand" % String(gs.pv(o)["name"]) if gs.is_spectator() else "Opponent hand"
+	_render_hidden_own_hand(have)
+
+
+## A2: a spectator who may not see the bottom player's hand gets its card backs along the bottom
+## (fanned like the hand), with "<name>'s hand · N cards", so the count is still readable.
+func _render_hidden_own_hand(have: bool) -> void:
+	var n := 0
+	if have and gs.is_spectator() and not gs.pv(gs.me()).has("hand"):
+		n = int(gs.pv(gs.me())["counts"]["hand"])
+	if own_backs_box == null:
+		own_backs_box = Control.new()
+		own_backs_box.name = "SpectatorHandBacks"
+		own_backs_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.add_child(own_backs_box)
+		own_backs_label = UIStyle.label("", 13, UIStyle.MUTED, false, true)
+		own_backs_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		layer.add_child(own_backs_label)
+	var key := "%d:%s:%s" % [n, gs.pv(gs.me())["name"] if have else "", str(gs.size)]
+	if key == _own_backs_key:
+		return
+	_own_backs_key = key
+	for ch in own_backs_box.get_children():
+		ch.queue_free()
+	own_backs_label.visible = n > 0
+	own_backs_box.visible = n > 0
+	if n == 0:
+		return
+	var shown := mini(n, OPP_HAND_MAX)
+	var bw: float = CardWidget.SIZES["hand"].x
+	var step := minf(bw * 0.62, (520.0 - bw) / maxf(1.0, float(shown - 1)))
+	var span := step * (shown - 1) + bw
+	var x0 := gs.play_area.size.x / 2.0 - span / 2.0
+	var top := gs.size.y - GameScreen.HAND_H + 6.0
+	for i in shown:
+		var b := CardWidget.new().setup({"hidden": true, "zone": "hand"}, "hand")
+		b.show_tooltip = false
+		b.auto_hover = false
+		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var t := 0.0 if shown == 1 else (float(i) - float(shown - 1) / 2.0) / (float(shown - 1) / 2.0)
+		b.position = Vector2(x0 + i * step, top + t * t * 6.0)
+		b.pivot_offset = Vector2(bw / 2.0, 0.0)
+		b.scale = Vector2(0.88, 0.88)   # card backs carry no text: a little smaller keeps the fan on screen
+		b.rotation = deg_to_rad(t * 2.0) if not UIStyle.reduce_motion else 0.0
+		own_backs_box.add_child(b)
+	own_backs_label.text = "%s's hand · %d card%s" % [String(gs.pv(gs.me())["name"]), n, "" if n == 1 else "s"]
+	own_backs_label.size = Vector2(gs.play_area.size.x, 20)
+	own_backs_label.position = Vector2(0, gs.size.y - GameScreen.HAND_H - 18.0)
 
 
 ## Pile stacks: counts for both players; only your own piles open for inspection. Your Extra
 ## pile carries the "can act" ring while a Ritual/Arcane summon is available from it, or a
 ## Fusion method can be activated now with a summonable Fusion unit (F03-08, `extra_avail`).
 func _update_piles(side: int, pidx: int, pv: Dictionary) -> void:
-	var mine := pidx == gs.me()
+	# A spectator opens the bottom player's piles only when that player lets them see their cards.
+	var mine := pidx == gs.me() and (not gs.is_spectator() or pv.has("spent"))
 	var extra_ready := false
 	if mine:
 		for c in pv.get("extra", []):
@@ -369,6 +424,22 @@ func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, target
 ## Slot item of player p's zone slot, or {}.
 func slot_item(p: int, zone: String, slot: int) -> Dictionary:
 	return slots.get(key(side_of(p), zone, slot), {})
+
+
+## Width of the unit block (3 unit zones and their gaps): the unit of normalised board space.
+const BLOCK_W := 3.0 * UNIT_SIZE + 2.0 * SLOT_GAP
+
+
+## A2: screen-local point `p` in normalised board space (see CursorTrack): (0, 0) is the top-left
+## of the unit block, (1, 1) its bottom-right. The board is drawn at a fixed size, so the same
+## normalised point is over the same zone in any window.
+func local_to_norm(p: Vector2) -> Vector2:
+	return (p - Vector2(_ux, _y0)) / Vector2(BLOCK_W, BOARD_H)
+
+
+## The screen-local point of normalised board position `n` (inverse of local_to_norm).
+func norm_to_local(n: Vector2) -> Vector2:
+	return Vector2(_ux, _y0) + n * Vector2(BLOCK_W, BOARD_H)
 
 
 ## Global rect of the card box in player p's zone slot (Rect2() when there is no such slot).
