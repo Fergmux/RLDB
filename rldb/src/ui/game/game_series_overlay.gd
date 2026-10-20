@@ -92,10 +92,12 @@ func build_modals() -> void:
 	overlay.visible = false
 	overlay.z_index = UiLayers.SERIES_MODAL
 	gs.add_child(overlay)
-	# Controls take clicks in tree order, not z order: the pause veil (built earlier, drawn above the
-	# modal) must also come after it in the tree, or the modal under it would take the veil's clicks.
-	if pause_dim != null and pause_dim.get_parent() == gs:
-		gs.move_child(pause_dim, -1)
+	# Controls take clicks in tree order, not z order: the pause veil and the top strip's popovers (Chat,
+	# Spectators), built earlier but drawn above the modal, must also come after it in the tree, or the
+	# modal and its dim under them would take their clicks.
+	for late in [pause_dim, gs.chat.panel, gs.spectate.panel]:
+		if late != null and (late as Node).get_parent() == gs:
+			gs.move_child(late, -1)
 	var sc := SmoothScroll.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	op.body.add_child(sc)

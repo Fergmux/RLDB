@@ -198,6 +198,32 @@ func test_j15_the_rewards_dim_fills_the_window_under_the_top_strip_buttons() -> 
 	assert_int(gs.menu.top_strip.z_index).is_equal(UiLayers.TOP_STRIP)
 
 
+func test_popovers_over_the_rewards_screen_take_their_own_clicks() -> void:
+	# Arrange: the rewards screen is up and the chat popover is open over it (as online)
+	var a := await _kill_board()
+	host.handle(1 - a, {"t": "concede"})
+	await await_idle_frame()
+	gs.skip_effects()
+	await await_idle_frame()
+	var panel: Control = gs.chat.panel
+	panel.visible = true
+	panel.position = Vector2(400, 300)
+	panel.reset_size()
+	await await_idle_frame()
+	var hit := [0]
+	var probe := Button.new()
+	probe.text = "probe"
+	probe.custom_minimum_size = Vector2(80, 30)
+	probe.pressed.connect(func(): hit[0] += 1)
+	(panel as HousePanel).body.add_child(probe)
+	await await_idle_frame()
+	# Act: a click on a button inside the popover (drawn above the modal, built before it)
+	await _push_click(probe.get_global_rect().get_center())
+	# Assert: the popover's button got it, not the modal or its dim under it
+	assert_int(hit[0]).is_equal(1)
+	panel.visible = false
+
+
 func test_j15_deck_choice_dim_reaches_the_top_but_leaves_the_sidebar_live() -> void:
 	# Arrange: a new series on its deck choice (the draft's "Your draft" list lives in the sidebar)
 	var h2: LocalHost = auto_free(LocalHost.new())
