@@ -76,6 +76,7 @@ func test_offline_screen_has_no_chat_or_spectator_controls() -> void:
 	var gs := await _screen(lh.seats[0])
 	assert_bool(gs.chat.button.visible).is_false()
 	assert_bool(gs.spectate.badge.visible).is_false()
+	assert_bool(gs.spectate.lobby_button.visible).is_false()
 	assert_bool((gs.menu.items["spectators"] as Button).visible).is_false()
 	assert_bool((gs.menu.items["concede"] as Button).visible).is_true()
 	assert_bool((gs.menu.items["stop"] as Button).visible).is_false()
@@ -131,8 +132,10 @@ func test_typing_in_chat_never_triggers_game_shortcuts(timeout := 30000) -> void
 func test_spectators_list_toggle_tooltips_and_state(timeout := 30000) -> void:
 	await _net()
 	var gs := await _screen(host.local_seat)
-	assert_bool(await _wait(func(): return gs.spectate.badge.visible)).is_true()
-	assert_str((gs.menu.items["spectators"] as Button).text).is_equal("Spectators (1)")
+	# J22 (22 Oct): the players' "n watching" badge became the always-present View lobby button.
+	assert_bool(gs.spectate.lobby_button.visible).is_true()
+	assert_bool(await _wait(func(): return gs.spectate._chip.visible)).is_true()
+	assert_str((gs.menu.items["spectators"] as Button).text).is_equal("View lobby (1 watching)")
 	gs.spectate.toggle_list()
 	var t: Button = gs.spectate.panel.find_child("EyeToggle*", true, false)
 	assert_object(t).is_not_null()
@@ -158,7 +161,8 @@ func test_spectator_screen_is_locked_and_leaving_sends_nothing(timeout := 30000)
 	assert_bool(gs.spectate.flip_button.visible).is_true()
 	assert_bool((gs.menu.items["stop"] as Button).visible).is_true()
 	assert_bool((gs.menu.items["concede"] as Button).visible).is_false()
-	assert_bool((gs.menu.items["spectators"] as Button).visible).is_false()
+	# J22: a spectator also gets View lobby (Mute only, no permissions: ui_chat_lobby_test).
+	assert_bool((gs.menu.items["spectators"] as Button).visible).is_true()
 	assert_bool(gs.sidebar.phase_btn.visible).is_false()
 	# Redacted: the bottom player's hand is shown as card backs, never as cards.
 	assert_int(gs.hand.order.size()).is_equal(0)

@@ -182,14 +182,14 @@ func update_conn() -> void:
 
 
 ## Shows the in-game menu buttons that fit this screen: a spectator gets Settings, Stop watching and
-## Quit; an online player also gets Spectators (with the count).
+## Quit; everyone online also gets View lobby (J22, with the spectator count).
 func refresh_items() -> void:
 	if items.is_empty():
 		return
 	var spec := gs.is_spectator()
-	var n: int = gs.view.get("net", {}).get("spectators", []).size()
-	(items["spectators"] as Button).visible = gs.is_network() and not spec
-	(items["spectators"] as Button).text = "Spectators (%d)" % n if n > 0 else "Spectators"
+	var n: int = gs.spectate.watchers().size()
+	(items["spectators"] as Button).visible = gs.is_network()
+	(items["spectators"] as Button).text = "View lobby (%d watching)" % n if n > 0 else "View lobby"
 	(items["concede"] as Button).visible = not spec
 	(items["return"] as Button).visible = not spec
 	(items["stop"] as Button).visible = spec
