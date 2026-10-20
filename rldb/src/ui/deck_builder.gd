@@ -439,15 +439,33 @@ func ui_remove() -> bool:
 # ------------------------------------------------------------ small widgets
 
 ## Round icon button drawn from vectors (no font glyph needed): cross, pencil. J1 (owner, 22 Oct):
-## a true circle. Its box stays square (SHRINK_CENTER in a taller row) and the JuicyButton gloss
-## (a rectangle and straight highlight lines) is replaced by a round one that follows the rim.
+## a true circle. Its box stays square (SHRINK_CENTER in a taller row); the disc, its rim, drop
+## shadow and hover glow are anti-aliased circles drawn here (per state in `discs`), with a round
+## gloss in place of the JuicyButton rectangle and straight highlight lines.
 class IconBtn extends JuicyButton:
 	var glyph: String = "cross"
 	var tint: Color = UIStyle.TEXT
+	## State ("normal", "hover", "pressed") -> {fill, rim, glow} colours of the disc.
+	var discs: Dictionary = {}
+
+	## Radius (px) of the drawn disc: half the square box.
+	func disc_radius() -> float:
+		return minf(size.x, size.y) / 2.0
 
 	func _draw() -> void:
 		var c := size / 2.0
-		var rr := minf(size.x, size.y) / 2.0
+		var rr := disc_radius()
+		var st := "normal" if disabled else ("pressed" if _down else ("hover" if _hover else "normal"))
+		var ds: Dictionary = discs.get(st, {})
+		if not ds.is_empty() and rr >= 4.0:
+			var glow: Color = ds["glow"]
+			if glow.a > 0.0:
+				for i in 6:   # soft outer glow, fading over 7 px
+					draw_circle(c, rr + 1.0 + i * 1.2, Color(glow, glow.a * 0.16 * (1.0 - i / 6.0)), true, -1.0, true)
+			else:
+				draw_circle(c + Vector2(0, 1), rr + 0.5, Color(0, 0, 0, 0.45), true, -1.0, true)   # drop shadow
+			draw_circle(c, rr - 0.5, ds["fill"], true, -1.0, true)
+			draw_arc(c, rr - 1.0, 0.0, TAU, 64, ds["rim"], 1.0, true)
 		if not disabled and rr >= 4.0:
 			# Soft gloss on the upper half of the disc and a thin highlight arc under the rim.
 			var ga := 0.12 if _hover and not _down else (0.04 if _down else 0.07)
@@ -462,9 +480,17 @@ class IconBtn extends JuicyButton:
 				draw_line(c + Vector2(-r, -r), c + Vector2(r, r), col, w)
 				draw_line(c + Vector2(-r, r), c + Vector2(r, -r), col, w)
 			"pencil":
-				draw_line(c + Vector2(r, -r), c + Vector2(-r * 0.7, r * 0.7), col, w * 1.6)
-				draw_line(c + Vector2(-r, r), c + Vector2(-r * 0.3, r), col, w * 0.8)
-				draw_line(c + Vector2(-r, r), c + Vector2(-r, r * 0.4), col, w * 0.8)
+				# A pencil on the diagonal: body, a band before the cap, and the sharpened tip.
+				var d := Vector2(1, -1).normalized()
+				var n := Vector2(1, 1).normalized()
+				var half := r * 1.35
+				var wd := maxf(3.0, r * 0.72) / 2.0
+				var tip := c - d * half
+				var base := tip + d * wd * 2.2
+				var tail := c + d * half
+				draw_colored_polygon(PackedVector2Array([base + n * wd, tail + n * wd, tail - n * wd, base - n * wd]), col)
+				draw_colored_polygon(PackedVector2Array([base + n * wd, base - n * wd, tip]), col.darkened(0.35))
+				draw_line(tail - d * wd * 1.3 + n * wd, tail - d * wd * 1.3 - n * wd, Color(0, 0, 0, 0.45), 1.0, true)
 
 
 ## Gold diamond followed by a rule that fades out to the right (section underline / header ornament).
@@ -631,18 +657,17 @@ static func _icon_btn(glyph: String, px: int, tip: String, danger: bool = false)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	b.tooltip_text = tip
 	b.focus_mode = Control.FOCUS_NONE
+	# J1: the disc is drawn by IconBtn (an anti-aliased circle); a rounded StyleBoxFlat showed
+	# facets and seams where its four corners meet once the canvas is scaled.
 	var rim := UIStyle.BAD.darkened(0.15) if danger else UIStyle.BRONZE
-	var n := UIStyle.flat(Color(0.07, 0.06, 0.05, 0.94), rim, 1, px / 2)
-	var h := UIStyle.flat(Color(0.16, 0.13, 0.09, 0.98), UIStyle.BAD if danger else UIStyle.GOLD_HI, 1, px / 2)
-	var p := UIStyle.flat(Color(0.03, 0.025, 0.02, 1.0), UIStyle.GOLD_HI, 1, px / 2)
-	for sb in [n, h, p]:
-		sb.set_content_margin_all(0)
-	UIStyle.lift_style(n, Color(0, 0, 0, 0.55), 3, 1)
-	UIStyle.lift_style(h, Color(UIStyle.BAD if danger else UIStyle.GOLD, 0.45), 7, 0)
-	b.add_theme_stylebox_override("normal", n)
-	b.add_theme_stylebox_override("hover", h)
-	b.add_theme_stylebox_override("pressed", p)
-	b.add_theme_stylebox_override("disabled", n)
+	b.discs = {
+		"normal": {"fill": Color(0.07, 0.06, 0.05, 0.94), "rim": rim, "glow": Color(0, 0, 0, 0.0)},
+		"hover": {"fill": Color(0.16, 0.13, 0.09, 0.98), "rim": UIStyle.BAD if danger else UIStyle.GOLD_HI,
+			"glow": Color(UIStyle.BAD if danger else UIStyle.GOLD, 0.45)},
+		"pressed": {"fill": Color(0.03, 0.025, 0.02, 1.0), "rim": UIStyle.GOLD_HI, "glow": Color(0, 0, 0, 0.0)},
+	}
+	for st in ["normal", "hover", "pressed", "disabled", "focus", "hover_pressed"]:
+		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
 	return b
 
 

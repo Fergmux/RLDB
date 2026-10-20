@@ -53,9 +53,10 @@ func test_saved_deck_icons_are_square_so_they_draw_round() -> void:
 	for b in btns:
 		var bb := b as Control
 		assert_float(bb.size.x).is_equal_approx(bb.size.y, 0.5)
-		var sb := bb.get_theme_stylebox("normal") as StyleBoxFlat
-		assert_float(float(sb.corner_radius_top_left)).is_greater_equal(bb.size.x / 2.0 - 0.5)
-		assert_float(float(sb.corner_radius_bottom_right)).is_greater_equal(bb.size.y / 2.0 - 0.5)
+		# The disc is drawn as a circle filling the box; no rectangular stylebox shows behind it.
+		assert_float((b as DeckBuilder.IconBtn).disc_radius()).is_equal_approx(bb.size.x / 2.0, 0.01)
+		assert_bool(bb.get_theme_stylebox("normal") is StyleBoxEmpty).is_true()
+		assert_bool(bb.get_theme_stylebox("hover") is StyleBoxEmpty).is_true()
 
 
 func test_icon_button_stays_square_in_a_taller_row() -> void:
