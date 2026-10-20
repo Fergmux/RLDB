@@ -1,7 +1,7 @@
 class_name GameMenu
 extends RefCounted
 ## Top strip of the match screen (connection state + Menu button), the in-game menu (Settings,
-## Concede, Return to menu, Quit to desktop), the interface settings popup and the
+## Return to menu, Concede game, Quit to desktop), the interface settings popup and the
 ## confirmation dialogs for leaving or conceding.
 
 const SETTINGS_W := 400.0
@@ -81,9 +81,10 @@ func build_top_strip() -> void:
 
 ## Builds the in-game menu and the settings popup (hidden).
 func build_popups() -> void:
-	# In-game menu (Menu button / Esc): Settings, Concede, Return to menu, Quit to desktop.
+	# In-game menu (Menu button / Esc): Settings, Return to menu, then the destructive group.
 	# Design review #14: 16 px inset, 12 px between items, a divider before the destructive group,
-	# which uses the Danger family (Concede game, Quit to desktop).
+	# which uses the Danger family (Concede game, Quit to desktop). J13 (owner, 22 Oct): Concede game
+	# comes below Return to menu.
 	var menu_plate := HousePanel.new("Menu", "Esc", Vector2(UIStyle.sp("lg"), UIStyle.sp("lg")), UIStyle.sp("md"))
 	game_menu = menu_plate
 	game_menu.visible = false
@@ -94,9 +95,9 @@ func build_popups() -> void:
 	# spectator (refresh_items shows the right set for the current view).
 	for it in [["settings", "Settings", func(): game_menu.visible = false; _show_popup(settings_popup)],
 			["spectators", "Spectators", func(): game_menu.visible = false; gs.spectate.toggle_list()],
-			["concede", "Concede game", func(): game_menu.visible = false; _confirm_concede()],
 			["return", "Return to menu", func(): confirm_forfeit(false)],
 			["stop", "Stop watching", func(): confirm_forfeit(false)],
+			["concede", "Concede game", func(): game_menu.visible = false; _confirm_concede()],
 			["quit", "Quit to desktop", func(): confirm_forfeit(true)]]:
 		var key := String(it[0])
 		if key == "concede":
