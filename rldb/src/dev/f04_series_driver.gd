@@ -143,7 +143,8 @@ func run(main_node: Node, dir: String) -> void:
 	gs.prompt.prompt_sig = 0
 	gs.prompt.render()
 	gs.prompt.show_wait("Ben is responding…")
-	await _frames(6)
+	# #38: the notice fades in after WaitNotice.APPEAR_DELAY (a fast reply never flashes it).
+	await get_tree().create_timer(WaitNotice.APPEAR_DELAY + 0.4).timeout
 	await _shot("prompt_07_waiting")
 	gs.prompt.show_wait("")
 	# Real attack target + trap response.
