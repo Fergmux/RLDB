@@ -78,6 +78,8 @@ func _new_player(index: int) -> Dictionary:
 		"index": index, "hp": START_HP, "ap": 0, "ap_start": 0, "ap_peak": 0, "ap_next": [], "delayed": [],
 		# D13: turn on which this player chose "Skip for the rest of this turn" for Traps (-1: none).
 		"trap_pass_turn": -1,
+		# J6 (owner feedback 2026-10-22): this seat's Trap response prompts (EffectEngine.TRAP_PROMPT_*).
+		"trap_prompts": "eligible",
 		"units": units, "backrow": backrow, "powers": powers,
 		"hand": [], "draw": [], "spent": [], "exhaust": [], "extra": [],
 		"name": "Player %d" % (index + 1),

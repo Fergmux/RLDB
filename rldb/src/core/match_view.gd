@@ -219,6 +219,7 @@ static func _player_view(m: MatchEngine, p: int, viewer: int) -> Dictionary:
 	}
 	if p == viewer:
 		v["trap_pass"] = m.passing_traps(p)   # D13: own seat only (the opponent never learns it)
+		v["trap_prompts"] = m.trap_prompt_mode(p)   # J6: own seat only too
 	for z in ["units", "backrow", "powers"]:
 		for uid in pl[z]:
 			v[z].append(null if uid == -1 else card_view(m, uid, viewer))
@@ -463,7 +464,10 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 	out.append({"t": "next_phase", "label": phase_label.get(m.phase, "Next"), "ok": can_act, "reason": "" if can_act else "Not your move."})
 	if not can_act:
 		return out
-	var cands := []
+	# J11 (owner feedback 2026-10-22): the Sacrifice Unit button under the player plate (no uid; it
+	# picks the unit). Per-unit "sacrifice" actions stay for the bot and the details notes, but the
+	# card action row no longer shows them (GameActionRow.ROW_HIDDEN).
+	var cands := [{"t": "sacrifice_pick", "label": "Sacrifice Unit", "full": "Sacrifice one of your units for +1 AP"}]
 	# Labels are short on-card button texts (F02-04); "full" is the longer description.
 	for u in pl["hand"]:
 		match m.category(u):
@@ -503,14 +507,13 @@ static func actions_for(m: MatchEngine, viewer: int) -> Array:
 		if m.category(u) == "spell":
 			cands.append({"t": "activate_set", "uid": u, "label": "Activate", "full": "Activate this set Spell"})
 	# Owner feedback 2026-10-18: a unit with enough Runes for a Ritual unit it could summon now
-	# offers "Ritual Tribute" itself (only while legal; one button per Ritual unit).
-	var rituals: Array = pl["extra"].filter(func(r): return m.category(r) == "ritual")
+	# offers the Ritual summon itself (only while legal). J14 (2026-10-22): one "Ritual Summon"
+	# button whatever the number of Ritual units; the player picks the unit in the card select tray.
 	for u in m.field_units(viewer):
-		var ok_r := rituals.filter(func(r): return m.validate(viewer, {"t": "ritual_tribute", "uid": u, "target": r}) == "")
-		for r in ok_r:
-			cands.append({"t": "ritual_tribute", "uid": u, "target": r,
-				"label": "Ritual Tribute" if ok_r.size() == 1 else "Ritual: %s" % m.name_of(r),
-				"full": "Tribute this unit to Ritual Summon %s" % m.name_of(r)})
+		var ok_r := m.ritual_tribute_targets(viewer, u)
+		if not ok_r.is_empty():
+			cands.append({"t": "ritual_tribute", "uid": u, "label": "Ritual Summon",
+				"full": "Tribute this unit to Ritual Summon %s" % " or ".join(ok_r.map(func(r): return m.name_of(r)))})
 	for u in pl["extra"]:
 		match m.category(u):
 			"ritual":

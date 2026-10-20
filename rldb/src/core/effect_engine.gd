@@ -16,6 +16,15 @@ const TRAP_PASS_TURN := "Skip for the rest of this turn"
 ## Option values of the two declining answers (an Activate option's value is the Trap's uid).
 const TRAP_V_SKIP := -1
 const TRAP_V_PASS_TURN := -2
+## J6 (owner feedback 2026-10-22): a seat's Trap response prompts (players[p]["trap_prompts"]).
+## "eligible": asked only when a Trap can respond (P-27; bots, tests and the tutorial). "always":
+## the player's toggle is on, so they are asked whenever they hold a face-down card set before this
+## turn, whether or not anything can respond: the prompt (and the opponent's wait) reveals nothing.
+## "off": the toggle is off, so they are never asked and their Traps never respond.
+const TRAP_PROMPT_ELIGIBLE := "eligible"
+const TRAP_PROMPT_ALWAYS := "always"
+const TRAP_PROMPT_OFF := "off"
+const TRAP_PROMPT_MODES := [TRAP_PROMPT_ELIGIBLE, TRAP_PROMPT_ALWAYS, TRAP_PROMPT_OFF]
 
 ## Frames; back() is resolving.
 var stack: Array = []
@@ -639,11 +648,17 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 		return R.CONT
 	if passing_traps(responder):
 		return R.CONT                     # D13: they skipped Traps for the rest of this turn
+	var prompts := trap_prompt_mode(responder)
+	if prompts == TRAP_PROMPT_OFF:
+		return R.CONT                     # J6: their toggle is off; never asked
 	var eligible := []
 	var concealed := false   # any face-down card that could plausibly be a Trap
+	var concealed_cols := []   # J6: columns of those not already used in this window
 	for uid in backrow_cards(responder):
 		if not is_face_up(uid) and cards[uid]["set_turn"] != turn:
 			concealed = true
+			if not (uid in used):
+				concealed_cols.append(int(cards[uid]["slot"]))
 		if category(uid) != "trap" or uid in used:
 			continue
 		if cards[uid]["set_turn"] == turn:
@@ -655,7 +670,13 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 	# face-down card, and simply passes when nothing can respond.
 	# P-27 (user): prompt only when a legal response exists; dummy windows are off by default.
 	var always: bool = config.get("hidden_response_windows", false)
-	if eligible.is_empty() and (not always or not concealed or not used.is_empty()):
+	if prompts == TRAP_PROMPT_ALWAYS:
+		# J6: asked while an unused face-down card is left and some Trap of the game could answer
+		# this event there, so whether one of theirs can (even after a Trap was used in this
+		# window) never shows. Both tests use public information only.
+		if eligible.is_empty() and (concealed_cols.is_empty() or not trap_window_plausible(responder, ev, concealed_cols)):
+			return R.CONT
+	elif eligible.is_empty() and (not always or not concealed or not used.is_empty()):
 		return R.CONT
 	var ans: Variant = take_answer(f)
 	if ans == null:
@@ -677,6 +698,62 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 	used.append(choice)
 	activate_trap(choice, responder, ev)
 	return R.STAY
+
+
+## J6: the Trap entries of every card in the game (CardScripts "trap"), read once.
+static var _pool_traps: Array = []
+
+
+## J6: true when some Trap of the whole card pool, set face-down in one of `cols` by player p, could
+## answer event `ev` by its timing and public conditions (who acted, the column, a Power or an
+## effect, how a card was destroyed). Its own state conditions ("cond", cost, Debilitate) are not
+## asked: they depend on which card it is. Uses no hidden information, so a hidden-window prompt
+## built on it reveals nothing; it only spares prompts no Trap could ever answer.
+func trap_window_plausible(p: int, ev: Dictionary, cols: Array) -> bool:
+	if _pool_traps.is_empty():
+		CardDB.ensure_loaded()
+		for c in CardDB.all():
+			var tr: Dictionary = CardScripts.get_entry(int(c["id"])).get("trap", {})
+			if String(c.get("category", "")) == "trap" and not tr.is_empty():
+				_pool_traps.append(tr)
+	for tr in _pool_traps:
+		var whens: Array = tr["when"] if tr["when"] is Array else [tr["when"]]
+		if not (ev["name"] in whens):
+			continue
+		match String(ev["name"]):
+			"attack":
+				if ev["player"] == p: continue
+				if tr.get("target_unit_only", false) and ev.get("target", -1) == -1: continue
+				if tr.get("column", false) and not (int(ev.get("column", -9)) in cols): continue
+			"summon":
+				if ev["player"] == p: continue
+			"activate":
+				if ev["player"] == p: continue
+				if tr.get("power_only", false) and (not cards.has(ev.get("card", -1)) or category(ev["card"]) != "power"): continue
+				if tr.get("effect_only", false) and ev.get("play", false): continue
+			"destroyed":
+				if ev["ctl"] != p: continue
+				if tr.get("by_effect", false) and ev["cause"] != "effect": continue
+				if tr.get("by_opponent", false) and ev.get("by_player", -1) != opp(p): continue
+		return true
+	return false
+
+
+## J6: player p's Trap response prompt mode (TRAP_PROMPT_*; "eligible" for an unknown value).
+func trap_prompt_mode(p: int) -> String:
+	var mode := String(players[p].get("trap_prompts", TRAP_PROMPT_ELIGIBLE))
+	return mode if mode in TRAP_PROMPT_MODES else TRAP_PROMPT_ELIGIBLE
+
+
+## J6: sets player p's Trap response prompt mode. Turning prompts off while p's own response prompt
+## is open answers it with Skip, so nobody waits on a prompt its player chose not to see.
+func set_trap_prompts(p: int, mode: String) -> String:
+	if not (mode in TRAP_PROMPT_MODES):
+		return "Unknown Trap prompt setting."
+	players[p]["trap_prompts"] = mode
+	if mode == TRAP_PROMPT_OFF and not pending.is_empty() and pending["player"] == p and pending["kind"] == "trap_response":
+		return answer_choice(p, int(pending["id"]), [TRAP_V_SKIP])
+	return ""
 
 
 ## D13: true while player p has chosen "Skip for the rest of this turn" (no Trap window is opened

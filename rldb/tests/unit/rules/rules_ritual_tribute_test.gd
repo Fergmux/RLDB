@@ -19,8 +19,10 @@ func test_a_unit_with_enough_runes_offers_ritual_tribute() -> void:
 	var null_u := TB.card(m, 0, CREEPING_NULL, "extra")
 	var acts := _tribute_actions(m, 0, mat)
 	assert_int(acts.size()).is_equal(1)
-	assert_str(String(acts[0]["label"])).is_equal("Ritual Tribute")
-	assert_int(int(acts[0]["target"])).is_equal(null_u)
+	# J14 (2026-10-22): the button says "Ritual Summon"; the Ritual unit is picked afterwards.
+	assert_str(String(acts[0]["label"])).is_equal("Ritual Summon")
+	assert_bool(acts[0].has("target")).is_false()
+	assert_str(String(acts[0]["full"])).contains(m.name_of(null_u))
 	assert_bool(acts[0]["ok"]).is_true()
 	assert_array(_tribute_actions(m, 0, short)).is_empty()
 

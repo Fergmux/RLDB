@@ -40,13 +40,18 @@ func stack_rect() -> Rect2:
 	return stack.get_global_rect()
 
 
+## Action kinds never shown on the card row. J11 (owner feedback 2026-10-22): a sacrifice starts
+## from the Sacrifice Unit button under the player plate, so a misclick on a card cannot spend it.
+const ROW_HIDDEN := ["sacrifice"]
+
+
 ## Legal actions of a card (only enabled ones; reasons stay in the details panel notes).
 func actions_for_card(uid: int) -> Array:
 	if gs.locked():
 		return []
 	var oks := []
 	for a in gs.mv.get("actions", []):
-		if a.get("uid", -1) == uid and a["ok"]:
+		if a.get("uid", -1) == uid and a["ok"] and not (String(a["t"]) in ROW_HIDDEN):
 			oks.append(a)
 	return oks
 
@@ -187,7 +192,7 @@ func run_action(uid: int, a: Dictionary) -> void:
 	if a.has("mode"):
 		cmd["mode"] = a["mode"]          # G07: Attack / Attack Direct
 	if a.has("target"):
-		cmd["target"] = a["target"]      # Ritual Tribute: the Ritual unit
+		cmd["target"] = a["target"]      # a targeted Ritual Tribute (J14: the button sends none; the tray asks)
 	gs.selected_uid = uid
 	gs.acting_uid = uid
 	gs.row_open = false
@@ -232,7 +237,8 @@ class ActionButton extends JuicyButton:
 	## Action kind -> accent of its medallion (the gold default for summons and the rest).
 	const ACCENT := {"attack": Color("e8605a"), "stance": Color("b4b6bc"), "cast": Color("5aa2ff"),
 		"activate_set": Color("5aa2ff"), "ability": Color("5aa2ff"), "power": Color("5aa2ff"),
-		"sacrifice": Color("e07a3a"), "ritual": Color("a874e0"), "ritual_tribute": Color("a874e0"),
+		"sacrifice": Color("e07a3a"), "sacrifice_pick": Color("e07a3a"), "ritual": Color("a874e0"), "ritual_tribute": Color("a874e0"),
+		"prompts": Color("c49a5a"),
 		"arcane": Color("b4b6bc"), "set": Color("c49a5a")}
 
 	## The action kind (the action's "t") and, for a stance change, the stance it goes to.
@@ -240,6 +246,18 @@ class ActionButton extends JuicyButton:
 	var to_stance := ""
 	## Drawn as the keyboard's current choice.
 	var keyboard_pick := false
+	## J6: a toggle's state lamp at the right end (-1: no lamp, 0: off, 1: on).
+	var lamp := -1:
+		set(v):
+			if v == lamp:
+				return
+			lamp = v
+			var st := ActionButton.styles(keyboard_pick, lamp != -1)
+			for k in st:
+				add_theme_stylebox_override(k, st[k])
+			queue_redraw()
+	## Room (px) the lamp takes at the right of the label.
+	const LAMP_W := 18.0
 
 	func _init(text_: String = "", kind_: String = "", stance_: String = "", kb_pick: bool = false) -> void:
 		super()
@@ -267,9 +285,21 @@ class ActionButton extends JuicyButton:
 		hover_inner_glow = Color(UIStyle.GOLD, 0.16)
 		set_meta(Sfx.BUTTON_META, "none")   # run_action plays confirm (or deny for a stale click)
 
+	## Draws the plate lit with the hover rim and gold text while `on` (the keyboard's choice, or a
+	## duel control whose flow is under way), restyling it.
+	func set_lit(on: bool) -> void:
+		if on == keyboard_pick:
+			return
+		keyboard_pick = on
+		var st := ActionButton.styles(on, lamp != -1)
+		for k in st:
+			add_theme_stylebox_override(k, st[k])
+		add_theme_color_override("font_color", UIStyle.GOLD_HI if on else UIStyle.TEXT)
+		queue_redraw()
+
 	## The plate's state boxes {normal, hover, pressed, hover_pressed, disabled}; `kb_pick` gives the
-	## normal plate the hover rim (the keyboard's choice).
-	static func styles(kb_pick: bool = false) -> Dictionary:
+	## normal plate the hover rim (the keyboard's choice); `lamp_room` keeps room for a toggle lamp.
+	static func styles(kb_pick: bool = false, lamp_room: bool = false) -> Dictionary:
 		var n := UIStyle.flat(FACE, Color(UIStyle.GOLD, 0.8), 1, RADIUS)
 		n.border_width_bottom = 2
 		var h := UIStyle.flat(FACE_HOVER, UIStyle.GOLD_HI, 1, RADIUS)
@@ -278,7 +308,7 @@ class ActionButton extends JuicyButton:
 		var d := UIStyle.flat(UIStyle.PANEL, UIStyle.DISABLED_EDGE, 1, RADIUS)
 		for sb in [n, h, p, d]:
 			sb.content_margin_left = GLYPH_W + 6.0
-			sb.content_margin_right = 12
+			sb.content_margin_right = 12 + (LAMP_W if lamp_room else 0.0)
 			sb.content_margin_top = 1
 			sb.content_margin_bottom = 2
 			sb.anti_aliasing = true
@@ -343,11 +373,29 @@ class ActionButton extends JuicyButton:
 		draw_arc(c, r, 0.0, TAU, 28, Color(gold, 0.95 if lit else 0.8), 1.3, true)
 		var gc: Color = UIStyle.DISABLED if off else (Color(1, 0.96, 0.84) if lit else gold.lightened(0.2))
 		ActionButton.draw_glyph(self, kind, to_stance, c, r * 0.62, gc)
+		if lamp != -1:
+			_draw_lamp(Vector2(size.x - LAMP_W / 2.0 - 6.0, cy), lamp == 1, off)
+
+	## J6: a toggle's state lamp: a faceted topaz lit with a soft halo when on (like the AP gems), a
+	## dark engraved socket when off.
+	func _draw_lamp(c: Vector2, on: bool, off: bool) -> void:
+		var r := 5.5
+		draw_circle(c, r + 2.0, Color(0, 0, 0, 0.55), true, -1.0, true)
+		draw_arc(c, r + 1.2, 0.0, TAU, 20, Color(UIStyle.BRONZE, 0.85), 1.2, true)
+		if on and not off:
+			draw_circle(c, r + 4.5, Color(UIStyle.GOLD_HI, 0.12), true, -1.0, true)
+			draw_circle(c, r, Color("9a6416"), true, -1.0, true)
+			draw_circle(c, r * 0.72, Color("f2b544"), true, -1.0, true)
+			draw_circle(c + Vector2(-0.6, -0.6), r * 0.38, Color("fff1b0"), true, -1.0, true)
+			draw_circle(c + Vector2(-1.8, -2.0), 1.0, Color(1, 1, 1, 0.9), true, -1.0, true)
+		else:
+			draw_circle(c, r, Color("17120e"), true, -1.0, true)
+			draw_arc(c, r - 1.2, PI * 1.1, PI * 1.9, 10, Color(UIStyle.BRONZE, 0.35), 1.0, true)
 
 	## Draws the glyph of action `k` (stance target `stance`) centred on `c`, about `s` px in radius.
 	static func draw_glyph(ci: CanvasItem, k: String, stance: String, c: Vector2, s: float, col: Color) -> void:
 		match k:
-			"summon", "ritual", "arcane":   # rising double chevron
+			"summon", "ritual", "arcane", "ritual_tribute":   # rising double chevron
 				for j in 2:
 					var y := c.y + s * (0.5 - 0.8 * j)
 					ci.draw_polyline(PackedVector2Array([Vector2(c.x - s * 0.8, y + s * 0.35), Vector2(c.x, y - s * 0.4), Vector2(c.x + s * 0.8, y + s * 0.35)]), col, 1.7, true)
@@ -386,9 +434,22 @@ class ActionButton extends JuicyButton:
 					ci.draw_colored_polygon(pts, Color(col, 0.3))
 					pts.append(pts[0])
 					ci.draw_polyline(pts, col, 1.4, true)
-			"sacrifice":   # a flame
+			"sacrifice", "sacrifice_pick":   # a flame
 				ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s * 0.55, -s * 0.1), c + Vector2(s * 0.6, s * 0.45),
 					c + Vector2(0, s), c + Vector2(-s * 0.6, s * 0.45), c + Vector2(-s * 0.4, -s * 0.2)]), col)
+			"prompts":   # J6: a bell (Trap response prompts); struck through in ember when off
+				var body := PackedVector2Array([c + Vector2(-s * 0.85, s * 0.55), c + Vector2(-s * 0.6, s * 0.3), c + Vector2(-s * 0.55, -s * 0.35),
+					c + Vector2(-s * 0.3, -s * 0.75), c + Vector2(0, -s * 0.85), c + Vector2(s * 0.3, -s * 0.75), c + Vector2(s * 0.55, -s * 0.35),
+					c + Vector2(s * 0.6, s * 0.3), c + Vector2(s * 0.85, s * 0.55)])
+				ci.draw_colored_polygon(body, Color(col, 0.3 if stance == "off" else 0.85))
+				var outline := body.duplicate()
+				outline.append(body[0])
+				ci.draw_polyline(outline, col, 1.3, true)
+				ci.draw_circle(c + Vector2(0, s * 0.82), s * 0.2, col, true, -1.0, true)
+				ci.draw_line(c + Vector2(0, -s * 0.85), c + Vector2(0, -s * 1.05), col, 1.4, true)
+				if stance == "off":
+					ci.draw_line(c + Vector2(-s * 0.95, -s * 0.95), c + Vector2(s * 0.95, s * 0.95), Color(0, 0, 0, 0.7), 3.2, true)
+					ci.draw_line(c + Vector2(-s * 0.95, -s * 0.95), c + Vector2(s * 0.95, s * 0.95), Color("e8605a"), 1.6, true)
 			"move":   # a two-headed arrow
 				ci.draw_line(c + Vector2(-s, 0), c + Vector2(s, 0), col, 1.6, true)
 				for sx in [-1.0, 1.0]:

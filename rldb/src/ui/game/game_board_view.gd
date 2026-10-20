@@ -53,6 +53,16 @@ var opp_hand_n: int = -1
 var ready_uids: Dictionary = {}
 ## Card my current pick belongs to (kept lit while everything else dims), or -1.
 var src_uid: int = -1
+## J6 / J11 (owner feedback 2026-10-22): the local player's duel controls under their plate
+## (Sacrifice Unit, Trap Prompts toggle).
+var controls: DuelControls
+## J6: the Trap prompts setting last sent for this seat and game ("" none), so it is sent once.
+var _prompts_sent := ""
+## J6: false only in dev drivers whose scripted flows expect the P-27 prompts (the seats keep the
+## engine default and the toggle sends nothing).
+static var prompts_sync := true
+## J11: the Sacrifice Unit button started the choice now pending (kept until nothing is pending).
+var _sac_flow := false
 ## A2: face-down hand of the bottom player on a spectator's screen (and its caption).
 var own_backs_box: Control
 var own_backs_label: Label
@@ -117,6 +127,12 @@ func build() -> void:
 			ps.pressed.connect(func(z): if s == 1: gs.details.show_pile(z))
 			layer.add_child(ps)
 			piles[side][zt[0]] = ps
+	controls = DuelControls.new()
+	controls.visible = false
+	controls.sacrifice_pressed.connect(_on_sacrifice_pressed)
+	controls.sacrifice_cancel_pressed.connect(func(): gs.selection.cancel())
+	controls.prompts_toggled.connect(_on_prompts_toggled)
+	layer.add_child(controls)
 	opp_hand_box = Control.new()
 	opp_hand_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(opp_hand_box)
@@ -249,6 +265,7 @@ func layout(w: float, h: float) -> void:
 	var ph := (plates[1] as Control).get_combined_minimum_size().y
 	(plates[1] as Control).position = Vector2(UIStyle.SAFE_HUD, _y0 + BOARD_H - ph + 8.0)
 	(plates[1] as Control).size = Vector2(PLATE_W, 0)
+	controls.position = Vector2(UIStyle.SAFE_HUD, _y0 + BOARD_H + 8.0 + DuelControls.TOP_GAP)
 	opp_hand_box.position = Vector2(UIStyle.SAFE_HUD, OPP_HAND_Y)
 	deco.mid_y = _y0 + 365.0
 	deco.x0 = _ux - 30.0
@@ -327,6 +344,7 @@ func render() -> void:
 			pl.begin_game("%s:%d" % [String(gs.view.get("save_id", "local")), int(gs.view.get("game_no", 0))])
 			pl.update_from(pv, active, pidx == p and not gs.is_spectator(), "", nxt)
 			_update_piles(side, pidx, pv)
+	_render_controls(have)
 	deco.glow_side = -1   # active player is shown by the plate's turn marker, not a table band
 	deco.queue_redraw()
 	gs.hand.render(targeting)
@@ -335,6 +353,103 @@ func render() -> void:
 		opp_hand_n = on
 		place_opp_hand()
 	_render_hidden_own_hand(have)
+
+
+# ---------------------------------------------------------------- J6 / J11 duel controls
+
+## Left edge (px, play-area x) the hand keeps clear of: the duel controls' right side plus a gap,
+## or 0 while they are hidden.
+func hand_left_min() -> float:
+	if controls == null or not controls.visible:
+		return 0.0
+	return controls.position.x + DuelControls.block_size().x + HAND_CLEAR
+
+
+## Gap (px) between the duel controls and the first hand card.
+const HAND_CLEAR := 14.0
+
+
+## True while this screen shows a seat's own game (not a spectator's, the tutorial's or a menu).
+func _controls_shown(have: bool) -> bool:
+	return have and not gs.is_spectator() and String(gs.view.get("stage", "")) == "game"
+
+
+## The viewer's settings key for the Trap prompts choice (per seat in hot-seat play).
+func prompts_pref_key() -> String:
+	return DuelControls.pref_key(String(gs.view.get("mode", "")) == "local", gs.me())
+
+
+## True in the tutorial: its scripted lessons keep the default prompts and send no setting.
+func _tutorial() -> bool:
+	return gs.view.has("tutorial") or String(gs.view.get("mode", "")) == "tutorial"
+
+
+func _render_controls(have: bool) -> void:
+	var shown := _controls_shown(have)
+	var was := controls.visible
+	controls.visible = shown
+	if shown != was:
+		gs.hand.layout([], true)          # the hand keeps clear of the controls
+	if not shown:
+		return
+	# J11: enabled only while a sacrifice is legal (the tooltip says why not).
+	var ok := false
+	var tip := "Not your move."
+	for a in gs.mv.get("actions", []):
+		if String(a["t"]) == "sacrifice_pick":
+			ok = bool(a["ok"]) and not gs.locked()
+			tip = String(a["full"]) if ok else String(a["reason"])
+	if gs.mv["winner"] != -1:
+		tip = "The duel is over."
+	var pd := gs.pending()
+	if pd.is_empty() or not bool(pd.get("mine", false)):
+		_sac_flow = false
+	controls.set_sacrifice(ok, tip, _sac_flow and bool(pd.get("cancellable", false)))
+	# J6: the toggle shows the viewer's saved choice; the seat's setting follows it.
+	var tut := _tutorial()
+	controls.prompts_btn.visible = not tut
+	if tut:
+		return
+	var on := DuelControls.load_prompts(prompts_pref_key())
+	if on != controls.prompts_on():
+		controls.set_prompts(on)
+	_sync_prompts(on)
+
+
+## J6: sends the seat's Trap prompts setting when the authority's (own-seat only) differs from the
+## viewer's choice: at the start of every game, after a resume or reconnect, and on a toggle. Sent
+## once per seat, game and value, so a refused command is not repeated every frame.
+func _sync_prompts(on: bool) -> void:
+	if not prompts_sync:
+		return
+	var want := DuelControls.mode_for(on)
+	var have := String(gs.pv(gs.me()).get("trap_prompts", ""))
+	if have == want:
+		return
+	var key := "%d|%s|%d|%s" % [gs.me(), String(gs.view.get("save_id", "")), int(gs.view.get("game_no", 0)), want]
+	if key == _prompts_sent:
+		return
+	_prompts_sent = key
+	# A seat setting, not a game action: straight to the seat (no toast, not counted as a move).
+	if gs.client != null:
+		gs.client.send({"t": "trap_prompts", "mode": want})
+
+
+func _on_prompts_toggled(on: bool) -> void:
+	DuelControls.store_prompts(prompts_pref_key(), on)
+	if not gs.mv.is_empty():
+		_sync_prompts(on)
+
+
+## J11: the Sacrifice Unit button: the engine asks which unit (board pick), then to confirm.
+func _on_sacrifice_pressed() -> void:
+	if gs.locked():
+		Sfx.play("deny")
+		return
+	gs.selection.deselect()
+	gs.acting_uid = -1
+	_sac_flow = true
+	gs.send({"t": "sacrifice_pick"})
 
 
 ## A2: a spectator who may not see the bottom player's hand gets its card backs along the bottom

@@ -112,7 +112,7 @@ func _ready() -> void:
 ## Command-line hooks for automated runs and screenshots:
 ##   -- --local / --bot [--seed=N] [--draft] [--bo=5] [--no-privacy]
 ##   -- --host=PORT / --join=HOST:PORT   (LAN dev transport)
-##   -- --shots= / --net-shots= / --bot-shots= / --f02-shots= / --deckbuilder-shots=<dir>
+##   -- --shots= / --net-shots= / --bot-shots= / --f02-shots= / --duelctl-shots= / --deckbuilder-shots=<dir>
 func _parse_cmdline() -> void:
 	var args := OS.get_cmdline_user_args()
 	var cfg := opts.duplicate(true)
@@ -144,6 +144,9 @@ func _parse_cmdline() -> void:
 			return
 		if a.begins_with("--duelui-shots="):
 			_run_driver("res://src/dev/duel_ui_release_driver.gd", a.split("=", true, 1)[1])
+			return
+		if a.begins_with("--duelctl-shots="):
+			_run_driver("res://src/dev/duel_controls_shots.gd", a.split("=", true, 1)[1])
 			return
 		if a.begins_with("--f02-shots="):
 			_run_driver("res://src/dev/f02_driver.gd", a.split("=", true, 1)[1])

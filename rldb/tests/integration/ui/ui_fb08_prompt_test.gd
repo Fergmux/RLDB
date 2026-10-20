@@ -140,10 +140,13 @@ func test_d13_activate_then_skip_then_pass_for_the_turn() -> void:
 	assert_bool(faces[0] != faces[1] and faces[1] != faces[2] and faces[0] != faces[2]).override_failure_message(str(faces)).is_true()
 	assert_str((btns[1] as Button).tooltip_text).is_equal(GamePromptBanner.SKIP_TIP)
 	assert_str((btns[2] as Button).tooltip_text).is_equal(GamePromptBanner.PASS_TURN_TIP)
-	# Pressing the list buttons answers the right options.
+	# Pressing the list buttons answers the right options. (J6: with the viewer's Trap prompts on,
+	# a later window of the same attack may ask again, so the check is that this one was answered.)
+	var asked: int = int(m.pending["id"])
 	(btns[1] as Button).pressed.emit()
 	await await_idle_frame()
-	assert_str(String(m.pending.get("kind", ""))).is_not_equal("trap_response")
+	assert_bool(m.pending.is_empty() or int(m.pending["id"]) != asked).is_true()
+	assert_bool(m.passing_traps(1 - int(r[3]))).is_false()      # Skip, not the turn pass
 
 
 ## H1 release check: at 1600x1000 the side column is thinner; side by side, "Skip" got about 20 px

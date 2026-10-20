@@ -693,7 +693,8 @@ func _apply(seat: int, seq: int, cmd: Dictionary) -> void:
 		return
 	# Forfeiting is always possible (the in-game menu's Return to menu / Quit while the opponent
 	# is disconnected); everything else waits for the reconnection.
-	var forfeit: bool = String(cmd.get("t", "")) == "forfeit_series"
+	# J6: a seat's own Trap prompts setting is applied even then (it never waits on the other seat).
+	var forfeit: bool = String(cmd.get("t", "")) in ["forfeit_series", "trap_prompts"]
 	if not forfeit and (paused or (remote_peer == 0 and series.stage == Series.STAGE_GAME)):
 		_error(seat, "The match is paused until your opponent reconnects.")
 		return

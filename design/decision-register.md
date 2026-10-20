@@ -40,7 +40,7 @@ or by updating this file).
 | P-18 | Effect-driven stance changes | Allowed in any phase (only manual stance changes are restricted). |
 | P-19 | Repeated replacement effects (e.g. Elemental Mastery) | Don't stack; the highest value applies. |
 | P-20 | Nested responses | One response window per triggering event; traps may not respond to traps. Owner chooses order. |
-| P-21 | Sacrifice timing | Main phases only, own turn. |
+| P-21 | Sacrifice timing | Main phases only, own turn. J11 (owner, 22 Oct): started from the Sacrifice Unit button under the plate (pick a unit, confirm), no longer from the card's action row. |
 
 ### Added during implementation
 
@@ -51,7 +51,7 @@ or by updating this file).
 | P-24 | "Activates an Effect" | Casting/activating a Spell, using a manual unit/Power ability, or playing a Power. On Summon/On Destruction triggers are not activations. |
 | P-25 | Playing a Power | Main Phases only (like other cards played to the board); its abilities may be used in Battle. |
 | P-26 | Nimble move timing | Any of the owner's phases (Main 1, Battle, Main 2), once per turn. |
-| P-27 | Hidden response windows | Whenever a player holds a face-down card they get a response prompt for each respondable event, even if no Trap qualifies (they just Pass). This hides whether an eligible Trap exists, at the cost of more prompts. Configurable: `hidden_response_windows`. **Superseded by the user's answer:** prompt only when a legal response exists (default off). Accepted consequence: the pause itself reveals that the opponent holds an eligible Trap (never which card). |
+| P-27 | Hidden response windows | Whenever a player holds a face-down card they get a response prompt for each respondable event, even if no Trap qualifies (they just Pass). This hides whether an eligible Trap exists, at the cost of more prompts. Configurable: `hidden_response_windows`. **Superseded by the user's answer:** prompt only when a legal response exists (default off). Accepted consequence: the pause itself reveals that the opponent holds an eligible Trap (never which card). **J6 (owner, 22 Oct):** each player now has a Trap Prompts toggle under their plate (saved per viewer, sent as their seat's own setting). On (the default): hidden windows for that seat, asked whenever they hold a face-down card set before this turn and some Trap of the card pool could answer the event, so the pause reveals nothing. Off: never asked (their Traps stay down). Bots, tests and the tutorial keep "prompt only when a legal response exists". |
 | P-28 | Last-known state in responses | Effects that read an attacker's ATK use its ATK at attack declaration if it has since left the Field (extends P-11). |
 | P-29 | Self-recovery on destruction | "Add a Warrior from Spent" style On Destruction effects cannot pick the destroyed card itself. |
 | P-30 | Optional "Once per turn" abilities | Abilities without "you can" (Chains of Binding, Yamata) are still player-activated, once per turn, not forced. |

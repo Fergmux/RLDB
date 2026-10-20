@@ -98,10 +98,8 @@ func _kb_cards() -> Array:
 
 
 func _has_ok_action(uid: int) -> bool:
-	for a in gs.mv.get("actions", []):
-		if a.get("uid", -1) == uid and a["ok"]:
-			return true
-	return false
+	# The card's row actions (J11: a sacrifice alone does not make a card Tab-selectable).
+	return not gs.action_row.actions_for_card(uid).is_empty()
 
 
 ## Tab / Shift+Tab: click-select the next/previous card of yours that can act, opening its
