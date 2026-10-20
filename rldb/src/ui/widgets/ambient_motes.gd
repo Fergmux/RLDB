@@ -38,16 +38,22 @@ var _motes: Array = []
 ## Round mote core and halo radii, as multiples of the mote size.
 var core_k := 0.32
 var halo_k := 1.6
+## Halo alpha, as a multiple of the mote's alpha.
+var halo_a := 0.18
 
 
-## Table dust (design review #23): very sparse, small, slow warm motes in the duel table's light.
-const DUST := {"size": Vector2(3.0, 6.0), "life": Vector2(10.0, 16.0), "alpha": Vector2(0.4, 0.6),
-	"rise": Vector2(3.0, 9.0), "sway": 14.0, "petals": false, "core": 0.6, "halo": 2.4}
+## Table dust (design review #23): sparse, small, slow warm motes in the duel table's light. Tuned in
+## the H1 release check to be noticed at a glance (the first pass read as two or three pinpricks)
+## while staying under the cards: a brighter core and a wider, warmer halo.
+const DUST := {"size": Vector2(4.0, 7.0), "life": Vector2(10.0, 16.0), "alpha": Vector2(0.6, 0.85),
+	"rise": Vector2(3.0, 9.0), "sway": 14.0, "petals": false, "core": 0.55, "halo": 3.0, "halo_a": 0.3}
+## Motes of the duel table.
+const DUST_COUNT := 16
 const DUST_COLOR := Color("ffd9a0")
 
 
 ## Sparse warm dust for the duel table (#23): `count` round motes on the DUST profile.
-static func dust(count: int = 10, seed_value: int = 2310) -> AmbientMotes:
+static func dust(count: int = DUST_COUNT, seed_value: int = 2310) -> AmbientMotes:
 	var m := AmbientMotes.new(count, [DUST_COLOR], seed_value, DUST)
 	m.name = "TableDust"
 	return m
@@ -73,6 +79,7 @@ func _init(count: int = 26, cols: Array = [], seed_value: int = 1606, profile: D
 	var petals := bool(profile.get("petals", true))
 	core_k = float(profile.get("core", core_k))
 	halo_k = float(profile.get("halo", halo_k))
+	halo_a = float(profile.get("halo_a", halo_a))
 	for i in count:
 		_motes.append({
 			"x": rng.randf(), "y": rng.randf(),
@@ -126,7 +133,7 @@ func _draw() -> void:
 			continue
 		var p: Vector2 = st["pos"]
 		var s := float(m["size"])
-		draw_circle(p, s * halo_k, Color(col, a * 0.18), true, -1.0, true)
+		draw_circle(p, s * halo_k, Color(col, a * halo_a), true, -1.0, true)
 		if bool(m["petal"]):
 			# A petal: a soft ellipse turned by its spin.
 			var pts := PackedVector2Array()

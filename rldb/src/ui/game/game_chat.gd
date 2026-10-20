@@ -60,7 +60,7 @@ func build(row: HBoxContainer, before: Control) -> void:
 	badge = UnreadBadge.new()
 	button.add_child(badge)
 	badge.position = Vector2(76 - 12, -7)
-	panel = HousePanel.new("Chat", "Players and spectators", Vector2(16, 14), 8)
+	panel = HousePanel.new("Chat", "Players and spectators", Vector2(UIStyle.sp("lg"), UIStyle.sp("lg")), UIStyle.sp("sm"))   # D5: 16 px popover padding
 	panel.name = "ChatPanel"
 	panel.visible = false
 	panel.z_index = UiLayers.GAME_MENU
@@ -69,6 +69,16 @@ func build(row: HBoxContainer, before: Control) -> void:
 	var close := UIStyle.button("✕", 12)
 	close.tooltip_text = "Close (Esc)"
 	close.custom_minimum_size = Vector2(26, 22)
+	# D5 check: a 22 px control centred in the header strip (the button's own 8 px vertical padding
+	# made it 31 px and put its box 3 px from the rim).
+	# Its own copies, taken once it is in the tree (the theme's button styles are shared).
+	close.ready.connect(func() -> void:
+		for st in ["normal", "hover", "pressed", "hover_pressed"]:
+			var csb := close.get_theme_stylebox(st).duplicate() as StyleBox
+			csb.content_margin_top = 2
+			csb.content_margin_bottom = 2
+			close.add_theme_stylebox_override(st, csb), CONNECT_ONE_SHOT)
+	close.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	close.mouse_filter = Control.MOUSE_FILTER_STOP
 	close.pressed.connect(close_box)
 	panel.head_row.mouse_filter = Control.MOUSE_FILTER_PASS

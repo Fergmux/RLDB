@@ -196,26 +196,30 @@ static func _type_word(t: String) -> Label:
 static func _count_plate(caption: String, n: int, col: Color) -> Control:
 	var p := PanelContainer.new()
 	var sb := UIStyle.flat(Color(col.darkened(0.78), 0.95), Color(col, 0.75), 1, 7)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 3
-	sb.content_margin_bottom = 3
+	# D5 check: the number and its caption sit side by side ("12 MAIN") with 12 px at the sides and
+	# 8 px (the chip token) above and below; stacked, the caption was squeezed 2 px from the chip's bottom edge.
+	sb.content_margin_left = UIStyle.sp("md")
+	sb.content_margin_right = UIStyle.sp("md")
+	sb.content_margin_top = UIStyle.sp("sm")
+	sb.content_margin_bottom = UIStyle.sp("sm")
 	p.add_theme_stylebox_override("panel", sb)
-	p.custom_minimum_size = Vector2(76, 0)
+	p.custom_minimum_size = Vector2(104, 0)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", -3)
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	p.add_child(v)
-	var num := UIStyle.label(str(n), 24, col.lightened(0.5), false, true)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", UIStyle.sp("sm"))
+	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(h)
+	var num := UIStyle.label(str(n), 22, col.lightened(0.5), false, true)
 	num.add_theme_font_override("font", UIStyle.font_display(700))
 	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	num.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	num.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(num)
-	var cap := UIStyle.label(caption, 11, Color(col, 0.95), false, true)
-	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	h.add_child(num)
+	var cap := UIStyle.label(caption, 12, Color(col, 0.95), false, true)
+	cap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(cap)
+	h.add_child(cap)
 	return p
 
 

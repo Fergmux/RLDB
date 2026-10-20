@@ -165,12 +165,14 @@ func reveal(picks: Control, tiles: Array) -> Tween:
 
 ## Plate with the "picks left" gems.
 func _picks_plate(left: int, total: int) -> Control:
-	var op := OrnatePanel.new(10, 8)
+	var op := OrnatePanel.new(10, UIStyle.CONTENT_FLOOR)   # D5: the caption sat 7 px from the rim (8 px margin)
 	op.arm = 10.0
 	op.frame_inset = 0.0
 	op.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	op.accent = UIStyle.BRONZE.lightened(0.2)
 	op.box().shadow_size = 8
+	op.box().content_margin_left = 18    # clear of the 10 px corner arms
+	op.box().content_margin_right = 18
 	op.tooltip_text = "%d pick%s remaining" % [left, "" if left == 1 else "s"]
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 14)
@@ -228,8 +230,8 @@ func _taken_flow(taken: Array) -> Control:
 	var sb := UIStyle.flat(Color(0.05, 0.04, 0.03, 0.9), Color(UIStyle.BRONZE, 0.8), 1, 10)
 	sb.content_margin_left = 16
 	sb.content_margin_right = 16
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 8
+	sb.content_margin_top = 14   # D5: room above the REWARDS CHOSEN caption (10 px before)
+	sb.content_margin_bottom = UIStyle.CONTENT_FLOOR
 	UIStyle.lift_style(sb, Color(0, 0, 0, 0.4), 6, 2)
 	plate.add_theme_stylebox_override("panel", UiSurface.box(sb, UiSurface.LEATHER, UIStyle.PANEL_GRAIN))
 	plate.custom_minimum_size = Vector2(minf(460.0, maxf(240.0, gs.overlays.overlay_box.custom_minimum_size.x - 40.0)), 0)

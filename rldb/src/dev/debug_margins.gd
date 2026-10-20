@@ -54,9 +54,44 @@ func _draw() -> void:
 		for c in _content(pc):
 			var cc := c as Control
 			var cr: Rect2 = inv * (cc.get_global_transform() * Rect2(Vector2.ZERO, cc.size))
-			if cr.has_area() and r.encloses(cr) and not inner.encloses(cr):
+			# Half a pixel of slack: containers place children on fractional positions.
+			if cr.has_area() and r.encloses(cr) and not inner.grow(0.5).encloses(cr):
 				draw_rect(cr, HIT, false, 2.0)
 				violations.append(cc)
+				_report(pc, cc, r, cr)
+
+
+## Prints each violation once per run (node path, its text, the smallest gap to the frame in px), so
+## a driver's log lists what the shots show.
+func _report(panel: Control, c: Control, r: Rect2, cr: Rect2) -> void:
+	var key := str(c.get_instance_id())
+	if _reported.has(key):
+		return
+	_reported[key] = true
+	var gap: float = minf(minf(cr.position.x - r.position.x, cr.position.y - r.position.y),
+			minf(r.end.x - cr.end.x, r.end.y - cr.end.y))
+	var txt := ""
+	if c is Label or c is Button or c is LineEdit:
+		txt = String(c.get("text")).left(32).replace("\n", " ")
+	print("MARGIN gap=%d px  \"%s\"  %s  in %s" % [roundi(gap), txt, c.get_class(), _owners(panel)])
+
+
+# The script files of the panel and its nearest scripted ancestors (where to look for the code).
+func _owners(n: Node) -> String:
+	var out := PackedStringArray()
+	while n != null and out.size() < 3:
+		var s := n.get_script() as Script
+		if s != null:
+			var f := s.resource_path.get_file()
+			if f == "":
+				f = "inner:" + s.get_instance_base_type()
+			if out.is_empty() or out[out.size() - 1] != f:
+				out.append(f)
+		n = n.get_parent()
+	return " < ".join(out)
+
+
+var _reported := {}
 
 
 func _collect(n: Node, out: Array) -> void:

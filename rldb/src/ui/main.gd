@@ -12,6 +12,8 @@ const DEV_SAVES_DIR := "user://dev_saves"
 ## normal run never touches it.
 const DEBUG_MARGINS_FLAG := "--debug-margins"
 const DEBUG_MARGINS_SCRIPT := "res://src/dev/debug_margins.gd"
+## `-- --calm`: reduced motion for a scripted run only (the saved setting is left alone).
+const CALM_FLAG := "--calm"
 ## Frame cap while the window is in the background (F05-04).
 const BACKGROUND_FPS := 30
 const DECKBUILDER_SHOT_DRIVER := "res://src/dev/deck_builder_shot_driver.gd"
@@ -85,6 +87,10 @@ func _ready() -> void:
 		TutorialProgress.enable_persistence()
 	Music.start()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if CALM_FLAG in args:
+		# Dev only: evidence runs of the reduced-motion (static) states. Not saved.
+		UIStyle.load_settings()
+		UIStyle.reduce_motion = true
 	if DEBUG_MARGINS_FLAG in args:
 		# Dev only (design review D5): the 12 px content-floor overlay over every screen.
 		get_tree().root.add_child.call_deferred(load(DEBUG_MARGINS_SCRIPT).new())

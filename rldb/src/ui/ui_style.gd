@@ -410,6 +410,18 @@ static func tween_token(tw: Tween, obj: Object, prop: NodePath, value: Variant, 
 	return tw.tween_property(obj, prop, value, motion(name)).set_trans(m[1]).set_ease(m[2])
 
 
+## A fresh tween on `node`, kept in its metadata under `key`; the tween kept there before (a hover
+## still easing in, say) is killed first, so two eases of one property never fight.
+static func restart_tween(node: Node, key: StringName) -> Tween:
+	if node.has_meta(key):
+		var old = node.get_meta(key)
+		if old is Tween and (old as Tween).is_valid():
+			(old as Tween).kill()
+	var tw := node.create_tween()
+	node.set_meta(key, tw)
+	return tw
+
+
 ## 1 +/- `amp` on the `breathe` sine at clock time `t` (s), for idle glows and pulsing rims;
 ## exactly 1 under reduce motion (one static state).
 static func breathe(t: float, amp: float = BREATHE_AMP, period: float = 2.4) -> float:

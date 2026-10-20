@@ -16,7 +16,10 @@ var small := Vector2i(1600, 900)
 
 
 func _initialize() -> void:
-	var args := OS.get_cmdline_user_args()
+	var args: Array = []
+	for a in OS.get_cmdline_user_args():
+		if not String(a).begins_with("--"):   # flags (--debug-margins, --calm) are read by Main
+			args.append(a)
 	out_dir = args[0] if args.size() > 0 else "user://f06"
 	var sz := Vector2i(1600, 900)
 	if args.size() > 1:

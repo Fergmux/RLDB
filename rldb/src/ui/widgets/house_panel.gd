@@ -16,8 +16,9 @@ extends PanelContainer
 ##     parent.add_child(p)
 ##     p.appear()
 
-## Height of the header strip (the header row sits on it).
-const HEAD_H := 30.0
+## Height of the header strip (the header row sits on it). 40 px keeps its small caps 12 px clear
+## of the rim (design review §1.4.2, the D5 floor); 30 px left them 8 px from it.
+const HEAD_H := 40.0
 ## Rim width and outer corner radius; layers inside use the inner radius RADIUS - BORDER.
 const BORDER := 3
 const RADIUS := 12

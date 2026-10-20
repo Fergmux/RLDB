@@ -506,11 +506,7 @@ func _render_decks() -> void:
 func _lift(cw: CardWidget, to: float) -> void:
 	if not is_instance_valid(cw):
 		return
-	var old = cw.get_meta("lift_tw", null)
-	if old is Tween and old.is_valid():
-		old.kill()
-	var t := cw.create_tween()
-	cw.set_meta("lift_tw", t)
+	var t := UIStyle.restart_tween(cw, "lift_tw")
 	t.tween_property(cw, "lift_k", to, UIStyle.dur(0.12)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 

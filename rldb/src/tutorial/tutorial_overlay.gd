@@ -130,9 +130,10 @@ func _build_panel() -> void:
 	hs.corner_radius_bottom_right = 0
 	hs.border_width_bottom = 1
 	hs.content_margin_left = PANEL_PAD
-	hs.content_margin_right = 10
-	hs.content_margin_top = 7
-	hs.content_margin_bottom = 7
+	# D5: 12 px floor around the lesson name and the step chip (7 px before).
+	hs.content_margin_right = UIStyle.CONTENT_FLOOR
+	hs.content_margin_top = UIStyle.CONTENT_FLOOR
+	hs.content_margin_bottom = UIStyle.CONTENT_FLOOR
 	head_p.add_theme_stylebox_override("panel", hs)
 	outer.add_child(head_p)
 	var head := HBoxContainer.new()
@@ -196,9 +197,9 @@ func _build_panel() -> void:
 	fs.corner_radius_bottom_right = 8
 	fs.border_width_top = 1
 	fs.content_margin_left = PANEL_PAD
-	fs.content_margin_right = 10
-	fs.content_margin_top = 8
-	fs.content_margin_bottom = 8
+	fs.content_margin_right = UIStyle.CONTENT_FLOOR
+	fs.content_margin_top = UIStyle.CONTENT_FLOOR   # D5 (8 px before)
+	fs.content_margin_bottom = UIStyle.CONTENT_FLOOR
 	foot_p.add_theme_stylebox_override("panel", fs)
 	outer.add_child(foot_p)
 	# Review #99: Next is the 40 px primary on the left; the two escape hatches are text links at the

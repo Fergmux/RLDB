@@ -52,6 +52,24 @@ func test_pile_row_has_no_inspect_button_and_its_tooltip_names_right_click() -> 
 	assert_str(row.tooltip_text).contains("Right-click to inspect")
 
 
+## Design review #91: a pile row is a compact summary (name, Type, "ATK / DEF"); its full details
+## open while it is hovered (and stay open while it is selected).
+func test_pile_row_is_a_compact_summary_that_expands_on_hover() -> void:
+	var row := await _open_spent()
+	var summary := row.find_child("RowSummary", true, false) as Control
+	var more := row.find_child("RowDetails", true, false) as Control
+	assert_object(summary).is_not_null()
+	assert_bool(more.visible).is_false()
+	assert_bool(row.find_children("*", "CardDetailsPanel", true, false).is_empty()).is_true()
+	var texts := summary.find_children("*", "Label", true, false).map(func(l): return String((l as Label).text))
+	assert_array(texts).contains(["/"])
+	row.mouse_entered.emit()
+	assert_bool(more.visible).is_true()
+	assert_int(row.find_children("*", "CardDetailsPanel", true, false).size()).is_equal(1)
+	row.mouse_exited.emit()
+	assert_bool(more.visible).is_false()
+
+
 func test_right_click_on_a_pile_row_opens_the_inspector() -> void:
 	var row := await _open_spent()
 	var ev := InputEventMouseButton.new()

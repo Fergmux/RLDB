@@ -47,9 +47,10 @@ func build(col: VBoxContainer) -> PanelContainer:
 	var lbg := PanelContainer.new()
 	var lsb := UIStyle.inset_style(UIStyle.PANEL_INK, 6, LOG_GRAIN)
 	lsb.base.content_margin_left = LOG_PAD
-	lsb.base.content_margin_top = LOG_PAD - 4
-	lsb.base.content_margin_bottom = LOG_PAD - 4
-	lsb.base.content_margin_right = UIStyle.sp("xs")
+	# D5: 12 px above and below the text; the scrollbar track sits 6 px in from the frame (§1.4.2).
+	lsb.base.content_margin_top = UIStyle.CONTENT_FLOOR
+	lsb.base.content_margin_bottom = UIStyle.CONTENT_FLOOR
+	lsb.base.content_margin_right = 6
 	lsb.base = lsb.base
 	lbg.add_theme_stylebox_override("panel", lsb)
 	lbg.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -73,7 +74,35 @@ func build(col: VBoxContainer) -> PanelContainer:
 	label.meta_hover_ended.connect(func(_m): label.mouse_default_cursor_shape = Control.CURSOR_ARROW)
 	StatusHelp.watch_rich(label)
 	lbg.add_child(label)
+	# H1 release check: lines scrolled up out of view no longer stop on a cut glyph at the well's top
+	# edge; they sink into a short ink fade, shown only while earlier lines are hidden.
+	top_fade = TopFade.new()
+	top_fade.name = "TopFade"
+	label.add_child(top_fade)
+	var vs := label.get_v_scroll_bar()
+	vs.value_changed.connect(func(v: float) -> void: top_fade.visible = v > 0.5)
+	top_fade.visible = false
 	return panel
+
+
+## The ink fade over the top of the log text (visible while the log is scrolled down).
+var top_fade: Control
+
+
+class TopFade extends Control:
+	const H := 18.0
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_preset(Control.PRESET_TOP_WIDE)
+		offset_bottom = H
+		offset_right = -float(UIStyle.SCROLL_CONTENT_GAP)   # clear of the scrollbar
+
+	func _draw() -> void:
+		var top := Color(UIStyle.PANEL_INK, 0.95)
+		var clear := Color(UIStyle.PANEL_INK, 0.0)
+		draw_polygon(PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), Vector2(size.x, size.y), Vector2(0, size.y)]),
+			PackedColorArray([top, top, clear, clear]))
 
 
 ## Forgets what was shown (a new seat or series attached).
