@@ -22,6 +22,40 @@ static func build(m: MatchEngine, viewer: int) -> Dictionary:
 	return v
 
 
+## A2: the view of a spectator, the third redaction mode. `orient` is the seat drawn at the bottom
+## (sent as "you"). `as_seat` is the player who allowed this spectator to see their cards, or -1:
+## with -1 nothing hidden from either player is included (no hand, pile contents, face-down
+## identities or private log lines: exactly what is public to everyone); with a seat it shows that
+## player's hidden information too, in their orientation. Either way it carries no prompt (choice
+## options, effect descriptions) and no actions: a spectator only watches.
+static func build_spectator(m: MatchEngine, orient: int, as_seat: int = -1) -> Dictionary:
+	var vis := as_seat if as_seat in [0, 1] else -1
+	if vis != -1:
+		orient = vis
+	var ps := []
+	for p in 2:
+		ps.append(_player_view(m, p, vis))
+	return {
+		"you": clampi(orient, 0, 1), "turn": m.turn, "active": m.active, "phase": m.phase, "winner": m.winner,
+		"first_turn": m.turn == 1, "reversal": m.reversal_active(), "players": ps,
+		"pending": _spectator_pending(m, vis), "log": log_for(m, vis),
+		"resolving": not m.stack.is_empty(), "actions": [], "extra_avail": {"any": false, "methods": []},
+		"spectator": true, "sees": vis,
+	}
+
+
+## A pending choice as a spectator sees it: who is deciding and what kind of decision (public),
+## never its options or text, and never "mine".
+static func _spectator_pending(m: MatchEngine, vis: int) -> Dictionary:
+	var pd: Dictionary = m.pending
+	if pd.is_empty():
+		return {}
+	var wait := {"id": pd["id"], "mine": false, "player": pd["player"], "kind": pd["kind"],
+		"prompt": "%s is %s" % [m.pname(pd["player"]), _public_kind(pd["kind"])]}
+	_add_source(m, pd, vis, wait)
+	return wait
+
+
 ## F03-08: what can be summoned from the viewer's Extra Deck right now, by method, so the Extra
 ## pile cue is never mistaken for Fusion-specific proof. {"any": bool, "methods": [...]} where a
 ## method is {"kind": "ritual" | "arcane", "uid": Extra unit} or {"kind": "fusion", "t": command,

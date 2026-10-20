@@ -39,9 +39,17 @@ func test_series_resumes_from_save_with_same_client_and_refuses_other_token() ->
 	impostor.local_seat.status_changed.connect(func(t): imp_errors.append(t))
 	impostor._token = "deadbeefdeadbeefdeadbeef"
 	assert_str(impostor.join_enet("127.0.0.1", port())).is_empty()
-	assert_bool(await _wait(func(): return imp_errors.any(func(e): return String(e).contains("another player")))).is_true()
+	# A2 (20 Oct): seat 1 is reserved for its saved player, so the impostor may only watch: a
+	# spectator with the public view, never the seat or its rewards and deck.
+	assert_bool(await _wait(func(): return impostor.is_spectator and not impostor.local_seat.last_view.is_empty())).is_true()
 	assert_int(host.remote_peer).is_equal(0)
-	assert_bool(impostor.local_seat.last_view.is_empty()).is_true()
+	var iv := impostor.local_seat.last_view
+	assert_bool(iv.get("spectator", false)).is_true()
+	assert_bool(iv.has("rewards") or iv.has("deck")).is_false()
+	impostor.local_seat.send({"t": "reward_finish"})
+	impostor.send_raw(99, {"t": "reward_finish"})
+	assert_bool(await _wait(func(): return imp_errors.count(NetSession.SPECTATOR_REFUSED) >= 2)).is_true()
+	assert_bool(host.series.rewards[1]["done"]).is_false()
 	iroot.queue_free()
 	await _wait(func(): return false, 20)
 	# Act 2: the original client returns with its persisted token
