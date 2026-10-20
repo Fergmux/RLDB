@@ -74,7 +74,35 @@ func build(col: VBoxContainer) -> PanelContainer:
 	label.meta_hover_ended.connect(func(_m): label.mouse_default_cursor_shape = Control.CURSOR_ARROW)
 	StatusHelp.watch_rich(label)
 	lbg.add_child(label)
+	# H1 release check: lines scrolled up out of view no longer stop on a cut glyph at the well's top
+	# edge; they sink into a short ink fade, shown only while earlier lines are hidden.
+	top_fade = TopFade.new()
+	top_fade.name = "TopFade"
+	label.add_child(top_fade)
+	var vs := label.get_v_scroll_bar()
+	vs.value_changed.connect(func(v: float) -> void: top_fade.visible = v > 0.5)
+	top_fade.visible = false
 	return panel
+
+
+## The ink fade over the top of the log text (visible while the log is scrolled down).
+var top_fade: Control
+
+
+class TopFade extends Control:
+	const H := 18.0
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_preset(Control.PRESET_TOP_WIDE)
+		offset_bottom = H
+		offset_right = -float(UIStyle.SCROLL_CONTENT_GAP)   # clear of the scrollbar
+
+	func _draw() -> void:
+		var top := Color(UIStyle.PANEL_INK, 0.95)
+		var clear := Color(UIStyle.PANEL_INK, 0.0)
+		draw_polygon(PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), Vector2(size.x, size.y), Vector2(0, size.y)]),
+			PackedColorArray([top, top, clear, clear]))
 
 
 ## Forgets what was shown (a new seat or series attached).

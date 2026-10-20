@@ -197,11 +197,11 @@ static func _count_plate(caption: String, n: int, col: Color) -> Control:
 	var p := PanelContainer.new()
 	var sb := UIStyle.flat(Color(col.darkened(0.78), 0.95), Color(col, 0.75), 1, 7)
 	# D5 check: the number and its caption sit side by side ("12 MAIN") with 12 px at the sides and
-	# 6 px above and below; stacked, the caption was squeezed 2 px from the chip's bottom edge.
+	# 8 px (the chip token) above and below; stacked, the caption was squeezed 2 px from the chip's bottom edge.
 	sb.content_margin_left = UIStyle.sp("md")
 	sb.content_margin_right = UIStyle.sp("md")
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
+	sb.content_margin_top = UIStyle.sp("sm")
+	sb.content_margin_bottom = UIStyle.sp("sm")
 	p.add_theme_stylebox_override("panel", sb)
 	p.custom_minimum_size = Vector2(104, 0)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE

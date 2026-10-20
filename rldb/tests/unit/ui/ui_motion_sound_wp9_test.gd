@@ -203,7 +203,7 @@ func test_inspector_counts_closed_at_once_and_frees_after_its_motion() -> void:
 func test_table_dust_is_sparse_round_and_deterministic() -> void:
 	var a: AmbientMotes = auto_free(AmbientMotes.dust())
 	var b: AmbientMotes = auto_free(AmbientMotes.dust())
-	assert_int(a.count()).is_equal(10)
+	assert_int(a.count()).is_equal(16)   # H1 release check: 10 read as two or three pinpricks
 	for m in a._motes:
 		assert_bool(m["petal"]).is_false()
 		assert_float(float(m["size"])).is_less_equal(AmbientMotes.DUST["size"].y)

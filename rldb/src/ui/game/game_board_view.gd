@@ -31,7 +31,7 @@ var table: Control
 var deco: BoardDeco
 ## Table dust motes and their light cone (#23), as fractions of the play field.
 var dust: AmbientMotes
-const DUST_COUNT := 10
+const DUST_COUNT := AmbientMotes.DUST_COUNT
 const DUST_SHAFT := Rect2(0.3, 0.0, 0.4, 1.0)
 ## Layer the cards of this view live on.
 var layer: Control
