@@ -68,6 +68,32 @@ func test_j5_scroll_cue_overlays_the_bottom_of_the_details() -> void:
 	assert_float(r.end.x).is_less_equal(_rect(bar).position.x + 0.5)
 
 
+func test_j3_draft_rows_open_and_close_on_click() -> void:
+	# Arrange: a read-only draft list row (no selection there, so the click itself opens it)
+	gs.details.pile_zone = GameDetails.DRAFT_ZONE
+	var c: Dictionary = gs.pv(gs.me())["hand"][0]
+	var row: Control = auto_free(gs.details._pile_row(c))
+	add_child(row)
+	var more := row.find_child("RowDetails", true, false) as Control
+	# Act / Assert: hovering does not open it, a click does, a second click closes it
+	row.mouse_entered.emit()
+	assert_bool(more.visible).is_false()
+	_left_click(row)
+	assert_bool(more.visible).is_true()
+	row.mouse_exited.emit()
+	assert_bool(more.visible).is_true()
+	_left_click(row)
+	assert_bool(more.visible).is_false()
+	gs.details.pile_zone = ""
+
+
+static func _left_click(c: Control) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	c.gui_input.emit(ev)
+
+
 ## The on-screen rect of `c` (the sidebar is scaled).
 static func _rect(c: Control) -> Rect2:
 	return c.get_global_transform() * Rect2(Vector2.ZERO, c.size)

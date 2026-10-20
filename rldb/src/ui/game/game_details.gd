@@ -330,7 +330,7 @@ func render_pile_list() -> void:
 		details_title.text = "Your draft (%d)" % cards.size()
 	else:
 		pile_hint.text = "Shown in a random order; the real order is unchanged." if pile_zone == "draw" else \
-			("" if pile_zone == "extra" else "Hover a card to read it; click to select it.")   # review: the Extra rows' buttons speak for themselves
+			("" if pile_zone == "extra" else "Click a card to open its details; click it again to close them.")   # review: the Extra rows' buttons speak for themselves
 		details_title.text = "Your %s (%d)" % [PILE_NAMES.get(pile_zone, pile_zone.capitalize()), cards.size()]
 	pile_hint.visible = pile_hint.text != ""
 	if sig == _pile_sig:
@@ -386,18 +386,10 @@ func _pile_row(c: Dictionary) -> Control:
 	row.tooltip_text = CardWidget.tooltip_for(c) + "\n\nRight-click to inspect"   # D15: no Inspect button
 	row.set_meta(&"tip_card", c)   # H8: the coloured card tooltip
 	var editable := pile_zone != DRAFT_ZONE   # draft picks are read-only (but can still be inspected)
-	if editable:
-		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var pick := func():
 		gs.selected_uid = uid
 		show_pile(pile_zone, -1 if sel else uid)
-	row.gui_input.connect(func(ev):
-		if ev is InputEventMouseButton and ev.pressed:
-			if ev.button_index == MOUSE_BUTTON_LEFT and editable:
-				pick.call()
-			elif ev.button_index == MOUSE_BUTTON_RIGHT:
-				row.accept_event()
-				gs.inspect.inspect_card(c))
 	# The card + details, then the action buttons across the row's full width (review: several
 	# summon buttons fit on one row instead of stacking in the text column).
 	var col := VBoxContainer.new()
@@ -406,7 +398,7 @@ func _pile_row(c: Dictionary) -> Control:
 	row.add_child(col)
 	# #91: a compact summary line (thumbnail, name, Type chip, "ATK / DEF" inline), so four Basic
 	# Mages no longer make a wall of identical stat boxes; the full compact details open under it
-	# while the row is hovered or selected.
+	# once the row is clicked (J3).
 	col.add_child(_pile_summary(c, can_act))
 	var more := VBoxContainer.new()
 	more.name = "RowDetails"
@@ -425,10 +417,33 @@ func _pile_row(c: Dictionary) -> Control:
 			GameUi.ignore_mouse(dp)
 			more.add_child(dp)
 		more.visible = on
+	# J3 (owner, 22 Oct): the details open on a click only, never on hover, and a second click closes
+	# them. In a pile the click selects the row (its actions show with the details); a draft pick is
+	# read-only, so there the click only opens or closes the row.
 	if sel:
 		expand.call(true)
-	row.mouse_entered.connect(func(): expand.call(true))
-	row.mouse_exited.connect(func(): expand.call(sel))
+	row.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed:
+			if ev.button_index == MOUSE_BUTTON_LEFT:
+				row.accept_event()
+				if editable:
+					pick.call()
+				else:
+					Sfx.play("select")
+					expand.call(not more.visible)
+			elif ev.button_index == MOUSE_BUTTON_RIGHT:
+				row.accept_event()
+				gs.inspect.inspect_card(c))
+	# Hovering highlights the row (a brighter rim and face); the layout never changes.
+	var rest_edge := sb.border_color
+	var rest_fill := sb.bg_color
+	var hover_edge: Color = UIStyle.GOLD_HI.lightened(0.15) if (sel or can_act) else Color(UIStyle.GOLD, 0.9)
+	row.mouse_entered.connect(func():
+		sb.border_color = hover_edge
+		sb.bg_color = rest_fill.lerp(UIStyle.PANEL_LIGHT, 0.55))
+	row.mouse_exited.connect(func():
+		sb.border_color = rest_edge
+		sb.bg_color = rest_fill)
 	# F04: Extra Deck rows always show their legal summons (no selection needed); other piles show
 	# the selected row's actions.
 	var buttons := extra_summons(uid) if pile_zone == "extra" else ([] if not sel else _row_actions(uid))
