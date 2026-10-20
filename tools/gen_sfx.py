@@ -467,6 +467,225 @@ def s_chat(r):
     return finish(lowpass(x, 7000), tail_kw=dict(wet=0.3, extra_s=0.18))
 
 
+# ---------------------------------------------------------------- set pieces (D8 / B5 / D6, 2026-10-20)
+# Layered designs: each set piece has an anticipation layer that swells into its climax (played at the start)
+# and a separate climax hit, so the climax always lands on the visual flash whatever the frame rate.
+def saw(freq, sec, detune_cents=0.0, vib_hz=0.0, vib_depth=0.0, phase=0.0):
+    """Band-limited-ish sawtooth (8 additive partials) with optional vibrato."""
+    n = n_samples(sec)
+    f = freq * (2.0 ** (detune_cents / 1200.0))
+    out = []
+    ph = phase
+    for i in range(n):
+        fi = f * (1.0 + vib_depth * math.sin(TWO_PI * vib_hz * i / SR))
+        ph += TWO_PI * fi / SR
+        v = 0.0
+        for k in range(1, 9):
+            v += math.sin(ph * k) / k
+        out.append(v * 0.55)
+    return out
+
+
+def formant(x, centres):
+    """Parallel fixed band-passes (vowel formants): centres = ((freq, q, gain), ...)."""
+    return mix(*[scale(bandpass_sweep(x, f, f, q), g) for f, q, g in centres])
+
+
+def swell(n, peak_at, attack_pow=1.8, release_s=0.25):
+    """Envelope rising (power curve) to 1 at sample `peak_at`, then an exponential release."""
+    out = []
+    for i in range(n):
+        if i < peak_at:
+            out.append((i / max(1, peak_at)) ** attack_pow)
+        else:
+            out.append(math.exp(-(i - peak_at) / SR / release_s))
+    return out
+
+
+AAH = ((730.0, 6.0, 1.0), (1090.0, 7.0, 0.5), (2440.0, 8.0, 0.22))
+
+
+def _choir(r, notes, sec, peak_s, release_s):
+    n = n_samples(sec)
+    voices = []
+    for vi, f in enumerate(notes):
+        for d in (-7.0, 0.0, 6.0):
+            voices.append(saw(f, sec, d, 4.6 + 0.3 * vi + 0.1 * d, 0.004, r.uniform(0, TWO_PI)))
+    body = formant(mix(*voices), AAH)
+    breath = scale(formant(lowpass(noise(r, sec), 5000), AAH), 0.12)
+    return mul(mix(body, breath), swell(n, n_samples(peak_s), 1.6, release_s))
+
+
+def s_ritual_choir(r):
+    """D8 Ritual anticipation: a dark choir pad (A minor, formant 'aah' voices) swelling into the climax,
+    over a low drone; the reverb is long, like a temple."""
+    sec = 1.15
+    ch = _choir(r, (110.0, 130.81, 164.81, 220.0), sec, 0.86, 0.3)
+    drone = mul(tone(55.0, sec, 3.0, ((1, 1), (2, 0.35), (3, 0.12)), 0.4), swell(n_samples(sec), n_samples(0.86), 1.2, 0.3))
+    return finish(mix(scale(ch, 1.0), scale(drone, 0.45)), tail_kw=dict(wet=0.55, extra_s=0.45, delay_s=0.071, fb=0.42))
+
+
+def s_ritual_impact(r):
+    """D8 Ritual climax: a deep temple gong and a choir chord stab under the pillar of light, with a sub drop."""
+    gong = [0.0] * n_samples(1.4)
+    for ratio, amp, dec in ((1.0, 1.0, 0.9), (1.48, 0.6, 0.6), (2.0, 0.45, 0.5), (2.76, 0.35, 0.35), (3.6, 0.22, 0.25), (4.4, 0.15, 0.18)):
+        part = mul(sweep(82.0 * ratio, 80.0 * ratio, 1.4), env_exp(n_samples(1.4), dec, 0.002))
+        gong = mix(gong, scale(part, amp))
+    stab = _choir(r, (220.0, 261.63, 329.63, 440.0), 0.9, 0.04, 0.35)
+    sub = mul(sweep(120.0, 32.0, 0.8), env_exp(n_samples(0.8), 0.25, 0.002))
+    crash = mul(lowpass(noise(r, 0.5), 2600), env_exp(n_samples(0.5), 0.09, 0.001))
+    x = softclip(mix(scale(gong, 0.75), scale(stab, 0.6), scale(sub, 1.0), scale(crash, 0.4)), 1.8)
+    return finish(x, tail_kw=dict(wet=0.5, extra_s=0.45, delay_s=0.068, fb=0.4))
+
+
+PENTA = (1318.5, 1567.98, 1760.0, 2093.0, 2349.3, 2637.0, 3136.0, 3520.0, 4186.0)
+
+
+def s_arcane_shimmer(r):
+    """D8 Arcane anticipation: crystalline shimmer, glassy grains thickening into the climax over a rising
+    FM glass tone and air."""
+    sec = 0.95
+    n = n_samples(sec)
+    parts = []
+    for i in range(46):
+        u = r.random() ** 0.55            # grains crowd toward the climax
+        f = r.choice(PENTA) * r.choice((1.0, 1.0, 0.5))
+        g = 0.25 + 0.5 * u
+        parts.append((u * (sec - 0.12), scale(tone(f, 0.25, r.uniform(0.05, 0.14), ((1, 1), (2.76, 0.25), (5.4, 0.08)), 0.001), g)))
+    grains = mix(*parts)
+    ph = 0.0
+    glass = []
+    for i in range(n):
+        u = i / n
+        fc = 600.0 * (3.0 ** u)
+        ph += TWO_PI * fc / SR
+        glass.append(math.sin(ph + 1.4 * math.sin(ph * 3.5)) * (u ** 1.8))
+    air = mul(highpass(noise(r, sec), 4000), [(i / n) ** 2.4 for i in range(n)])
+    return finish(mix(scale(grains, 0.8), scale(glass, 0.35), scale(air, 0.25)), tail_kw=dict(wet=0.5, extra_s=0.4, delay_s=0.045))
+
+
+def s_arcane_impact(r):
+    """D8 Arcane climax: the lattice shatters: glass bursts, a bright bell chord and a sub thump."""
+    parts = []
+    for i in range(34):
+        off = (i / 34.0) ** 1.6 * 0.28
+        dur = r.uniform(0.008, 0.03)
+        b = mul(highpass(noise(r, dur), r.uniform(2500, 6000)), env_exp(n_samples(dur), dur * 0.3, 0.0003))
+        parts.append((off, scale(b, math.exp(-off / 0.12))))
+    shards = mix(*parts)
+    chord = mix(*[(0.005 * k, scale(bell(f, 1.2, 0.35), 0.5)) for k, f in enumerate((659.25, 830.61, 987.77, 1318.5))])
+    sub = mul(sweep(95.0, 38.0, 0.6), env_exp(n_samples(0.6), 0.16, 0.002))
+    return finish(softclip(mix(scale(shards, 0.7), scale(chord, 1.2), scale(sub, 1.1)), 2.4), tail_kw=dict(wet=0.45, extra_s=0.4, delay_s=0.05))
+
+
+def s_fusion_vortex(r):
+    """D8 Fusion anticipation: a vortex whoosh that spins faster (rising tremolo) and climbs in pitch."""
+    sec = 0.85
+    n = n_samples(sec)
+    wind = bandpass_sweep(noise(r, sec), 250.0, 3200.0, q=2.2)
+    ph = 0.0
+    rot = []
+    for i in range(n):
+        u = i / n
+        ph += TWO_PI * (4.0 + 20.0 * u * u) / SR
+        rot.append(0.55 + 0.45 * math.sin(ph))
+    env = [(i / n) ** 1.6 for i in range(n)]
+    tones = mix(sweep(80.0, 320.0, sec), scale(sweep(120.0, 480.0, sec), 0.6))
+    x = softclip(mix(scale(mul(mul(wind, rot), env), 1.6), scale(mul(tones, env), 0.5)), 2.2)
+    return finish(x, tail_kw=dict(wet=0.3, extra_s=0.1, delay_s=0.04))
+
+
+def s_fusion_impact(r):
+    """D8 Fusion climax: the core implodes (a quick suck) and explodes: sub, crack, a shimmering metal cluster."""
+    suck = mul(sweep(1400.0, 180.0, 0.07), [(i / n_samples(0.07)) ** 2 for i in range(n_samples(0.07))])
+    sub = mul(sweep(115.0, 30.0, 0.9), env_exp(n_samples(0.9), 0.3, 0.002))
+    crack = mul(lowpass(noise(r, 0.2), 4200), env_exp(n_samples(0.2), 0.035, 0.0005))
+    metal = mix(scale(bell(880.0, 1.1, 0.32), 0.6), scale(bell(1331.0, 1.1, 0.26), 0.45), scale(bell(1769.0, 1.0, 0.2), 0.35))
+    rumble = mul(lowpass2(noise(r, 1.0), 300), env_exp(n_samples(1.0), 0.32, 0.01))
+    hit = softclip(mix(scale(sub, 1.1), scale(crack, 0.8), scale(metal, 0.7), scale(rumble, 1.1)), 2.2)
+    return finish(mix(scale(suck, 0.5), (0.07, hit)), tail_kw=dict(wet=0.42, extra_s=0.35, delay_s=0.055))
+
+
+def s_card_slam(r):
+    """D8 landing: a card slammed down on the wooden table: low thump, wood knock and a puff of dust."""
+    thump = mul(sweep(130.0, 48.0, 0.3), env_exp(n_samples(0.3), 0.08, 0.0008))
+    knock = tone(210.0, 0.15, 0.04, ((1, 1), (2.3, 0.4), (3.9, 0.15)), 0.0005)
+    dust = mul(lowpass(noise(r, 0.3), 1600), env_exp(n_samples(0.3), 0.09, 0.004))
+    return finish(softclip(mix(scale(thump, 1.1), scale(knock, 0.6), scale(dust, 0.35)), 1.6), tail_kw=dict(wet=0.22, extra_s=0.12))
+
+
+def s_serpent_coil(r):
+    """B5: the Serpents rise and coil: a hiss swelling and fading, a watery swirl and a low rising tone."""
+    sec = 1.3
+    n = n_samples(sec)
+    hiss = mul(highpass(noise(r, sec), 3200), [0.4 + 0.6 * abs(math.sin(math.pi * (i / n) * 2.5)) * (i / n) for i in range(n)])
+    swirl_src = noise(r, sec)
+    swirl = []
+    low = band = 0.0
+    for i, v in enumerate(swirl_src):
+        u = i / n
+        f = 700.0 + 450.0 * math.sin(TWO_PI * (1.2 + 2.5 * u) * u)
+        k = 2.0 * math.sin(math.pi * f / SR)
+        low += k * band
+        high = v - low - band / 3.0
+        band += k * high
+        swirl.append(band * (0.3 + 0.7 * u))
+    ph = 0.0
+    tonal = []
+    for i in range(n):
+        u = i / n
+        ph += TWO_PI * (70.0 + 70.0 * u) * (1.0 + 0.01 * math.sin(TWO_PI * 5.0 * i / SR)) / SR
+        tonal.append(math.sin(ph) * (u ** 1.2))
+    return finish(mix(scale(hiss, 0.35), scale(swirl, 0.9), scale(tonal, 0.55)), tail_kw=dict(wet=0.4, extra_s=0.25, delay_s=0.06))
+
+
+def s_serpent_strike(r):
+    """B5: the serpent darts (rising whoosh) and lands on the plate: a heavy water splash, sub and bubbles."""
+    wsec = 0.23
+    wn = n_samples(wsec)
+    whoosh = mul(bandpass_sweep(noise(r, wsec), 600.0, 3600.0, q=1.8), [(i / wn) ** 1.5 for i in range(wn)])
+    splash = mul(lowpass(noise(r, 0.5), 4200), env_exp(n_samples(0.5), 0.12, 0.001))
+    sub = mul(sweep(95.0, 32.0, 0.8), env_exp(n_samples(0.8), 0.24, 0.002))
+    bubbles = []
+    for i in range(14):
+        off = r.uniform(0.02, 0.35)
+        f0 = r.uniform(280.0, 520.0)
+        b = mul(sweep(f0, f0 * 2.4, 0.03), env_exp(n_samples(0.03), 0.012, 0.001))
+        bubbles.append((off, scale(b, 0.35 * math.exp(-off / 0.25))))
+    hit = softclip(mix(scale(splash, 1.0), scale(sub, 1.1), mix(*bubbles)), 2.0)
+    return finish(mix(scale(whoosh, 0.9), (wsec, hit)), tail_kw=dict(wet=0.38, extra_s=0.3, delay_s=0.05))
+
+
+def s_sacrifice(r):
+    """D6: a unit consumed: a soft fire whoosh, crackling, a low tone sinking away and embers rising."""
+    sec = 0.9
+    n = n_samples(sec)
+    whoosh = mul(bandpass_sweep(noise(r, sec), 300.0, 1500.0, q=1.4), [math.sin(math.pi * min(1.0, i / (n * 0.7))) ** 1.4 for i in range(n)])
+    cr = []
+    for i in range(36):
+        off = r.uniform(0.05, 0.75)
+        dur = r.uniform(0.003, 0.009)
+        cr.append((off, scale(mul(highpass(noise(r, dur), 2000), env_exp(n_samples(dur), dur * 0.3, 0.0002)), r.uniform(0.3, 0.8))))
+    sink = mul(sweep(220.0, 105.0, 0.8), env_exp(n_samples(0.8), 0.3, 0.02))
+    rise = mix(*[(0.42 + 0.06 * k, scale(bell(f, 0.35, 0.09), 0.3)) for k, f in enumerate((1046.5, 1318.5, 1568.0))])
+    return finish(mix(scale(whoosh, 0.9), scale(mix(*cr), 0.5), scale(sink, 0.4), rise), tail_kw=dict(wet=0.35, extra_s=0.25))
+
+
+def s_ap_gain(r):
+    """D6: AP gained: a bright two-note amber twinkle with a tiny sparkle."""
+    a = bell(1046.5, 0.35, 0.09)
+    b = bell(1567.98, 0.4, 0.11)
+    sp = mul(highpass(noise(r, 0.08), 6000), env_exp(n_samples(0.08), 0.02, 0.001))
+    return finish(mix(scale(a, 0.7), (0.06, scale(b, 0.8)), (0.06, scale(sp, 0.2))), tail_kw=dict(wet=0.3, extra_s=0.15))
+
+
+def s_ap_loss(r):
+    """D6: AP lost: a dull, short descending blip."""
+    x = mul(sweep(520.0, 330.0, 0.22), env_exp(n_samples(0.22), 0.07, 0.003))
+    y = mul(sweep(1040.0, 660.0, 0.22), env_exp(n_samples(0.22), 0.04, 0.003))
+    return finish(lowpass(mix(x, scale(y, 0.25)), 2600), tail_kw=dict(wet=0.22, extra_s=0.12))
+
+
 SOUNDS = [
     ("card_draw", s_card_draw), ("card_play", s_card_play), ("card_set", s_card_set),
     ("summon", s_summon), ("select", s_select), ("confirm", s_confirm),
@@ -480,14 +699,23 @@ SOUNDS = [
     ("click_primary", s_click_primary), ("click_secondary", s_click_secondary), ("back", s_back),
     ("deck_add", s_deck_add), ("deck_remove", s_deck_remove),
     ("chat", s_chat),
+    ("fusion_vortex", s_fusion_vortex), ("fusion_impact", s_fusion_impact),
+    ("ritual_choir", s_ritual_choir), ("ritual_impact", s_ritual_impact),
+    ("arcane_shimmer", s_arcane_shimmer), ("arcane_impact", s_arcane_impact),
+    ("card_slam", s_card_slam), ("serpent_coil", s_serpent_coil), ("serpent_strike", s_serpent_strike),
+    ("sacrifice", s_sacrifice), ("ap_gain", s_ap_gain), ("ap_loss", s_ap_loss),
 ]
 
 # Per-sound peak level (dBFS); default PEAK_DBFS. UI clicks sit well under the game sounds.
-PEAK = {"chat": -12.0, "click_primary": -11.0, "click_secondary": -12.0, "back": -10.5, "deck_add": -10.0, "deck_remove": -10.5}
+PEAK = {"chat": -12.0, "click_primary": -11.0, "click_secondary": -12.0, "back": -10.5, "deck_add": -10.0, "deck_remove": -10.5,
+        "ap_gain": -10.0, "ap_loss": -11.0, "card_slam": -7.5, "sacrifice": -8.0}
 
 
 # Hard duration caps (seconds); longer renders are trimmed and re-faded.
-MAX_LEN = {"boom": 1.6, "charge": 1.4, "victory_big": 2.6, "exhaust": 1.3, "fuse": 1.3, "ritual": 1.4, "arcane": 1.3, "victory": 1.4, "defeat": 1.4, "turn": 0.9, "heal": 0.9, "summon": 0.8}
+MAX_LEN = {"boom": 1.6, "charge": 1.4, "victory_big": 2.6, "exhaust": 1.3, "fuse": 1.3, "ritual": 1.4, "arcane": 1.3, "victory": 1.4, "defeat": 1.4, "turn": 0.9, "heal": 0.9, "summon": 0.8,
+           "fusion_vortex": 1.0, "fusion_impact": 1.8, "ritual_choir": 1.7, "ritual_impact": 2.0, "arcane_shimmer": 1.4,
+           "arcane_impact": 1.8, "card_slam": 0.6, "serpent_coil": 1.6, "serpent_strike": 1.6, "sacrifice": 1.2,
+           "ap_gain": 0.6, "ap_loss": 0.45}
 
 
 def write_wav(path, x):

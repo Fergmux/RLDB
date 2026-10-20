@@ -1,9 +1,9 @@
 class_name FxPileEffects
 extends FxPart
 ## Card-movement effects between zones and piles: destruction (crack, burn, drop toward Spent),
-## Exhaust (card shown front and centre, then pulled into the Exhaust pile in a void colour) and the
-## Fusion / Ritual / Arcane special-summon sequence (materials drawn to the summon, then sent to Spent
-## or Exhaust, and the unit arriving with a type-specific flourish). Presentation only: every effect
+## Exhaust (card shown front and centre, then pulled into the Exhaust pile in a void colour), the
+## sacrifice (D6), the B5 transient summon ghost and a lone special-summon material (one whose summon
+## failed; the Fusion / Ritual / Arcane set pieces themselves live in FxSummon). Presentation only: every effect
 ## is an overlay on the already-final board and is removed by FxPlayer.finish_all().
 ##
 ## Identity rule: a card is drawn face up only when the event carries `id` (core strips it for seats
@@ -14,7 +14,7 @@ extends FxPart
 const BURN := Color("ff8a3a")
 const VOID := Color("a47bff")
 const KIND_ACCENT := {"fusion": "fusion", "ritual": "ritual", "arcane": "arcane"}
-const KIND_SOUND := {"fusion": "fuse", "ritual": "ritual", "arcane": "arcane"}
+const BURN_SHADER := "res://assets/shaders/canvas_fx_burn.gdshader"
 
 ## Seconds the Exhaust card holds front and centre.
 const EXHAUST_HOLD := 0.6
@@ -35,11 +35,50 @@ func ghost_view(e: Dictionary, prev_mv: Dictionary) -> Dictionary:
 		if Zones.KEY.has(zone):
 			var arr: Array = prev_mv["players"][int(at["p"])][Zones.KEY[zone]]
 			var slot := int(at["slot"])
-			if slot < arr.size() and arr[slot] is Dictionary:
+			# The previous card of the slot, unless the event names another one (summoned in between).
+			if slot < arr.size() and arr[slot] is Dictionary and (not e.has("id") or int(arr[slot].get("id", -1)) == int(e["id"])):
 				return arr[slot]
 	if e.has("id"):
 		return MatchView.summary_view(Series.card_summary(int(e["id"])))
 	return {"hidden": true}
+
+
+## B5: a ghost of the unit summoned by `summon_e` (its public `id`) standing in player `p`'s unit `slot`
+## and registered as transient, for a unit that already left the field again in this batch. It arrives
+## like a summon when `arrive` is true. Returns null when the event does not name the card.
+func summon_ghost(p: int, slot: int, summon_e: Dictionary, arrive: bool = false) -> CardWidget:
+	if not summon_e.has("id"):
+		return null
+	var view := MatchView.summary_view(Series.card_summary(int(summon_e["id"])))
+	view["stance"] = String(summon_e.get("stance", "atk"))
+	var rect: Rect2 = _fx.screen.fx_slot_global_rect(p, "unit", slot)
+	var g := _ghost(view, "board", String(view["stance"]) == "def")
+	g.position = _fx.fx_pos(rect.get_center() - g.size / 2.0)
+	_fx.add_node(g)
+	_fx.hold_transient(FxPlayer.transient_key(p, "unit", slot), g)
+	if arrive and not UIStyle.reduce_motion:
+		var home := g.position
+		g.position = _fx.fx_pos(_fx.screen.hand_anchor(p) - g.size / 2.0)
+		g.scale = Vector2(1.18, 1.18)
+		g.modulate.a = 0.0
+		var tw := _fx.new_tween()
+		tw.set_parallel(true)
+		tw.tween_property(g, "modulate:a", 1.0, UIStyle.dur(0.08))
+		tw.tween_property(g, "position", home, UIStyle.dur(0.24)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+		tw.tween_property(g, "scale", Vector2.ONE, UIStyle.dur(0.24)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+		tw.chain().tween_callback(func():
+			_fx.burst(FxBurst.Kind.DUST, Vector2(rect.get_center().x, rect.end.y - 6.0), FxCardEffects.DUST_COLOR, 8, 50.0, 0.4)
+			if is_instance_valid(g):
+				g.fx_glow = Color(UIStyle.GOLD_HI, 0.8))
+		tw.chain().tween_property(g, "scale", Vector2(1.08, 0.92), UIStyle.dur(0.05))
+		tw.chain().tween_property(g, "scale", Vector2.ONE, UIStyle.dur(0.1)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(g, "fx_glow", Color(UIStyle.GOLD_HI, 0.0), UIStyle.dur(0.3))
+	return g
+
+
+## A still ghost of the card `e` destroys (the F12 hold ghost), or null when it may not be shown.
+func destroy_ghost(e: Dictionary, prev_mv: Dictionary) -> CardWidget:
+	return hold_ghost(e, prev_mv)
 
 
 ## Anonymous-or-identified card widget used by every ghost: click-through, no hover, no tooltip.
@@ -51,6 +90,28 @@ func _ghost(view: Dictionary, kind: String, rotated: bool = false) -> CardWidget
 	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	g.pivot_offset = g.size / 2.0
 	return g
+
+
+## The burn material (canvas_fx_burn) on ghost `g`: white-hot edge, `ember` glow and `char` ahead of it.
+## Drive it with burn_step(progress, g, mat), which also follows the card as it moves.
+static func burn_material(g: CardWidget, ember: Color, char_col: Color, hot: Color = Color(1.0, 0.95, 0.75)) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load(BURN_SHADER)
+	mat.set_shader_parameter("ember_color", ember)
+	mat.set_shader_parameter("char_color", char_col)
+	mat.set_shader_parameter("hot_color", hot)
+	g.material = mat
+	return mat
+
+
+## Sets the burn progress of `mat` on `g` and its card rect in viewport pixels (for the rising front).
+static func burn_step(v: float, g: CardWidget, mat: ShaderMaterial) -> void:
+	if not is_instance_valid(g):
+		return
+	var xf := g.get_viewport().get_final_transform() * g.get_global_transform_with_canvas()
+	var r := xf * Rect2(Vector2.ZERO, g.size)
+	mat.set_shader_parameter("rect_px", Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
+	mat.set_shader_parameter("progress", v)
 
 
 func _dissolve(g: CardWidget, edge: Color) -> ShaderMaterial:
@@ -101,7 +162,12 @@ func destroy(e: Dictionary, prev_mv: Dictionary) -> void:
 	var col := VOID if dest == "exhaust" else BURN
 	var rect: Rect2 = _fx.screen.fx_slot_global_rect(p, zone, slot)
 	_fx.burst(FxBurst.Kind.EMBER, rect.get_center(), col, 8, 50.0, 0.5)
+	# B5: a card summoned earlier in this batch stands as a held ghost: it is the one destroyed now.
+	var held := _fx.take_transient(FxPlayer.transient_key(p, zone, slot))
 	var view := ghost_view(e, prev_mv)
+	if held != null:
+		view = held.view
+		_fx.free_node(held)
 	if view.has("hidden") and view.size() == 1 and zone != "backrow":
 		return
 	var rot: bool = zone == "backrow" or (zone == "unit" and String(view.get("stance", "atk")) == "def")
@@ -147,6 +213,99 @@ func hold_ghost(e: Dictionary, prev_mv: Dictionary) -> CardWidget:
 	g.position = _fx.fx_pos(rect.get_center() - g.size / 2.0)
 	_fx.add_node(g)
 	return g
+
+
+# ---------------------------------------------------------------- sacrifice (D6)
+
+## Seconds from the start of a sacrifice to its embers reaching the AP gems (the AP gain plays then).
+const SACRIFICE_TO_AP := 0.85
+## Seconds the card is offered up (glow, lift, tremble) before it burns and its embers leave.
+const SACRIFICE_OFFER := 0.22
+## Ember colour of a sacrifice: the AP amber, hotter.
+const SACRIFICE_EMBER := Color("ffb347")
+const SACRIFICE_EMBERS := 16
+
+
+## A unit is sacrificed (event `e`: p, at, id, stance, dest): it is consumed instead of vanishing. The
+## card glows and trembles, burns away from its edges (dissolve with an amber ember edge) while it sinks a
+## little, and a stream of embers drifts from it into its controller's AP gems, where they flare.
+func sacrifice(e: Dictionary, prev_mv: Dictionary) -> void:
+	var at: Dictionary = e.get("at", {})
+	if at.is_empty():
+		return
+	var p := int(at["p"])
+	var slot := int(at["slot"])
+	var rect: Rect2 = _fx.screen.fx_slot_global_rect(p, "unit", slot)
+	var view := ghost_view(e, prev_mv)
+	var g := _ghost(view, "board", String(e.get("stance", view.get("stance", "atk"))) == "def")
+	var c := rect.get_center()
+	g.position = _fx.fx_pos(c - g.size / 2.0)
+	_fx.add_node(g)
+	var pl: PlayerPlate = _fx.screen.plate_of(int(e.get("p", p)))
+	var gems: Vector2 = pl.ap_gems.get_global_rect().get_center() + Vector2(-40.0, 0.0)
+	var tw := _fx.new_tween()
+	if UIStyle.reduce_motion:
+		g.fx_glow = Color(SACRIFICE_EMBER, 0.8)
+		tw.tween_property(g, "modulate:a", 0.0, 0.4)
+		tw.tween_callback(_fx.free_node.bind(g))
+		return
+	var base := g.position
+	var mat := burn_material(g, SACRIFICE_EMBER, Color(0.16, 0.06, 0.02))
+	burn_step(0.0, g, mat)
+	g.fx_glow = Color(SACRIFICE_EMBER, 0.0)
+	# Offered up: a warm glow, a lift and a tremble.
+	tw.tween_property(g, "fx_glow", Color(SACRIFICE_EMBER, 1.0), UIStyle.dur(0.14))
+	tw.parallel().tween_property(g, "position", base + Vector2(0, -10.0), UIStyle.dur(0.18)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_method(_tremble.bind(g), 0.0, 1.0, UIStyle.dur(SACRIFICE_OFFER))
+	tw.tween_callback(func():
+		_fx.burst(FxBurst.Kind.EMBER, c, SACRIFICE_EMBER, 22, 80.0, 0.9)
+		_fx.burst(FxBurst.Kind.SPARK, c, SACRIFICE_EMBER.lightened(0.3), 10, 56.0, 0.35)
+		_embers_to(c, gems, rect.size.x * 0.6))
+	# Consumed: the fire climbs the card from its foot while it sinks and shrinks a little; embers keep rising.
+	tw.tween_method(burn_step.bind(g, mat), 0.0, 1.0, UIStyle.dur(0.6)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.parallel().tween_property(g, "position", base + Vector2(0, 6.0), UIStyle.dur(0.6))
+	tw.parallel().tween_property(g, "scale", Vector2(0.92, 0.92), UIStyle.dur(0.6))
+	tw.parallel().tween_property(g, "fx_glow", Color(SACRIFICE_EMBER, 0.35), UIStyle.dur(0.6))
+	tw.parallel().tween_callback(func(): _fx.burst(FxBurst.Kind.EMBER, c + Vector2(0, -rect.size.y * 0.2), Color("ffd27a"), 14, 70.0, 0.9)).set_delay(UIStyle.dur(0.25))
+	tw.tween_callback(func():
+		_fx.burst(FxBurst.Kind.DUST, Vector2(c.x, rect.end.y - 6.0), Color("8a7a66"), 8, 46.0, 0.45)
+		_fx.free_node(g))
+
+
+func _tremble(k: float, g: Control) -> void:
+	if is_instance_valid(g):
+		g.rotation = sin(k * TAU * 4.0) * 0.04 * (1.0 - k)
+
+
+## A stream of embers drifting on curved paths from `from_g` into `to_g` (global), arriving about
+## SACRIFICE_TO_AP after the start of the sacrifice, each with a small flare where it lands.
+func _embers_to(from_g: Vector2, to_g: Vector2, spread: float) -> void:
+	for i in SACRIFICE_EMBERS:
+		var m := FxSigil.new()
+		m.kind = "mote"
+		m.col = SACRIFICE_EMBER if i % 3 else Color("ffd27a")
+		m.radius = 6.0 + 5.0 * FxBlast.rnd(i, 71.0)
+		var start := from_g + Vector2((FxBlast.rnd(i, 72.0) - 0.5) * spread, (FxBlast.rnd(i, 73.0) - 0.5) * spread * 0.8)
+		var a := _fx.fx_pos(start)
+		var b := _fx.fx_pos(to_g)
+		var ctrl := a.lerp(b, 0.5) + Vector2((FxBlast.rnd(i, 74.0) - 0.5) * 160.0, -60.0 - 70.0 * FxBlast.rnd(i, 75.0))
+		m.position = a
+		m.modulate.a = 0.0
+		_fx.add_node(m)
+		var tw := _fx.new_tween()
+		# The embers leave after the offering (SACRIFICE_OFFER) and all land by SACRIFICE_TO_AP.
+		tw.tween_interval(UIStyle.dur(0.02 * float(i)))
+		tw.tween_method(_ember_fly.bind(m, a, ctrl, b), 0.0, 1.0, UIStyle.dur(maxf(SACRIFICE_TO_AP - SACRIFICE_OFFER - 0.02 * float(i), 0.2)))
+		tw.tween_callback(func():
+			_fx.burst(FxBurst.Kind.SPARK, to_g, SACRIFICE_EMBER.lightened(0.3), 5, 18.0, 0.25)
+			_fx.free_node(m))
+
+
+func _ember_fly(k: float, m: Control, a: Vector2, ctrl: Vector2, b: Vector2) -> void:
+	if is_instance_valid(m):
+		var e2 := ease(k, -1.8)
+		m.position = a.lerp(ctrl, e2).lerp(ctrl.lerp(b, e2), e2)
+		m.modulate.a = minf(1.0, k * 5.0) * (1.0 - 0.4 * k)
 
 
 # ---------------------------------------------------------------- exhaust
@@ -304,53 +463,3 @@ func material(e: Dictionary, prev_mv: Dictionary, gather: Vector2) -> void:
 		mt.tween_callback(func():
 			_fx.burst(FxBurst.Kind.SPARK, pile_g, (VOID if dest == "exhaust" else col).lightened(0.25), 8, 34.0, 0.3)
 			_fx.free_node(m)))
-
-
-## The special-summoned unit arrives in its slot from the Extra pile with a flourish of its kind:
-## Fusion swirl, Ritual light column with rune rings, Arcane hexagram sigil.
-func arrive_special(p: int, slot: int, kind: String) -> void:
-	var it: Dictionary = _fx.screen.fx_slot_item(p, "unit", slot)
-	if it.is_empty():
-		return
-	var w: CardWidget = it["widget"]
-	var holder: Control = it["holder"]
-	_fx.unhide(w)
-	var rect: Rect2 = holder.get_global_rect()
-	var col := kind_color(kind)
-	_fx.add_cleanup(_fx.reset_widget.bind(w, holder))
-	var tw := _fx.new_tween()
-	if UIStyle.reduce_motion:
-		w.modulate.a = 0.0
-		w.fx_glow = Color(col, 0.8)
-		tw.tween_property(w, "modulate:a", 1.0, 0.12)
-		tw.parallel().tween_property(w, "fx_glow", Color(col, 0.0), 0.3)
-		tw.tween_callback(_fx.reset_widget.bind(w, holder))
-		return
-	var centre := rect.get_center()
-	var reach := rect.size.length() * 0.7
-	_sigil(kind, col, reach, centre, 0.9 if kind != "arcane" else 1.0)
-	if kind == "ritual":
-		var ring := FxRuneRing.new()
-		ring.col = col
-		ring.radius = reach
-		ring.position = _fx.fx_pos(centre)
-		_fx.add_node(ring)
-		var rt := _fx.new_tween()
-		rt.tween_property(ring, "t", 1.0, UIStyle.dur(0.8))
-		rt.tween_callback(_fx.free_node.bind(ring))
-	w.fx_offset = _origin(p, "extra") - centre
-	w.scale = Vector2(0.4, 0.4)
-	w.modulate.a = 0.0
-	holder.z_index = UiLayers.FX_CARD
-	var wait := UIStyle.dur(0.25)
-	tw.set_parallel(true)
-	tw.tween_property(w, "modulate:a", 1.0, UIStyle.dur(0.12)).set_delay(wait)
-	tw.tween_property(w, "fx_offset", Vector2.ZERO, UIStyle.dur(0.4)).set_delay(wait).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.4)).set_delay(wait).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.chain().tween_callback(func():
-		_fx.burst(FxBurst.Kind.SPARK, centre, col.lightened(0.3), 16, reach, 0.5)
-		w.fx_flash = 0.7
-		w.fx_glow = Color(col, 0.95))
-	tw.tween_property(w, "fx_flash", 0.0, UIStyle.dur(0.25))
-	tw.parallel().tween_property(w, "fx_glow", Color(col, 0.0), UIStyle.dur(0.55))
-	tw.chain().tween_callback(_fx.reset_widget.bind(w, holder))

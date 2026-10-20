@@ -35,7 +35,9 @@ func test_for_fx_mapping() -> void:
 	assert_str(Sfx.for_fx({"k": "status", "at": {}, "s": CardDB.BUFFS[0], "n": 1}, 0)).is_equal("buff")
 	assert_str(Sfx.for_fx({"k": "status", "at": {}, "s": CardDB.DEBUFFS[0], "n": 1}, 0)).is_equal("debuff")
 	assert_str(Sfx.for_fx({"k": "stat", "at": {}, "atk": 1, "def": 1}, 0)).is_equal("")
-	assert_str(Sfx.for_fx({"k": "ap", "p": 0, "d": 1}, 0)).is_equal("")
+	# D6 (2026-10-20): AP changes now have their own sounds (they were silent).
+	assert_str(Sfx.for_fx({"k": "ap", "p": 0, "d": 1}, 0)).is_equal("ap_gain")
+	assert_str(Sfx.for_fx({"k": "ap", "p": 0, "d": -1}, 0)).is_equal("ap_loss")
 	assert_str(Sfx.for_fx({"k": "turn", "p": 0, "turn": 2}, 0)).is_equal("turn")
 	assert_str(Sfx.for_fx({"k": "phase", "phase": "battle", "turn": 2}, 0)).is_equal("phase")
 

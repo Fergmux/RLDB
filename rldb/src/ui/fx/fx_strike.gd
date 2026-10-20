@@ -423,6 +423,11 @@ func _trail(p: float, w: CardWidget, holder: Control, col: Color, steps: int, st
 	tw.chain().tween_callback(_fx.free_node.bind(m))
 
 
+## The big damage number for a hit on the plate at global `plate_c`, placed clear of the window edge (B5).
+func big_number(plate_c: Vector2, dmg: int, col: Color, fs: int) -> void:
+	_damage_number(_number_pos(plate_c), dmg, col, fs)
+
+
 ## Where a damage number goes for a plate at `c`: pushed toward the middle of the window so it never clips.
 func _number_pos(c: Vector2) -> Vector2:
 	var mid: Vector2 = _fx.screen.get_global_rect().get_center()

@@ -13,6 +13,9 @@ const NAMES: PackedStringArray = [
 	"attack", "impact", "damage", "heal", "destroy", "buff", "debuff", "turn", "phase",
 	"notice", "victory", "defeat", "exhaust", "fuse", "ritual", "arcane", "victory_big",
 	"boom", "charge", "click_primary", "click_secondary", "back", "deck_add", "deck_remove", "chat",
+	# D8 / B5 / D6 (2026-10-20): the summon set pieces, the Serpents' strike, sacrifice and AP changes.
+	"fusion_vortex", "fusion_impact", "ritual_choir", "ritual_impact", "arcane_shimmer", "arcane_impact",
+	"card_slam", "serpent_coil", "serpent_strike", "sacrifice", "ap_gain", "ap_loss",
 ]
 ## F22 / F25: UI sounds. One user action makes exactly one UI sound: within one frame only the request
 ## with the highest priority plays (a later, higher one stops the earlier voice, a lower or equal one is
@@ -212,6 +215,11 @@ static func for_fx(e: Dictionary, me: int) -> String:
 			return "attack"
 		"hp":
 			return "heal" if float(e.get("d", 0)) > 0.0 else "damage"
+		"ap":
+			var dap := float(e.get("d", 0))
+			return "ap_gain" if dap > 0.0 else ("ap_loss" if dap < 0.0 else "")
+		"sacrifice":
+			return "sacrifice"
 		"destroy":
 			return "exhaust" if String(e.get("dest", "spent")) == "exhaust" else "destroy"
 		"exhaust":

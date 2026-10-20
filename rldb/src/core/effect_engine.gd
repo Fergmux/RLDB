@@ -827,6 +827,9 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Di
 	var snap := snapshot(uid)
 	var debil := is_debilitated(uid)
 	var dpos := fx_pos(uid)
+	# Presentation identity (B5): only a card everyone can see (a unit or a face-up card) is named.
+	var pub_id: int = int(d(uid)["id"]) if was_unit or is_face_up(uid) else -1
+	var pub_stance: String = String(inst.get("stance", "atk"))
 	var dest := "spent"
 	if (has_flag_raw(uid, "exhaust_on_destroy") and not debil) or has_flag_raw(uid, "exhaust_on_spent"):
 		dest = "exhaust"
@@ -834,7 +837,12 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Di
 	# A hidden card's label ("a set Spell/Trap") starts the sentence, so it is capitalised.
 	add_log("%s is destroyed%s." % [label.substr(0, 1).to_upper() + label.substr(1), " by battle" if cause == "battle" else ""])
 	if not dpos.is_empty():               # a resolving Spell (limbo) has no board position
-		add_fx({"k": "destroy", "at": dpos, "cause": cause, "dest": dest})
+		var dfx := {"k": "destroy", "at": dpos, "cause": cause, "dest": dest}
+		if pub_id >= 0:
+			dfx["id"] = pub_id
+			if was_unit:
+				dfx["stance"] = pub_stance
+		add_fx(dfx)
 	var ev := {"self": uid, "ctl": p, "cause": cause, "by": by_uid, "by_player": by_player,
 		"snapshot": snap, "debilitated": debil, "was_unit": was_unit, "player": active,
 		"text": "%s destroyed" % label, "type": snap.get("type_now", ""), "orig_slot": snap["slot"]}

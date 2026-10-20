@@ -711,8 +711,12 @@ func _op_sacrifice(f: Dictionary, op: Dictionary) -> int:
 	var uid: int = f["src"]
 	var p: int = f["ctl"]
 	var label := name_of(uid)
+	# D6: presentation of the sacrifice (a public unit consumed into AP), taken before it leaves the field.
+	var sfx := {"k": "sacrifice", "p": p, "at": fx_pos(uid), "id": d(uid)["id"], "stance": String(cards[uid].get("stance", "atk")),
+		"dest": "exhaust" if has_flag_raw(uid, "exhaust_on_spent") else "spent"}
 	var snap := _leave_field(uid, "spent", "sacrifice")
 	add_log("%s sacrifices %s." % [pname(p), label])
+	add_fx(sfx)
 	change_ap(p, 1, " (sacrifice)")
 	emit("sacrificed", {"self": uid, "ctl": p, "player": p, "snapshot": snap, "debilitated": snap["st"].get("debilitate", 0) > 0})
 	emit("tribute_or_sacrifice", {"self": uid, "ctl": p, "player": p, "debilitated": snap["st"].get("debilitate", 0) > 0})
