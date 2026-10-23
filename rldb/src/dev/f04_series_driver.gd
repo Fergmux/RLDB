@@ -101,7 +101,22 @@ func run(main_node: Node, dir: String) -> void:
 	await _frames(6)
 	var m: MatchEngine = host.series.game
 	# --- prompts in game 1 ---
-	await get_tree().create_timer(4.5).timeout   # the who-goes-first coin plays over the board first
+	# K3 (owner, 23 Oct): the who-goes-first coin plays over the board first; its dark backdrop
+	# covers the whole window (top strip, sidebar and hand row too), the coin stays centred on the field.
+	await get_tree().create_timer(1.0).timeout
+	await _shot("coin_01_spin")
+	var coins := gs.get_children().filter(func(n): return n is CoinFlip)
+	_check("K3 the coin flip plays at game 1", coins.size() == 1)
+	if coins.size() == 1:
+		var coin: CoinFlip = coins[0]
+		_check("K3 the coin's backdrop covers the whole window", coin.get_global_rect().is_equal_approx(Rect2(Vector2.ZERO, gs.size)), str(coin.get_global_rect()))
+		var focus = coin.get("focus_rect")
+		_check("K3 the coin is centred on the play field", focus is Rect2 and (focus as Rect2).is_equal_approx(gs.play_area), str(focus))
+		_check("K3 Menu and Chat sit above the coin's backdrop", gs.menu.top_strip.z_index > coin.z_index)
+	await get_tree().create_timer(1.2).timeout
+	await _shot("coin_02_landed")
+	await get_tree().create_timer(2.3).timeout
+	_check("K3 the top strip returns to its in-game layer after the coin", gs.menu.top_strip.z_index == UiLayers.TOP_STRIP)
 	_stage_board(m)
 	host.broadcast()
 	_view_seat(m.active)

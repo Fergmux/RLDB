@@ -109,6 +109,8 @@ var _held: Dictionary = {}
 var _held_gen: int = 0
 ## Series whose game-1 coin flip has been shown (static: hot-seat seats share it).
 static var _coin_shown: Dictionary = {}
+## The game-1 coin flip while it plays (null otherwise).
+var _coin: CoinFlip
 
 
 func _init() -> void:
@@ -256,6 +258,7 @@ func _relayout() -> void:
 	hand.layout([], true)
 	board.place_opp_hand()
 	overlays.place_modals()
+	_place_coin()
 
 
 # ---------------------------------------------------------------- view handling
@@ -368,15 +371,42 @@ func _maybe_coin_flip() -> void:
 	_coin_shown[key] = true
 	var first: int = int(mv["active"])
 	var coin := CoinFlip.new()
-	coin.position = play_area.position
-	coin.size = play_area.size
+	_coin = coin
 	add_child(coin)
+	_place_coin()
+	# K3 (owner, 23 Oct): the coin's dim fills the window, so the top strip (Menu, Chat) is raised
+	# above it while it plays, as over the series modal (J15).
+	menu.raise_top_strip(true)
+	coin.tree_exiting.connect(_coin_gone)
 	# Owner feedback 2026-10-18: the opening hands are dealt after the coin flip, not under it.
 	hand.layer.modulate.a = 0.0
 	board.opp_hand_box.modulate.a = 0.0
 	coin.finished.connect(_deal_after_coin)
 	coin.tree_exiting.connect(_deal_after_coin)   # backstop: the coin removed early
 	coin.play(String(pv(first)["name"]), String(pv(1 - first)["name"]), first == me() and not is_spectator(), first)
+
+
+## K3 (owner, 23 Oct): the coin flip covers the whole window (its dim fills every edge, like the
+## series modal's, J15) and centres the coin on the play field.
+func _place_coin() -> void:
+	if _coin == null or not is_instance_valid(_coin):
+		return
+	_coin.position = Vector2.ZERO
+	_coin.size = size
+	_coin.focus_rect = play_area
+
+
+## True while the game-1 coin flip plays (the top strip stays raised above its dim).
+func coin_playing() -> bool:
+	return _coin != null and is_instance_valid(_coin) and not _coin.is_queued_for_deletion()
+
+
+## The coin flip has left: the top strip returns to its in-game layer (unless a series modal,
+## which raises it too, is up by then).
+func _coin_gone() -> void:
+	_coin = null
+	if String(view.get("stage", "")) == "game" or String(view.get("stage", "")) == "":
+		menu.raise_top_strip(false)
 
 
 ## Shows the hands once the coin flip is done: mine dealt in from the draw pile, the opponent's

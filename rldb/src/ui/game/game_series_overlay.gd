@@ -360,7 +360,7 @@ func render() -> void:
 	if stage == "game" or stage == "":
 		overlay.visible = false
 		overlay_dim.visible = false
-		gs.menu.raise_top_strip(false)
+		gs.menu.raise_top_strip(gs.coin_playing())   # K3: the coin flip's full-window dim raises it too
 		_overlay_stage = ""
 		rewards.mode = ""
 		return
