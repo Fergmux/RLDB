@@ -53,6 +53,15 @@ var first_seat: int = 0
 ## The result title ("You go first" / "Ben goes first"): a TitleText child, so it draws above the
 ## veil this control paints (#72).
 var result_title: TitleText
+## K3 (owner, 23 Oct): the area the coin is centred in (the play field), in this control's
+## coordinates. The control itself covers the whole window, so its uniform dim fills every edge
+## (top strip, sidebar, hand row) while the coin, its pool of darkness and the title stay on the
+## field. An empty rect (the default) means the whole control.
+var focus_rect: Rect2 = Rect2():
+	set(v):
+		focus_rect = v
+		_place_result()
+		queue_redraw()
 
 
 func _init() -> void:
@@ -126,6 +135,11 @@ func play(winner_name: String, other_name: String, me_first: bool, seat: int = 0
 	tw.tween_callback(queue_free)
 
 
+## The rect the coin is centred in: `focus_rect`, or the whole control when it is empty.
+func coin_area() -> Rect2:
+	return focus_rect if focus_rect.has_area() else Rect2(Vector2.ZERO, size)
+
+
 ## Centres the result title under the coin.
 func _place_result() -> void:
 	if result_title == null:
@@ -134,7 +148,8 @@ func _place_result() -> void:
 	var sz := result_title.get_combined_minimum_size()
 	result_title.size = sz
 	result_title.pivot_offset = sz / 2.0
-	result_title.position = Vector2(size.x / 2.0 - sz.x / 2.0, size.y / 2.0 + R + RESULT_GAP)
+	var mid := coin_area().get_center()
+	result_title.position = Vector2(mid.x - sz.x / 2.0, mid.y + R + RESULT_GAP)
 
 
 ## The title lands with the coin (motion token `impact`): it drops in from RESULT_PUNCH scale, holds a
@@ -175,10 +190,11 @@ func _draw() -> void:
 	if _pool_tex == null:
 		_pool_tex = _radial(Color(0.03, 0.015, 0.0, 1.0), Color(0.03, 0.015, 0.0, 0.0), 0.5, Color(0.03, 0.015, 0.0, 0.55))
 		_glow_tex = _radial(Color(1.0, 0.78, 0.35, 1.0), Color(1.0, 0.7, 0.25, 0.0), 0.45, Color(1.0, 0.72, 0.28, 0.5))
-	var mid := size / 2.0
-	# Dark pool over the field (ellipse, fades to nothing at the edges) and the warm glow around the coin.
+	var mid := coin_area().get_center()
+	# A uniform dim over the whole window (K3), then a dark pool over the field (ellipse, fades to
+	# nothing at its edges) and the warm glow around the coin.
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.025, 0.014, 0.006, DIM_ALPHA * backdrop_a))
-	draw_texture_rect(_pool_tex, Rect2(Vector2.ZERO, size), false, Color(1, 1, 1, POOL_ALPHA * backdrop_a))
+	draw_texture_rect(_pool_tex, coin_area(), false, Color(1, 1, 1, POOL_ALPHA * backdrop_a))
 	var gr := R * (3.9 + 0.4 * sin(Time.get_ticks_msec() * 0.004))
 	var gc := mid + Vector2(0, -lift * 0.5)
 	draw_texture_rect(_glow_tex, Rect2(gc - Vector2(gr, gr), Vector2(gr, gr) * 2.0), false, Color(1, 1, 1, GLOW_ALPHA * backdrop_a))

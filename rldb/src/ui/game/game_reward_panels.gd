@@ -295,7 +295,9 @@ func _ledger_row(text: String, divider: bool) -> Control:
 	detail.clip_text = true
 	detail.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.add_child(detail)
-	var tick := UIStyle.label("\u2713", 16, UIStyle.GOOD, false, true)
+	# K2 (owner, 23 Oct): the house tick medallion, in the reward's colour, instead of a text tick.
+	var tick := TickMedallion.new(col, 22.0)
+	tick.name = "DoneTick"
 	tick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(tick)
 	if not divider:

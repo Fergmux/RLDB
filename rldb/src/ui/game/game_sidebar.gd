@@ -352,7 +352,17 @@ func _seat_plate(p: int, title: String, score: int, stage: String, ready: bool) 
 	row.add_child(UIStyle.label(str(score), 24, UIStyle.GOLD, false, true))
 	if stage == "decks":
 		if ready:
-			v.add_child(UIStyle.label("\u2713 Deck ready", 14, UIStyle.GOOD))
+			# K2 (owner, 23 Oct): the house tick medallion before the line, not a text tick.
+			var ready_row := HBoxContainer.new()
+			ready_row.name = "DeckReady"
+			ready_row.add_theme_constant_override("separation", UIStyle.sp("sm"))
+			var tick := TickMedallion.new(UIStyle.GOOD, 20.0)
+			tick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			ready_row.add_child(tick)
+			var lbl := UIStyle.label("Deck ready", 14, UIStyle.GOOD)
+			lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			ready_row.add_child(lbl)
+			v.add_child(ready_row)
 		else:
 			var dots := WaitingDots.new("Choosing a deck", 14, UIStyle.MUTED)
 			dots.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT

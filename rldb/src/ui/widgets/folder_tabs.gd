@@ -109,8 +109,8 @@ func set_pane_margins(l: float, t: float, r: float, b: float) -> void:
 
 
 ## Adds a tab and returns it. `opts`: glyph (Control drawn before the title), badge (String shown in
-## a pill after it), accent (Color of its rim accent), disabled (bool), tooltip (String),
-## min_width (float).
+## a pill after it), badge_node (a Control shown after it instead, such as a TickMedallion), accent
+## (Color of its rim accent), disabled (bool), tooltip (String), min_width (float).
 func add_tab(key: String, title: String, opts: Dictionary = {}) -> Tab:
 	var t := Tab.new(self, key, title, opts)
 	_tabs.append(t)
@@ -441,7 +441,12 @@ class Tab extends Button:
 		_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		_content.add_child(_label)
-		if String(opts.get("badge", "")) != "":
+		if opts.get("badge_node") is Control:
+			_badge = opts["badge_node"]
+			_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			GameUi.ignore_mouse(_badge)
+			_content.add_child(_badge)
+		elif String(opts.get("badge", "")) != "":
 			_badge = GameUi.pill(String(opts["badge"]), accent if accent.a > 0.0 else UIStyle.GOLD, 13)
 			_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			GameUi.ignore_mouse(_badge)
@@ -451,7 +456,9 @@ class Tab extends Button:
 		var need := UIStyle.font_display(600).get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, owner_tabs.font_size).x + 36.0
 		if _glyph != null:
 			need += _glyph.custom_minimum_size.x + gap
-		if _badge != null:
+		if _badge != null and opts.get("badge_node") is Control:
+			need += _badge.custom_minimum_size.x + gap
+		elif _badge != null:
 			need += UIStyle.font_body().get_string_size(String(opts["badge"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 22.0 + gap
 		custom_minimum_size = Vector2(maxf(float(opts.get("min_width", 0.0)), need), owner_tabs.tab_height)
 		mouse_entered.connect(func(): _hover(true))
