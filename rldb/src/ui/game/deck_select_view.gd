@@ -502,8 +502,15 @@ func category_tabs(dr: Dictionary) -> FolderTabs:
 		var title := String(labels.get(cat, key.capitalize()))
 		var col: Color = UIStyle.CATEGORY_COLORS.get(key, UIStyle.BRONZE)
 		var tip := ("Draft %s cards: %d pick%s left." % [title, n_left, "" if n_left == 1 else "s"]) if n_left > 0 else "%s: all picks made." % title
-		ft.add_tab(key, title, {"accent": col, "disabled": n_left <= 0, "tooltip": tip,
-			"glyph": ChoiceTile.Icon.new(key, col, 26.0), "badge": str(n_left) if n_left > 0 else "\u2713"})
+		var opts := {"accent": col, "disabled": n_left <= 0, "tooltip": tip, "glyph": ChoiceTile.Icon.new(key, col, 26.0)}
+		# K2 (owner, 23 Oct): a finished category shows a round enamelled tick medallion in its colour.
+		if n_left > 0:
+			opts["badge"] = str(n_left)
+		else:
+			var done := TickMedallion.new(col, DONE_TICK)
+			done.name = "DoneTick"
+			opts["badge_node"] = done
+		ft.add_tab(key, title, opts)
 	ft.select(String(dr["category"]), false)
 	ft.tab_selected.connect(func(key: String): ov.gs.send({"t": "draft_category", "category": key}))
 	var b: Dictionary = dr.get("basic", {})
@@ -527,6 +534,8 @@ func category_tabs(dr: Dictionary) -> FolderTabs:
 	return ft
 
 
+## K2: diameter of the tick medallion on a finished category tab.
+const DONE_TICK := 24.0
 ## J30: card size of the basic unit in the draft-complete pane.
 const CONFIRM_CARD := Vector2(176, 264)
 ## J30: width of the Confirm selections button.
@@ -537,7 +546,7 @@ const CONFIRM_W := 300.0
 ## beside a summary of the picks per category and the hero "Confirm selections" button, which
 ## sends `draft_confirm` and locks the deck in.
 func confirm_pane(dr: Dictionary) -> Control:
-	var gs := ov.gs
+	var gs: GameScreen = ov.gs if ov != null else null
 	var center := CenterContainer.new()
 	center.name = "DraftComplete"
 	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -556,11 +565,11 @@ func confirm_pane(dr: Dictionary) -> Control:
 		cw.name = "BasicCard"
 		cw.custom_minimum_size = CONFIRM_CARD
 		cw.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		cw.right_pressed.connect(gs.inspect.inspect_widget)
+		if gs != null:
+			cw.right_pressed.connect(gs.inspect.inspect_widget)
 		bcol.add_child(cw)
-		var cap := UIStyle.label("Basic unit \u00d7%d" % copies, 14, UIStyle.TEXT_DIM)
-		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		bcol.add_child(cap)
+		# K2 (owner, 23 Oct): no "Basic unit x3" caption once the draft is complete; the chips beside
+		# the card already count the copies.
 		var change := UIStyle.size_button(UIStyle.secondary_button("Change basic unit", 14), "small")
 		change.name = "ChangeBasicComplete"
 		change.size_flags_horizontal = Control.SIZE_SHRINK_CENTER

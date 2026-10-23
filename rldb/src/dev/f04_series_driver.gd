@@ -335,6 +335,19 @@ func _draft_phase() -> void:
 	_check("J30 Confirm selections shown once every card is drafted", confirm != null and not confirm.disabled)
 	_check("J30 draft modal inside the window", get_viewport().get_visible_rect().grow(1).encloses(ov.overlay.get_global_rect()), str(ov.overlay.get_global_rect()))
 	await _shot("draft_08b_complete")
+	# K2 (owner, 23 Oct): no "Basic unit x3" caption on the complete pane; finished tabs show the
+	# round tick medallion (also checked at 1280x800, the smallest supported window).
+	var pane := ov.overlay_box.find_child("DraftComplete", true, false)
+	_check("K2 no basic-copies caption once the draft is complete", pane != null
+		and pane.find_children("*", "Label", true, false).all(func(l): return not (l as Label).text.begins_with("Basic unit ×")))
+	var ticks := ov.overlay_box.find_children("DoneTick", "", true, false)
+	_check("K2 every finished category tab shows a tick medallion", ticks.size() == int(host.series.view_for(0)["draft"]["categories"].size())
+		and ticks.all(func(t): return t is TickMedallion), str(ticks.size()))
+	DisplayServer.window_set_size(Vector2i(1280, 800))
+	await get_tree().create_timer(0.6).timeout
+	await _shot("draft_08b_complete_1280x800")
+	DisplayServer.window_set_size(Vector2i(1600, 1000))
+	await get_tree().create_timer(0.6).timeout
 	await _draft_list_checks(gs)
 	# J30: the basic unit can still change after every card is drafted.
 	var chg2 := _find_button(ov.overlay_box, "Change basic unit")
