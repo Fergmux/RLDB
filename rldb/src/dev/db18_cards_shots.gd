@@ -141,7 +141,7 @@ func run() -> void:
 	await _shot("00_board_new_cards")
 
 	var t := await _inspect_slot(me, "unit", 0, "01_inspect_necro")
-	_check("Necro inspector shows its Fusion materials", t.contains("Mage Unit + Debuffed Unit"))
+	_check("Necro inspector shows its Fusion materials", t.contains("Monster Unit + Dark Unit"))
 	_check("Necro inspector shows its doubling ability", t.contains("double the Debuffs"))
 	t = await _inspect_slot(me, "unit", 1, "02_inspect_drako")
 	_check("Drako inspector shows its Arcane requirement and Power ability", t.contains("combined Cost equals this Unit's Cost") and t.contains("Destroy a Power"))

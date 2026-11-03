@@ -7,7 +7,7 @@ extends RefCounted
 ## the context banner (F02-07 / F02-10); others (responses, ordering, yes/no) use the banner list.
 const PICK_KINDS := ["select", "attack_target", "slot"]
 ## Prompt zones that mean one of my unit zones.
-const UNIT_ZONES := ["unit", "adjacent", "column", "orig"]
+const UNIT_ZONES := ["unit", "adjacent", "column", "orig", "beside"]
 
 ## The host screen this component works on.
 var gs: GameScreen

@@ -25,8 +25,8 @@ func test_c054_strength_in_unity_scales_with_unique_races() -> void:
 func test_c089_nether_portal_fuses_for_one_ap() -> void:
 	var m := TB.make()
 	var np := TB.power(m, 0, 89)
-	var beast := TB.unit(m, 0, 4, 0)
-	var dragon := TB.unit(m, 0, 2, 1)
+	var beast := TB.unit(m, 0, 4, 0, "atk", 20, 8)         # 2026-11-03 Bastion Wyrm: 20+ ATK or DEF ...
+	var dragon := TB.unit(m, 0, 116, 1)                    # ... + a Physical unit
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.ability(m, np)
 	TB.choose_uids(m, [wyrm])
@@ -78,8 +78,8 @@ func test_c092_preservation_jar_retains_a_hand_card() -> void:
 func test_c137_unstable_fusions_uses_and_exhausts_hand_materials() -> void:
 	var m := TB.make()
 	TB.power(m, 0, 137)
-	var beast := TB.card(m, 0, 4)
-	var dragon := TB.card(m, 0, 2)
+	var beast := TB.card(m, 0, 28)                         # Guardian of the Forest 12/22 (printed DEF in Hand)
+	var dragon := TB.card(m, 0, 116)                       # Basic Dragon (Physical)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.cast(m, 0, 82)
 	TB.choose_uids(m, [wyrm])
@@ -200,13 +200,19 @@ func test_c056_razeon_storm_reveals_face_down_and_paralyses_all_on_death() -> vo
 	assert_int(m.status_count(foe, "paralyse")).is_equal(1)
 
 
-func test_c058_infernogate_burns_everything() -> void:
+# 2026-11-03: the 10 Burn to all units became "discard a card to draw a card" (intent updated).
+func test_c058_infernogate_discards_to_draw_and_burns_no_one() -> void:
 	var m := TB.make()
 	var ig := TB.unit(m, 0, 58, 0)
 	var foe := TB.unit(m, 1, TB.WATER, 0)
+	var h: int = m.players[0]["hand"][0]
+	var n: int = m.players[0]["hand"].size()
 	TB.ability(m, ig)
-	assert_int(m.status_count(foe, "burn")).is_equal(10)
-	assert_int(m.status_count(ig, "burn")).is_equal(10)
+	TB.choose_uids(m, [h])
+	assert_str(m.cards[h]["zone"]).is_equal("spent")
+	assert_int(m.players[0]["hand"].size()).is_equal(n)
+	assert_int(m.status_count(foe, "burn")).is_equal(0)
+	assert_int(m.status_count(ig, "burn")).is_equal(0)
 
 
 func test_c059_abysslord_paralyses_and_grants_infiltrate() -> void:
@@ -229,13 +235,13 @@ func test_c060_rotmaw_debilitates_on_summon() -> void:
 	assert_int(m.status_count(foe, "debilitate")).is_equal(3)
 
 
+# 2026-11-03: the Medic moved to an optional 8 Medic On Summon (intent updated).
 func test_c061_sanctified_blade_heals_adjacent() -> void:
 	var m := TB.make()
-	var sb := TB.unit(m, 0, 61, 0)
 	var ally := TB.unit(m, 0, TB.WATER, 1)
-	TB.ability(m, sb)
+	TB.special(m, 0, 61, 0)
 	TB.choose_uids(m, [ally])
-	assert_int(m.status_count(ally, "medic")).is_equal(3)
+	assert_int(m.status_count(ally, "medic")).is_equal(8)
 
 
 func test_c094_mirrorflesh_combines_material_stats_and_type() -> void:
@@ -267,18 +273,21 @@ func test_c142_gojirun_trades_def_for_atk_each_turn() -> void:
 	var m := TB.make()
 	var g := TB.unit(m, 1, 142, 0)
 	TB.to_turn2(m)
-	assert_int(m.atk_of(g)).is_equal(42)
-	assert_int(m.def_of(g)).is_equal(20)
+	assert_int(m.atk_of(g)).is_equal(30)                   # 2026-11-03: 26/20, +4/-4
+	assert_int(m.def_of(g)).is_equal(16)
 
 
+# 2026-11-03: the Blind moved to On Summon (2 stacks); the second ability switches ATK/DEF.
 func test_c143_typhoon_simorgh_nimbles_allies_and_blinds_foes() -> void:
 	var m := TB.make()
-	var ts := TB.unit(m, 0, 143, 0)
 	var foe := TB.unit(m, 1, TB.WATER, 0)
+	var ts := TB.special(m, 0, 143, 0)
+	assert_int(m.status_count(foe, "blind")).is_equal(2)
 	TB.ability(m, ts, 0)
-	TB.ability(m, ts, 1)
 	assert_int(m.status_count(ts, "nimble")).is_equal(1)
-	assert_int(m.status_count(foe, "blind")).is_equal(1)
+	TB.ability(m, ts, 1)
+	assert_int(m.status_count(foe, "blind")).is_equal(2)
+	assert_int(m.atk_of(ts)).is_equal(44)
 
 
 func test_c144_stone_guardian_cannot_be_destroyed_by_lightning_in_battle() -> void:
@@ -299,13 +308,16 @@ func test_c145_trigonam_burns_all_and_buys_hp() -> void:
 	assert_int(m.players[0]["hp"]).is_equal(70)
 
 
-func test_c146_akiramari_gives_medic_to_basic_units() -> void:
+# 2026-11-03: the 5 Medic On Summon is gone; it now searches a card (intent updated).
+func test_c146_akiramari_no_longer_gives_medic_to_basic_units() -> void:
 	var m := TB.make()
 	var basic := TB.unit(m, 1, TB.WATER, 0)
 	TB.special(m, 0, 146, 0)
-	assert_int(m.status_count(basic, "medic")).is_equal(5)
+	assert_str(String(m.pending.get("prompt", ""))).contains("Add a card from Draw to Hand")
+	assert_int(m.status_count(basic, "medic")).is_equal(0)
 
 
+# 2026-11-03 ruling: "cannot attack other Units if they can attack this Unit" (same result here).
 func test_c147_demented_apparition_forces_attacks_onto_itself() -> void:
 	var m := TB.make()
 	TB.p1_battle(m)
@@ -317,15 +329,16 @@ func test_c147_demented_apparition_forces_attacks_onto_itself() -> void:
 	assert_bool(other in targets).is_false()
 
 
-func test_c147_demented_apparition_overrides_direct_attack() -> void:
-	# Ruling: a unit that can attack directly (Diggie, Flying Sandworm) must still attack
-	# Demented Apparition if it attacks at all.
+# 2026-11-03 ruling (intent reversed on purpose): the new text restricts attacks on other Units
+# only, so a unit that can attack directly (Diggie, Flying Sandworm) keeps its direct attack.
+func test_c147_demented_apparition_leaves_the_direct_attack_open() -> void:
 	var m := TB.make()
 	TB.p1_battle(m)
 	var app := TB.unit(m, 0, 147, 1)
+	TB.unit(m, 0, TB.WATER, 0)
 	for id in [162, 171]:
 		var a := TB.unit(m, 1, id, 0 if id == 162 else 2)
-		assert_array(m.attack_targets(a)).is_equal([app])
+		assert_array(m.attack_targets(a)).is_equal([app, -1])
 
 
 func test_c147_demented_apparition_paralyses_unprotected_foes_on_summon() -> void:
@@ -367,16 +380,20 @@ func test_c062_naturewrath_curses_itself_and_debilitates_column() -> void:
 	assert_int(m.status_count(foe, "debilitate")).is_equal(1)
 
 
-func test_c063_last_foundation_reveals_and_destroys_weakest_foe_on_death() -> void:
+# 2026-11-03 (intent updated): the Reveal is optional and the On Destroy exhausts a card from
+# its controller's Spent instead of destroying the weakest foe.
+func test_c063_last_foundation_reveals_and_exhausts_from_spent_on_death() -> void:
 	var m := TB.make()
 	var fd := TB.set_card(m, 1, 45, 2)
 	var lf := TB.special(m, 0, 63, 0)
+	TB.choose(m, ["Yes"])
 	assert_bool(m.is_face_up(fd)).is_true()
 	var weak := TB.unit(m, 1, TB.WATER, 0, "atk", 2)
-	TB.unit(m, 1, TB.WATER, 1, "atk", 9)
+	var s := TB.card(m, 0, TB.WATER, "spent")
 	TB.kill(m, lf)
-	TB.choose_uids(m, [weak])             # the lowest-ATK unit is the only legal target, but the player still confirms it
-	assert_str(m.cards[weak]["zone"]).is_equal("spent")
+	TB.choose_uids(m, [s])                # the sole other card in Spent: still chosen by the player
+	assert_str(m.cards[s]["zone"]).is_equal("exhaust")
+	assert_str(m.cards[weak]["zone"]).is_equal("unit")
 
 
 func test_c063_last_foundation_gains_eternal_at_end_of_turn_without_buffs() -> void:
@@ -390,7 +407,7 @@ func test_c064_necrovast_grows_with_exhaust() -> void:
 	var m := TB.make()
 	var nv := TB.unit(m, 0, 64, 0)
 	TB.card(m, 0, TB.WATER, "exhaust")
-	assert_int(m.atk_of(nv)).is_equal(28)
+	assert_int(m.atk_of(nv)).is_equal(26)                  # 2026-11-03: 22 + 4 per card
 
 
 func test_c066_nyxthral_shields_neighbour_and_filters_cards() -> void:
@@ -411,37 +428,41 @@ func test_c095_mimic_copies_column_foe_and_doubles_debuffs_on_death() -> void:
 	var mm := TB.special(m, 0, 95, 0)
 	TB.choose_uids(m, [foe])              # sole unprotected column foe: still chosen by the player
 	assert_int(m.status_count(foe, "paralyse")).is_equal(2)
-	assert_int(m.atk_of(mm)).is_equal(26)
+	assert_int(m.atk_of(mm)).is_equal(m.atk_of(foe))       # a copy of the foe's current ATK
 	assert_str(m.unit_type(mm)).is_equal("Physical")
 	TB.kill(m, mm)
 	assert_int(m.status_count(foe, "paralyse")).is_equal(4)
 
 
-func test_c065_creeping_null_paralyses_opposing_units() -> void:
+# 2026-11-03 (intent updated): the On Summon Paralyse became an optional Rune.
+func test_c065_creeping_null_no_longer_paralyses_opposing_units() -> void:
 	var m := TB.make()
 	var a := TB.unit(m, 1, TB.WATER, 0)
 	var b := TB.unit(m, 1, TB.WATER, 3)
 	TB.special(m, 0, 65, 0)
-	assert_int(m.status_count(a, "paralyse")).is_equal(1)
-	assert_int(m.status_count(b, "paralyse")).is_equal(1)
+	TB.choose_uids(m, [b])
+	assert_int(m.status_count(a, "paralyse")).is_equal(0)
+	assert_int(m.status_count(b, "paralyse")).is_equal(0)
+	assert_int(m.status_count(b, "rune")).is_equal(1)
 
 
 func test_c097_legendary_swordsman_gains_cleanse_and_comeback_atk() -> void:
 	var m := TB.make()
 	var ls := TB.special(m, 0, 97, 0)
 	assert_int(m.status_count(ls, "cleanse")).is_equal(3)
-	assert_int(m.atk_of(ls)).is_equal(26)
+	assert_int(m.atk_of(ls)).is_equal(30)                  # 2026-11-03: 30/30, +20 when behind
 	m.players[0]["hp"] = 40
-	assert_int(m.atk_of(ls)).is_equal(56)
+	assert_int(m.atk_of(ls)).is_equal(50)
 
 
-func test_c183_yamata_has_eight_eternal_and_burns_opponent_each_start_of_turn() -> void:
+# 2026-11-03 (intent updated): the start-of-turn Damage became a once-per-turn Poison ability.
+func test_c183_yamata_has_eight_eternal_and_no_longer_burns_opponent_at_start_of_turn() -> void:
 	var m := TB.make()
 	var y := TB.special(m, 1, 183, 0)
 	assert_int(m.status_count(y, "eternal")).is_equal(8)
-	assert_int(m.script_of(y).get("abilities", []).size()).is_equal(0)   # P-30: not a manual button
+	assert_int(m.script_of(y).get("abilities", []).size()).is_equal(1)
 	TB.to_turn2(m)
-	assert_int(m.players[0]["hp"]).is_equal(54)
+	assert_int(m.players[0]["hp"]).is_equal(60)
 
 
 # ---------------------------------------------------------------- Arcane
@@ -449,6 +470,8 @@ func test_c183_yamata_has_eight_eternal_and_burns_opponent_each_start_of_turn() 
 func test_c170_grandmother_kaya_discards_for_ap() -> void:
 	var m := TB.make()
 	var h: int = m.players[0]["hand"][0]
+	TB.unit(m, 1, TB.WATER, 0)                             # 2026-11-03: the opponent controls more cards
+	TB.unit(m, 1, TB.WATER, 1)
 	TB.special(m, 0, 170, 0)
 	TB.choose_uids(m, [h])
 	assert_str(m.cards[h]["zone"]).is_equal("spent")
@@ -507,7 +530,7 @@ func test_c177_illusionist_strong_on_own_turn_but_deals_no_battle_damage() -> vo
 	var m := TB.make()
 	TB.p1_battle(m)
 	var il := TB.unit(m, 1, 177, 0)
-	assert_int(m.atk_of(il)).is_equal(60)          # 2026-10-17: 30 + 30 on its own turn
+	assert_int(m.atk_of(il)).is_equal(50)          # 2026-11-03: 30 + 20 on its own turn
 	TB.attack(m, il, -1)
 	assert_int(m.players[0]["hp"]).is_equal(60)
 	var foe := TB.unit(m, 0, TB.WATER, 0)

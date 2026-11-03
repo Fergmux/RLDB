@@ -287,13 +287,15 @@ func test_c037_solomon_captain_gains_ten_only_while_protected() -> void:
 
 func test_c069_magentric_tributed_for_a_fusion_gives_it_two_pierce() -> void:
 	var m := TB.make()
-	var mag := TB.unit(m, 0, MAGENTRIC, 0)                       # Beast
-	var dragon := TB.unit(m, 0, DRAGON_WATER, 1)
-	var wyrm := TB.card(m, 0, 93, "extra")                       # Bastion Wyrm: Beast + Dragon
+	var mag := TB.unit(m, 0, MAGENTRIC, 0)                       # Lightning Beast
+	var dragon := TB.unit(m, 0, DRAGON_WATER, 1, "atk", 20, 8)
+	# 2026-11-03: Bastion Wyrm needs a Physical unit now; Razeon Storm (20+ ATK or DEF + Lightning,
+	# no Pierce of its own) takes Magentric as its Lightning material.
+	var wyrm := TB.card(m, 0, 56, "extra")
 	TB.cast(m, 0, 82)
 	TB.choose_uids(m, [wyrm])
-	TB.choose_uids(m, [mag])
 	TB.choose_uids(m, [dragon])
+	TB.choose_uids(m, [mag])
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
@@ -314,10 +316,10 @@ func test_c069_magentric_tributed_for_a_ritual_gives_it_two_pierce() -> void:
 
 func test_c069_other_fusion_materials_give_no_pierce() -> void:
 	var m := TB.make()
-	var beast := TB.unit(m, 0, BEAST_WATER, 0)
-	var dragon := TB.unit(m, 0, DRAGON_WATER, 1)
+	var beast := TB.unit(m, 0, BEAST_WATER, 0, "atk", 20, 8)
+	var dragon := TB.unit(m, 0, 131, 1)                          # Basic Dragon (Lightning)
 	TB.unit(m, 0, MAGENTRIC, 2)                                  # on the Field but not tributed
-	var wyrm := TB.card(m, 0, 93, "extra")
+	var wyrm := TB.card(m, 0, 56, "extra")                       # Razeon Storm (2026-11-03 materials)
 	TB.cast(m, 0, 82)
 	TB.choose_uids(m, [wyrm])
 	TB.choose_uids(m, [beast])
@@ -330,9 +332,10 @@ func test_c069_other_fusion_materials_give_no_pierce() -> void:
 func test_c069_magentric_exhausted_for_an_arcane_summon_gives_nothing() -> void:
 	var m := TB.make()
 	var mag := TB.card(m, 0, MAGENTRIC, "spent")                 # cost 2
-	var cliff := TB.card(m, 0, 174, "extra")                     # Cliff, 2A
+	var one := TB.card(m, 0, MAGE_WATER, "spent")                # cost 1
+	var cliff := TB.card(m, 0, 174, "extra")                     # Cliff, 3A since 2026-11-03
 	assert_str(m.submit(0, {"t": "arcane", "uid": cliff, "stance": "atk"})).is_empty()
-	TB.choose_uids(m, [mag])
+	TB.choose_uids(m, [mag, one])
 	TB.choose(m, ["Front row, column 1"])
 	assert_str(m.cards[cliff]["zone"]).is_equal("unit")
 	assert_int(m.status_count(cliff, "pierce")).is_equal(0)
@@ -435,15 +438,18 @@ func test_c157_symbiote_siphonophore_draws_an_extra_card_at_start_of_turn() -> v
 
 # ---------------------------------------------------------------- Geolock, Last Foundation, Tyde
 
-func test_c057_geolock_summon_grants_infiltrate_and_nimble_to_your_units() -> void:
+# 2026-11-03 (intent updated): the On Summon became a once-per-turn ability on one unit.
+func test_c057_geolock_grants_infiltrate_and_nimble_to_one_unit_per_turn() -> void:
 	var m := TB.make()
 	var ally := TB.unit(m, 0, MAGE_WATER, 1)
 	var foe := TB.unit(m, 1, BEAST_WATER, 0)
 	var geo := TB.special(m, 0, 57, 0)
-	TB.choose(m, ["Yes"])
-	for u in [ally, geo]:
-		assert_int(m.status_count(u, "infiltrate")).is_equal(1)
-		assert_int(m.status_count(u, "nimble")).is_equal(1)
+	assert_bool(m.pending.is_empty()).is_true()
+	assert_str(TB.ability(m, geo, 1)).is_empty()
+	TB.choose_uids(m, [ally])
+	assert_int(m.status_count(ally, "infiltrate")).is_equal(1)
+	assert_int(m.status_count(ally, "nimble")).is_equal(1)
+	assert_int(m.status_count(geo, "nimble")).is_equal(0)
 	assert_int(m.status_count(foe, "nimble")).is_equal(0)
 
 
@@ -452,7 +458,7 @@ func test_c057_geolock_changes_stance_of_unprotected_foes_and_no_longer_moves() 
 	var geo := TB.unit(m, 0, 57, 0)
 	var front := TB.unit(m, 1, BEAST_WATER, 0, "atk")
 	var back := TB.unit(m, 1, MAGE_WATER, 3, "atk")              # protected
-	assert_int(CardScripts.get_entry(57)["abilities"].size()).is_equal(1)
+	assert_int(CardScripts.get_entry(57)["abilities"].size()).is_equal(2)   # 2026-11-03: + Infiltrate/Nimble
 	assert_str(TB.ability(m, geo)).is_empty()
 	assert_str(m.cards[front]["stance"]).is_equal("def")
 	assert_str(m.cards[back]["stance"]).is_equal("atk")
@@ -469,6 +475,7 @@ func test_c063_last_foundation_reveals_spells_traps_and_gains_eternal_even_when_
 	var own_set := TB.set_card(m, 0, MAGIC_CYLINDER, 1)
 	var foe_set := TB.set_card(m, 1, SACRED_OFFERINGS, 2)
 	var lf := TB.special(m, 0, 63, 0)
+	TB.choose(m, ["Yes"])                                          # 2026-11-03: the Reveal is optional
 	assert_int(m.status_count(own_set, "reveal")).is_equal(1)
 	assert_int(m.status_count(foe_set, "reveal")).is_equal(1)
 	m.apply_status(lf, "nimble", 1)                              # a Buff no longer blocks Eternal
@@ -539,11 +546,11 @@ func test_c181_solomon_tyrannical_needs_to_be_protecting() -> void:
 
 # ---------------------------------------------------------------- The Illusionist and Rituals
 
-func test_c177_illusionist_is_typeless_and_gains_thirty_on_its_own_turn() -> void:
+func test_c177_illusionist_is_typeless_and_gains_twenty_on_its_own_turn() -> void:
 	var m := TB.make()
 	var ill := TB.unit(m, 0, 177, 0)
 	assert_str(m.unit_type(ill)).is_equal("")
-	assert_int(m.atk_of(ill)).is_equal(60)
+	assert_int(m.atk_of(ill)).is_equal(50)                         # 2026-11-03: +20 (was +30)
 	TB.to_turn2(m)
 	assert_int(m.atk_of(ill)).is_equal(30)
 
@@ -576,13 +583,13 @@ func test_c095_c065_c183_ritual_costs_and_stats_follow_the_new_source() -> void:
 	assert_str(mimic["cost_kind"]).is_equal("ritual")
 	assert_int(mimic["cost"]).is_equal(2)
 	assert_that(mimic["atk"]).is_null()
-	var null_u := CardDB.get_def(65)
-	assert_int(null_u["atk"]).is_equal(40)
-	assert_int(null_u["def"]).is_equal(28)
+	var null_u := CardDB.get_def(65)                             # 2026-11-03 stats
+	assert_int(null_u["atk"]).is_equal(36)
+	assert_int(null_u["def"]).is_equal(12)
 	var yam := CardDB.get_def(183)
 	assert_int(yam["cost"]).is_equal(3)
-	assert_int(yam["atk"]).is_equal(12)
-	assert_int(yam["def"]).is_equal(20)
+	assert_int(yam["atk"]).is_equal(10)
+	assert_int(yam["def"]).is_equal(18)
 	assert_that(CardDB.get_def(96)["cost"]).is_null()
 
 
@@ -596,6 +603,7 @@ func test_c095_mimic_accepts_a_two_rune_material() -> void:
 	assert_array(_opts(m)).contains([mat])
 
 
+# 2026-11-03: the start-of-turn Damage is gone entirely (a Poison ability replaced it).
 func test_c183_yamata_three_runes_and_start_of_turn_damage_kept() -> void:
 	var m := TB.make()
 	var mat := TB.unit(m, 1, MAGE_WATER, 0)

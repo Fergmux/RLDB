@@ -507,6 +507,9 @@ func eval_cond(f: Dictionary, cond: Dictionary) -> bool:
 				if (protected_by(f["src"]) != -1) != v: return false
 			"protected":
 				if (unit_on_field(f["src"]) and is_protected(f["src"])) != v: return false
+			"opp_more_cards":
+				# Grandmother Kaya (170): the opponent has more cards on the Field than the controller.
+				if (field_cards(opp(f["ctl"])).size() > field_cards(f["ctl"]).size()) != v: return false
 			"event_cost_min":
 				var ec: int = f["event"].get("card", -1)
 				if not cards.has(ec) or current_cost(ec) < v: return false
@@ -866,11 +869,16 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 	return true
 
 
-## Free zones for a summon placed "column" (the source's column) or "orig" (the zone it
-## left) by frame f.
+## Free zones for a summon placed "column" (the source's column), "orig" (the zone it left) or
+## "beside" (a free zone of the controller adjacent to the source unit, Akiramari 146) by frame f.
 func placement_slots(f: Dictionary, zone: String) -> Array:
 	var p: int = f["ctl"]
 	match zone:
+		"beside":
+			var src: int = f["src"]
+			if not unit_on_field(src) or cards[src]["ctl"] != p:
+				return []
+			return adjacent_slots(cards[src]["slot"]).filter(func(s): return players[p]["units"][s] == -1)
 		"column":
 			var col: int = f["vars"].get("column", _col_any(f["src"]) if on_field(f["src"]) else f["event"].get("column", 0))
 			return [col, col + 3].filter(func(s): return players[p]["units"][s] == -1)
@@ -884,7 +892,7 @@ func placement_slots(f: Dictionary, zone: String) -> Array:
 ## offered and the Spell/ability is refused before anything is paid.
 func column_summon_blocked(f: Dictionary, ops: Array) -> bool:
 	for op in ops:
-		if op["op"] == "summon" and op.get("place", "any") in ["column", "orig"] and placement_slots(f, op["place"]).is_empty():
+		if op["op"] == "summon" and op.get("place", "any") in ["column", "orig", "beside"] and placement_slots(f, op["place"]).is_empty():
 			return true
 	return false
 
@@ -939,6 +947,13 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Di
 	if not on_field(uid) and not (cards.has(uid) and cards[uid]["zone"] == "limbo"):
 		return false
 	var inst: Dictionary = cards[uid]
+	# Snow Tiger Paladin (190), Protected by a Unit at the start of its controller's turn: that
+	# player's Traps on the Field (set or face up) cannot be Destroyed, by any cause, until the
+	# start of their next turn. A Trap that was used or sent elsewhere still leaves normally.
+	if inst["zone"] == "backrow" and category(uid) == "trap" and turn_effect_active(inst["ctl"], TFX_TRAPS_INDESTRUCTIBLE):
+		var lab := public_label(uid)
+		add_log("%s cannot be destroyed (Snow Tiger Paladin)." % (lab.substr(0, 1).to_upper() + lab.substr(1)))
+		return false
 	if inst["zone"] == "unit":
 		if cause == "battle" and not battle_vs.is_empty():
 			if has_flag(uid, "battle_immune_30atk") and battle_vs["atk"] >= 30:

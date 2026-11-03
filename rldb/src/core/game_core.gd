@@ -83,6 +83,9 @@ func _new_player(index: int) -> Dictionary:
 		"trap_pass_turn": -1,
 		# J6 (owner feedback 2026-10-22): this seat's Trap response prompts (EffectEngine.TRAP_PROMPT_*).
 		"trap_prompts": "eligible",
+		# Player effects that last until the start of this player's next turn (Snow Tiger Paladin):
+		# effect name -> the turn it was applied (see turn_effect_active).
+		"turn_fx": {},
 		"units": units, "backrow": backrow, "powers": powers,
 		"hand": [], "draw": [], "spent": [], "exhaust": [], "extra": [],
 		"name": "Player %d" % (index + 1),
@@ -495,6 +498,25 @@ func def_of(uid: int) -> int:
 	return stat_breakdown(uid)["def"]
 
 
+## Snow Tiger Paladin (190): player p's "until the start of your next turn" effects.
+const TFX_TRAPS_COST_LESS := "traps_cost_less"
+const TFX_TRAPS_INDESTRUCTIBLE := "traps_indestructible"
+
+
+## Starts player p's effect `effect` now; it lasts until the start of p's next turn.
+func start_turn_effect(p: int, effect: String) -> void:
+	if not players[p].has("turn_fx"):
+		players[p]["turn_fx"] = {}
+	players[p]["turn_fx"][effect] = turn
+
+
+## True while player p's effect `effect` lasts: from the turn it was applied until the start of
+## p's next turn (turns alternate, so two turns later).
+func turn_effect_active(p: int, effect: String) -> bool:
+	var t: int = int(players[p].get("turn_fx", {}).get(effect, -1))
+	return t != -1 and turn >= t and turn < t + 2
+
+
 ## Current ordinary AP cost (floored at zero). Extra-deck cards return -1 (no ordinary cost).
 func current_cost(uid: int) -> int:
 	var df := d(uid)
@@ -511,6 +533,8 @@ func current_cost(uid: int) -> int:
 		v -= 1
 	if cat == "trap" and player_has_flag(p, "traps_cost_less"):
 		v -= 1
+	if cat == "trap" and turn_effect_active(p, TFX_TRAPS_COST_LESS):
+		v -= 1                            # Snow Tiger Paladin, Protecting a Unit (stacks with the Guild)
 	# Reinforcements: -1 AP (2026-11-03; it was -2) while only the opponent controls a unit.
 	if CardDB.is_unit_category(cat) and player_has_flag(p, "units_cost_less_if_behind") \
 			and field_units(p).is_empty() and not field_units(opp(p)).is_empty():
@@ -752,6 +776,8 @@ func _reset_field_state(uid: int) -> void:
 	inst["control_until"] = -1
 	inst.erase("control_slot")
 	inst.erase("runes_used")
+	# Mirrorflesh / Ultimate Dragon read the Units Tributed for *this* Fusion Summon only.
+	inst.erase("fusion_mats")
 
 
 ## Moves a card to a pile ("hand", "draw", "draw_top", "spent", "exhaust", "extra").

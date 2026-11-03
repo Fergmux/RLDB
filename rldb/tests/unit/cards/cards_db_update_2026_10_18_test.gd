@@ -530,7 +530,7 @@ func test_renamed_and_recosted_powers_and_spells() -> void:
 
 # @cards 170,172,173,174,175,176
 func test_arcane_units_carry_the_new_stats() -> void:
-	var want := {170: [4, 10], 172: [18, 10], 173: [20, 14], 174: [8, 18], 175: [26, 20]}
+	var want := {170: [4, 10], 172: [18, 10], 173: [20, 4], 174: [8, 20], 175: [20, 20]}   # 2026-11-03 stats
 	for id in want:
 		var d := CardDB.get_def(id)
 		assert_array([d["atk"], d["def"]]).override_failure_message(str(id)).is_equal(want[id])
@@ -616,7 +616,7 @@ func test_c185_drako_ability_needs_a_power_on_the_field() -> void:
 func test_c186_bronze_salaman_is_a_1_rune_light_dragon_in_the_trial_of_the_warrior_deck() -> void:
 	var d := CardDB.get_def(BRONZE_SALAMAN)
 	assert_array([d["category"], d["race"], d["type"], d["cost_kind"], d["cost"], d["atk"], d["def"]]) \
-		.is_equal(["ritual", "Dragon", "Light", "ritual", 1, 20, 20])
+		.is_equal(["ritual", "Dragon", "Light", "ritual", 1, 16, 16])            # 2026-11-03 stats
 	var decks: Array = JSON.parse_string(FileAccess.get_file_as_string("res://data/starter_decks.json"))["decks"]
 	var lone: Dictionary = decks.filter(func(x): return String(x["name"]) == "Trial of the Warrior")[0]
 	assert_array(lone["extra"].map(func(x): return int(x))).contains([BRONZE_SALAMAN])
@@ -625,9 +625,9 @@ func test_c186_bronze_salaman_is_a_1_rune_light_dragon_in_the_trial_of_the_warri
 
 func test_c186_bronze_salaman_offers_a_fusion_summon_as_it_lands() -> void:
 	var m := TB.make()
-	var beast := TB.unit(m, 0, BEAST_WATER, 1)
-	var dragon := TB.unit(m, 0, 2, 2)
-	var wyrm := TB.card(m, 0, 93, "extra")                    # Bastion Wyrm: Beast + Dragon
+	var beast := TB.unit(m, 0, BEAST_WATER, 1, "atk", 20, 8)
+	var dragon := TB.unit(m, 0, 116, 2)                       # Basic Dragon (Physical)
+	var wyrm := TB.card(m, 0, 93, "extra")                    # Bastion Wyrm (2026-11-03): 20+ ATK or DEF + Physical
 	TB.special(m, 0, BRONZE_SALAMAN, 0)
 	assert_str(TB.pend_kind(m)).is_equal("confirm")
 	TB.choose(m, ["Yes"])
@@ -721,15 +721,18 @@ func test_c187_fence_ignores_traps_and_powers() -> void:
 
 # ---------------------------------------------------------------- Necro, the Loathsome
 
-func test_c188_necro_materials_are_a_mage_plus_a_debuffed_unit() -> void:
+# 2026-11-03 (intent updated): the materials are now Monster Unit + Dark Unit, and Necro is 0/30.
+func test_c188_necro_materials_are_a_monster_plus_a_dark_unit() -> void:
 	var m := TB.make()
 	var mage := TB.unit(m, 0, MAGE_WATER, 0)
 	var other := TB.unit(m, 0, BEAST_WATER, 1)
-	assert_bool(CF.fusion_mats_ok(m, NECRO, [mage, other])).is_false()
 	m.apply_status(other, "poison", 1)
-	assert_bool(CF.fusion_mats_ok(m, NECRO, [mage, other])).is_true()
+	assert_bool(CF.fusion_mats_ok(m, NECRO, [mage, other])).is_false()     # the old Mage + Debuffed pair
+	var monster := TB.unit(m, 0, MONSTER_WATER, 2)
+	var dark := TB.unit(m, 0, MONSTER_DARK, 3)
+	assert_bool(CF.fusion_mats_ok(m, NECRO, [monster, dark])).is_true()
 	var d := CardDB.get_def(NECRO)
-	assert_array([d["race"], d["type"], d["atk"], d["def"]]).is_equal(["Mage", "Dark", 32, 0])
+	assert_array([d["race"], d["type"], d["atk"], d["def"]]).is_equal(["Mage", "Dark", 0, 30])
 
 
 func test_c188_necro_copies_every_debuff_on_the_other_units() -> void:
@@ -796,6 +799,7 @@ func test_c188_target_cleanse_prevents_the_spread() -> void:
 	assert_int(m.status_count(necro, "poison")).is_equal(2)
 
 
+# 2026-11-03 ruling (wording updated): "cannot attack other Units if they can attack this Unit".
 func test_c147_demented_apparition_forces_any_attacker_that_can_attack_it() -> void:
 	var m := TB.make()
 	TB.to_turn2(m)
@@ -809,4 +813,4 @@ func test_c147_demented_apparition_forces_any_attacker_that_can_attack_it() -> v
 	var a := TB.unit(m, 1, MAGE_WATER, 2)
 	m.apply_status(a, "infiltrate", 1)
 	assert_array(m.attack_targets(a)).contains_exactly([app])  # can attack it: must attack it
-	assert_str(CardDB.get_def(147)["on_field"]).contains("and can attack this Unit: that Unit must attack this Unit.")
+	assert_str(CardDB.get_def(147)["on_field"]).contains("Your opponent's Units cannot attack other Units if they can attack this Unit.")

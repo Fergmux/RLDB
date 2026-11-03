@@ -1202,8 +1202,15 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c056_razeon_material_prompt_names_the_new_requirement",
+						"test_unit_with_20_or_more_atk_or_def_material_reads_either_current_stat"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -1218,14 +1225,21 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
 						"test_c057_geolock_ability_needs_an_unprotected_foe",
 						"test_c057_geolock_changes_stance_of_unprotected_foes_and_no_longer_moves",
-						"test_c057_geolock_summon_grants_infiltrate_and_nimble_to_your_units"
+						"test_c057_geolock_grants_infiltrate_and_nimble_to_one_unit_per_turn"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c057_geolock_has_no_on_summon_and_its_new_ability_targets_one_unit",
+						"test_unit_with_20_or_more_atk_or_def_material_reads_either_current_stat"
 					]
 				}
 			]
@@ -1236,12 +1250,20 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c058_infernogate_ability_needs_a_card_in_hand",
+						"test_c058_infernogate_discards_a_card_then_draws_and_burns_nothing",
+						"test_unit_with_20_or_more_atk_or_def_material_reads_either_current_stat"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
-						"test_c058_infernogate_burns_everything"
+						"test_c058_infernogate_discards_to_draw_and_burns_no_one"
 					]
 				}
 			]
@@ -1252,7 +1274,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
@@ -1274,7 +1296,7 @@
 			"csv_2026_10_17": "unchanged",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/cards/unchanged_powers_fusions_test.gd",
@@ -1297,17 +1319,27 @@
 			"csv_2026_10_17": "unchanged",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/cards/unchanged_powers_fusions_test.gd",
 					"tests": [
-						"test_c061_sanctified_blade_materials_are_warrior_plus_light",
+						"test_c061_sanctified_blade_materials_are_a_tall_unit_plus_light",
 						"test_c061_sanctified_blade_medic_never_auto_activates",
 						"test_c061_sanctified_blade_medic_offers_only_own_adjacent_units",
 						"test_c061_sanctified_blade_medic_survives_unrelated_turns",
-						"test_c061_sanctified_blade_summon_revives_small_light_into_column",
+						"test_c061_sanctified_blade_summon_no_longer_revives_from_spent",
 						"test_c061_sanctified_blade_without_adjacent_unit_keeps_its_use"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c061_sanctified_blade_ability_needs_a_unit_in_hand",
+						"test_c061_sanctified_blade_discards_a_unit_for_one_ap",
+						"test_c061_sanctified_blade_on_summon_can_be_declined",
+						"test_c061_sanctified_blade_on_summon_offers_8_medic_to_an_adjacent_ally",
+						"test_unit_with_20_or_more_atk_or_def_material_reads_either_current_stat"
 					]
 				},
 				{
@@ -1324,7 +1356,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -1340,7 +1372,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
@@ -1349,10 +1381,20 @@
 					]
 				},
 				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c063_last_foundation_asks_nothing_with_no_spell_or_trap",
+						"test_c063_last_foundation_destroyed_exhausts_a_card_from_its_controllers_spent",
+						"test_c063_last_foundation_destroyed_with_an_empty_spent_does_nothing",
+						"test_c063_last_foundation_reveal_is_optional",
+						"test_c063_last_foundation_switches_atk_def_of_all_units_once_per_turn"
+					]
+				},
+				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
 						"test_c063_last_foundation_gains_eternal_at_end_of_turn_without_buffs",
-						"test_c063_last_foundation_reveals_and_destroys_weakest_foe_on_death"
+						"test_c063_last_foundation_reveals_and_exhausts_from_spent_on_death"
 					]
 				}
 			]
@@ -1363,8 +1405,14 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c064_necrovast_gains_4_per_card_in_exhaust"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -1379,12 +1427,20 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c065_creeping_null_destroyed_destroys_a_unit_with_a_rune",
+						"test_c065_creeping_null_destroyed_with_no_rune_on_the_field_does_nothing",
+						"test_c065_creeping_null_on_summon_rune_is_optional"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
-						"test_c065_creeping_null_paralyses_opposing_units"
+						"test_c065_creeping_null_no_longer_paralyses_opposing_units"
 					]
 				}
 			]
@@ -1395,7 +1451,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2008,12 +2064,19 @@
 			"csv_2026_10_17": "unchanged",
 			"csv_2026_10_18": "unchanged",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/cards/unchanged_powers_fusions_test.gd",
 					"tests": [
 						"test_c093_bastion_wyrm_materials_and_summon_eternal"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c093_bastion_wyrm_fuses_from_a_tall_unit_and_a_physical_unit",
+						"test_unit_with_20_or_more_atk_or_def_material_reads_either_current_stat"
 					]
 				}
 			]
@@ -2040,7 +2103,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
@@ -2063,13 +2126,19 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/cards/changed_cards_test.gd",
 					"tests": [
-						"test_c096_roma_is_twelve_per_rune_used",
+						"test_c096_roma_is_ten_per_rune_used",
 						"test_c096_roma_pays_ten_hp_to_destroy_a_lower_atk_unit_once_per_turn"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c096_roma_gains_10_per_rune_used"
 					]
 				}
 			]
@@ -2080,8 +2149,14 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c097_legendary_swordsman_gains_20_atk_while_behind_on_hp"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -2096,7 +2171,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2895,8 +2970,14 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c141_bahatia_destroyed_takes_12_atk_def_from_a_unit_of_its_type"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -2911,7 +2992,7 @@
 			"csv_2026_10_17": "unchanged",
 			"csv_2026_10_18": "unchanged",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/cards/unchanged_powers_fusions_test.gd",
@@ -2933,8 +3014,16 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c143_simorgh_blinds_the_opponent_twice_on_summon",
+						"test_c143_simorgh_second_ability_switches_atk_and_def_of_every_unit_this_turn",
+						"test_unit_with_20_or_more_atk_or_def_material_reads_either_current_stat"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -2949,7 +3038,7 @@
 			"csv_2026_10_17": "unchanged",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/cards/unchanged_powers_fusions_test.gd",
@@ -2973,7 +3062,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
@@ -2989,12 +3078,22 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c146_akiramari_gains_8_atk_def_per_adjacent_basic_unit_of_yours",
+						"test_c146_akiramari_needs_three_basic_units",
+						"test_c146_akiramari_on_summon_searches_any_card_at_one_ap_less_and_heals_no_one",
+						"test_c146_akiramari_summon_ability_needs_a_free_adjacent_zone",
+						"test_c146_akiramari_summons_a_basic_unit_from_draw_beside_it"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
-						"test_c146_akiramari_gives_medic_to_basic_units"
+						"test_c146_akiramari_no_longer_gives_medic_to_basic_units"
 					]
 				}
 			]
@@ -3005,7 +3104,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
@@ -3014,10 +3113,19 @@
 					]
 				},
 				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c147_apparition_does_not_restrict_a_direct_attack",
+						"test_c147_apparition_restricts_unit_attacks_to_itself",
+						"test_c147_protected_apparition_restricts_only_an_attacker_that_can_reach_it",
+						"test_unit_with_20_or_more_atk_or_def_material_reads_either_current_stat"
+					]
+				},
+				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
 						"test_c147_demented_apparition_forces_attacks_onto_itself",
-						"test_c147_demented_apparition_overrides_direct_attack",
+						"test_c147_demented_apparition_leaves_the_direct_attack_open",
 						"test_c147_demented_apparition_paralyses_unprotected_foes_on_summon"
 					]
 				}
@@ -3090,8 +3198,16 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c151_ultimate_dragon_becomes_the_combined_atk_def_of_its_tributes",
+						"test_c151_ultimate_dragon_shows_unknown_stats_off_the_field",
+						"test_c151_ultimate_dragon_summoned_without_a_fusion_has_no_tributes_to_add"
+					]
+				},
 				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
@@ -3566,12 +3682,18 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
 					"tests": [
 						"test_arcane_units_carry_the_new_stats"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c170_kaya_offers_the_discard_only_while_the_opponent_controls_more_cards"
 					]
 				},
 				{
@@ -3589,7 +3711,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/cards/changed_cards_test.gd",
@@ -3618,7 +3740,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
@@ -3641,12 +3763,18 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
 					"tests": [
 						"test_arcane_units_carry_the_new_stats"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c173_thunderclap_destroyed_paralyses_everything_then_is_exhausted"
 					]
 				},
 				{
@@ -3663,18 +3791,24 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/cards/changed_cards_test.gd",
 					"tests": [
-						"test_c174_cliff_gives_two_ap_when_sacrificed_but_not_when_destroyed"
+						"test_c174_cliff_gives_one_ap_when_sacrificed_but_not_when_destroyed"
 					]
 				},
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
 					"tests": [
 						"test_arcane_units_carry_the_new_stats"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c174_cliff_sacrificed_gains_one_more_ap"
 					]
 				}
 			]
@@ -3685,13 +3819,19 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
 					"tests": [
 						"test_arcane_units_carry_the_new_stats",
 						"test_c175_boom_destroyed_gives_your_units_10_def_without_asking"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c175_boom_arcane_cost_4_is_paid_exactly"
 					]
 				},
 				{
@@ -3708,13 +3848,20 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
 					"tests": [
 						"test_arcane_units_carry_the_new_stats",
 						"test_c176_tritu_becomes_the_combined_atk_and_def_of_the_other_water_units"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c176_tritu_stops_adjacent_units_attacking",
+						"test_c176_tritu_summons_a_water_unit_from_spent_into_its_column"
 					]
 				},
 				{
@@ -3731,14 +3878,20 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
 						"test_c177_illusionist_destroyed_recovers_a_low_cost_card_from_own_exhaust",
-						"test_c177_illusionist_is_typeless_and_gains_thirty_on_its_own_turn",
+						"test_c177_illusionist_is_typeless_and_gains_twenty_on_its_own_turn",
 						"test_c177_illusionist_recovery_is_optional"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c177_illusionist_gains_20_atk_on_its_turn"
 					]
 				},
 				{
@@ -3828,7 +3981,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
@@ -3882,7 +4035,7 @@
 			"csv_2026_10_17": "changed",
 			"csv_2026_10_18": "changed",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
@@ -3891,9 +4044,15 @@
 					]
 				},
 				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c183_yamata_poisons_a_unit_in_its_column_instead_of_burning_hp"
+					]
+				},
+				{
 					"file": "res://tests/unit/cards/cards_powers_extra_test.gd",
 					"tests": [
-						"test_c183_yamata_has_eight_eternal_and_burns_opponent_each_start_of_turn"
+						"test_c183_yamata_has_eight_eternal_and_no_longer_burns_opponent_at_start_of_turn"
 					]
 				}
 			]
@@ -3925,7 +4084,7 @@
 			"csv_2026_10_17": "new",
 			"csv_2026_10_18": "new",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
@@ -3943,7 +4102,7 @@
 			"csv_2026_10_17": "new",
 			"csv_2026_10_18": "new",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
@@ -3963,7 +4122,7 @@
 			"csv_2026_10_17": "new",
 			"csv_2026_10_18": "new",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
@@ -3982,7 +4141,7 @@
 			"csv_2026_10_17": "new",
 			"csv_2026_10_18": "new",
 			"csv_2026_11_03": "changed",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
+			"status": "covered",
 			"tests": [
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
@@ -3991,8 +4150,14 @@
 						"test_c188_necro_ability_needs_a_debuff_and_is_once_per_turn",
 						"test_c188_necro_copies_every_debuff_on_the_other_units",
 						"test_c188_necro_doubles_its_debuffs_and_spreads_them_to_an_opponents_unit",
-						"test_c188_necro_materials_are_a_mage_plus_a_debuffed_unit",
+						"test_c188_necro_materials_are_a_monster_plus_a_dark_unit",
 						"test_c188_target_cleanse_prevents_the_spread"
+					]
+				},
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c188_necro_materials_are_a_monster_and_a_dark_unit"
 					]
 				}
 			]
@@ -4003,8 +4168,21 @@
 			"csv_2026_10_17": "new",
 			"csv_2026_10_18": "new",
 			"csv_2026_11_03": "new",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c189_bot_values_no_attack_for_a_unit_owlbear_locks",
+						"test_c189_debilitated_owlbear_locks_no_attack",
+						"test_c189_opponents_units_with_owlbears_race_cannot_attack",
+						"test_c189_owlbear_changes_its_race_then_every_unit_of_yours",
+						"test_c189_owlbear_materials_are_a_beast_and_a_physical_unit",
+						"test_c189_owlbear_race_choice_can_be_cancelled",
+						"test_new_cards_without_a_sheet_index_sort_last_by_id"
+					]
+				}
+			]
 		},
 		"190": {
 			"name": "Snow Tiger Paladin",
@@ -4012,8 +4190,20 @@
 			"csv_2026_10_17": "new",
 			"csv_2026_10_18": "new",
 			"csv_2026_11_03": "new",
-			"status": "pending(changed or added in the 2026-11-03 CSV -- revalidate against the migrated behaviour and add the id to pending.json _revalidated_2026_11_03)",
-			"tests": []
+			"status": "covered",
+			"tests": [
+				{
+					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_extra_test.gd",
+					"tests": [
+						"test_c190_snow_tiger_alone_does_not_trigger_at_turn_start",
+						"test_c190_snow_tiger_materials_are_a_beast_and_a_light_unit",
+						"test_c190_snow_tiger_on_summon_calls_a_cheap_unit_from_draw_into_its_column",
+						"test_c190_snow_tiger_protected_makes_your_traps_indestructible_until_your_next_turn",
+						"test_c190_snow_tiger_protecting_makes_your_traps_cheaper_until_your_next_turn",
+						"test_new_cards_without_a_sheet_index_sort_last_by_id"
+					]
+				}
+			]
 		},
 		"191": {
 			"name": "Do Not Open Box",

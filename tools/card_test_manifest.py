@@ -149,6 +149,8 @@ def build():
 		i = int(c["id"])
 		files = found.get(i, {})
 		tests = [{"file": f, "tests": sorted(files[f])} for f in sorted(files)]
+		# A card first added after the 2026-10-18 export is judged by the newest export only.
+		in18 = i in csv18 or csv1103.get(i) != "new"
 		if i in pending:
 			status = "pending(%s)" % pending[i]
 		elif csv1103.get(i, "new") != "unchanged" and i not in revalidated_1103:

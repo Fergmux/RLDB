@@ -180,37 +180,37 @@ func test_c060_rotmaw_poison_is_once_per_turn() -> void:
 
 
 # ---------------------------------------------------------------- 61 Sanctified Blade (F09)
+# Updated on purpose for the 2026-11-03 text: materials "Unit with 20 or more ATK or DEF + Light
+# Unit"; On Summon "You can apply 8 Medic to an Adjacent Unit"; "Once per turn: you can discard a
+# Unit to gain +1 AP". The F09 intent (nothing activates by itself) is kept.
 
-func test_c061_sanctified_blade_materials_are_warrior_plus_light() -> void:
+func test_c061_sanctified_blade_materials_are_a_tall_unit_plus_light() -> void:
 	var m := CF.make()
-	var warrior := TB.unit(m, 0, 3, 0)                          # Basic Warrior (Water)
+	var warrior := TB.unit(m, 0, 3, 0)                          # Basic Warrior (Water) 8/8
 	var light := TB.unit(m, 0, 105, 1)                       # Basic Mage (Light)
-	var mage := TB.unit(m, 0, TB.WATER, 2)
-	assert_bool(CF.fusion_mats_ok(m, 61, [warrior, light])).is_true()
-	assert_bool(CF.fusion_mats_ok(m, 61, [warrior, mage])).is_false()
+	var tall := TB.unit(m, 0, TB.WATER, 2, "atk", 6, 20)
+	assert_bool(CF.fusion_mats_ok(m, 61, [warrior, light])).is_false()   # the old Warrior + Light pair
+	assert_bool(CF.fusion_mats_ok(m, 61, [tall, light])).is_true()
 
 
-func test_c061_sanctified_blade_summon_revives_small_light_into_column() -> void:
+func test_c061_sanctified_blade_summon_no_longer_revives_from_spent() -> void:
 	var m := CF.make()
 	var small := TB.card(m, 0, 105, "spent")                    # Light, cost 1
-	var big := TB.card(m, 0, 28, "spent")                       # Light, cost 2
+	var ally := TB.unit(m, 0, TB.WATER, 1)
 	TB.special(m, 0, 61, 0)
-	assert_bool(small in CF.offered(m)).is_true()
-	assert_bool(big in CF.offered(m)).is_false()
-	TB.choose_uids(m, [small])
-	CF.place(m, "Back row, column 1")
-	assert_str(CF.zone(m, small)).is_equal("unit")
-	assert_int(GameCore.slot_col(int(m.cards[small]["slot"]))).is_equal(0)
+	assert_bool(small in CF.offered(m)).is_false()
+	assert_bool(ally in CF.offered(m)).is_true()                # the 8 Medic choice instead
+	CF.decline(m)
+	assert_str(CF.zone(m, small)).is_equal("spent")
 
 
 func test_c061_sanctified_blade_medic_never_auto_activates() -> void:
-	# F09: summoning it (and declining its separate On Summon), more summons, a Spell and two
-	# turn starts must not apply Medic or spend the once-per-turn use.
+	# F09: summoning it (and declining its On Summon), more summons, a Spell and two turn starts
+	# must not apply Medic, discard anything or spend the once-per-turn use.
 	var m := CF.make()
-	TB.card(m, 0, 105, "spent")
+	var ally := TB.unit(m, 0, TB.WATER, 1)
 	var sb := TB.special(m, 0, 61, 0)
 	assert_str(CF.decline(m)).is_empty()
-	var ally := TB.unit(m, 0, TB.WATER, 1)
 	TB.summon(m, 0, 4, 3)
 	TB.cast(m, 0, 83)
 	TB.choose_uids(m, [ally])
@@ -218,30 +218,29 @@ func test_c061_sanctified_blade_medic_never_auto_activates() -> void:
 	assert_int(m.status_count(ally, "medic")).is_equal(0)
 	assert_int(m.status_count(sb, "medic")).is_equal(0)
 	assert_str(TB.ability(m, sb)).is_empty()                    # use still available on turn 1
-	assert_str(TB.pend_kind(m)).is_equal("select")              # waits for a target choice
+	assert_str(TB.pend_kind(m)).is_equal("select")              # waits for a card choice
 
 
 func test_c061_sanctified_blade_medic_survives_unrelated_turns() -> void:
 	var m := CF.make()
 	var sb := TB.unit(m, 0, 61, 0)
-	var ally := TB.unit(m, 0, TB.WATER, 1)
 	CF.end_turn(m)
 	CF.end_turn(m)                                              # player 0's turn 3
-	assert_int(m.status_count(ally, "medic")).is_equal(0)
+	var unit_card: int = m.players[0]["hand"].filter(func(u): return m.is_unit(u))[0]
 	assert_str(TB.ability(m, sb)).is_empty()
-	TB.choose_uids(m, [ally])
-	assert_int(m.status_count(ally, "medic")).is_equal(3)
+	var ap := CF.ap(m, 0)
+	TB.choose_uids(m, [unit_card])
+	assert_int(CF.ap(m, 0)).is_equal(ap + 1)
 	assert_str(TB.ability(m, sb)).is_equal("Already used this turn.")
 
 
 func test_c061_sanctified_blade_medic_offers_only_own_adjacent_units() -> void:
 	var m := CF.make()
-	var sb := TB.unit(m, 0, 61, 0)
 	var right := TB.unit(m, 0, TB.WATER, 1)
 	var behind := TB.unit(m, 0, TB.WATER, 3)
 	var far := TB.unit(m, 0, TB.WATER, 2)
 	var foe := TB.unit(m, 1, TB.WATER, 0)
-	TB.ability(m, sb)
+	var sb := TB.special(m, 0, 61, 0)
 	var offered := CF.offered(m)
 	assert_bool(right in offered).is_true()
 	assert_bool(behind in offered).is_true()
@@ -253,11 +252,13 @@ func test_c061_sanctified_blade_medic_offers_only_own_adjacent_units() -> void:
 func test_c061_sanctified_blade_without_adjacent_unit_keeps_its_use() -> void:
 	var m := CF.make()
 	var sb := TB.unit(m, 0, 61, 0)
-	assert_str(TB.ability(m, sb)).is_equal("No legal target.")
-	var ally := TB.unit(m, 0, TB.WATER, 1)
+	for h in m.players[0]["hand"].duplicate():
+		m.move_to_pile(h, "spent")
+	assert_str(TB.ability(m, sb)).is_equal("No legal target.")     # no unit in Hand to discard
+	var u := TB.card(m, 0, TB.WATER)
 	assert_str(TB.ability(m, sb)).is_empty()
-	TB.choose_uids(m, [ally])
-	assert_int(m.status_count(ally, "medic")).is_equal(3)
+	TB.choose_uids(m, [u])
+	assert_str(CF.zone(m, u)).is_equal("spent")
 
 
 # ---------------------------------------------------------------- 93 Bastion Wyrm
@@ -265,11 +266,13 @@ func test_c061_sanctified_blade_without_adjacent_unit_keeps_its_use() -> void:
 func test_c093_bastion_wyrm_materials_and_summon_eternal() -> void:
 	var m := CF.make()
 	var beast := TB.unit(m, 0, 4, 0)
-	var beast2 := TB.unit(m, 0, 113, 1)
+	var phys := TB.unit(m, 0, 115, 1)                           # Basic Mage (Physical)
 	var dragon := TB.unit(m, 0, 2, 2)
-	assert_bool(CF.fusion_mats_ok(m, 93, [dragon, beast])).is_true()
-	assert_bool(CF.fusion_mats_ok(m, 93, [beast, beast2])).is_false()
-	var w := TB.special(m, 0, 93, 3)
+	var tall := TB.unit(m, 0, 2, 3, "atk", 20, 4)
+	assert_bool(CF.fusion_mats_ok(m, 93, [dragon, beast])).is_false()   # 2026-11-03: the old Beast + Dragon pair
+	assert_bool(CF.fusion_mats_ok(m, 93, [tall, phys])).is_true()
+	assert_bool(CF.fusion_mats_ok(m, 93, [beast, phys])).is_false()      # 8/8: not 20 ATK or DEF
+	var w := TB.special(m, 0, 93, 4)
 	assert_int(m.status_count(w, "eternal")).is_equal(1)
 
 
@@ -285,8 +288,8 @@ func test_c142_gojirun_materials_pierce_and_no_growth_on_opponent_turn() -> void
 	var g := TB.special(m, 0, 142, 3)
 	assert_int(m.status_count(g, "pierce")).is_equal(1)
 	TB.to_turn2(m)                                              # player 1's turn
-	assert_int(m.atk_of(g)).is_equal(38)
-	assert_int(m.def_of(g)).is_equal(24)
+	assert_int(m.atk_of(g)).is_equal(26)                       # 2026-11-03: 26/20, no growth
+	assert_int(m.def_of(g)).is_equal(20)
 
 
 # ---------------------------------------------------------------- 144 Stone Guardian

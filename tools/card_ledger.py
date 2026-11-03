@@ -75,7 +75,22 @@ NOTES = {
     187: "Either player's Spell activation (cast or set Spell flipped); the Rune is optional, on any unit.",
     188: "On Summon copies the Debuffs of every other unit (a copied Debilitate suppresses its own ability). The ability doubles its Debuffs, then applies the doubled stacks to an opponent's unit (Cleanse there can prevent each).",
     149: "Zero-cost check uses printed ordinary costs of all cards you own in this game, Extra Deck included.",
-    146: "Medic applies to Basic Units on both sides.",
+    146: "2026-11-03: three Basic Unit materials. On Summon an optional search of any card from Draw (-1 AP this turn). Once per turn a Basic Unit from Draw into a free zone of yours adjacent to it. +8 ATK/DEF per adjacent Basic Unit of yours.",
+    56: "2026-11-03 material \"Unit with 20 or more ATK or DEF\": current ATK or current DEF of 20 or more (also 57, 58, 61, 93, 143, 147).",
+    57: "2026-11-03: no On Summon; a second once-per-turn ability gives one unit (either side) 1 Infiltrate and 1 Nimble.",
+    58: "2026-11-03: the ability discards a card (Hand to Spent), then draws; it needs a card in Hand.",
+    61: "2026-11-03: optional 8 Medic On Summon on one of your adjacent units; the ability discards a unit card from Hand for +1 AP.",
+    63: "2026-11-03: the Reveal is optional (asked only with a Spell/Trap on the Field); once per turn the Freaky Funday switch; On Destroy its controller exhausts a card of their choice from their own Spent (not itself), mandatory while there is one.",
+    65: "2026-11-03: optional Rune On Summon; On Destroy its controller destroys a unit with a Rune on either side, mandatory while one exists.",
+    143: "2026-11-03: On Summon 2 Blind to the opponent's units; the second ability is the Freaky Funday switch.",
+    147: "2026-11-03 ruling: an opponent's unit that can attack it (Infiltrate counts) cannot attack other units; direct attacks are not restricted.",
+    151: "2026-11-03: ?/? = combined current ATK/DEF of the units tributed for its Fusion Summon (as Mirrorflesh); 0/0 when summoned another way.",
+    170: "2026-11-03: the On Summon discard is offered only while the opponent has more cards on the Field.",
+    173: "2026-11-03: destroyed undebilitated, it goes to Exhaust (as Flying Sandworm) after paralysing every unit.",
+    176: "2026-10-18: sums current ATK and DEF of the other Water units on the Field when summoned (snapshot). 2026-11-03: \"Adjacent Units cannot declare an Attack\" is Zorath's lock (its controller's adjacent units); once per turn a Water unit from Spent into its column.",
+    183: "2026-11-03: the start-of-turn Damage became a once-per-turn 6 Poison on a unit in its column.",
+    189: "New 2026-11-03. The Race change is one-shot (as Chaos Witch's Type): itself, then all of its controller's units, from every Race of the pool. Opponent's units of its current Race cannot attack while it is on the Field (undebilitated).",
+    190: "New 2026-11-03, owner ruling \"Both at turn start\": at its controller's turn start, Protecting a unit = their Traps cost -1 AP, Protected by a unit = their Traps on the Field cannot be Destroyed, each until the start of their next turn.",
 }
 
 
