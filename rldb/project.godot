@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="RLDB"
-config/version="0.3.9"
+config/version="0.3.10"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
@@ -33,13 +33,11 @@ enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/godot
 
 [rendering]
 
-anti_aliasing/quality/msaa_2d=2
 rendering_device/driver.windows="d3d12"
-renderer/rendering_method="forward_plus"
 renderer/rendering_method.mobile="gl_compatibility"
+anti_aliasing/quality/msaa_2d=2
 
 [steam]
 
 initialization/app_data/app_id=480
 initialization/processes/initialize_on_startup=true
-initialization/processes/embed_callbacks=false
