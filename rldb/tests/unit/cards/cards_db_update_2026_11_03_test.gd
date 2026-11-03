@@ -334,12 +334,38 @@ func test_c067_void_basilisk_fuses_first_then_exhausts_itself() -> void:
 	assert_bool(i_sum >= 0 and i_sum < i_exh).override_failure_message("summon %d exhaust %d" % [i_sum, i_exh]).is_true()
 
 
-func test_c067_void_basilisk_is_never_one_of_its_own_materials() -> void:
+## Owner, 3 Nov: Void Basilisk may be one of its own materials; then it is not exhausted.
+func test_c067_void_basilisk_can_be_its_own_material_and_then_is_not_exhausted() -> void:
 	var m := TB.make()
 	var vb := TB.unit(m, 0, VOID_BASILISK, 0)                 # Dark
-	TB.unit(m, 0, MONSTER_DARK, 1)                            # the only other Dark unit
-	TB.card(m, 0, MIRRORFLESH, "extra")                       # would take Basilisk + the Monster
-	assert_str(m.validate(0, {"t": "ability", "uid": vb, "idx": 0})).is_equal("No Fusion unit can be summoned.")
+	var mon := TB.unit(m, 0, MONSTER_DARK, 1)                 # the only other Dark unit
+	var mf := TB.card(m, 0, MIRRORFLESH, "extra")             # takes Basilisk + the Monster
+	assert_str(TB.ability(m, vb)).is_empty()
+	TB.choose_uids(m, [mf])
+	TB.choose_uids(m, [vb])
+	TB.choose_uids(m, [mon])
+	TB.choose(m, ["Front row, column 1"])
+	TB.choose(m, ["Attack"])
+	assert_str(CF.zone(m, mf)).is_equal("unit")
+	assert_str(CF.zone(m, vb)).is_equal("spent")              # tributed, and not exhausted afterwards
+	assert_int(TB.log_index(m, "Void Basilisk moves from Unit to Exhaust")).is_equal(-1)
+
+
+## Owner, 3 Nov: Seppuku may be one of its own materials; then the "then Destroy this Unit" does not happen.
+func test_c068_seppuku_can_be_its_own_material_and_then_is_not_destroyed() -> void:
+	var m := TB.make()
+	var sp := TB.unit(m, 0, SEPPUKU, 0)                       # Warrior / Dark
+	var mon := TB.unit(m, 0, MONSTER_DARK, 1)
+	var mf := TB.card(m, 0, MIRRORFLESH, "extra")
+	assert_str(TB.ability(m, sp)).is_empty()
+	TB.choose_uids(m, [mf])
+	TB.choose_uids(m, [sp])
+	TB.choose_uids(m, [mon])
+	TB.choose(m, ["Front row, column 1"])
+	TB.choose(m, ["Attack"])
+	assert_str(CF.zone(m, mf)).is_equal("unit")
+	assert_str(CF.zone(m, sp)).is_equal("spent")
+	assert_int(TB.log_index(m, "Seppuku is destroyed")).is_equal(-1)
 
 
 func test_c067_void_basilisk_on_a_full_board_needs_a_field_material() -> void:

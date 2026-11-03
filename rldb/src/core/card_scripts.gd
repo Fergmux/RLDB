@@ -299,14 +299,15 @@ static func _build() -> Dictionary:
 	t[39] = {"flags": ["battle_immune_30atk"]}
 	t[67] = {"on": [trig("summoned", [ch({"kind": "unit", "column": true}, "u", true, "Apply 2 Paralyse to a unit in this column?"), st("$u", "paralyse", 2)])],
 		# 2026-11-03: the Fusion Summon comes first, then this unit is exhausted (it used to be exhausted
-		# first, as a cost). It is still never one of the materials (`not_self`); as it stays on the
-		# Field until the Fusion unit has landed, it no longer frees its own zone for it. The `then` ops
-		# run right after the Fusion unit lands, before its On Summon effects; they run only if the
+		# first, as a cost). Owner, 3 Nov: it may be one of the materials itself; then the "then Exhaust
+		# this Unit" does not happen (the `then` op only acts on it while it is still on the Field). The
+		# `then` ops run right after the Fusion unit lands, before its On Summon effects, and only if the
 		# summon happens.
-		"abilities": [abil("Fusion Summon (Field and/or Spent), then exhaust this unit", [{"op": "fusion", "sources": ["field", "spent"], "not_self": true,
+		"abilities": [abil("Fusion Summon (Field and/or Spent), then exhaust this unit", [{"op": "fusion", "sources": ["field", "spent"],
 			"then": [{"op": "move", "target": "self", "to": "exhaust", "from_field": true}]}], false)]}
-	# 2026-11-03: Fusion Summon first, then this unit is destroyed (see Void Basilisk).
-	t[68] = {"abilities": [abil("Fusion Summon (Field), then destroy this unit", [{"op": "fusion", "sources": ["field"], "not_self": true,
+	# 2026-11-03: Fusion Summon first, then this unit is destroyed. Owner, 3 Nov: it may be one of the
+	# materials itself; then the destruction does not happen (see Void Basilisk).
+	t[68] = {"abilities": [abil("Fusion Summon (Field), then destroy this unit", [{"op": "fusion", "sources": ["field"],
 		"then": [{"op": "destroy", "target": "self", "keep_going": true}]}], false)]}
 	# 2026-11-03: the On Summon is an optional 1 Cleanse on an adjacent unit; when tributed, the
 	# Fusion or Ritual unit summoned gets 1 Cleanse (was 2 Pierce).
