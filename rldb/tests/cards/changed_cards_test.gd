@@ -90,18 +90,20 @@ func test_c045_magic_cylinder_reflects_attacker_atk_and_costs_one_more() -> void
 	assert_int(m.current_cost(cyl)).is_equal(2)
 
 
-func test_c045_magic_cylinder_ignores_direct_attacks_and_other_columns() -> void:
+# 2026-11-03 (intent changed on purpose, replaces C-03): the trigger is the attacker's column,
+# whatever the target, and a direct attack from that column counts.
+func test_c045_magic_cylinder_follows_the_attackers_column_direct_attacks_included() -> void:
 	var m := CF.p1_battle()
 	TB.set_card(m, 0, 45, 0)
-	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 30)
-	var other := TB.unit(m, 0, TB.WATER, 1)
-	TB.attack(m, a, other)                                   # attack on column 2
+	var a := TB.unit(m, 1, TB.WATER, 1, "atk", 30)           # attacker in column 2
+	var mine := TB.unit(m, 0, TB.WATER, 0)
+	TB.attack(m, a, mine)                                    # attack on the Trap's column 1
 	assert_bool(CF.labels(m).has("Activate Magic Cylinder")).is_false()
 	var m2 := CF.p1_battle()
 	TB.set_card(m2, 0, 45, 0)
 	var a2 := TB.unit(m2, 1, TB.WATER, 0, "atk", 30)
-	TB.attack(m2, a2, -1)                                    # direct attack
-	assert_bool(CF.labels(m2).has("Activate Magic Cylinder")).is_false()
+	TB.attack(m2, a2, -1)                                    # direct attack from column 1
+	assert_bool(CF.labels(m2).has("Activate Magic Cylinder")).is_true()
 
 
 # ---------------------------------------------------------------- 46 Mirror Force

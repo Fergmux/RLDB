@@ -511,10 +511,10 @@ func current_cost(uid: int) -> int:
 		v -= 1
 	if cat == "trap" and player_has_flag(p, "traps_cost_less"):
 		v -= 1
-	# Reinforcements (2026-10-18): -2 AP while only the opponent controls a unit.
+	# Reinforcements: -1 AP (2026-11-03; it was -2) while only the opponent controls a unit.
 	if CardDB.is_unit_category(cat) and player_has_flag(p, "units_cost_less_if_behind") \
 			and field_units(p).is_empty() and not field_units(opp(p)).is_empty():
-		v -= 2
+		v -= 1
 	return maxi(v, 0)
 
 

@@ -243,7 +243,7 @@ static func _spells_traps() -> Dictionary:
 			_do("Choose its target", "Click your [type]Water[/type] Warrior to give it a [kw]Rune[/kw].\n\n(Runes are counters used for Ritual summons.)", [{"t": "choose", "opt": {"card": "p_warrior"}}]),
 			_read("Into Spent", "The Spell resolved and went to your [zone]Spent[/zone] pile.\n\nYour Warrior now carries a [kw]Rune[/kw].", [{"pile": ["me", "spent"]}, {"slot": ["me", "unit", 1]}]),
 			_do("Set a Trap", "Click [card]Magic Cylinder[/card] and click [btn]Set[/btn].\n\nYou pay its [stat]AP[/stat] now, not when it activates.", [{"t": "set", "card": "p_cyl"}]),
-			_do("Same column", "[card]Magic Cylinder[/card] guards units in its column.\n\nSet it in the middle Trap/Spell zone, behind your Warrior.", [{"t": "choose", "opt": {"slot": 1}}]),
+			_do("Same column", "[card]Magic Cylinder[/card] springs when a Rival unit in its column declares an attack.\n\nSet it in the middle Trap/Spell zone, in the column of the Rival's Warrior.", [{"t": "choose", "opt": {"slot": 1}}]),
 			_do("End your turn", "Click the phase button until your turn ends:\n[btn]Go to Battle Phase[/btn], [btn]Go to Recovery[/btn], then [btn]End turn[/btn].", [{"t": "next_phase"}], THEIR_TURN),
 			_wait("The Rival attacks", "Watch: the Rival's [type]Fire[/type] Warrior attacks your Warrior.", {"pending_kind": "trap_response", "pending_player": PLAYER}),
 			_do("Spring the Trap", "Your Trap's condition is met.\n\n[btn]Skip[/btn] would let this attack through; [btn]Skip for the rest of this turn[/btn] stops Trap offers until the turn ends.\n\nClick [btn]Activate Magic Cylinder[/btn].", [{"t": "choose", "opt": {"card": "p_cyl"}}]),

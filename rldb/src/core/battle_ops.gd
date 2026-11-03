@@ -20,10 +20,8 @@ func _attack_check(p: int, uid: int, mode: String = "") -> String:
 
 
 func _cannot_attack_reason(uid: int) -> String:
-	if has_flag(uid, "rider_no_attack"):
-		var pr := protector_of(uid)
-		if pr != -1 and unit_race(pr) == "Dragon":
-			return "Dragon Rider cannot attack while protected by a Dragon."
+	if attack_stance_locked(uid):
+		return "Dragon Rider cannot attack while protected by a Dragon."
 	for other in adjacent_units(uid):
 		if has_flag(other, "adjacent_no_attack"):
 			return "%s prevents adjacent units from attacking." % name_of(other)
@@ -140,7 +138,10 @@ func _op_attack_declare(f: Dictionary, op: Dictionary) -> int:
 func _op_attack_window(f: Dictionary, op: Dictionary) -> int:
 	var uid: int = f["src"]
 	var target: int = f["vars"]["target"]
+	# column: the attacked column (the target's, or the attacker's for a direct attack);
+	# attacker_column: the attacker's own column (Magic Cylinder, Damage Conversion, 2026-11-03).
 	var ev := {"name": "attack", "player": f["ctl"], "attacker": uid, "target": target, "column": f["vars"]["column"],
+		"attacker_column": column_of(uid),
 		"lks": {uid: {"atk": atk_of(uid), "def": def_of(uid)}},
 		"text": "%s attacks %s" % [name_of(uid), "directly" if target == -1 else name_of(target)]}
 	f["event"] = ev

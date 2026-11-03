@@ -64,6 +64,7 @@ func push_frame(f: Dictionary) -> void:
 func run() -> void:
 	var guard := 0
 	while winner == -1 and pending.is_empty():
+		enforce_stance_locks()
 		guard += 1
 		if guard > 20000:
 			push_error("effect loop guard tripped")
@@ -100,6 +101,27 @@ func run() -> void:
 		pending = {}
 		trigger_queue.clear()
 		window_queue.clear()
+
+
+## Dragon Rider (2026-11-03): "If this Unit is Protected by a Dragon Unit: this Unit cannot be in
+## Attack Stance". True while unit `uid` is such a unit (its effect not suppressed).
+func attack_stance_locked(uid: int) -> bool:
+	if not has_flag(uid, "rider_no_attack"):
+		return false
+	var pr := protector_of(uid)
+	return pr != -1 and unit_race(pr) == "Dragon"
+
+
+## Puts every unit that cannot be in Attack stance right now (attack_stance_locked) in Defense stance.
+## Checked before each resolution step, so a Dragon arriving in front of a Dragon Rider, or the Rider
+## moving behind one, takes effect at once.
+func enforce_stance_locks() -> void:
+	for p in [0, 1]:
+		for u in field_units(p):
+			if cards[u]["stance"] == "atk" and attack_stance_locked(u):
+				cards[u]["stance"] = "def"
+				add_log("%s is protected by %s, so it cannot be in Attack stance: it changes to Defense stance." % [name_of(u), name_of(protector_of(u))])
+				add_fx({"k": "stance", "at": fx_pos(u), "to": "def"})
 
 
 func _exec(f: Dictionary, op: Dictionary) -> int:
@@ -666,6 +688,15 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 			continue
 		if _trap_eligible(uid, responder, ev):
 			eligible.append(uid)
+	# Do Not Open Box (2026-11-03): a set card of the responder destroyed by this very event has left
+	# the Field, but a Trap that answers its own destruction still responds from its last zone.
+	var gone := _destroyed_set_card(ev, responder)
+	if gone != -1 and not (gone in used):
+		if not ev.get("was_public", true):
+			concealed = true              # J6: it was face down, so it could have been any card
+			concealed_cols.append(int(ev.get("slot", -1)))
+		if category(gone) == "trap" and _trap_eligible(gone, responder, ev):
+			eligible.append(gone)
 	# Opening the window only when a Trap is eligible would tell the opponent so.
 	# With hidden_response_windows the responder is asked whenever they hold a
 	# face-down card, and simply passes when nothing can respond.
@@ -701,6 +732,17 @@ func _op_window(f: Dictionary, op: Dictionary) -> int:
 	return R.STAY
 
 
+## The set card of player p that the "st_destroyed" event `ev` destroyed, when it was set before this
+## turn and not activated (a Trap may then answer its own destruction), else -1.
+func _destroyed_set_card(ev: Dictionary, p: int) -> int:
+	if String(ev.get("name", "")) != "st_destroyed" or int(ev.get("ctl", -1)) != p:
+		return -1
+	var uid: int = int(ev.get("self", -1))
+	if not cards.has(uid) or on_field(uid) or not ev.get("was_set", false) or int(ev.get("set_turn", turn)) == turn:
+		return -1
+	return uid
+
+
 ## J6: the Trap entries of every card in the game (CardScripts "trap"), read once.
 static var _pool_traps: Array = []
 
@@ -724,8 +766,7 @@ func trap_window_plausible(p: int, ev: Dictionary, cols: Array) -> bool:
 		match String(ev["name"]):
 			"attack":
 				if ev["player"] == p: continue
-				if tr.get("target_unit_only", false) and ev.get("target", -1) == -1: continue
-				if tr.get("column", false) and not (int(ev.get("column", -9)) in cols): continue
+				if tr.get("attacker_column", false) and not (int(ev.get("attacker_column", -9)) in cols): continue
 			"summon":
 				if ev["player"] == p: continue
 			"activate":
@@ -736,6 +777,10 @@ func trap_window_plausible(p: int, ev: Dictionary, cols: Array) -> bool:
 				if ev["ctl"] != p: continue
 				if tr.get("by_effect", false) and ev["cause"] != "effect": continue
 				if tr.get("by_opponent", false) and ev.get("by_player", -1) != opp(p): continue
+			"st_destroyed":
+				if tr.get("self_destroyed", false):
+					if ev["ctl"] != p or not ev.get("was_set", false) or not (int(ev.get("slot", -9)) in cols): continue
+					if tr.get("by_opponent", false) and ev.get("by_player", -1) != opp(p): continue
 		return true
 	return false
 
@@ -779,9 +824,11 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 	match ev["name"]:
 		"attack":
 			if ev["player"] == p: return false
-			if tr.get("target_unit_only", false) and ev.get("target", -1) == -1: return false
-			if tr.get("column", false):
-				if ev["column"] != cards[uid]["slot"]: return false
+			# 2026-11-03 (Magic Cylinder, Damage Conversion): an attack declared by an opponent's unit
+			# in this Trap's column, whatever its target. Column i of one side faces column i of the
+			# other (GameBoardView draws both sides' columns in the same order).
+			if tr.get("attacker_column", false):
+				if int(ev.get("attacker_column", -9)) != cards[uid]["slot"]: return false
 		"summon":
 			if ev["player"] == p: return false
 		"activate":
@@ -793,7 +840,13 @@ func _trap_eligible(uid: int, p: int, ev: Dictionary) -> bool:
 			if tr.get("by_effect", false) and ev["cause"] != "effect": return false
 			if tr.get("by_opponent", false) and ev.get("by_player", -1) != opp(p): return false
 		"st_destroyed":
-			pass                          # any Spell/Trap, either side (Counter Transmutation)
+			# Counter Transmutation answers any Spell/Trap, either side. Do Not Open Box answers only its
+			# own destruction while set, by the opponent.
+			if tr.get("self_destroyed", false):
+				if int(ev.get("self", -1)) != uid or _destroyed_set_card(ev, p) != uid: return false
+				if tr.get("by_opponent", false) and ev.get("by_player", -1) != opp(p): return false
+			elif int(ev.get("self", -1)) == uid:
+				return false
 	if tr.has("cond") and not eval_cond(f, tr["cond"]):
 		return false
 	if column_summon_blocked(f, tr["ops"]):
@@ -838,7 +891,8 @@ func column_summon_blocked(f: Dictionary, ops: Array) -> bool:
 
 ## Flips Trap uid face up for player p and queues its effect for event ev.
 func activate_trap(uid: int, p: int, ev: Dictionary) -> void:
-	cards[uid]["face_up"] = true
+	if on_field(uid):
+		cards[uid]["face_up"] = true      # a Trap answering its own destruction is already in a pile
 	add_log("%s activates Trap %s." % [pname(p), name_of(uid)])
 	add_fx({"k": "spotlight", "p": p, "id": d(uid)["id"], "how": "trap", "at": fx_pos(uid)})
 	emit("trap_activated", {"player": p, "card": uid})
@@ -935,9 +989,12 @@ func destroy(uid: int, cause: String, by_uid: int, by_player: int, battle_vs: Di
 	elif was_spell_trap:
 		# Counter Transmutation (2026-10-18) responds to any destroyed Spell/Trap. Named only when it
 		# was public: a set card that was destroyed face down stays unnamed.
+		# was_set / set_turn / column: a set Trap answering its own destruction (Do Not Open Box)
+		# resolves from the zone it left.
 		window_queue.append({"name": "st_destroyed", "self": uid, "ctl": p, "cause": cause, "by_player": by_player,
 			"by": by_uid, "player": active, "text": "%s destroyed" % label, "slot": snap["slot"],
-			"was_public": label != "a set Spell/Trap"})
+			"was_public": label != "a set Spell/Trap", "was_set": snap["zone"] == "backrow" and not snap["face_up"],
+			"set_turn": int(snap.get("set_turn", -1)), "column": snap["slot"] if snap["zone"] == "backrow" else -1})
 	return true
 
 

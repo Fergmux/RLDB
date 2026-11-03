@@ -55,33 +55,35 @@ func test_p22_on_summon_resolves_before_summon_trap() -> void:
 	assert_int(m.status_count(u, "paralyse")).is_equal(0)   # its Cleanse blocks the Paralyse
 
 
-# P-23 / C-03: Magic Cylinder and Damage Conversion: attacks on your unit in the trap's column only.
-func test_p23_magic_cylinder_ignores_direct_attacks() -> void:
+# Owner ruling 2026-11-03 (replaces P-23 / C-03 on purpose): Magic Cylinder and Damage Conversion
+# answer an Attack declared by an opponent's unit in the Trap's column (the attacker's column),
+# whatever its target; a direct attack counts. Column i of one side faces column i of the other.
+func test_p23_magic_cylinder_answers_a_direct_attack_from_its_column() -> void:
 	var m := _battle()
 	TB.set_card(m, 0, 45, 0)
 	var a := TB.unit(m, 1, 162, 0)                        # Diggie can attack directly
 	TB.unit(m, 0, TB.WATER, 2)
 	m.submit(1, {"t": "attack", "uid": a})
 	TB.choose(m, ["directly"])
-	assert_bool(m.pending.is_empty()).is_true()
+	assert_str(m.pending["kind"]).is_equal("trap_response")
 
 
-func test_p23_magic_cylinder_triggers_from_attacker_in_another_column() -> void:
+func test_p23_magic_cylinder_ignores_an_attacker_in_another_column() -> void:
 	var m := _battle()
 	TB.set_card(m, 0, 45, 2)                              # column 3
 	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 10)        # attacker in column 1
 	var d := TB.unit(m, 0, TB.WATER, 2)                   # defender in column 3
 	TB.attack(m, a, d)
-	assert_str(m.pending["kind"]).is_equal("trap_response")
+	assert_bool(m.pending.is_empty()).is_true()
 
 
-func test_c03_damage_conversion_ignores_direct_attacks() -> void:
+func test_c03_damage_conversion_answers_a_direct_attack_from_its_column() -> void:
 	var m := _battle()
 	TB.set_card(m, 0, 47, 0)
 	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
 	TB.attack(m, a, -1)
-	assert_bool(m.pending.is_empty()).is_true()
-	assert_int(m.players[0]["hp"]).is_equal(50)
+	TB.choose(m, ["Activate Damage Conversion"])
+	assert_int(m.players[0]["hp"]).is_equal(60 + 10 - 10)  # healed 10, then took the direct 10
 
 
 # P-26: Nimble moves only in Main Phases.
