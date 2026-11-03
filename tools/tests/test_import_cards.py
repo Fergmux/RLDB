@@ -43,12 +43,12 @@ class ImportRegressionTest(unittest.TestCase):
             self.assertEqual(old[cid]["source"]["raw"]["condition"], "temp", cid)
 
     def test_populated_summon_fields_are_not_duplicated(self):
-        self.assertEqual(self.by_id[63]["on_summon"], "Apply Reveal to all Spells/Traps.")
+        self.assertEqual(self.by_id[63]["on_summon"], "You can apply Reveal to all Spells/Traps.")   # 2026-11-03
         self.assertEqual(self.by_id[63]["condition"], "")
         self.assertEqual(self.by_id[97]["on_summon"], "Apply 3 Cleanse to this Unit.")
         self.assertEqual(self.by_id[97]["condition"], "")
         self.assertEqual(self.by_id[97]["description"].count("Apply 3 Cleanse"), 1)
-        self.assertEqual(self.by_id[63]["description"].count("Apply Reveal"), 1)
+        self.assertEqual(self.by_id[63]["description"].count("apply Reveal"), 1)
 
     def test_legacy_condition_move_still_handles_an_empty_summon_cell(self):
         # A source that still stores the effect in `condition` (the old layout) is moved once.
@@ -73,9 +73,9 @@ class ImportRegressionTest(unittest.TestCase):
 
     def test_unique_stable_ids(self):
         ids = [c["id"] for c in self.data["cards"]]
-        self.assertEqual(len(ids), 188)
-        self.assertEqual(len(set(ids)), 188)
-        self.assertEqual(set(ids), set(range(1, 189)))
+        self.assertEqual(len(ids), 191)                     # 189-191 arrived on 2026-11-03
+        self.assertEqual(len(set(ids)), 191)
+        self.assertEqual(set(ids), set(range(1, 192)))
 
     def test_new_cards_of_2026_10_18(self):
         expect = {184: ("Counter Transmutation", "trap"), 185: ("Drako, Councillor of The Order", "arcane"),
@@ -85,7 +85,7 @@ class ImportRegressionTest(unittest.TestCase):
             self.assertEqual((self.by_id[cid]["name"], self.by_id[cid]["category"]), (name, cat), cid)
         self.assertEqual(self.by_id[184]["condition"], "If a Spell/Trap is Destroyed:")   # "Sell/Trap" typo
         self.assertEqual((self.by_id[186]["cost_kind"], self.by_id[186]["cost"]), ("ritual", 1))
-        self.assertEqual((self.by_id[185]["cost"], self.by_id[187]["cost"]), (3, 1))
+        self.assertEqual((self.by_id[185]["cost"], self.by_id[187]["cost"]), (4, 2))   # 2026-11-03 costs
         self.assertIsNone(self.by_id[188]["cost"])
 
     def test_light_and_dark_replace_heavenly_and_necrotic(self):
@@ -95,7 +95,7 @@ class ImportRegressionTest(unittest.TestCase):
         self.assertEqual(self.by_id[13]["type"], "Dark")          # Chaos Witch is no longer typeless
         self.assertEqual(self.by_id[13]["art"]["type_icon"], "Card/types/dark.png")
         self.assertEqual(self.by_id[105]["type"], "Light")
-        self.assertEqual(self.by_id[61]["condition"], "Warrior Unit + Light Unit")
+        self.assertEqual(self.by_id[61]["condition"], "Unit with 20 or more ATK or DEF + Light Unit")
 
     def test_extra_deck_descriptions_leave_out_the_summon_requirement(self):
         for c in self.data["cards"]:
@@ -117,21 +117,23 @@ class ImportRegressionTest(unittest.TestCase):
 
     def test_typed_special_values(self):
         self.assertEqual((self.by_id[95]["cost_kind"], self.by_id[95]["cost"]), ("ritual", 2))   # Mimic 2R
-        self.assertEqual((self.by_id[183]["cost"], self.by_id[183]["atk"], self.by_id[183]["def"]), (3, 12, 20))
-        self.assertEqual((self.by_id[175]["atk"], self.by_id[174]["atk"], self.by_id[174]["def"]), (26, 8, 18))
+        self.assertEqual((self.by_id[183]["cost"], self.by_id[183]["atk"], self.by_id[183]["def"]), (3, 10, 18))
+        self.assertEqual((self.by_id[175]["atk"], self.by_id[174]["atk"], self.by_id[174]["def"]), (20, 8, 20))
         self.assertIsNone(self.by_id[176]["def"])          # Tritu ?/? since 2026-10-18
-        self.assertEqual((self.by_id[65]["atk"], self.by_id[65]["def"]), (40, 28))
+        self.assertEqual((self.by_id[65]["atk"], self.by_id[65]["def"]), (36, 12))
+        self.assertIsNone(self.by_id[151]["atk"])          # Ultimate Dragon ?/? since 2026-11-03
         self.assertIsNone(self.by_id[96]["cost"])          # Roma ?R
         self.assertIsNone(self.by_id[95]["atk"])           # Mimic ?/?
         self.assertEqual(self.by_id[177]["type"], "")      # The Illusionist: typeless
         self.assertEqual(self.by_id[177]["atk"], 30)
         self.assertEqual(self.by_id[177]["art"]["type_icon"], "Card/types/unknown.png")
-        self.assertEqual((self.by_id[9]["cost"], self.by_id[9]["def"]), (2, 22))
+        self.assertEqual((self.by_id[9]["cost"], self.by_id[9]["def"]), (2, 16))
 
     def test_confirmed_corrections_survive(self):
-        self.assertIn("Choose one of your opponent's Units", self.by_id[48]["on_summon"])
+        self.assertEqual(self.by_id[48]["on_summon"], "One of your opponent's Units Permanently loses -20 ATK.")
         self.assertNotIn("highest", self.by_id[48]["description"])
-        self.assertIn("one of your Units in this Column", self.by_id[45]["condition"])
+        for cid in (45, 47):
+            self.assertEqual(self.by_id[cid]["condition"], "If your opponent's Unit in this Column declares an Attack:")
         self.assertEqual(self.by_id[1]["name"].find("("), -1)
         for cid in list(range(170, 178)) + [185, 187]:
             self.assertEqual(self.by_id[cid]["condition"], "Exhaust Units from Spent whose combined Cost equals this Unit's Cost.")
@@ -141,10 +143,10 @@ class ImportRegressionTest(unittest.TestCase):
         self.assertEqual(self.by_id[169]["on_field"], "At the start of your turn: draw a card.")
         self.assertNotIn("raw", self.by_id[169]["source"])
         self.assertEqual(self.by_id[90]["on_field"], "Once per turn: you can apply 1 Paralyse to a Unit.")
-        self.assertEqual(self.by_id[183]["on_field"], "At the start of your turn: your opponent takes -6 HP Damage.")
+        self.assertEqual(self.by_id[183]["on_field"], "Once per turn: you can apply 6 Poison to a Unit in this Column.")
 
     def test_mirror_force_keeps_counting_cards_in_the_new_sentence_shape(self):
-        # 2026-10-20 export says "4 or more Units"; wording-only batch, the rule counts cards.
+        # The 2026-10-20 and 2026-11-03 exports say "4 or more Units"; the owner confirmed cards (2026-11-03).
         self.assertEqual(self.by_id[46]["condition"], "If your opponent Controls 4 or more cards and declares an Attack:")
         self.assertIn("condition", self.by_id[46]["source"]["raw"])
 
@@ -155,11 +157,67 @@ class ImportRegressionTest(unittest.TestCase):
         self.assertIn("On Destroy: Change the Stance of all Units.", self.by_id[147]["description"])
 
     def test_standardised_export_needs_no_typo_corrections(self):
-        for cid in (12, 40, 73, 102, 141, 162, 184, 186, 187, 188):
+        for cid in (40, 102, 141, 184, 186, 187):
             self.assertNotIn("raw", self.by_id[cid]["source"], cid)
         self.assertIn("Unit's", self.by_id[102]["on_field"])
-        self.assertEqual(sorted(ic.TEXT_CORRECTIONS), [45, 46, 47, 48, 147])
-        self.assertIn("and can attack this Unit: that Unit must attack this Unit", self.by_id[147]["on_field"])
+        self.assertEqual(sorted(ic.TEXT_CORRECTIONS), [21, 45, 46, 47, 48, 135, 146, 147, 170])
+        self.assertTrue(self.by_id[147]["on_field"].endswith("Your opponent's Units cannot attack other Units if they can attack this Unit."))
+
+    # ---- 2026-11-03 (JB Edit export): new layout and owner rulings
+
+    def test_lowercase_sentence_starts_are_capitalised_and_kept_as_provenance(self):
+        self.assertEqual(self.by_id[73]["on_summon"], "Add a Warrior Unit from Draw to Hand.")
+        self.assertEqual(self.by_id[73]["source"]["raw"]["On Summon/Play"], "add a Warrior Unit from Draw to Hand.")
+        self.assertEqual(self.by_id[14]["on_destruction"], "Take -6 HP Damage, then your opponent must take -6 HP Damage.")
+        for c in self.data["cards"]:
+            for k in ("condition", "on_summon", "on_field", "on_destruction"):
+                self.assertFalse(c[k][:1].islower(), (c["id"], k))
+                self.assertEqual(c[k], c[k].strip(), (c["id"], k))
+
+    def test_owner_typo_fixes_of_2026_11_03(self):
+        self.assertIn("If your opponent Summons a Unit, then that Unit Permanently loses -10 ATK.", self.by_id[21]["on_field"])
+        self.assertTrue(self.by_id[146]["on_field"].startswith("Once per turn: you can Summon a Basic Unit"))
+        self.assertIn("Dragon Unit: this Unit cannot be in Attack Stance", self.by_id[135]["on_field"])
+        self.assertEqual(self.by_id[170]["on_summon"], "If your opponent Controls more cards: you can discard a card to gain +1 AP.")
+
+    def test_new_cards_of_2026_11_03(self):
+        expect = {189: ("Owlbear Druid", "fusion", "Mage", "Physical", 34, 24, "Beast Unit + Physical Unit"),
+                  190: ("Snow Tiger Paladin", "fusion", "Warrior", "Light", 18, 40, "Beast Unit + Light Unit")}
+        for cid, (name, cat, race, ty, atk, df, mat) in expect.items():
+            c = self.by_id[cid]
+            self.assertEqual((c["name"], c["category"], c["race"], c["type"], c["atk"], c["def"], c["material"]),
+                             (name, cat, race, ty, atk, df, mat), cid)
+            self.assertEqual(c["source"]["raw"]["name"], name + " inspired")
+        box = self.by_id[191]
+        self.assertEqual((box["name"], box["category"], box["cost_kind"], box["cost"]), ("Do Not Open Box", "trap", "ap", 2))
+        self.assertEqual(box["condition"], "If your opponent Destroys this Trap:")
+        self.assertEqual(box["on_summon"], "Summon a Unit from Draw in this Column.")
+        for cid in (189, 190, 191):
+            self.assertIsNone(self.by_id[cid]["source"]["index"], cid)
+            self.assertEqual(self.by_id[cid]["art"], {"image": "", "card_img": "", "type_icon": ""}, cid)
+        self.assertEqual([c["id"] for c in self.data["cards"][-3:]], [189, 190, 191])   # no index: sorted last
+
+    def test_damage_conversion_costs_one_by_owner_ruling(self):
+        self.assertEqual(self.by_id[47]["cost"], 1)
+        self.assertEqual(self.by_id[47]["source"]["raw"]["cost"], "0")
+
+    def test_art_and_material_come_through_without_their_columns(self):
+        prev = {c["id"]: c for c in ic.build(os.path.join(ic.SRC, "RLDB Master - Card Database (2026-10-20).csv"))["cards"]}
+        for cid, c in prev.items():
+            self.assertEqual(self.by_id[cid]["art"], c["art"], cid)
+        self.assertEqual(self.by_id[94]["material"], "2 Units with the same Type")
+        self.assertEqual(self.by_id[146]["material"], "Basic Unit + Basic Unit + Basic Unit")
+        self.assertEqual(self.by_id[170]["material"], self.by_id[170]["condition"])
+        self.assertEqual(self.by_id[63]["material"], "")                    # Rituals have none
+
+    def test_empty_description_column_is_rebuilt_from_the_rules_texts(self):
+        self.assertEqual(self.by_id[12]["description"],
+                         "On Summon: If you Control another Unit in this Column: you can draw a card and gain +1 AP. "
+                         "You can lose -1 AP to Summon a Unit with 20 ATK or less from Spent in this Column.")
+        for c in self.data["cards"]:
+            if c["category"] != "basic_unit":
+                self.assertTrue(c["description"], c["id"])
+            self.assertNotIn("description", c["source"].get("raw", {}), c["id"])
 
     def test_no_orphan_card_or_note(self):
         self.assertEqual(self.data["unassigned_source_notes"], [])
@@ -195,7 +253,7 @@ class AdoptTest(unittest.TestCase):
 
     def test_stat_change_is_listed_and_text_change_is_flagged(self):
         lines = ic.report(self.cards, self._changed(175, atk=30, on_field="Something new."))
-        self.assertTrue(any(l.startswith("stat  175") and "atk 26 -> 30" in l for l in lines), lines)
+        self.assertTrue(any(l.startswith("stat  175") and "atk 20 -> 30" in l for l in lines), lines)
         self.assertTrue(any(l.startswith("TEXT  175") and "check whether the behaviour changed" in l for l in lines), lines)
 
     def test_new_and_removed_ids_are_reported(self):

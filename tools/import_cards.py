@@ -75,16 +75,38 @@ LEGACY_CONDITION_TO_SUMMON = {63, 97}
 #         Infiltrate attacker is forced even while it is Protected (raw text: "is Unprotected").
 # Dropped as obsolete (the standardised export fixed them): the possessive and typo fixes on 12,
 # 40, 73, 102, 141, 162, 184, 186, 187 and 188, and earlier 169, 90 and 183.
-#   46 (owner, 2026-10-20: wording only, no effect changes): the 2026-10-20 export says "Controls 4 or
-#         more Units"; the rule (and every earlier export) counts cards, so the new sentence shape is
-#         kept with "cards". Raised with the owner for a ruling.
+#   46 (owner, 2026-10-20, confirmed 2026-11-03): the sheet says "Controls 4 or more Units"; Mirror
+#         Force counts cards.
+# Owner rulings of 2026-11-03 on the JB Edit export (design/card-database-update-2026-11-03.md):
+#   45/47: Magic Cylinder / Damage Conversion read "If your opponent's Unit in this Column declares an
+#         Attack:" (the attacker's column; a direct attack counts). Supersedes the C-03 wording.
+#   48: Overextend reads "One of your opponent's Units Permanently loses -20 ATK." (controller chooses).
+#   147: Demented Apparition's lure reads "Your opponent's Units cannot attack other Units if they can
+#         attack this Unit." (supersedes the 2026-10-18 "must attack this Unit" wording).
+#   Typos the owner asked to fix: 21 "you opponent summons" -> "your opponent Summons"; 146 "summon" ->
+#         "Summon"; 135 and 170 a capital just after a colon (house style is lowercase there).
 TEXT_CORRECTIONS = {
+    21: {"on_field": "This Unit gains +10 ATK/DEF for each card in Exhaust. If your opponent Summons a Unit, then that Unit Permanently loses -10 ATK."},
+    45: {"condition": "If your opponent's Unit in this Column declares an Attack:"},
     46: {"condition": "If your opponent Controls 4 or more cards and declares an Attack:"},
-    45: {"condition": "If your opponent declares an Attack on one of your Units in this Column:"},
-    47: {"condition": "If your opponent declares an Attack on one of your Units in this Column:"},
-    48: {"on_summon": "Choose one of your opponent's Units, it Permanently loses -20 ATK."},
-    147: {"on_field": "At the start of your turn: your opponent's Units lose -8 DEF. If your opponent's Unit attacks and can attack this Unit: that Unit must attack this Unit."},
+    47: {"condition": "If your opponent's Unit in this Column declares an Attack:"},
+    48: {"on_summon": "One of your opponent's Units Permanently loses -20 ATK."},
+    135: {"on_field": "If this Unit is Protected by a Dragon Unit: this Unit cannot be in Attack Stance, then that Dragon Unit gains +14 ATK."},
+    146: {"on_field": "Once per turn: you can Summon a Basic Unit from Draw to an Adjacent Zone. This Unit gains +8 ATK/DEF for each of your Adjacent Basic Units."},
+    147: {"on_field": "At the start of your turn: your opponent's Units lose -8 DEF. Your opponent's Units cannot attack other Units if they can attack this Unit."},
+    170: {"on_summon": "If your opponent Controls more cards: you can discard a card to gain +1 AP."},
 }
+
+# Owner rulings of 2026-11-03: the new cards drop the sheet's working suffix "inspired", and Damage
+# Conversion costs 1 (the sheet says 0).
+NAME_CORRECTIONS = {189: "Owlbear Druid", 190: "Snow Tiger Paladin"}
+COST_CORRECTIONS = {47: "1"}
+
+# From the 2026-11-03 export the sheet no longer carries the art columns (image, card_img, type_icon)
+# or `material`. Art references come from the newest earlier pinned export that has them (by ID; a new
+# card has none until its art arrives); an Extra Deck card's material is its `condition` cell, which
+# every export has kept identical to `material`.
+ART_COLUMNS = ("image", "card_img", "type_icon")
 
 # F03-04: Arcane material is an exact payment. The standardised export states it itself ("whose
 # combined Cost equals this Unit's Cost"); only the older ambiguous wording ("Cost equivilant to
@@ -151,11 +173,25 @@ def describe(c):
     return " ".join(parts)
 
 
+def _art_fallback():
+    """ID -> art cells from the newest earlier pinned export that has the art columns."""
+    for name in PREVIOUS_SOURCES:
+        p = os.path.join(SRC, name)
+        if not os.path.exists(p):
+            continue
+        with open(p, encoding="utf-8-sig", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        if rows and all(c in rows[0] for c in ART_COLUMNS):
+            return {int(r["id"]): r for r in rows if r["id"].strip()}
+    return {}
+
+
 def build(card_csv=None):
     """Returns {"cards": [...], "unassigned_source_notes": [...]} from the card CSV."""
     path = card_csv or os.path.join(SRC, CARD_SOURCE)
     with open(path, encoding="utf-8-sig", newline="") as fh:
         rows = list(csv.DictReader(fh))
+    art_rows = None if rows and all(c in rows[0] for c in ART_COLUMNS) else _art_fallback()
     cards = []
     for row in rows:
         raw_name = row["name"]
@@ -167,11 +203,23 @@ def build(card_csv=None):
         cid = int(row["id"])
         raw = {}
         category = CATEGORY_KEYS[row["category"].strip()]
-        cost_kind, cost = parse_cost(category, row["cost"])
+        cost_cell = row["cost"]
+        if cid in COST_CORRECTIONS and cost_cell.strip() != COST_CORRECTIONS[cid]:
+            raw["cost"] = cost_cell
+            cost_cell = COST_CORRECTIONS[cid]
+        cost_kind, cost = parse_cost(category, cost_cell)
         condition = row["condition"].strip()
         on_summon = row["On Summon/Play"].strip()
-        material = row["material"].strip()
+        if "material" in row:
+            material = row["material"].strip()
+        else:
+            material = condition if category in ("fusion", "arcane") else ""
         description = row["description"].strip()
+        if art_rows is None:
+            art = {k: row[k].strip() for k in ART_COLUMNS}
+        else:
+            ar = art_rows.get(cid, {})
+            art = {k: ar.get(k, "").strip() for k in ART_COLUMNS}
         if condition.lower() in EDITORIAL_CONDITIONS:
             raw["condition"] = row["condition"]
             condition = ""
@@ -181,6 +229,7 @@ def build(card_csv=None):
             on_summon, condition = condition, ""
         if category == "basic_unit" and name.endswith(")") and BASIC_TYPE_SUFFIX in name:
             name = name[:name.rindex(BASIC_TYPE_SUFFIX)]
+        name = NAME_CORRECTIONS.get(cid, name)
         if name != raw_name:
             raw["name"] = raw_name
         c = {
@@ -200,10 +249,13 @@ def build(card_csv=None):
             "on_destruction": row["On Destruction"].strip(),
             "material": material,
             "description": description,
-            "art": {"image": row["image"].strip(), "card_img": row["card_img"].strip(), "type_icon": row["type_icon"].strip()},
-            "source": {"file": os.path.basename(path), "sheet": row["sheet"].strip(), "index": int(row["index"])},
+            "art": {"image": art["image"], "card_img": art["card_img"], "type_icon": art["type_icon"]},
+            # A new card can arrive without a sheet index (2026-11-03): null, sorted after the rest.
+            "source": {"file": os.path.basename(path), "sheet": row["sheet"].strip(),
+                       "index": int(row["index"]) if row["index"].strip() else None},
         }
-        rebuild = "On Summon/Play" in raw
+        # The 2026-11-03 export leaves `description` empty: it is rebuilt from the rules texts.
+        rebuild = "On Summon/Play" in raw or not description
         if category == "arcane":
             for key, col in (("condition", "condition"), ("material", "material")):
                 if AMBIGUOUS_ARCANE in c[key].lower() or not c[key]:
@@ -222,7 +274,8 @@ def build(card_csv=None):
                 c[field] = text
                 rebuild = True
         if rebuild:
-            raw["description"] = row["description"]
+            if row["description"].strip():
+                raw["description"] = row["description"]
             c["description"] = describe(c)
         if raw:
             c["source"]["raw"] = dict(sorted(raw.items()))
@@ -232,7 +285,7 @@ def build(card_csv=None):
     assert len(set(ids)) == len(ids), "duplicate ids"
     for c in cards:
         assert "temp" not in (c["condition"] + c["on_summon"]).lower().split(), c["id"]
-    cards.sort(key=lambda c: (c["source"]["index"], c["id"]))
+    cards.sort(key=lambda c: (c["source"]["index"] is None, c["source"]["index"] or 0, c["id"]))
     return {"cards": cards, "unassigned_source_notes": []}
 
 
