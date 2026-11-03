@@ -1071,6 +1071,104 @@ def s_step_done(r):
     return finish(mix(scale(a, 0.6), (0.07, scale(b, 0.75))), tail_kw=dict(wet=0.3, extra_s=0.18))
 
 
+# ---------------------------------------------------------------- K1 (2026-10-23): the Spell / Trap spotlight
+# One cue per full-screen card presentation, played the moment the card lands in the centre (its glint and
+# sparks). Same build as the set pieces (glass voices, brass voices, a long hall, a clean limiter), but shorter,
+# so a chain of spotlights never smears, and a little under the set-piece climaxes in the mix (PEAK).
+APENTA = (1760.0, 1975.5, 2217.5, 2637.0, 2960.0, 3520.0)   # A major pentatonic, A6 up
+
+
+def s_spell_cast(r):
+    """K1 Spell cast / activated: an arcane cast. A rising glass 'fwip' releases into a bright A major
+    glass-harmonica bloom (A3-E4-A4-C#5-E5) whose voices open one by one, an FM glass tone that climbs an
+    octave as the spell takes flight, a spiral of sparkles up the A pentatonic, a warm A2 sub and a breath
+    of air; all of it rings out in an airy hall. Soft attack on the landing, no hit, no noise burst."""
+    sec = 1.7
+    n = n_samples(sec)
+    pick = n_samples(0.05)
+    # The pickup: a filtered air sweep rising into the landing, then letting go (never a burst).
+    fwip = taper(mul(lowpass2(bandpass_sweep(noise(r, 0.2), 900.0, 5200.0, q=2.4), 7000.0),
+                     [((i / pick) ** 2 if i < pick else math.exp(-(i - pick) / SR / 0.05)) for i in range(n_samples(0.2))]), 0.06)
+    chord = [0.0] * n
+    for f, st, at, dec, amp in ((220.0, 0.0, 0.045, 1.1, 0.8), (329.63, 0.015, 0.05, 1.0, 0.7),
+                                (440.0, 0.035, 0.035, 0.9, 0.6), (554.37, 0.06, 0.04, 0.8, 0.5),
+                                (659.25, 0.09, 0.05, 0.7, 0.42)):
+        chord = mix(chord, scale(_glass_voice(r, f, sec, st, at, dec), amp))
+    chord = taper(chord, 0.6)
+    # The cast: an FM glass tone climbing A4 -> A5 as the spell takes flight, its brightness easing off.
+    ph, cast = 0.0, []
+    nc = n_samples(0.9)
+    for i in range(nc):
+        u = i / nc
+        f = 440.0 * 2.0 ** min(1.0, u / 0.35)
+        ph += TWO_PI * f / SR
+        g = (0.5 - 0.5 * math.cos(math.pi * min(1.0, i / n_samples(0.02)))) * math.exp(-i / SR / 0.28)
+        cast.append(math.sin(ph + (1.2 * math.exp(-i / SR / 0.15)) * math.sin(ph * 2.0)) * g)
+    cast = taper(cast, 0.3)
+    # The spiral of sparkles, climbing and thinning.
+    parts = []
+    for k in range(14):
+        off = 0.03 + 0.7 * (k / 13.0) ** 1.3
+        f = APENTA[k % len(APENTA)] * (1.0 if k < 7 else 1.0025)
+        g = 0.38 * math.exp(-off / 0.5) * r.uniform(0.75, 1.0)
+        parts.append((off, scale(taper(tone(f, 0.6, r.uniform(0.08, 0.14), ((1, 1), (2.0, 0.05)), 0.004), 0.2), g)))
+    sparkle = mix(*parts)
+    ns = n_samples(1.2)
+    sub = taper(mul(sweep(118.0, 110.0, 1.2), [(0.5 - 0.5 * math.cos(math.pi * min(1.0, i / n_samples(0.05)))) * math.exp(-i / SR / 0.35)
+                                               for i in range(ns)]), 0.4)
+    na = n_samples(0.9)
+    air = taper(mul(lowpass2(highpass(noise(r, 0.9), 3000.0), 8000.0),
+                    [(min(1.0, i / n_samples(0.05)) ** 2) * math.exp(-i / SR / 0.25) for i in range(na)]), 0.3)
+    x = mix(scale(fwip, 0.35), scale(chord, 1.0), scale(cast, 0.32), scale(sparkle, 1.0), scale(sub, 0.4), scale(air, 0.07))
+    x = hall(x, wet=0.5, predelay_s=0.02, rt60=1.8, damp=6500.0, extra_s=0.3)
+    x = smooth_limit(x, 4.0)
+    return finish(taper(x, 0.6), rev=False)
+
+
+def _iron(r, f, sec, dec):
+    """An iron jaw ringing: inharmonic partials (a struck bar) through a dark low-pass, 2 ms rounded attack."""
+    n = n_samples(sec)
+    out = [0.0] * n
+    for ratio, amp, d in ((1.0, 1.0, 1.0), (2.76, 0.45, 0.6), (5.4, 0.18, 0.35), (8.93, 0.06, 0.2)):
+        w = TWO_PI * f * ratio / SR
+        ph = r.uniform(0.0, TWO_PI)
+        for i in range(n):
+            out[i] += amp * math.sin(w * i + ph) * math.exp(-i / SR / (dec * d))
+    a = n_samples(0.002)
+    for i in range(min(a, n)):
+        out[i] *= 0.5 - 0.5 * math.cos(math.pi * i / a)
+    return lowpass2(out, 3200.0)
+
+
+def s_trap_spring(r):
+    """K1 Trap activated: a trap springs. A tight mechanical snap (a wooden latch knock on a low thump,
+    rounded, never a noise crack) sets off an iron jaw ringing; the cover is torn away (a falling
+    whoosh) and a dark brass stinger rises out of it, an open D fifth with an Eb grinding against the D
+    (menace, not fanfare). A darker, shorter hall than the Spell; nothing harsh above 4 kHz."""
+    sec = 1.5
+    n = n_samples(sec)
+    knock = tone(780.0, 0.12, 0.022, ((1, 1), (2.31, 0.35), (3.62, 0.12)), 0.0012)
+    click = mul(lowpass2(noise(r, 0.03), 2200.0), env_exp(n_samples(0.03), 0.005, 0.0008))
+    thump = mul(sweep(150.0, 52.0, 0.35), [(0.5 - 0.5 * math.cos(math.pi * min(1.0, i / n_samples(0.003)))) * math.exp(-i / SR / 0.09)
+                                           for i in range(n_samples(0.35))])
+    snap = mix(scale(knock, 0.55), scale(click, 0.5), scale(thump, 1.0))
+    jaw = taper(_iron(r, 196.0, 1.1, 0.45), 0.3)
+    nw = n_samples(0.42)
+    whoosh = taper(mul(lowpass(bandpass_sweep(noise(r, 0.42), 2600.0, 420.0, q=1.6), 3500.0),
+                       [(min(1.0, i / n_samples(0.03)) ** 1.5) * math.exp(-i / SR / 0.14) for i in range(nw)]), 0.1)
+    # The stinger: low brass, blooming open then closing as it rings.
+    lip = lambda t: 1.4 + 3.2 * (min(1.0, t / 0.07) if t < 0.07 else math.exp(-(t - 0.07) / 0.35))
+    sting = [0.0] * n
+    for f, st, amp, dec, c in ((73.42, 0.02, 0.55, 0.7, -4.0), (110.0, 0.025, 0.6, 0.65, 4.0),
+                               (146.83, 0.03, 0.5, 0.6, -3.0), (155.56, 0.06, 0.32, 0.55, 3.0)):
+        sting = mix(sting, scale(_brass_voice(f * 1.03, f, 0.05, sec, st, 0.03, dec, lip, c, r.uniform(0, TWO_PI)), amp))
+    sting = taper(sting, 0.5)
+    x = mix(scale(snap, 1.8), scale(jaw, 0.22), (0.015, scale(whoosh, 0.5)), scale(sting, 0.7))
+    x = hall(x, wet=0.4, predelay_s=0.015, rt60=1.5, damp=4000.0, extra_s=0.25)
+    x = smooth_limit(x, 5.5)   # level the snap's peak so the stinger carries the loudness
+    return finish(taper(x, 0.5), rev=False)
+
+
 SOUNDS = [
     ("card_draw", s_card_draw), ("card_play", s_card_play), ("card_set", s_card_set),
     ("summon", s_summon), ("select", s_select), ("confirm", s_confirm),
@@ -1093,6 +1191,7 @@ SOUNDS = [
     ("toggle_on", s_toggle_on), ("toggle_off", s_toggle_off), ("hp_low_heartbeat", s_hp_low_heartbeat),
     ("card_hover", s_card_hover), ("reward_reveal", s_reward_reveal), ("reward_pick", s_reward_pick),
     ("step_done", s_step_done),
+    ("spell_cast", s_spell_cast), ("trap_spring", s_trap_spring),
 ]
 
 # Per-sound peak level (dBFS); default PEAK_DBFS. UI clicks sit well under the game sounds.
@@ -1108,7 +1207,10 @@ PEAK = {"chat": -12.0, "chat_pop": -10.0,"click_primary": -11.0, "click_secondar
         # H29: the same rule for the other two set pieces. Each climax sits within 1 LU of arcane_impact and
         # each build-up within 1 LU of arcane_shimmer (loudest 400 ms, K-weighted); the low brass of Fusion
         # needs the most peak for the same loudness.
-        "fusion_vortex": -5.0, "fusion_impact": -3.5, "ritual_choir": -4.5, "ritual_impact": -5.0}
+        "fusion_vortex": -5.0, "fusion_impact": -3.5, "ritual_choir": -4.5, "ritual_impact": -5.0,
+        # K1: the spotlight cues. A Spell or Trap shows many times a game, so each cue sits about 2 LU under
+        # the set-piece climaxes and about 2 LU over the board sounds (loudest 400 ms, K-weighted).
+        "spell_cast": -7.5, "trap_spring": -5.0}
 
 
 # Hard duration caps (seconds); longer renders are trimmed and re-faded.
@@ -1117,7 +1219,8 @@ MAX_LEN = {"boom": 1.6, "charge": 1.4, "victory_big": 2.6, "exhaust": 1.3, "fuse
            "arcane_impact": 2.4, "card_slam": 0.6, "serpent_coil": 1.6, "serpent_strike": 1.6, "sacrifice": 1.2,
            "ap_gain": 0.6, "ap_loss": 0.45,
            "ui_hover": 0.12, "panel_open": 0.55, "panel_close": 0.35, "tab": 0.2, "toggle_on": 0.16, "toggle_off": 0.16,
-           "hp_low_heartbeat": 0.75, "card_hover": 0.14, "chat_pop": 0.8, "reward_reveal": 0.9, "reward_pick": 0.6, "step_done": 0.6}
+           "hp_low_heartbeat": 0.75, "card_hover": 0.14, "chat_pop": 0.8, "reward_reveal": 0.9, "reward_pick": 0.6, "step_done": 0.6,
+           "spell_cast": 2.2, "trap_spring": 2.0}
 
 
 def write_wav(path, x):

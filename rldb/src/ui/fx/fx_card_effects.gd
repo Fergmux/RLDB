@@ -110,6 +110,44 @@ func attack(e: Dictionary) -> void:
 	tw.tween_callback(_fx.reset_widget.bind(w, holder))
 
 
+## K4: attack event `e` was declared and waits for a Trap prompt (FxPlayer.stage_attacks): the attacker
+## rears back from its target and glows in the target colour, then settles. It never lunges or touches
+## the target: the strike plays when the battle resolves. Reduced motion: the glow only.
+func declare(e: Dictionary) -> void:
+	var screen: Control = _fx.screen
+	var from: Dictionary = e.get("from", {})
+	var to: Dictionary = e.get("to", {})
+	var it: Dictionary = screen.fx_slot_item(int(from.get("p", -1)), "unit", int(from.get("slot", -1)))
+	if it.is_empty():
+		return
+	var w: CardWidget = it["widget"]
+	var holder: Control = it["holder"]
+	_fx.add_cleanup(_fx.reset_widget.bind(w, holder))
+	var col := Color(UIStyle.TARGET, 0.55)   # softer than the strike's 0.8: the card art stays readable while it waits
+	var tw := _fx.new_tween()
+	if UIStyle.reduce_motion:
+		w.fx_glow = col
+		tw.tween_interval(0.35)
+		tw.tween_property(w, "fx_glow", Color(UIStyle.TARGET, 0.0), 0.25)
+		tw.tween_callback(_fx.reset_widget.bind(w, holder))
+		return
+	var start_c: Vector2 = holder.get_global_rect().get_center()
+	var target_c: Vector2 = screen.side_center(int(to.get("p", 0))) if bool(to.get("direct", false)) \
+		else screen.fx_slot_global_rect(int(to.get("p", 0)), "unit", int(to.get("slot", 0))).get_center()
+	var back := -(target_c - start_c).normalized() * 10.0
+	holder.z_index = UiLayers.FX_CARD
+	w.pivot_offset = w.size / 2.0
+	tw.set_parallel(true)
+	tw.tween_property(w, "fx_offset", back, UIStyle.dur(0.18)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "scale", Vector2(1.05, 1.05), UIStyle.dur(0.18)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(w, "fx_glow", col, UIStyle.dur(0.14))
+	tw.chain().tween_interval(UIStyle.dur(0.32))
+	tw.chain().tween_property(w, "fx_offset", Vector2.ZERO, UIStyle.dur(0.26)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	tw.parallel().tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.26)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	tw.parallel().tween_property(w, "fx_glow", Color(UIStyle.TARGET, 0.0), UIStyle.dur(0.4)).set_trans(Tween.TRANS_SINE)
+	tw.chain().tween_callback(_fx.reset_widget.bind(w, holder))
+
+
 ## A status `s` is gained on the card at `at`: coloured glow plus a floating label.
 func status(at: Dictionary, s: String, _n: int) -> void:
 	var p := int(at["p"])

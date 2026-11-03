@@ -9,9 +9,26 @@ extends FxPart
 const HOLD := 1.85
 ## Spotlights waiting behind the one on screen; the oldest is dropped beyond this.
 const MAX_QUEUED := 4
+## K1 (owner feedback 2026-10-23): the cue of each presentation, played once as the card lands in the
+## centre (its glint): an arcane cast for a Spell (cast from the hand or a set Spell activated), a snap
+## and reveal for a Trap. In the mix they sit over the board sounds and under the set-piece climaxes
+## (tools/gen_sfx.py PEAK); the calm (reduced motion) variant plays the cue as the card fades in, a
+## little softer, like the calm set pieces. Nothing else in the batch sounds while the card is shown
+## (FxPlayer holds the rest until it has gone).
+const SOUND_SPELL := "spell_cast"
+const SOUND_TRAP := "trap_spring"
+const CALM_DB := -3.0
+
+## Plays a sound (name, volume dB); tests swap it to count the cues.
+var play_sfx: Callable = func(n: String, db: float) -> void: Sfx.play(n, db, 0.0)
 
 var _queue: Array = []
 var _active: bool = false
+
+
+## The cue of the spotlight for fx event `e`: SOUND_TRAP for a Trap, else SOUND_SPELL.
+static func sound_for(e: Dictionary) -> String:
+	return SOUND_TRAP if String(e.get("how", "cast")) == "trap" else SOUND_SPELL
 
 
 ## True while a spotlight is on screen (or about to be).
@@ -102,8 +119,10 @@ func _show(e: Dictionary) -> void:
 		_fx.free_node(c)
 		_fx.free_node(pill)
 		_next()
+	var snd := sound_for(e)
 	var tw := _fx.new_tween()
 	if UIStyle.reduce_motion:
+		play_sfx.call(snd, CALM_DB)
 		c.position = home
 		c.modulate.a = 0.0
 		tw.set_parallel(true)
@@ -130,6 +149,7 @@ func _show(e: Dictionary) -> void:
 	tw.tween_property(c, "rotation", 0.0, UIStyle.dur(0.34)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
 	# Arrival: glint, accent glow, sparks; the caption pops in.
 	tw.chain().tween_callback(func():
+		play_sfx.call(snd, 0.0)
 		_fx.burst(FxBurst.Kind.SPARK, area.get_center(), accent.lightened(0.4), 12, 170.0, 0.45)
 		c.fx_flash = 0.5
 		c.fx_glow = Color(accent.lightened(0.2), 0.9))

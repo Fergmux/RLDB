@@ -24,6 +24,8 @@ const NAMES: PackedStringArray = [
 	"card_hover", "reward_reveal", "reward_pick", "step_done",
 	# J17 (22 Oct): the new-chat-message pop.
 	"chat_pop",
+	# K1 (23 Oct): the Spell / Trap spotlight cues (FxSpotlight).
+	"spell_cast", "trap_spring",
 ]
 ## F22 / F25: UI sounds. One user action makes exactly one UI sound: within one frame only the request
 ## with the highest priority plays (a later, higher one stops the earlier voice, a lower or equal one is
