@@ -27,6 +27,12 @@ const NUMBER_Z := UiLayers.FX + 2
 const MAX_BATCH_TIME := 3.0
 ## B5: seconds a unit summoned and removed in the same batch stands (as a ghost) before it can be removed.
 const TRANSIENT_HOLD := 0.55
+## K4: a batch with a strike or a Spell/Trap spotlight holds a hot-seat hand-over (GameScreen.fx_hold_until,
+## SessionLauncher._check_hotseat) until its last effect has started plus this many seconds (before
+## UIStyle.dur scaling). After a Trap prompt the strike plays just as the screen would go back to the
+## attacker; without the hold the hand-over cut it (and the Trap's spotlight) at once.
+const HANDOVER_TAIL := 0.6
+const HANDOVER_TAGS := ["attack", "direct", "lethal", "spotlight"]
 
 ## The host screen (GameScreen) that owns the layers and answers the host contract.
 var screen: GameScreen
@@ -88,6 +94,44 @@ func expect_game_end(events: Array) -> void:
 
 ## The killing blow of `events` (FxStrike.detect), with the attack of an earlier batch of this game.
 func lethal_info(events: Array) -> Dictionary:
+	return _lethal(stage_attacks(events))
+
+
+## K4 (owner feedback 2026-10-23): when each attack strikes. The rules write "attack" when an attack is
+## declared and "battle" when it resolves; between the two the defender may be asked whether to use a
+## Trap, and that prompt arrives in the same view as the declaration. So the strike plays at "battle",
+## in whichever batch it comes: "battle" becomes the "attack" every effect below plays (the lunge, its
+## sounds, a killing blow), and its declaration is dropped. A declaration whose battle is not in this
+## batch (it waits for a Trap prompt, or a Trap stopped it) becomes a "declare" cue only: the attacker
+## rears back, and never lunges. Pure: returns a new array.
+static func stage_attacks(events: Array) -> Array:
+	var out := []
+	for i in events.size():
+		var e: Dictionary = events[i]
+		match String(e.get("k", "")):
+			"attack":
+				var resolves := false   # its battle follows in this batch, before any other declaration
+				for j in range(i + 1, events.size()):
+					var kj := String(events[j].get("k", ""))
+					if kj == "attack":
+						break
+					if kj == "battle":
+						resolves = true
+						break
+				if not resolves:
+					var d := e.duplicate()
+					d["k"] = "declare"
+					out.append(d)
+			"battle":
+				var s := e.duplicate()
+				s["k"] = "attack"
+				out.append(s)
+			_:
+				out.append(e)
+	return out
+
+
+func _lethal(events: Array) -> Dictionary:
 	var prior := {}
 	if not _last_attack.is_empty() and screen != null and int(screen.view.get("game_no", -1)) == _last_attack_game:
 		prior = _last_attack
@@ -184,6 +228,7 @@ func finish_all() -> void:
 func play(events: Array, prev_mv: Dictionary) -> void:
 	if events.is_empty():
 		return
+	events = stage_attacks(events)   # K4: strikes play when the battle resolves, never at the declaration
 	if not busy():
 		_tweens.clear()
 		_cleanups.clear()
@@ -196,7 +241,7 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 		if e["k"] == "turn":
 			turn_in_batch = true
 	var fast := UIStyle.reduce_motion
-	var lethal := lethal_info(events)   # F04-07 / F12: the killing blow of this batch, if it has one
+	var lethal := _lethal(events)   # F04-07 / F12: the killing blow of this batch, if it has one
 	_note_attacks(events)
 	var lmode := String(lethal.get("mode", ""))
 	if lmode != "":
@@ -273,6 +318,10 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 					sched.append([st, _cards.attack.bind(e), "attack"])
 					attack_end = st + (0.2 if fast else 0.46)
 					t = st + (0.1 if fast else 0.2)
+			"declare":
+				# K4: declared into a Trap window; the strike plays when its battle resolves.
+				sched.append([t, _cards.declare.bind(e), "declare"])
+				t += 0.1
 			"summon":
 				var sp := int(e["p"])
 				var sslot := int(e["slot"])
@@ -387,6 +436,22 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 		var at := (float(sched[i][0]) * kc + shift) * UIStyle.dur(1.0)
 		last_plan.append({"t": at, "tag": String(sched[i][2]) if sched[i].size() > 2 else ""})
 		_later(at, sched[i][1])
+	_hold_handover()
+
+
+## K4: holds a hot-seat hand-over while this batch's strike or spotlight plays (see HANDOVER_TAIL).
+func _hold_handover() -> void:
+	if screen == null:
+		return
+	var keep := false
+	var end := 0.0
+	for s in last_plan:
+		var tag := String(s["tag"])
+		keep = keep or tag in HANDOVER_TAGS
+		var length := SPOT_HOLD if tag == "spotlight" else 0.0
+		end = maxf(end, float(s["t"]) + (length + HANDOVER_TAIL) * UIStyle.dur(1.0))
+	if keep:
+		screen.fx_hold_until = maxi(screen.fx_hold_until, Time.get_ticks_msec() + int(end * 1000.0))
 
 
 ## The strike call for a killing blow `lethal` (mode "direct" or "unit").

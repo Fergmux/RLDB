@@ -148,6 +148,23 @@ func _op_attack_window(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
+## K4 (owner feedback 2026-10-23): the public "battle" presentation event, written when a declared attack
+## actually resolves (after its Trap window, past every "does not resolve" check). Clients play the
+## strike here, never at the declaration, so an attack a Trap stops never lunges. Same shape as the
+## "attack" event, with the combatants' positions now. It goes first in log entry `entry` (the first
+## entry the battle writes), ahead of the battle's damage and destructions.
+func _battle_fx(a: int, target: int, entry: int) -> void:
+	var p: int = cards[a]["ctl"]
+	var fx := {"k": "battle", "from": {"p": p, "slot": cards[a]["slot"]},
+		"to": {"p": cards[target]["ctl"], "slot": cards[target]["slot"]} if target != -1 else {"p": opp(p), "direct": true}}
+	if entry >= log_entries.size():
+		add_log(" ")   # nothing was written (a 0-damage hit): a fresh public entry the clients have not seen
+	if String(log_entries[entry]["pub"]) == "":
+		add_fx(fx)
+		return
+	log_entries[entry]["fx"].insert(0, fx)
+
+
 ## Type advantage bonus: 6, plus 6 for each active Elemental Mastery ("Your Type Advantage gains
 ## +6 ATK / DEF", 2026-10-18): one copy = 12 as before, two = 18.
 func type_bonus(p: int) -> int:
@@ -323,10 +340,12 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 			return R.END
 		var dburn := status_count(a, "burn")
 		var dmg := atk_of(a)
+		var entry := log_entries.size()
 		if has_flag(a, "no_battle_damage"):
 			add_log("%s's attacks do not inflict damage." % name_of(a))
 		else:
 			change_hp(q, -dmg, " (direct attack by %s)" % name_of(a))
+		_battle_fx(a, -1, entry)
 		_apply_burn(a, p, dburn)
 		return R.CONT
 	if not unit_on_field(target) or cards[target]["ctl"] != q:
@@ -349,6 +368,7 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 	if notes:
 		summary += " (" + ", ".join(notes) + ")"
 	add_log("Battle: " + summary + ".")
+	_battle_fx(a, target, log_entries.size() - 1)
 	var no_dmg := has_flag(a, "no_battle_damage")
 	if defending_atk:
 		if av > dv:
