@@ -274,7 +274,8 @@ func test_ritual_lesson_runes_tribute_and_payoff() -> void:
 	assert_int(null_u["slot"]).is_equal(1)
 	assert_int(m.players[ME]["ap"]).is_equal(1)                     # the Ritual summon paid no AP
 	assert_str(m.cards[h.keys["o_warrior"]]["zone"]).is_equal("spent")
-	assert_int(m.players[RIVAL]["hp"]).is_equal(28)                 # 40 against 8 in Attack stance (2026-10-17 Null 40/28)
+	assert_int(m.players[RIVAL]["hp"]).is_equal(32)                 # 36 against 8 in Attack stance (2026-11-03 Null 36/12)
+	assert_int(int(null_u["runes"])).is_equal(0)                    # its optional On Summon Rune was skipped
 
 
 func test_ritual_lesson_refuses_off_script_commands() -> void:
@@ -300,13 +301,14 @@ func test_arcane_lesson_exact_total_exhausts_materials() -> void:
 	var m := h.game()
 	assert_bool(h.is_complete()).is_true()
 	assert_int(h.refused).is_equal(0)
-	assert_str(m.cards[h.keys["s_mage"]]["zone"]).is_equal("exhaust")
+	# 2026-11-03: Boom costs 4 (both Dragons) and is 20/20.
+	assert_str(m.cards[h.keys["s_mage"]]["zone"]).is_equal("spent")
 	assert_str(m.cards[h.keys["s_wyvern"]]["zone"]).is_equal("exhaust")
-	assert_str(m.cards[h.keys["s_hydra"]]["zone"]).is_equal("spent")
+	assert_str(m.cards[h.keys["s_hydra"]]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[h.keys["s_drake"]]["zone"]).is_equal("spent")
 	assert_str(m.cards[h.keys["p_boom"]]["zone"]).is_equal("unit")
 	assert_int(m.players[ME]["ap"]).is_equal(2)                     # no AP paid for the Arcane summon
-	assert_int(m.players[RIVAL]["hp"]).is_equal(36)                 # flipped to Attack: 32 (26 ATK + 6) against 8
+	assert_int(m.players[RIVAL]["hp"]).is_equal(42)                 # flipped to Attack: 26 (20 ATK + 6) against 8
 
 
 func test_arcane_lesson_offers_no_zero_cost_unit_and_refuses_wrong_totals() -> void:
@@ -314,28 +316,28 @@ func test_arcane_lesson_offers_no_zero_cost_unit_and_refuses_wrong_totals() -> v
 	_play_to(h, "Choose the materials")
 	var pd := h.game().pending
 	assert_bool(pd.get("total_exact", false)).is_true()
-	assert_int(int(pd["total_required"])).is_equal(3)
+	assert_int(int(pd["total_required"])).is_equal(4)               # Boom's 2026-11-03 cost
 	assert_int(_opt(h, "s_drake")).is_equal(-1)                      # 0-cost: not offered (F03-05)
 	var before := _snap(h)
 	var hints := []
 	h.hint.connect(func(t): hints.append(t))
-	# Over-pay: both Dragons = 4.
-	h.handle(ME, {"t": "choose", "id": pd["id"], "indices": [_opt(h, "s_wyvern"), _opt(h, "s_hydra")]})
+	# Under-pay: the Mage and a Dragon = 3.
+	h.handle(ME, {"t": "choose", "id": pd["id"], "indices": [_opt(h, "s_mage"), _opt(h, "s_wyvern")]})
 	# Under-pay: a Dragon alone = 2.
 	h.handle(ME, {"t": "choose", "id": pd["id"], "indices": [_opt(h, "s_wyvern")]})
 	# Over-pay with an exact pair inside it: 1 + 2 + 2 = 5.
 	h.handle(ME, {"t": "choose", "id": pd["id"], "indices": [_opt(h, "s_mage"), _opt(h, "s_wyvern"), _opt(h, "s_hydra")]})
 	assert_array(_snap(h)).is_equal(before)
 	assert_int(h.refused).is_equal(3)
-	assert_array(hints).is_equal([TutorialHost.HINT_TOTAL % [4, 3], TutorialHost.HINT_TOTAL % [2, 3], TutorialHost.HINT_TOTAL % [5, 3]])
+	assert_array(hints).is_equal([TutorialHost.HINT_TOTAL % [3, 4], TutorialHost.HINT_TOTAL % [2, 4], TutorialHost.HINT_TOTAL % [5, 4]])
 	# The view's picker agrees: Confirm would stay disabled for the over-pay, enabled for exact.
 	var vp: Dictionary = h.seats[ME].last_view["match"]["pending"]
-	assert_str(MatchView.multi_pick_error(vp, [_opt(h, "s_wyvern"), _opt(h, "s_hydra")])).is_not_empty()
-	assert_str(MatchView.multi_pick_error(vp, [_opt(h, "s_mage"), _opt(h, "s_hydra")])).is_empty()
-	# The other exact combination (Mage + Hydra), in either order, is accepted.
-	h.handle(ME, {"t": "choose", "id": pd["id"], "indices": [_opt(h, "s_hydra"), _opt(h, "s_mage")]})
+	assert_str(MatchView.multi_pick_error(vp, [_opt(h, "s_mage"), _opt(h, "s_wyvern"), _opt(h, "s_hydra")])).is_not_empty()
+	assert_str(MatchView.multi_pick_error(vp, [_opt(h, "s_wyvern"), _opt(h, "s_hydra")])).is_empty()
+	# The exact combination, in the other order, is accepted.
+	h.handle(ME, {"t": "choose", "id": pd["id"], "indices": [_opt(h, "s_hydra"), _opt(h, "s_wyvern")]})
 	assert_int(h.refused).is_equal(3)
 	assert_str(String(h.current_step()["title"])).is_equal("Choose its zone")
 	_play_all(h)
 	assert_str(h.game().cards[h.keys["s_hydra"]]["zone"]).is_equal("exhaust")
-	assert_str(h.game().cards[h.keys["s_wyvern"]]["zone"]).is_equal("spent")
+	assert_str(h.game().cards[h.keys["s_mage"]]["zone"]).is_equal("spent")
