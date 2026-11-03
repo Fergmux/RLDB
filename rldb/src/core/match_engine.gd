@@ -694,7 +694,7 @@ func _op_ritual_pick(f: Dictionary, op: Dictionary) -> int:
 ## Stance step of a summon command. Commands summon only in the player's own Setup or Recovery
 ## Phase, where B3 enters the unit in Attack stance without asking (SummonOps.stance_choice_open).
 func _stance_op(_cmd: Dictionary) -> Dictionary:
-	return {"op": "pick_stance", "as": "stance", "cancellable": true}
+	return {"op": "pick_stance", "as": "stance", "cancellable": true, "slot": "$slot"}
 
 
 ## B3 (owner feedback 2026-10-20): whether unit `uid` may change stance manually now. Always in

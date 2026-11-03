@@ -66,9 +66,22 @@ func stance_choice_open(p: int) -> bool:
 	return p != active or not (phase in [PHASE_MAIN1, PHASE_MAIN2])
 
 
+## Dragon Rider (owner, 3 Nov): a unit that cannot be in Attack stance while protected by a Dragon,
+## summoned into back-row `slot` of player p behind a Dragon, enters in Defense stance unasked.
+func summon_stance_locked(unit: int, p: int, slot: int) -> bool:
+	if slot < 0 or slot_row(slot) != 1 or not has_flag_raw(unit, "rider_no_attack"):
+		return false
+	var front: int = players[p]["units"][slot - 3]
+	return front != -1 and unit_race(front) == "Dragon"
+
+
 func _op_pick_stance(f: Dictionary, op: Dictionary) -> int:
 	# `for`: the unit being summoned when it is not the frame's source (Fusion / special summons).
+	# `slot`: the zone it is going to (a var), so a Dragon Rider behind a Dragon is never offered Attack.
 	var unit: int = int(op.get("for", f["src"]))
+	if op.has("slot") and summon_stance_locked(unit, f["ctl"], int(eval_num(f, op["slot"]))):
+		f["vars"][op["as"]] = "def"
+		return R.CONT
 	if has_flag_raw(unit, "no_defense") or op.get("fixed", "") == "atk" or not stance_choice_open(f["ctl"]):
 		f["vars"][op["as"]] = "atk"
 		return R.CONT

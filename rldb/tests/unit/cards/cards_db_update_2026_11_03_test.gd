@@ -501,6 +501,39 @@ func test_c135_dragon_rider_summoned_behind_a_dragon_is_put_in_defense() -> void
 	assert_str(m.validate(0, {"t": "stance", "uid": rider})).contains("cannot be in Attack stance")
 
 
+## Owner, 3 Nov: a Dragon Rider summoned behind a Dragon is never offered Attack stance, even where a
+## summon asks for one (here the Battle Phase); it enters in Defense stance.
+func test_c135_rider_summoned_behind_a_dragon_is_not_asked_for_a_stance() -> void:
+	var m := TB.make()
+	TB.to_battle(m)
+	var p := m.active
+	var dragon := TB.unit(m, p, DRAGON_WATER, 0)
+	var rider := TB.card(m, p, DRAGON_RIDER, "spent")
+	m.push_frame(m.make_frame(rider, p, [{"op": "pick_stance", "as": "stance", "for": rider, "slot": 3},
+		{"op": "place", "target": rider, "slot": 3, "stance": "$stance"}], "test summon"))
+	m.run()
+	assert_bool(m.pending.is_empty()).override_failure_message("asked: %s" % str(m.pending)).is_true()
+	assert_str(String(m.cards[rider]["zone"])).is_equal("unit")
+	assert_str(String(m.cards[rider]["stance"])).is_equal("def")
+	assert_str(TB.log_text(m)).not_contains("changes to Defense stance")
+	assert_int(m.atk_of(dragon)).is_equal(8 + 14)
+
+
+## Behind a non-Dragon the same summon still asks Attack or Defense.
+func test_c135_rider_summoned_behind_a_non_dragon_is_asked_for_a_stance() -> void:
+	var m := TB.make()
+	TB.to_battle(m)
+	var p := m.active
+	TB.unit(m, p, MAGE_WATER, 0)
+	var rider := TB.card(m, p, DRAGON_RIDER, "spent")
+	m.push_frame(m.make_frame(rider, p, [{"op": "pick_stance", "as": "stance", "for": rider, "slot": 3},
+		{"op": "place", "target": rider, "slot": 3, "stance": "$stance"}], "test summon"))
+	m.run()
+	assert_bool(m.pending.is_empty()).is_false()
+	assert_str(TB.choose(m, ["Attack stance"])).is_empty()
+	assert_str(String(m.cards[rider]["stance"])).is_equal("atk")
+
+
 func test_c135_a_dragon_arriving_in_front_puts_the_rider_in_defense() -> void:
 	var m := TB.make()
 	var rider := TB.unit(m, 0, DRAGON_RIDER, 3)

@@ -220,7 +220,7 @@ func _op_summon(f: Dictionary, op: Dictionary) -> int:
 		add_log("%s cannot be summoned (Bahatia)." % name_of(u))
 		return R.CONT
 	var ops := [{"op": "pick_slot", "zone": op.get("place", "any") if op.get("place", "any") != "any" else "unit", "as": "sslot", "for": u},
-		{"op": "pick_stance", "as": "stance", "fixed": "atk" if op.get("stance", "choose") == "atk" else "", "for": u},
+		{"op": "pick_stance", "as": "stance", "fixed": "atk" if op.get("stance", "choose") == "atk" else "", "for": u, "slot": "$sslot"},
 		{"op": "place", "target": u, "slot": "$sslot", "stance": "$stance"}]
 	ops += summon_tail(u, f["ctl"])
 	_splice(f, ops)
@@ -258,7 +258,7 @@ func _op_ambush(f: Dictionary, op: Dictionary) -> int:
 	f["vars"]["ambush_n"] = done + 1
 	var u: int = pool[0]
 	var ops := [{"op": "pick_slot", "zone": "unit", "as": "sslot", "for": u},
-		{"op": "pick_stance", "as": "stance", "for": u},
+		{"op": "pick_stance", "as": "stance", "for": u, "slot": "$sslot"},
 		{"op": "place", "target": u, "slot": "$sslot", "stance": "$stance"}]
 	ops += summon_tail(u, p)
 	ops.append({"op": "ambush"})

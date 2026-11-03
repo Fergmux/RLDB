@@ -224,7 +224,7 @@ Check any prompt strings in `card_scripts.gd` that quote these.
 ## Decisions for review
 - Columns face each other directly, so Magic Cylinder and Damage Conversion check whether the attacker is in the Trap's column.
 - Void Basilisk and Seppuku (owner, 3 Nov): each can be one of its own Fusion materials. If it is, its "then Exhaust/Destroy this Unit" does not happen. When it is not a material, it stays on the Field until the Fusion lands, so on a full board one of the Tributes has to come from the Field.
-- Dragon Rider is moved to Defence as soon as a Dragon protects it, and stance changes to Attack are refused. A Rider Summoned behind a Dragon may still see the stance prompt, but it is set to Defence straight away.
+- Dragon Rider is moved to Defence as soon as a Dragon protects it, and stance changes to Attack are refused. Owner, 3 Nov: when it is Summoned behind a Dragon it is never offered Attack Stance; it enters in Defence without a stance prompt.
 - Do Not Open Box responds only on the opponent's turn, like every Trap, and must have been Set before that turn.
 - Shen's -10 is an ordinary permanent loss, so Sneaky Snunday and Freaky Funday affect it.
 - Soul Devourer can target itself, like every "a Unit in this Column" choice.
