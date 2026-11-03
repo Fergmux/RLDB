@@ -16,7 +16,7 @@ const BALANCE := [
 	[71, -1, -1, 16],    # Faerie Flight: DEF 18 -> 16
 	[78, -1, 24, -1],    # Abraxus Terrormane: ATK 26 -> 24
 	[162, -1, 6, -1],    # Diggie: ATK 2 -> 6
-	[171, -1, 6, 10],    # Flying Sandworm: ATK 4 -> 6
+	[171, -1, 6, 6],     # Flying Sandworm: ATK 4 -> 6; DEF 6 (2026-11-03)
 ]
 
 
@@ -162,20 +162,21 @@ func _roma(m: MatchEngine, runes: int) -> int:
 	return uid
 
 
-func test_c096_roma_is_twelve_per_rune_used() -> void:
+# 2026-11-03: +10 per Rune (was +12).
+func test_c096_roma_is_ten_per_rune_used() -> void:
 	var m := CF.make()
 	var two := _roma(m, 2)
-	assert_int(m.atk_of(two)).is_equal(24)
-	assert_int(m.def_of(two)).is_equal(24)
+	assert_int(m.atk_of(two)).is_equal(20)
+	assert_int(m.def_of(two)).is_equal(20)
 	var m2 := CF.make()
 	assert_int(m2.atk_of(_roma(m2, 0))).is_equal(0)          # summoned without Runes
 
 
 func test_c096_roma_pays_ten_hp_to_destroy_a_lower_atk_unit_once_per_turn() -> void:
 	var m := CF.make()
-	var roma := _roma(m, 2)                                  # 24 ATK
-	var low := TB.unit(m, 1, TB.WATER, 0, "atk", 23)
-	var equal := TB.unit(m, 1, TB.WATER, 1, "atk", 24)
+	var roma := _roma(m, 2)                                  # 20 ATK (2026-11-03)
+	var low := TB.unit(m, 1, TB.WATER, 0, "atk", 19)
+	var equal := TB.unit(m, 1, TB.WATER, 1, "atk", 20)
 	assert_str(TB.ability(m, roma)).is_empty()
 	assert_bool(low in CF.offered(m)).is_true()
 	assert_bool(equal in CF.offered(m)).is_false()
@@ -207,15 +208,16 @@ func test_c100_gaping_crevasse_destroyed_by_an_effect_paralyses_nothing() -> voi
 
 # ---------------------------------------------------------------- 174 Cliff the Flying Bison
 
-func test_c174_cliff_gives_two_ap_when_sacrificed_but_not_when_destroyed() -> void:
+# 2026-11-03: +1 AP (was +2).
+func test_c174_cliff_gives_one_ap_when_sacrificed_but_not_when_destroyed() -> void:
 	var m := CF.make()
 	var a := TB.unit(m, 0, 174, 0)
 	var b := TB.unit(m, 0, 174, 1)
 	var before := CF.ap(m, 0)
 	TB.kill(m, a)
 	assert_int(CF.ap(m, 0)).is_equal(before)
-	m.submit(0, {"t": "sacrifice", "uid": b})                # +1 rule AP, +2 from Cliff
-	assert_int(CF.ap(m, 0)).is_equal(before + 3)
+	m.submit(0, {"t": "sacrifice", "uid": b})                # +1 rule AP, +1 from Cliff
+	assert_int(CF.ap(m, 0)).is_equal(before + 2)
 
 
 # ---------------------------------------------------------------- 180 Hypnotise

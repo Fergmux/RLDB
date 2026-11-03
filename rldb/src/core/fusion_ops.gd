@@ -31,6 +31,8 @@ func _req_ok(u: int, req: Dictionary, chosen: Array) -> bool:
 			"category": if not (category(u) in v): return false
 			"atk_min": if s["atk"] < v: return false
 			"def_min": if s["def"] < v: return false
+			# 2026-11-03 "Unit with 20 or more ATK or DEF": either current stat reaches v.
+			"stat_min": if s["atk"] < v and s["def"] < v: return false
 			"has_buff": if has_any_buff(u) != v: return false
 			"has_debuff": if has_any_debuff(u) != v: return false
 			"has_type": if (s["type"] != "") != v: return false
@@ -240,6 +242,9 @@ func _op_fusion_mat(f: Dictionary, op: Dictionary) -> int:
 static func _a_an(t: String) -> String:
 	if t == "":
 		return "a material"
+	# "unit" sounds like "you-nit": "a unit with 20 or more ATK or DEF", not "an unit".
+	if t.to_lower().begins_with("unit"):
+		return "a " + t
 	return ("an " if "AEIOUaeiou".contains(t.substr(0, 1)) else "a ") + t
 
 
@@ -256,6 +261,7 @@ func _req_text(req: Dictionary) -> String:
 			"category": noun = "Basic Unit" if "basic_unit" in v else "unit"
 			"atk_min": tail.append("with at least %d ATK" % int(v))
 			"def_min": tail.append("with at least %d DEF" % int(v))
+			"stat_min": tail.append("with %d or more ATK or DEF" % int(v))
 			"has_buff": adj.append("buffed" if v else "unbuffed")
 			"has_debuff": adj.append("debuffed" if v else "undebuffed")
 			"has_type": tail.append("with a Type" if v else "with no Type")

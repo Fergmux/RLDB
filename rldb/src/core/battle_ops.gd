@@ -24,14 +24,30 @@ func _cannot_attack_reason(uid: int) -> String:
 		var pr := protector_of(uid)
 		if pr != -1 and unit_race(pr) == "Dragon":
 			return "Dragon Rider cannot attack while protected by a Dragon."
+	# Zorath (22), Tritu (176): "Adjacent Units cannot declare an Attack" (its controller's own).
 	for other in adjacent_units(uid):
 		if has_flag(other, "adjacent_no_attack"):
 			return "%s prevents adjacent units from attacking." % name_of(other)
+	# Owlbear Druid (189, 2026-11-03): "Your opponent's Units with the same Race as this Unit cannot
+	# attack", read continuously from Owlbear's current Race.
+	var race := unit_race(uid)
+	if race != "":
+		for o in field_units(opp(cards[uid]["ctl"])):
+			if has_flag(o, "same_race_no_attack") and unit_race(o) == race:
+				return "%s prevents %s units from attacking." % [name_of(o), race]
 	return ""
 
 
-## Legal attack targets: opposing unit uids, plus -1 for a direct attack. A forcing unit
-## (Demented Apparition) overrides everything, including "can attack directly".
+## Why unit `uid` may not attack at all while the board stays as it is ("" = it may): the card
+## locks above (Zorath, Tritu, Owlbear Druid, Dragon Rider). Phase, stance, Paralyse and targets
+## are not part of it. Read-only; the bot's stance scoring uses it to skip attacks that cannot happen.
+func attack_locked_reason(uid: int) -> String:
+	if not unit_on_field(uid):
+		return "Not on the Field."
+	return _cannot_attack_reason(uid)
+
+
+## Legal attack targets: opposing unit uids, plus -1 for a direct attack.
 func attack_targets(uid: int) -> Array:
 	var p: int = cards[uid]["ctl"]
 	var foes := field_units(opp(p))
@@ -39,12 +55,13 @@ func attack_targets(uid: int) -> Array:
 	for u in foes:
 		if not is_protected(u) or status_count(uid, "infiltrate") > 0:
 			out.append(u)
-	# Demented Apparition (owner wording 2026-10-18): "If your opponent's Unit attacks and can attack
-	# this Unit: that Unit must attack this Unit". `out` holds exactly what this attacker can attack,
-	# so a protected Apparition still forces an Infiltrate attacker but not an ordinary one.
-	var forced := out.filter(func(u): return has_flag(u, "taunt"))
-	if not forced.is_empty():
-		return forced
+	# Demented Apparition (owner ruling 2026-11-03): "Your opponent's Units cannot attack other Units
+	# if they can attack this Unit." `out` holds exactly the units this attacker can attack, so a
+	# protected Apparition still restricts an Infiltrate attacker but not an ordinary one. Only the
+	# other Units are removed: a direct attack the attacker may make stays legal.
+	var lures := out.filter(func(u): return has_flag(u, "taunt"))
+	if not lures.is_empty():
+		out = lures
 	if foes.is_empty() or has_flag(uid, "direct_attack"):
 		out.append(-1)
 	return out

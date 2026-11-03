@@ -8,8 +8,8 @@ extends GdUnitTestSuite
 
 func test_c082_polymerization_fusion_summons_from_field_materials() -> void:
 	var m := CF.make()
-	var beast := TB.unit(m, 0, 4, 0)
-	var dragon := TB.unit(m, 0, 2, 1)
+	var beast := TB.unit(m, 0, 4, 0, "atk", 20, 8)             # 2026-11-03 Wyrm: 20+ ATK or DEF unit ...
+	var dragon := TB.unit(m, 0, 116, 1)                       # ... + Physical unit (Basic Dragon, Physical)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	var poly := TB.cast(m, 0, 82)
 	assert_str(CF.finish_fusion(m, wyrm, [beast, dragon], "Front row, column 3")).is_empty()
@@ -22,7 +22,7 @@ func test_c082_polymerization_fusion_summons_from_field_materials() -> void:
 
 func test_c082_polymerization_cannot_be_cast_without_legal_materials() -> void:
 	var m := CF.make()
-	TB.unit(m, 0, 4, 0)                                          # a Beast but no Dragon
+	TB.unit(m, 0, 4, 0)                                          # one 8/8 unit: no Bastion Wyrm pair
 	TB.card(m, 0, 93, "extra")
 	var poly := TB.card(m, 0, 82)
 	m.players[0]["ap"] = 5

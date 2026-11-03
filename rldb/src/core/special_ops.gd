@@ -49,7 +49,8 @@ func _op_declare_type(f: Dictionary, op: Dictionary) -> int:
 	for i in op["types"].size():
 		var ty: String = op["types"][i]
 		opts.append({"v": i, "label": ty if ty != "" else "No type"})
-	return ask(f, f["ctl"], "mode", "Choose a Type.", opts, 1, 1, op.get("cancellable", false))
+	# `prompt`: the same declaration picks a Race for Owlbear Druid (189).
+	return ask(f, f["ctl"], "mode", String(op.get("prompt", "Choose a Type.")), opts, 1, 1, op.get("cancellable", false))
 
 
 func _type_name(t: String) -> String:
@@ -61,6 +62,26 @@ func _op_set_type(f: Dictionary, op: Dictionary) -> int:
 		if unit_on_field(u):
 			cards[u]["type_o"] = f["vars"][op["var"]]
 			add_log("%s becomes %s." % [name_of(u), _type_name(f["vars"][op["var"]])])
+	return R.CONT
+
+
+## Owlbear Druid (189): the units become the Race declared into var `var`, one-shot (they keep it
+## until something changes it again, like Chaos Witch's Type change).
+func _op_set_race(f: Dictionary, op: Dictionary) -> int:
+	var race := String(f["vars"].get(op["var"], ""))
+	for u in refs(f, op["target"]):
+		if unit_on_field(u) and race != "":
+			cards[u]["race_o"] = race
+			add_log("%s becomes a %s." % [name_of(u), race])
+	return R.CONT
+
+
+## Snow Tiger Paladin (190): starts a player effect of the frame's controller that lasts until the
+## start of their next turn (GameCore.start_turn_effect). `text` is logged.
+func _op_turn_effect(f: Dictionary, op: Dictionary) -> int:
+	var p: int = f["ctl"]
+	start_turn_effect(p, String(op["effect"]))
+	add_log("%s: %s's %s until the start of their next turn." % [name_of(f["src"]) if f["src"] != -1 else "Effect", pname(p), String(op["text"])])
 	return R.CONT
 
 
@@ -359,9 +380,13 @@ func _op_no_loyalty(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Mirrorflesh Construct: ATK/DEF/Type become the combined values of its materials.
+## Mirrorflesh Construct (94): ATK/DEF/Type become the combined values of its materials (their
+## stats as they were tributed). Ultimate Dragon (151, 2026-11-03) passes `keep_type`: only its
+## ATK/DEF change. A unit that was not Fusion Summoned has no materials and becomes 0/0.
 func _op_mirrorflesh(f: Dictionary, op: Dictionary) -> int:
 	var me: int = f["src"]
+	if not unit_on_field(me):
+		return R.CONT
 	var mats: Array = cards[me].get("fusion_mats", [])
 	var a := 0
 	var df := 0
@@ -370,17 +395,22 @@ func _op_mirrorflesh(f: Dictionary, op: Dictionary) -> int:
 		df += m["def"]
 	cards[me]["base_atk"] = a
 	cards[me]["base_def"] = df
+	if op.get("keep_type", false):
+		add_log("%s becomes %d/%d." % [name_of(me), a, df])
+		return R.CONT
 	cards[me]["type_o"] = mats[0]["type"] if not mats.is_empty() else ""
 	add_log("%s becomes %d/%d, %s." % [name_of(me), a, df, _type_name(cards[me]["type_o"])])
 	return R.CONT
 
 
+## Roma (96): +`per` ATK/DEF for each Rune used for its Ritual summon (10 since 2026-11-03).
 func _op_roma(f: Dictionary, op: Dictionary) -> int:
 	var me: int = f["src"]
+	var per: int = int(op.get("per", 10))
 	var n: int = cards[me].get("runes_used", 0)   # any non-Ritual summon (e.g. from Spent) used no Runes
-	cards[me]["base_atk"] = 12 * n
-	cards[me]["base_def"] = 12 * n
-	add_log("Roma uses %d Rune(s): becomes %d/%d." % [n, 12 * n, 12 * n])
+	cards[me]["base_atk"] = per * n
+	cards[me]["base_def"] = per * n
+	add_log("Roma uses %d Rune(s): becomes %d/%d." % [n, per * n, per * n])
 	return R.CONT
 
 

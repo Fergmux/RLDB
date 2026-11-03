@@ -51,6 +51,11 @@ static func offense(m: MatchEngine, u: int) -> Dictionary:
 	if m.status_count(u, "paralyse") > 0:
 		best["why"] = "paralysed"
 		return best
+	# A card lock (Zorath, Tritu, Owlbear Druid, Dragon Rider) means it has no attack to value.
+	var locked := m.attack_locked_reason(u)
+	if locked != "":
+		best["why"] = locked
+		return best
 	var q: int = 1 - int(m.cards[u]["ctl"])
 	for t in m.attack_targets(u):
 		var pv := m.battle_preview(u, t)
@@ -103,7 +108,7 @@ static func explain(m: MatchEngine, u: int, me: int, stance: String = "") -> Dic
 ## Attack-stance unit, since stance changes are free in the opponent's Setup Phase).
 static func _threatened(m: MatchEngine, u: int) -> bool:
 	for e in m.field_units(1 - int(m.cards[u]["ctl"])):
-		if m.status_count(e, "paralyse") > 0 or not (u in m.attack_targets(e)):
+		if m.status_count(e, "paralyse") > 0 or m.attack_locked_reason(e) != "" or not (u in m.attack_targets(e)):
 			continue
 		if m.battle_preview(e, u)["t_dies"]:
 			return true

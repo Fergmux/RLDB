@@ -32,7 +32,7 @@ func _op_pick_slot(f: Dictionary, op: Dictionary) -> int:
 		"backrow": slots = free_backrow_slots(p)
 		"power": slots = free_power_slots(p)
 		"adjacent": slots = _adjacent_free(f["src"])
-		"column", "orig": slots = placement_slots(f, op["zone"])
+		"column", "orig", "beside": slots = placement_slots(f, op["zone"])
 	slots.sort()
 	if slots.is_empty():
 		add_log("%s: no free zone." % f["label"])
@@ -46,7 +46,7 @@ func _op_pick_slot(f: Dictionary, op: Dictionary) -> int:
 	for s in slots:
 		var label := ""
 		match op["zone"]:
-			"unit", "adjacent", "column", "orig": label = "%s row, column %d" % ["Front" if slot_row(s) == 0 else "Back", slot_col(s) + 1]
+			"unit", "adjacent", "column", "orig", "beside": label = "%s row, column %d" % ["Front" if slot_row(s) == 0 else "Back", slot_col(s) + 1]
 			"backrow": label = "Trap/Spell zone, column %d" % (s + 1)
 			"power": label = "Power zone %d" % (s + 1)
 		opts.append({"v": s, "label": label, "slot": s, "zone": op["zone"]})

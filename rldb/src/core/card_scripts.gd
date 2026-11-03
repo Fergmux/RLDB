@@ -155,12 +155,16 @@ const SHORT_LABELS := {
 	"Exhaust a unit you control: destroy a unit": "Exhaust & Destroy",
 	"Heal 4 HP or your opponent takes 4 Damage": "Heal or Drain",
 	"Change Stance of your opponent's unprotected units": "Topple Foes",
-	"Apply 10 Burn to all units": "Burn All",
+	"Apply 1 Infiltrate and 1 Nimble to a unit": "Infiltrate + Nimble",
+	"Discard a card to draw a card": "Discard & Draw",
+	"Discard a unit to gain +1 AP": "Discard for AP",
+	"Switch ATK/DEF of all units until end of turn": "Switch ATK/DEF",
+	"Summon a Basic Unit from Draw to an adjacent zone": "Call Basic Unit",
+	"Change this unit's Race: all your units become it": "Change Race",
+	"Summon a Water unit from Spent in this column": "Revive Water",
 	"Apply 3 Poison to a unit": "Apply Poison",
-	"Apply 3 Medic to an adjacent unit": "Apply Medic",
 	"Change Type (Physical/Light/Dark)": "Change Type",
 	"Apply 1 Nimble to all your units": "Nimble All",
-	"Apply 1 Blind to all opponent's units": "Blind Foes",
 	"Lose 1 AP: Heal 10 HP": "Heal 10 (1 AP)",
 	"Exhaust the unit this protects: +1 Eternal and +1 AP": "Exhaust Ward",
 	"Apply 10 Burn, 4 Poison or 1 Curse to a unit": "Afflict",
@@ -170,7 +174,6 @@ const SHORT_LABELS := {
 	"Apply 1 Debilitate to a unit": "Apply Debilitate",
 	"Apply 1 Infiltrate to this unit": "Gain Infiltrate",
 	"Take 10 Damage: destroy a unit with lower ATK": "Execute (10 HP)",
-	"Apply 2 Medic to adjacent units": "Medic Adjacent",
 	"Destroy a Power (+1 AP if it is yours)": "Break Power",
 	"Double this unit's Debuffs and give them to an opponent's unit": "Spread Debuffs",
 }
@@ -424,40 +427,61 @@ static func _build() -> Dictionary:
 	t[44] = {"flags": ["no_set"]}
 
 	# ------------------------------------------------------------ Fusion
-	t[56] = {"fusion": [{"atk_min": 20}, {"type": "Lightning"}], "on": [trig("summoned", [all_({"kind": "facedown"}), st("$all", "reveal")]),
+	# 2026-11-03: "Unit with 20 or more ATK or DEF" (stat_min) is a material whose current ATK or
+	# current DEF is 20 or more (FusionOps._mat_stats, as Razeon's old "20 ATK or more").
+	t[56] = {"fusion": [{"stat_min": 20}, {"type": "Lightning"}], "on": [trig("summoned", [all_({"kind": "facedown"}), st("$all", "reveal")]),
 		trig("destroyed", [all_({"kind": "unit"}), st("$all", "paralyse")])]}
-	t[57] = {"fusion": [{"def_min": 20}, {"type": "Earth"}],
-		"on": [trig("summoned", [yes("Apply 1 Infiltrate and 1 Nimble to your units?"), all_({"kind": "unit", "side": "self"}), st("$all", "infiltrate"), st("$all", "nimble")])],
-		"abilities": [abil("Change Stance of your opponent's unprotected units", [all_({"kind": "unit", "side": "opp", "unprotected": true}), {"op": "stance", "target": "$all"}])]}
+	# 2026-11-03: the On Summon is gone; a second once-per-turn ability targets one unit.
+	t[57] = {"fusion": [{"stat_min": 20}, {"type": "Earth"}],
+		"abilities": [abil("Change Stance of your opponent's unprotected units", [all_({"kind": "unit", "side": "opp", "unprotected": true}), {"op": "stance", "target": "$all"}]),
+			abil("Apply 1 Infiltrate and 1 Nimble to a unit", [ch({"kind": "unit"}, "u"), st("$u", "infiltrate"), st("$u", "nimble")])]}
 	t[57]["abilities"][0]["cond"] = {"count": {"kind": "unit", "side": "opp", "unprotected": true}, "min": 1}
-	t[58] = {"fusion": [{"race": "Monster"}, {"type": "Fire"}], "on": [trig("summoned", [ch({"kind": "power"}, "u", true, "Destroy a Power?"), {"op": "destroy", "target": "$u"}])],
-		"abilities": [abil("Apply 10 Burn to all units", [all_({"kind": "unit"}), st("$all", "burn", 10)])]}
+	# 2026-11-03: discard (Hand to Spent) first, then draw.
+	t[58] = {"fusion": [{"stat_min": 20}, {"type": "Fire"}], "on": [trig("summoned", [ch({"kind": "power"}, "u", true, "Destroy a Power?"), {"op": "destroy", "target": "$u"}])],
+		"abilities": [abil("Discard a card to draw a card", [ch({"kind": "hand", "side": "self"}, "h", false, "Discard a card (Hand to Spent), then draw a card."),
+			{"op": "move", "target": "$h", "to": "spent"}, {"op": "draw", "n": 1}])]}
 	t[59] = {"fusion": [{"race": "Mage"}, {"type": "Water"}], "on": [trig("summoned", [ch({"kind": "backrow", "spell_trap": true}, "u", true, "Destroy a Spell or Trap?"), {"op": "destroy", "target": "$u"}])],
 		"abilities": [abil("Apply 1 Paralyse to a unit", [ch({"kind": "unit"}, "u"), st("$u", "paralyse")]), abil("Apply 1 Infiltrate to a unit", [ch({"kind": "unit"}, "u"), st("$u", "infiltrate")])]}
 	t[60] = {"fusion": [{"has_debuff": true}, {"has_buff": true}], "on": [trig("summoned", [ch({"kind": "unit"}, "u", false, "Apply 3 Debilitate to a unit."), st("$u", "debilitate", 3)])],
 		"abilities": [abil("Apply 3 Poison to a unit", [ch({"kind": "unit"}, "u"), st("$u", "poison", 3)])]}
-	t[61] = {"fusion": [{"race": "Warrior"}, {"type": "Light"}], "on": [trig("summoned", [ch({"kind": "spent", "side": "self", "type": "Light", "cost_max": 1}, "u", true, "Summon a 1-cost or lower Light unit from Spent into this column?"),
-		need("u"), {"op": "summon", "target": "$u", "place": "column", "stance": "choose"}])],
-		"abilities": [abil("Apply 3 Medic to an adjacent unit", [ch({"kind": "unit", "side": "self", "adjacent": true}, "u"), st("$u", "medic", 3)])]}
-	t[93] = {"fusion": [{"race": "Beast"}, {"race": "Dragon"}], "on": [trig("summoned", [st("self", "eternal")])]}
+	# 2026-11-03: On Summon an optional 8 Medic on an adjacent unit (its controller's own, as every
+	# "Adjacent" card); the ability discards a unit card from Hand (to Spent) for +1 AP.
+	t[61] = {"fusion": [{"stat_min": 20}, {"type": "Light"}], "on": [trig("summoned", [ch({"kind": "unit", "side": "self", "adjacent": true}, "u", true, "Apply 8 Medic to an adjacent unit?"), st("$u", "medic", 8)])],
+		"abilities": [abil("Discard a unit to gain +1 AP", [ch({"kind": "hand", "side": "self", "unit_card": true}, "h", false, "Discard a unit (Hand to Spent) to gain 1 AP."),
+			{"op": "move", "target": "$h", "to": "spent"}, {"op": "ap", "n": 1}])]}
+	t[93] = {"fusion": [{"stat_min": 20}, {"type": "Physical"}], "on": [trig("summoned", [st("self", "eternal")])]}
 	t[94] = {"fusion": [{"has_type": true}, {"same_type_as": 0}], "on": [trig("summoned", [{"op": "mirrorflesh"}]),
 		trig("destroyed", [ch({"kind": "unit", "type": "$snap_type"}, "u", false, "Destroy a unit with the same Type."), {"op": "destroy", "target": "$u"}])]}
 	t[141] = {"fusion": [{"type": "Dark"}, {"type": "Light"}], "flags": ["type_summon_lock"],
 		"abilities": [abil("Change Type (Physical/Light/Dark)", [{"op": "declare_type", "types": ["Physical", "Light", "Dark"], "as": "ty"}, {"op": "set_type", "target": "self", "var": "ty"}])],
-		"on": [trig("destroyed", [ch({"kind": "unit", "type": "$snap_type"}, "u", true, "Make a unit with the same Type lose 30 ATK/DEF?"), {"op": "stat", "target": "$u", "atk": -30, "def": -30}])]}
+		"on": [trig("destroyed", [ch({"kind": "unit", "type": "$snap_type"}, "u", true, "Make a unit with the same Type lose 12 ATK/DEF?"), {"op": "stat", "target": "$u", "atk": -12, "def": -12}])]}
 	t[142] = {"fusion": [{"race": "Dragon"}, {"type": "Lightning"}], "on": [trig("summoned", [st("self", "pierce")]),
 		trig("start_turn", [{"op": "stat", "target": "self", "atk": 4, "def": -4}], "own_turn", "start of turn")]}
-	t[143] = {"fusion": [{"type": "Water"}, {"type": "Lightning"}], "abilities": [
-		abil("Apply 1 Nimble to all your units", [all_({"kind": "unit", "side": "self"}), st("$all", "nimble")]),
-		abil("Apply 1 Blind to all opponent's units", [all_({"kind": "unit", "side": "opp"}), st("$all", "blind")])]}
+	# 2026-11-03: On Summon 2 Blind to the opponent's units; the second ability is Freaky Funday's
+	# switch (ATK/DEF of every unit now on the Field, and in card effects, until end of turn).
+	t[143] = {"fusion": [{"stat_min": 20}, {"type": "Water"}], "on": [trig("summoned", [all_({"kind": "unit", "side": "opp"}), st("$all", "blind", 2)])],
+		"abilities": [abil("Apply 1 Nimble to all your units", [all_({"kind": "unit", "side": "self"}), st("$all", "nimble")]),
+			abil("Switch ATK/DEF of all units until end of turn", [{"op": "swap_all"}])]}
 	t[144] = {"fusion": [{"race": "Warrior"}, {"type": "Earth"}], "flags": ["battle_immune_lightning"],
 		"on": [trig("summoned", [ch({"kind": "unit"}, "u", true, "Apply 1 Cleanse to a unit?"), st("$u", "cleanse")]),
 			trig("destroyed", [ch({"kind": "spent_or_draw", "side": "self", "type": "Earth", "unit_card": true, "not_self": true}, "u", true, "Add an Earth unit from Spent or Draw to Hand?"), {"op": "move", "target": "$u", "to": "hand"}])]}
 	t[145] = {"fusion": [{"race": "Mage"}, {"type": "Fire"}], "on": [trig("summoned", [all_({"kind": "unit"}), st("$all", "burn", 10)])],
 		"abilities": [abil("Lose 1 AP: Heal 10 HP", [hp("self", 10)], true, {"ap": 1})]}
-	t[146] = {"fusion": [{"category": ["basic_unit"]}, {"type": "Physical"}], "on": [trig("summoned", [all_({"kind": "unit", "basic": true}), st("$all", "medic", 5)]),
-		trig("destroyed", [ch({"kind": "spent_or_draw", "side": "self", "basic": true}, "u", true, "Summon a Basic Unit from Spent or Draw to this zone?"), need("u"), {"op": "summon", "target": "$u", "place": "orig", "stance": "choose"}])]}
-	t[147] = {"fusion": [{"race": "Monster"}, {"type": "Dark"}], "flags": ["taunt"],
+	# Akiramari (2026-11-03): three Basic Unit materials. On Summon an optional search of any card
+	# from Draw that costs 1 AP less this turn (as the Tag Teams). Once per turn a Basic Unit from
+	# Draw into a free zone of yours adjacent to it ("beside"). +8 ATK/DEF per adjacent Basic Unit
+	# of yours. The On Destroy summon is unchanged; the 5 Medic On Summon is gone.
+	var akiramari_count := {"count": {"kind": "unit", "side": "self", "adjacent": true, "basic": true}, "mul": 8}
+	t[146] = {"fusion": [{"category": ["basic_unit"]}, {"category": ["basic_unit"]}, {"category": ["basic_unit"]}],
+		"on": [trig("summoned", [ch({"kind": "draw", "side": "self"}, "c", true, "Add a card from Draw to Hand? It costs 1 AP less this turn."),
+				{"op": "move", "target": "$c", "to": "hand"}, {"op": "cost_turn", "target": "$c", "n": -1}]),
+			trig("destroyed", [ch({"kind": "spent_or_draw", "side": "self", "basic": true}, "u", true, "Summon a Basic Unit from Spent or Draw to this zone?"), need("u"), {"op": "summon", "target": "$u", "place": "orig", "stance": "choose"}])],
+		"abilities": [abil("Summon a Basic Unit from Draw to an adjacent zone", [ch({"kind": "draw", "side": "self", "basic": true}, "u", false, "Summon a Basic Unit from Draw to a zone adjacent to Akiramari."),
+			{"op": "summon", "target": "$u", "place": "beside", "stance": "choose"}])],
+		"aura": [{"to": "self", "atk": akiramari_count, "def": akiramari_count}]}
+	# Demented Apparition (2026-11-03 ruling): an opponent's unit that can attack it cannot attack
+	# other units ("taunt", BattleOps.attack_targets); direct attacks are not restricted.
+	t[147] = {"fusion": [{"stat_min": 20}, {"type": "Dark"}], "flags": ["taunt"],
 		"on": [trig("summoned", [all_({"kind": "unit", "side": "opp", "unprotected": true}), st("$all", "paralyse", 2)]),
 			trig("start_turn", [all_({"kind": "unit", "side": "opp"}), {"op": "stat", "target": "$all", "def": -8}], "own_turn", "start of turn"),
 			trig("destroyed", [all_({"kind": "unit"}), {"op": "stance", "target": "$all"}])]}
@@ -465,41 +489,72 @@ static func _build() -> Dictionary:
 		"abilities": [abil("Exhaust the unit this protects: +1 Eternal and +1 AP", [ch({"kind": "unit", "side": "self", "protected_by_src": true}, "u", false, "Exhaust the unit this unit is protecting."),
 			{"op": "move", "target": "$u", "to": "exhaust"}, st("self", "eternal"), {"op": "ap", "n": 1}])]}
 	t[181]["abilities"][0]["cond"] = {"protecting": true}
+	# Ultimate Dragon (2026-11-03): ?/?, the combined ATK/DEF of the units Tributed for its Fusion
+	# Summon (as Mirrorflesh 94; its Type stays none).
 	t[151] = {"fusion": [{"race": "Dragon"}, {"race": "Dragon"}, {"race": "Dragon"}], "abilities": [abil("Apply 10 Burn, 4 Poison or 1 Curse to a unit", [ch({"kind": "unit"}, "u"),
 		{"op": "mode", "options": [{"label": "10 Burn", "ops": [st("$u", "burn", 10)]}, {"label": "4 Poison", "ops": [st("$u", "poison", 4)]}, {"label": "1 Curse", "ops": [st("$u", "curse")]}]}])],
-		"on": [trig("destroyed", [yes("Double all Debuffs on the Field?"), {"op": "double_debuffs", "side": "any"}])]}
+		"on": [trig("summoned", [{"op": "mirrorflesh", "keep_type": true}]),
+			trig("destroyed", [yes("Double all Debuffs on the Field?"), {"op": "double_debuffs", "side": "any"}])]}
 	# Necro, the Loathsome (2026-10-18). On Summon it takes a copy of every Debuff on the other units
 	# (a copied Debilitate suppresses its own effects too). The ability doubles its Debuffs, then
 	# applies those doubled stacks to a chosen opponent's unit.
-	t[188] = {"fusion": [{"race": "Mage"}, {"has_debuff": true}], "on": [trig("summoned", [{"op": "copy_all_debuffs"}])],
+	# 2026-11-03 materials: Monster Unit + Dark Unit.
+	t[188] = {"fusion": [{"race": "Monster"}, {"type": "Dark"}], "on": [trig("summoned", [{"op": "copy_all_debuffs"}])],
 		"abilities": [abil("Double this unit's Debuffs and give them to an opponent's unit", [ch({"kind": "unit", "side": "opp"}, "u", false, "Choose an opponent's unit to receive this unit's doubled Debuffs."),
 			{"op": "spread_debuffs", "target": "$u"}])]}
 	t[188]["abilities"][0]["cond"] = {"self_has_debuff": true}
+	# Owlbear Druid (new 2026-11-03). The Race change is one-shot, like Chaos Witch's (13) Type change:
+	# this unit, then every unit of its controller, take the declared Race (any Race of the card pool)
+	# and keep it until changed again. While it is on the Field, the opponent's units with its current
+	# Race cannot attack (BattleOps._cannot_attack_reason).
+	t[189] = {"fusion": [{"race": "Beast"}, {"type": "Physical"}], "flags": ["same_race_no_attack"],
+		"abilities": [abil("Change this unit's Race: all your units become it", [{"op": "declare_type", "types": CardDB.RACES, "as": "race", "prompt": "Choose a Race."},
+			{"op": "set_race", "target": "self", "var": "race"}, all_({"kind": "unit", "side": "self", "not_self": true}), {"op": "set_race", "target": "$all", "var": "race"}])]}
+	# Snow Tiger Paladin (new 2026-11-03). Owner ruling "Both at turn start": at the start of its
+	# controller's turn, Protecting a Unit (a unit behind it) makes their Traps cost 1 AP less, and
+	# Protected by a Unit (a unit in front of it) makes their Traps on the Field indestructible, each
+	# until the start of their next turn (GameCore.turn_effect_active).
+	t[190] = {"fusion": [{"race": "Beast"}, {"type": "Light"}],
+		"on": [trig("summoned", [ch({"kind": "draw", "side": "self", "unit_card": true, "cost_max": 2}, "u", true, "Summon a 2-cost or lower unit from Draw into this column?"),
+				need("u"), {"op": "summon", "target": "$u", "place": "column", "stance": "choose"}]),
+			trig("start_turn", [{"op": "if", "cond": {"protecting": true}, "then": [{"op": "turn_effect", "effect": GameCore.TFX_TRAPS_COST_LESS, "text": "Traps cost 1 AP less"}]},
+				{"op": "if", "cond": {"protected": true}, "then": [{"op": "turn_effect", "effect": GameCore.TFX_TRAPS_INDESTRUCTIBLE, "text": "Traps cannot be Destroyed"}]}], "own_turn", "start of turn")]}
+	# Only triggers when it is Protecting or Protected by a unit (neither: nothing to do).
+	t[190]["on"][1]["filter"] = {"not": {"protecting": false, "protected": false}}
 
 	# ------------------------------------------------------------ Ritual
 	t[98] = {"on": [trig("summoned", [st("self", "burn", 8)]), trig("destroyed", [by_unit_st("burn", 4)])],
 		"abilities": [abil("Apply Reveal to a Spell/Trap", [ch({"kind": "facedown"}, "u"), st("$u", "reveal")])]}
 	t[62] = {"on": [trig("summoned", [st("self", "curse")]), trig("destroyed", [ch({"kind": "unit"}, "u", true, "Apply 1 Curse to a unit?"), st("$u", "curse")])],
 		"abilities": [abil("Apply 1 Debilitate to a unit in this column", [ch({"kind": "unit", "column": true}, "u"), st("$u", "debilitate")])]}
-	t[63] = {"on": [trig("summoned", [all_({"kind": "backrow", "spell_trap": true}), st("$all", "reveal")]),
+	# The Last Foundation (2026-11-03): the Reveal is optional (asked only while a Spell/Trap is on
+	# the Field); a once-per-turn Freaky Funday switch; On Destroy its controller exhausts a card of
+	# their own choice from their own Spent (mandatory while it holds another card).
+	t[63] = {"on": [trig("summoned", [{"op": "confirm", "prompt": "Apply Reveal to all Spells/Traps?", "cond": {"count": {"kind": "backrow", "spell_trap": true}, "min": 1}},
+			all_({"kind": "backrow", "spell_trap": true}), st("$all", "reveal")]),
 		trig("end_turn", [st("self", "eternal")], "own_turn", "end of turn"),
-		trig("destroyed", [ch({"kind": "unit", "side": "opp", "min_atk": true}, "u", false, "Destroy the opponent's lowest-ATK unit."), {"op": "destroy", "target": "$u"}])]}
-	t[64] = {"aura": [{"to": "self", "atk": {"pile": "exhaust", "mul": 6}, "def": {"pile": "exhaust", "mul": 6}}],
+		trig("destroyed", [ch({"kind": "spent", "side": "self", "not_self": true}, "u", false, "Exhaust a card from your Spent."), {"op": "move", "target": "$u", "to": "exhaust"}])],
+		"abilities": [abil("Switch ATK/DEF of all units until end of turn", [{"op": "swap_all"}])]}
+	t[64] = {"aura": [{"to": "self", "atk": {"pile": "exhaust", "mul": 4}, "def": {"pile": "exhaust", "mul": 4}}],
 		"on": [trig("destroyed", [ch({"kind": "exhaust", "side": "self"}, "u", true, "Move a card from Exhaust to Draw?"), {"op": "move", "target": "$u", "to": "draw"}])]}
 	t[66] = {"on": [trig("summoned", [ch({"kind": "unit", "side": "self", "adjacent": true}, "u", false, "Apply 1 Eternal to an adjacent unit."), st("$u", "eternal")])],
 		"abilities": [abil("Draw a card, then discard a card", [{"op": "draw", "n": 1}, ch({"kind": "hand", "side": "self"}, "h", false, "Discard a card: send it from Hand to Spent."), {"op": "move", "target": "$h", "to": "spent"}])]}
 	t[95] = {"on": [trig("summoned", [ch({"kind": "unit", "side": "opp", "unprotected": true, "column": true}, "u", false, "Choose an opponent's unprotected unit in this column."),
 		need("u"), st("$u", "paralyse", 2), {"op": "copy_stats", "from": "$u", "type": true}]),
 		trig("destroyed", [{"op": "double_debuffs", "side": "opp"}])]}
-	t[65] = {"on": [trig("summoned", [all_({"kind": "unit", "side": "opp"}), st("$all", "paralyse")])],
+	# The Creeping Null (2026-11-03): an optional Rune On Summon; On Destroy its controller destroys a
+	# unit with at least 1 Rune, either side (mandatory while one exists).
+	t[65] = {"on": [trig("summoned", [ch({"kind": "unit"}, "u", true, "Apply 1 Rune to a unit?"), st("$u", "rune")]),
+			trig("destroyed", [ch({"kind": "unit", "has_status": "rune"}, "u", false, "Destroy a unit with a Rune."), {"op": "destroy", "target": "$u"}])],
 		"abilities": [abil("Apply 1 Debilitate to a unit", [ch({"kind": "unit"}, "u"), st("$u", "debilitate")])]}
 	t[97] = {"on": [trig("summoned", [st("self", "cleanse", 3)]), trig("destroyed", [ch({"kind": "unit", "race": "Warrior"}, "u", true, "Apply 2 Rune to a Warrior unit?"), st("$u", "rune", 2)])],
 		"abilities": [abil("Apply 1 Infiltrate to this unit", [st("self", "infiltrate")])],
-		"aura": [{"to": "self", "atk": 30, "cond": {"hp_lower": true}}]}
+		"aura": [{"to": "self", "atk": 20, "cond": {"hp_lower": true}}]}
+	# Yamata (2026-11-03): the start-of-turn 6 Damage became a once-per-turn 6 Poison in its column.
 	t[183] = {"on": [trig("summoned", [st("self", "eternal", 8)]),
-		trig("start_turn", [hp("opp", -6)], "own_turn", "start of turn"),
-		trig("destroyed", [ch({"kind": "spent_or_draw", "side": "self", "category": ["power"]}, "u", true, "Add a Power from Spent or Draw to Hand?"), {"op": "move", "target": "$u", "to": "hand"}])]}
-	t[96] = {"on": [trig("summoned", [{"op": "roma"}])],
+		trig("destroyed", [ch({"kind": "spent_or_draw", "side": "self", "category": ["power"]}, "u", true, "Add a Power from Spent or Draw to Hand?"), {"op": "move", "target": "$u", "to": "hand"}])],
+		"abilities": [abil("Apply 6 Poison to a unit in this column", [ch({"kind": "unit", "column": true}, "u"), st("$u", "poison", 6)])]}
+	t[96] = {"on": [trig("summoned", [{"op": "roma", "per": 10}])],
 		"abilities": [abil("Take 10 Damage: destroy a unit with lower ATK", [ch({"kind": "unit", "atk_below_self": true}, "u"), {"op": "destroy", "target": "$u"}], true, {"hp": 10})]}
 	# Bronze Salaman (2026-10-18): an optional Fusion Summon from the Field as it lands; when it is
 	# sacrificed or tributed (undebilitated), an optional Retain on a card in your Hand.
@@ -507,26 +562,34 @@ static func _build() -> Dictionary:
 		trig("tribute_or_sacrifice", [ch({"kind": "hand", "side": "self"}, "h", true, "Apply 1 Retain to a card in your Hand?"), st("$h", "retain")])]}
 
 	# ------------------------------------------------------------ Arcane
-	t[170] = {"on": [trig("summoned", [ch({"kind": "hand", "side": "self"}, "h", true, "Discard a card (Hand to Spent) to gain 1 AP?"), need("h"), {"op": "move", "target": "$h", "to": "spent"}, {"op": "ap", "n": 1}]),
+	# Grandmother Kaya (2026-11-03): only while the opponent has more cards on the Field than you.
+	t[170] = {"on": [trig("summoned", [{"op": "if", "cond": {"opp_more_cards": true}, "then": [ch({"kind": "hand", "side": "self"}, "h", true, "Discard a card (Hand to Spent) to gain 1 AP?"),
+			need("h"), {"op": "move", "target": "$h", "to": "spent"}, {"op": "ap", "n": 1}]}]),
 		trig("destroyed", [{"op": "require", "cond": {"count": {"kind": "spent", "side": "self", "not_self": true}, "min": 1}},
 			yes("Take 10 Damage to add a card from Spent to Hand?"), hp("self", -10), ch({"kind": "spent", "side": "self", "not_self": true}, "u", false, "Add a card from Spent to Hand."), {"op": "move", "target": "$u", "to": "hand"}])]}
+	t[170]["on"][0]["filter"] = {"opp_more_cards": true}   # no trigger at all while the condition fails
 	t[171] = {"flags": ["direct_attack", "exhaust_on_destroy"], "on": [trig("start_turn", [{"op": "stat", "target": "self", "atk": 6}], "own_turn", "start of turn")]}
 	t[172] = {"on": [trig("summoned", [ch({"kind": "draw", "side": "self", "unit_card": true, "race": "Beast"}, "c", true, "Add a Beast unit from Draw to Hand? It costs 1 AP less this turn."),
 			{"op": "move", "target": "$c", "to": "hand"}, {"op": "cost_turn", "target": "$c", "n": -1}])],
 		"abilities": [abil("Destroy a unit with a Rune", [ch({"kind": "unit", "has_status": "rune"}, "u"), {"op": "destroy", "target": "$u"}])]}
-	t[173] = {"on": [trig("summoned", [hp("opp", {"count": {"kind": "unit", "side": "opp"}, "mul": -4})]), trig("destroyed", [all_({"kind": "unit"}), st("$all", "paralyse")])]}
-	t[174] = {"on": [trig("tribute_or_sacrifice", [{"op": "ap", "n": 2}])]}
+	# Thunderclap Dragon (2026-11-03): "..., then Exhaust this Unit" on its On Destroy: it goes to
+	# Exhaust instead of Spent when destroyed undebilitated (as Flying Sandworm 171).
+	t[173] = {"flags": ["exhaust_on_destroy"], "on": [trig("summoned", [hp("opp", {"count": {"kind": "unit", "side": "opp"}, "mul": -4})]), trig("destroyed", [all_({"kind": "unit"}), st("$all", "paralyse")])]}
+	t[174] = {"on": [trig("tribute_or_sacrifice", [{"op": "ap", "n": 1}])]}
 	# 2026-10-18: the On Destroy DEF gain is no longer optional.
 	t[175] = {"on": [trig("summoned", [all_({"kind": "unit", "side": "opp"}), {"op": "stance", "target": "$all"}]),
 		trig("destroyed", [all_({"kind": "unit", "side": "self"}), {"op": "stat", "target": "$all", "def": 10}])],
 		"abilities": [abil("Apply 1 Debilitate to a unit", [ch({"kind": "unit"}, "u"), st("$u", "debilitate")])]}
 	# 2026-10-18: DEF is effect-determined too (the combined DEF of the other Water units).
-	t[176] = {"on": [trig("summoned", [{"op": "set_base", "target": "self", "atk": {"sum_atk": {"kind": "unit", "type": "Water", "not_self": true}},
+	# 2026-11-03: once per turn a Water unit from your Spent into this column; "Adjacent Units cannot
+	# declare an Attack" is Zorath's (22) lock on its controller's adjacent units. The Medic is gone.
+	t[176] = {"flags": ["adjacent_no_attack"], "on": [trig("summoned", [{"op": "set_base", "target": "self", "atk": {"sum_atk": {"kind": "unit", "type": "Water", "not_self": true}},
 			"def": {"sum_def": {"kind": "unit", "type": "Water", "not_self": true}}}])],
-		"abilities": [abil("Apply 2 Medic to adjacent units", [all_({"kind": "unit", "side": "self", "adjacent": true}), st("$all", "medic", 2)])]}
+		"abilities": [abil("Summon a Water unit from Spent in this column", [ch({"kind": "spent", "side": "self", "unit_card": true, "type": "Water"}, "u", false, "Summon a Water unit from your Spent into this column."),
+			{"op": "summon", "target": "$u", "place": "column", "stance": "choose"}])]}
 	# Card-specific Exhaust recovery (decisions.md): optional, your own Exhaust, current ordinary
 	# cost 1 or lower (Extra Deck cards have no ordinary cost and never qualify).
-	t[177] = {"flags": ["no_battle_damage"], "aura": [{"to": "self", "atk": 30, "cond": {"my_turn": true}}],
+	t[177] = {"flags": ["no_battle_damage"], "aura": [{"to": "self", "atk": 20, "cond": {"my_turn": true}}],
 		"on": [trig("destroyed", [ch({"kind": "exhaust", "side": "self", "cost_max": 1}, "u", true, "Move a 1-cost or lower card from your Exhaust to Draw?"), {"op": "move", "target": "$u", "to": "draw"}])]}
 	# Fence of the Marked Claw (2026-10-18): an optional Monster search with -1 AP this turn; whenever
 	# a Spell is activated (either player's), an optional Rune on any unit.
