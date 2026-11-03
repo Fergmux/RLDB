@@ -222,4 +222,17 @@ Check any prompt strings in `card_scripts.gd` that quote these.
   - On Field: the owner ruling above.
 
 ## Decisions for review
-Filled in by the integrator from the agents' reports.
+- Columns face each other directly, so Magic Cylinder and Damage Conversion check whether the attacker is in the Trap's column.
+- Void Basilisk and Seppuku stay on the Field until the Fusion lands, so on a full board one of the Tributes has to come from the Field. If Eternal saves Seppuku, the Fusion still happens.
+- Dragon Rider is moved to Defence as soon as a Dragon protects it, and stance changes to Attack are refused. A Rider Summoned behind a Dragon may still see the stance prompt, but it is set to Defence straight away.
+- Do Not Open Box responds only on the opponent's turn, like every Trap, and must have been Set before that turn.
+- Shen's -10 is an ordinary permanent loss, so Sneaky Snunday and Freaky Funday affect it.
+- Soul Devourer can target itself, like every "a Unit in this Column" choice.
+- The Last Foundation cannot Exhaust itself with its On Destroy.
+- A Debilitated Thunderclap goes to Spent, not Exhaust.
+- Kaya and Snow Tiger don't trigger at all when their condition fails.
+- The Last Foundation asks about its Reveal only when a Spell/Trap is on the Field.
+- When Snow Tiger protects a face-down Trap, the opponent can infer that the card is a Trap. That comes with the card text.
+- The bot's stance scoring skips Units that are locked from attacking (Zorath, Tritu, Owlbear, Dragon Rider).
+- Ultimate Dragon shows ?/? off the Field, and 0/0 if it is Summoned without a Fusion.
+- Speed override (owner, 3 Nov): no full suite was run. About 50 older tests that pin the previous numbers still fail and need updating later. Every new card test passes, and so do the tutorial and bot tests.
