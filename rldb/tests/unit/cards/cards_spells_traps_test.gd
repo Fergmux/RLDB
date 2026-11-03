@@ -228,12 +228,12 @@ func test_c047_damage_conversion_heals_by_attacker_atk() -> void:
 	var m := _p1_turn()
 	TB.to_battle(m)
 	var dc := TB.set_card(m, 0, 47, 1)
-	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 12)
+	var a := TB.unit(m, 1, TB.WATER, 1, "atk", 12)          # 2026-11-03: the attacker's column counts
 	var d := TB.unit(m, 0, TB.WATER, 1, "def", 0, 40)
 	TB.attack(m, a, d)
 	TB.choose(m, ["Activate Damage Conversion"])
 	assert_int(m.players[0]["hp"]).is_equal(72)
-	assert_int(m.current_cost(dc)).is_equal(1)
+	assert_int(m.current_cost(dc)).is_equal(2)              # costs 1 since 2026-11-03, +1 once used
 
 
 func test_c048_overextend_weakens_the_chosen_unit_after_third_unit() -> void:

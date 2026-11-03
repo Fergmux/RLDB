@@ -69,12 +69,25 @@ static func has(id: int) -> bool:
 
 
 ## All definitions in source order (the 2026-10-18 export repeats some indices; ties go by id).
+## A card with no sheet index (the 3 Nov 2026 new cards: null) sorts after every indexed card.
 static func all() -> Array:
 	ensure_loaded()
 	var out := _defs.values()
-	out.sort_custom(func(a, b): return a["source"]["index"] < b["source"]["index"] \
-		or (a["source"]["index"] == b["source"]["index"] and a["id"] < b["id"]))
+	out.sort_custom(func(a, b): return _order_before(a, b))
 	return out
+
+
+## Source-order comparison of two definitions: by sheet index (none = last), then by id.
+static func _order_before(a: Dictionary, b: Dictionary) -> bool:
+	var ia = a["source"].get("index")
+	var ib = b["source"].get("index")
+	var na := ia == null
+	var nb := ib == null
+	if na != nb:
+		return nb                         # an indexed card comes before one without an index
+	if not na and float(ia) != float(ib):
+		return float(ia) < float(ib)
+	return int(a["id"]) < int(b["id"])
 
 
 static func unassigned_notes() -> Array:

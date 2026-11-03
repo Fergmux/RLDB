@@ -338,6 +338,7 @@ func validate(p: int, cmd: Dictionary) -> String:
 			if status_count(uid, "paralyse") > 0: return PARALYSED_STANCE
 			if not can_change_stance(uid): return STANCE_PHASE_ONLY
 			if has_flag(uid, "no_defense") and inst["stance"] == "atk": return "This unit cannot be in Defense stance."
+			if inst["stance"] == "def" and attack_stance_locked(uid): return "%s cannot be in Attack stance while it is protected by a Dragon." % name_of(uid)
 			return ""
 		"attack":
 			return _attack_check(p, uid, String(cmd.get("mode", "")))
@@ -506,7 +507,8 @@ func fusion_methods(p: int) -> Array:
 				break
 		if fop.is_empty() or validate(p, c) != "":
 			continue
-		var targets := fusion_candidates(p, fop["sources"], c["uid"] if leaves else -1)
+		var not_self: bool = leaves or (c["t"] == "ability" and fop.get("not_self", false))
+		var targets := fusion_candidates(p, fop["sources"], c["uid"] if not_self else -1, leaves)
 		if not targets.is_empty():
 			var e: Dictionary = c.duplicate()
 			e["targets"] = targets
@@ -535,14 +537,15 @@ func _ability_check(p: int, uid: int, idx: int, ab: Dictionary) -> String:
 	if column_summon_blocked(f, ab["ops"]):
 		return "No free zone in this column."
 	# A Fusion ability needs a Fusion unit it could actually summon (the paying unit itself
-	# leaves before the summon when the ability exhausts/destroys it).
+	# leaves before the summon when the ability exhausts/destroys it first; `not_self`: it is never a
+	# material but stays on the Field until the Fusion unit has landed).
 	var leaves := false
 	for op in ab["ops"]:
 		if op["op"] in ["move", "destroy"] and op.get("target", "") == "self":
 			leaves = true
 		if op["op"] == "fusion" and extra_summons_locked():
 			return NO_EXTRA_IN_BATTLE
-		if op["op"] == "fusion" and fusion_candidates(p, op["sources"], uid if leaves else -1).is_empty():
+		if op["op"] == "fusion" and fusion_candidates(p, op["sources"], uid if leaves or op.get("not_self", false) else -1, leaves).is_empty():
 			return "No Fusion unit can be summoned."
 	return ""
 
@@ -591,8 +594,9 @@ func _execute(p: int, cmd: Dictionary) -> void:
 			var flead := _fusion_lead(ab["ops"], split[0], true)
 			split[0] += flead
 			var ops: Array = split[0] + [{"op": "ability_cost", "idx": idx}]
-			# F04-22: a Fusion method's self-destruction / exhaustion (Seppuku, Void Basilisk) is a
+			# F04-22: a Fusion method's self-destruction / exhaustion placed before its Fusion is a
 			# cost, paid with the AP/HP cost right after the committing stance, before the window.
+			# (Since 2026-11-03 Seppuku and Void Basilisk do it after the summon, in the op's `then`.)
 			if not flead.is_empty():
 				while not split[1].is_empty() and split[1][0]["op"] in ["move", "destroy"] and split[1][0].get("target", "") == "self":
 					ops.append(split[1].pop_front())
@@ -646,7 +650,8 @@ func _fusion_lead(ops: Array, lead: Array, ability: bool) -> Array:
 		if ability and fo["op"] in ["move", "destroy"] and fo.get("target", "") == "self":
 			leaves = true
 		if fo["op"] == "fusion":
-			return [{"op": "fusion_pick", "sources": fo["sources"], "exclude_self": leaves, "cancellable": true}]
+			return [{"op": "fusion_pick", "sources": fo["sources"], "exclude_self": leaves or (ability and fo.get("not_self", false)),
+				"frees_zone": leaves, "cancellable": true}]
 	return []
 
 

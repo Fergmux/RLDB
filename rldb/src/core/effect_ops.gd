@@ -263,6 +263,10 @@ func _op_move(f: Dictionary, op: Dictionary) -> int:
 		add_log("%s is no longer on the Field, so its effect ends." % name_of(f["src"]))
 		return R.END
 	for u in refs(f, op["target"]):
+		# `from_field` ("..., then Exhaust this Unit", Void Basilisk): a card that already left the Field
+		# is not pulled out of a pile.
+		if op.get("from_field", false) and not on_field(u):
+			continue
 		var from: String = cards[u]["zone"]
 		var was_public := not (from in HIDDEN_PILES)
 		if from == "backrow" and not is_face_up(u):
@@ -296,8 +300,9 @@ func _op_destroy(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
 		if on_field(u):
 			var done := destroy(u, "effect", f["src"], f["ctl"])
-			# "Destroy this Unit, ...": if the cost was prevented, nothing else happens.
-			if not done and op["target"] == "self":
+			# "Destroy this Unit, ...": if the cost was prevented, nothing else happens. `keep_going`: the
+			# destruction comes last ("..., then Destroy this Unit", Seppuku), so the rest still runs.
+			if not done and op["target"] == "self" and not op.get("keep_going", false):
 				add_log("%s was not destroyed, so its effect ends." % name_of(u))
 				return R.END
 	return R.CONT
@@ -313,6 +318,9 @@ func _op_stance(f: Dictionary, op: Dictionary) -> int:
 func _flip_stance(u: int) -> void:
 	if has_flag(u, "no_defense") and cards[u]["stance"] == "atk":
 		add_log("%s cannot be in Defense stance." % name_of(u))
+		return
+	if cards[u]["stance"] == "def" and attack_stance_locked(u):
+		add_log("%s cannot be in Attack stance while it is protected by a Dragon." % name_of(u))
 		return
 	cards[u]["stance"] = "def" if cards[u]["stance"] == "atk" else "atk"
 	add_log("%s changes to %s stance." % [name_of(u), "Defense" if cards[u]["stance"] == "def" else "Attack"])

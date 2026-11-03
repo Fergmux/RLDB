@@ -61,11 +61,12 @@ func _assignable(reqs: Array, pool: Array, chosen: Array, need_field: bool = fal
 
 
 ## True when p has no free unit zone, so a Fusion summon needs a Field material to free one.
-## A method unit that leaves the Field to pay (`exclude`, e.g. Void Basilisk) frees its own zone.
-func _fusion_needs_field_mat(p: int, exclude: int = -1) -> bool:
+## A method unit that leaves the Field before the summon (`exclude` with `exclude_frees`) frees its own
+## zone; one that leaves only after it (Void Basilisk, Seppuku since 2026-11-03) does not.
+func _fusion_needs_field_mat(p: int, exclude: int = -1, exclude_frees: bool = true) -> bool:
 	if not free_unit_slots(p).is_empty():
 		return false
-	return not (exclude != -1 and unit_on_field(exclude) and cards[exclude]["ctl"] == p)
+	return not (exclude_frees and exclude != -1 and unit_on_field(exclude) and cards[exclude]["ctl"] == p)
 
 
 ## Fusion materials player p could use among `sources`, optionally excluding one uid.
@@ -79,12 +80,13 @@ func extra_summons_locked() -> bool:
 	return phase == PHASE_BATTLE
 
 
-## Fusion units player p could summon now from `sources`; none in the Battle Phase.
-func fusion_candidates(p: int, sources: Array, exclude: int = -1) -> Array:
+## Fusion units player p could summon now from `sources`; none in the Battle Phase. `exclude` is never
+## a material; `exclude_frees`: it leaves the Field before the summon, freeing its zone.
+func fusion_candidates(p: int, sources: Array, exclude: int = -1, exclude_frees: bool = true) -> Array:
 	if extra_summons_locked():
 		return []
 	var pool := _fusion_pool(p, sources).filter(func(u): return u != exclude)
-	var need_field := _fusion_needs_field_mat(p, exclude)
+	var need_field := _fusion_needs_field_mat(p, exclude, exclude_frees)
 	var out := []
 	for u in players[p]["extra"]:
 		if category(u) != "fusion" or _summon_blocked(p, unit_type(u)):
@@ -109,18 +111,21 @@ func _op_fusion_possible(f: Dictionary, op: Dictionary) -> int:
 ## step (F07 removed the separate Confirm). Until then everything is cancellable and nothing has
 ## changed (only frame vars are written). Costs, self-destruction / exhaustion, the response
 ## window and the summon follow; `_op_fusion` rechecks the plan before anything is tributed.
-## Op fields: sources, exclude_self (the paying unit leaves, so it is never a material and frees
-## its own zone), cancellable.
+## Op fields: sources, exclude_self (the method unit is never a material), frees_zone (it leaves the
+## Field before the summon, so its zone is free for the Fusion unit; defaults to exclude_self),
+## cancellable.
 func _op_fusion_pick(f: Dictionary, op: Dictionary) -> int:
 	var cancellable: bool = op.get("cancellable", true)
+	var frees: bool = op.get("frees_zone", op.get("exclude_self", false))
 	var ans: Variant = take_answer(f)
 	if ans != null:
-		_fusion_plan_ops(f, int(ans[0]), op["sources"], op.get("exclude_self", false), cancellable)
+		_fusion_plan_ops(f, int(ans[0]), op["sources"], frees, cancellable)
 		return R.CONT
 	f["vars"].erase("fusion_ready")
 	if op.get("exclude_self", false):
-		f["vars"]["fusion_exclude"] = f["src"]     # the paying unit is never its own material
-	var cands := fusion_candidates(f["ctl"], op["sources"], f["vars"].get("fusion_exclude", -1))
+		f["vars"]["fusion_exclude"] = f["src"]     # the method unit is never its own material
+		f["vars"]["fusion_exclude_frees"] = frees
+	var cands := fusion_candidates(f["ctl"], op["sources"], f["vars"].get("fusion_exclude", -1), f["vars"].get("fusion_exclude_frees", true))
 	if cands.is_empty():
 		add_log(NO_EXTRA_IN_BATTLE if extra_summons_locked() else "No Fusion Summon is possible.")
 		return R.END
@@ -189,13 +194,18 @@ func _fusion_fizzle(f: Dictionary) -> int:
 
 ## The Fusion summon itself. With a completed plan it tributes and places; without one (a
 ## triggered method such as Tag Team - S) it first runs the same choice steps.
+## Op fields: sources; not_self (the method unit is never a material); then (ops run right after the
+## Fusion unit lands, before its On Summon effects, and only when it does: "..., then Exhaust this
+## Unit", Void Basilisk and Seppuku, 2026-11-03).
 func _op_fusion(f: Dictionary, op: Dictionary) -> int:
 	var p: int = f["ctl"]
 	if not f["vars"].get("fusion_ready", false):
 		if op.get("planned", false):
 			return R.CONT                 # the plan was abandoned (no candidates / materials)
-		_splice(f, [{"op": "fusion_pick", "sources": op["sources"], "cancellable": not f["committed"]},
-			{"op": "fusion", "sources": op["sources"], "planned": true}])
+		var planned: Dictionary = op.duplicate()
+		planned["planned"] = true
+		_splice(f, [{"op": "fusion_pick", "sources": op["sources"], "cancellable": not f["committed"],
+			"exclude_self": op.get("not_self", false), "frees_zone": false}, planned])
 		return R.CONT
 	f["vars"].erase("fusion_ready")
 	var fu: int = f["vars"]["fusion"]
@@ -203,6 +213,7 @@ func _op_fusion(f: Dictionary, op: Dictionary) -> int:
 		add_log("The chosen Fusion materials are no longer available, so the Fusion Summon of %s fails." % name_of(fu))
 		return _fusion_fizzle(f)
 	var ops := [{"op": "fusion_tribute"}, {"op": "place", "target": fu, "slot": "$fslot", "stance": "$stance"}, {"op": "tribute_bonus", "target": fu}]
+	ops += op.get("then", [])
 	ops += summon_tail(fu, p)
 	_splice(f, ops)
 	return R.CONT
@@ -218,7 +229,7 @@ func _op_fusion_mat(f: Dictionary, op: Dictionary) -> int:
 		return R.CONT
 	var ex: int = f["vars"].get("fusion_exclude", -1)
 	var pool := _fusion_pool(f["ctl"], f["vars"]["fsources"]).filter(func(u): return u != ex)
-	var need_field := _fusion_needs_field_mat(f["ctl"], ex)
+	var need_field := _fusion_needs_field_mat(f["ctl"], ex, f["vars"].get("fusion_exclude_frees", true))
 	var ok := []
 	for u in pool:
 		if u in chosen or not _req_ok(u, reqs[op["i"]], chosen):
