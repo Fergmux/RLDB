@@ -5,7 +5,7 @@
       "title": "RLDB",
       "lines": [
         "Card art, table and menu backgrounds and the soundtrack: supplied by the RLDB team.",
-        "Sound effects: synthesised for RLDB (tools/gen_sfx.py)."
+        "Sound effects: generated for RLDB with ElevenLabs Sound Effects (eleven_text_to_sound_v2), November 2026."
       ]
     },
     {
