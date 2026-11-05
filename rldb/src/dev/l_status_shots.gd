@@ -15,6 +15,8 @@ const PEAK := FxStatus.PEAK_AT + 0.04
 
 ## True: only the shots of the "before" pair (board, field close-ups, badge sheet, one old effect).
 var before := false
+## True: a 3840x2160 window; only the native-resolution close-ups of field cards and the inspector.
+var uhd := false
 var _sfx_seen: Array = []
 
 
@@ -22,7 +24,9 @@ func run(main_node: Node, dir: String) -> void:
 	main = main_node
 	out_dir = dir
 	DirAccess.make_dir_recursive_absolute(out_dir)
-	DisplayServer.window_set_size(Vector2i(1600, 1000))
+	DisplayServer.window_set_size(Vector2i(3840, 2160) if uhd else Vector2i(1600, 1000))
+	if uhd:
+		get_tree().root.size = Vector2i(3840, 2160)
 	if not Sfx._loaded:
 		Sfx.load_settings()
 	Sfx._muted = true   # in memory only: the player's audio settings file is never written
@@ -77,6 +81,16 @@ func _stage() -> void:
 
 
 func _steps() -> void:
+	if uhd:
+		await _move(Vector2(1300, 60))
+		await _native_closeups("4k_field_cards_native")
+		var w := _w_slot(a, "unit", int(m.cards[uids["u3"]]["slot"]))
+		await _rclick(w.get_global_rect().get_center())
+		await _wait(0.6)
+		await _move(Vector2(1580, 990))
+		await _wait(0.3)
+		await _native_region("4k_inspect_native", Rect2(Vector2(280, 140), Vector2(500, 480)))
+		return
 	await _move(Vector2(1300, 60))
 	await _shot("board_statuses" + ("_before" if before else "_after"))
 	await _closeups("field_cards" + ("_before" if before else "_after"))
@@ -106,6 +120,40 @@ func _closeups(name: String) -> void:
 		var r := _slot_rect(a, "unit", slot).grow(6)
 		tiles.append([_crop(img, r, 2.5), ""])
 	await _show_sheet(name, tiles, 4)
+
+
+## Field cards u0..u3 side by side at the window's native resolution (no scaling), saved as one JPG.
+func _native_closeups(name: String) -> void:
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var crops := []
+	var w := 0
+	var h := 0
+	var px := float(img.get_width()) / get_viewport().get_visible_rect().size.x   # canvas units -> pixels
+	for k in ["u0", "u1", "u2", "u3"]:
+		var r0 := _slot_rect(a, "unit", int(m.cards[uids[k]]["slot"])).grow(4)
+		var r := Rect2(r0.position * px, r0.size * px)
+		var ri := Rect2i(r.position.floor(), r.size.ceil()).intersection(Rect2i(Vector2i.ZERO, img.get_size()))
+		var c := img.get_region(ri)
+		crops.append(c)
+		w += c.get_width() + 12
+		h = maxi(h, c.get_height())
+	var out := Image.create(w, h, false, Image.FORMAT_RGB8)
+	out.fill(Color("17130f"))
+	var x := 0
+	for c in crops:
+		out.blit_rect(c, Rect2i(Vector2i.ZERO, c.get_size()), Vector2i(x, 0))
+		x += c.get_width() + 12
+	out.save_jpg(out_dir.path_join(name + ".jpg"), 0.88)
+
+
+func _native_region(name: String, r: Rect2) -> void:
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var px := float(img.get_width()) / get_viewport().get_visible_rect().size.x
+	r = Rect2(r.position * px, r.size * px)
+	var ri := Rect2i(r.position.floor(), r.size.ceil()).intersection(Rect2i(Vector2i.ZERO, img.get_size()))
+	img.get_region(ri).save_jpg(out_dir.path_join(name + ".jpg"), 0.88)
 
 
 ## The inspector's big card for u3 (many statuses) and u0.
