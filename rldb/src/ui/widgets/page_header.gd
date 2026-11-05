@@ -41,7 +41,7 @@ func _init(text: String) -> void:
 	back.name = "Back"
 	back.custom_minimum_size.x = BACK_W
 	back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	back.tooltip_text = "Back to the main menu (Esc)"
+	back.tooltip_text = "Back to the main menu"
 	back.pressed.connect(back_pressed.emit)
 	row.add_child(back)
 	rule = Ornate.Rule.new(Color(UIStyle.GOLD, 0.6), true, 12.0)

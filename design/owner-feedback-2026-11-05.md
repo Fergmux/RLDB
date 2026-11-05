@@ -94,6 +94,11 @@ make a way for ai to automatically upload the build for us
   (`publish-release` / `tools/publish_github.py` need a mac asset).
 - No more questions: decide, work around blockers, and list every decision and anything not done in the final report.
 
+- **L30 (owner, 2026-11-05, verbatim):** "remove the escx button prompt from the cancel button, i don't want keyboard
+  shortcuts prompts visible anywhere in the game". Standing rule: no keyboard-shortcut hints (keycaps, "Esc", "Enter",
+  "(Space)", hotkey labels in tooltips or buttons) may be shown anywhere in the game. The shortcuts themselves keep
+  working.
+
 ## Facts found during the up-front inspection (2026-11-05)
 
 - ElevenLabs MCP: the `sfx` flow node (model `eleven_text_to_sound_v2`, 0.5-30 s, loop option) is available, and so is

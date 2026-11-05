@@ -168,7 +168,7 @@ func build(row: HBoxContainer, before: Control) -> void:
 	row2.add_child(input)
 	_send_b = UIStyle.primary_button("Send", 14)
 	_send_b.custom_minimum_size = Vector2(72, 36)
-	_send_b.tooltip_text = "Send (Enter)"
+	_send_b.tooltip_text = "Send"
 	_send_b.pressed.connect(send)
 	row2.add_child(_send_b)
 	# J19: no key hint under the input; the character counter shows only near the limit.
@@ -185,7 +185,7 @@ func build(row: HBoxContainer, before: Control) -> void:
 static func add_close(p: HousePanel, on_close: Callable) -> RoundCloseButton:
 	var close := RoundCloseButton.new(CLOSE_D)
 	close.name = "CloseButton"
-	close.tooltip_text = "Close (Esc)"
+	close.tooltip_text = "Close"
 	close.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(on_close)
 	p.head_row.mouse_filter = Control.MOUSE_FILTER_PASS
