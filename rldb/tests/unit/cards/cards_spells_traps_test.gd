@@ -60,15 +60,15 @@ func test_c043_freaky_funday_also_switches_atk_and_def_in_card_effects() -> void
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10, 20)
 	TB.cast(m, 0, 43)
-	TB.cast(m, 0, 182)                                      # Shimmer Serum: +20 ATK this turn
+	TB.cast(m, 0, 182)                                      # Shimmer Serum: +10 ATK this turn (2026-11-03)
 	TB.choose_uids(m, [u])
 	assert_int(m.atk_of(u)).is_equal(20)
-	assert_int(m.def_of(u)).is_equal(30)
+	assert_int(m.def_of(u)).is_equal(10 + 10)               # the +10 ATK lands on DEF
 	var late := TB.unit(m, 0, TB.WATER, 1, "atk", 10, 20)   # arrives after Funday: not switched
 	TB.cast(m, 0, 182)
 	TB.choose_uids(m, [late])
 	assert_int(m.atk_of(late)).is_equal(10)
-	assert_int(m.def_of(late)).is_equal(40)
+	assert_int(m.def_of(late)).is_equal(20 + 10)
 	TB.to_turn2(m)
 	assert_int(m.atk_of(u)).is_equal(10)
 	assert_int(m.def_of(u)).is_equal(20)
@@ -83,20 +83,20 @@ func test_c043_two_freaky_fundays_cancel_out() -> void:
 	assert_int(m.def_of(u)).is_equal(20)
 	TB.cast(m, 0, 182)
 	TB.choose_uids(m, [u])
-	assert_int(m.atk_of(u)).is_equal(30)                    # effects are back to normal too
+	assert_int(m.atk_of(u)).is_equal(10 + 10)               # effects are back to normal too (Serum +10)
 	assert_int(m.def_of(u)).is_equal(20)
 
 
 func test_c043_unit_that_leaves_and_returns_is_a_new_card() -> void:
 	var m := TB.make()
-	var u := TB.unit(m, 0, 162, 0)                          # Diggie 6/0 (2026-10-17)
+	var u := TB.unit(m, 0, 162, 0)                          # Diggie 6/2 (2026-11-03)
 	TB.cast(m, 0, 43)
-	assert_int(m.atk_of(u)).is_equal(0)
+	assert_int(m.atk_of(u)).is_equal(2)                     # switched: ATK reads its DEF
 	m._leave_field(u, "spent", "test")
 	m.players[0]["spent"].erase(u)
 	m.place_unit(u, 0, 0, "atk")
 	assert_int(m.atk_of(u)).is_equal(6)
-	assert_int(m.def_of(u)).is_equal(0)
+	assert_int(m.def_of(u)).is_equal(2)
 
 
 func test_c083_sacred_offerings_adds_a_rune() -> void:
@@ -107,12 +107,13 @@ func test_c083_sacred_offerings_adds_a_rune() -> void:
 	assert_int(m.status_count(u, "rune")).is_equal(1)
 
 
-func test_c084_assassinate_destroys_unit_with_30_def_or_less_only() -> void:
+# 2026-11-03: 20 DEF or less (was 30).
+func test_c084_assassinate_destroys_unit_with_20_def_or_less_only() -> void:
 	var m := TB.make()
-	var weak := TB.unit(m, 1, TB.WATER, 0, "atk", 8, 30)
-	var tough := TB.unit(m, 1, TB.WATER, 1, "atk", 8, 31)
+	var weak := TB.unit(m, 1, TB.WATER, 0, "atk", 8, 20)
+	var tough := TB.unit(m, 1, TB.WATER, 1, "atk", 8, 21)
 	TB.cast(m, 0, 84)
-	TB.choose_uids(m, [weak])               # only the 30-DEF unit is legal, but it is still chosen
+	TB.choose_uids(m, [weak])               # only the 20-DEF unit is legal, but it is still chosen
 	assert_str(m.cards[weak]["zone"]).is_equal("spent")
 	assert_str(m.cards[tough]["zone"]).is_equal("unit")
 
@@ -278,9 +279,9 @@ func test_c103_alexanders_arrow_drains_summoned_unit() -> void:
 	TB.set_card(m, 0, 103, 0)
 	TB.unit(m, 0, TB.WATER, 0, "atk", 6)
 	TB.unit(m, 0, TB.WATER, 1, "atk", 9)
-	var u := TB.summon(m, 1, 37, 0)                         # Solomon 26 ATK
+	var u := TB.summon(m, 1, 37, 0)                         # Solomon 20 ATK (2026-11-03)
 	TB.choose(m, ["Activate Alexander's Arrow"])
-	assert_int(m.atk_of(u)).is_equal(20)
+	assert_int(m.atk_of(u)).is_equal(20 - 6)
 
 
 func test_c140_energy_dispel_destroys_the_spell_without_negating_and_raises_its_own_cost() -> void:
@@ -368,9 +369,10 @@ func test_c052_saviour_defcon_2_revives_small_unit_in_column() -> void:
 func test_c165_saviour_defcon_1_answers_big_summon() -> void:
 	var m := _p1_turn()
 	TB.set_card(m, 0, 165, 0)
-	var ally := TB.card(m, 0, 37, "spent")                  # 26 ATK: not eligible
-	var ok := TB.card(m, 0, 28, "spent")                    # 14 ATK
-	TB.summon(m, 1, 79, 2)                                  # Akakaiju 34 ATK
+	# 2026-11-03: the summon must have 20 ATK or more and the revived unit 20 ATK or less (was 24).
+	var ally := TB.card(m, 0, 38, "spent")                  # The Lone Warrior, 24 ATK: not eligible
+	var ok := TB.card(m, 0, 28, "spent")                    # Guardian of the Forest, 12 ATK
+	TB.summon(m, 1, 79, 2)                                  # Akakaiju 26 ATK
 	TB.choose(m, ["Activate Saviour Appears: Defcon 1"])
 	var opts: Array = m.pending["options"].map(func(o): return o["v"])
 	assert_bool(ally in opts).is_false()
