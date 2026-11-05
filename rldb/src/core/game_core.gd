@@ -482,7 +482,7 @@ func evolve_unit(uid: int) -> void:
 	note("evolve", {"uid": uid, "p": int(inst["ctl"]), "from": from_id, "to": to_id})
 
 
-## True while effects are reversed this turn.
+## True while Sneaky Snunday reverses ATK/DEF gains and losses this turn (an even number of copies cancels).
 func reversal_active() -> bool:
 	return reversal_turn == turn and reversal_count % 2 == 1
 
@@ -495,11 +495,20 @@ func swap_active() -> bool:
 ## Returns {"atk", "def", "parts": [explanations]} for a unit, recalculated live. A unit switched
 ## by Freaky Funday shows base + earlier modifiers switched; modifiers applied since were switched
 ## when applied and auras are switched while Funday lasts, so they are added as they are.
+## L15 (owner, 2026-11-05) Sneaky Snunday: "Until the end of this turn: all new and ongoing ATK/DEF
+## gains and losses are reversed." While it is active a unit on the Field reads
+## base - (unreversed - base): the whole difference from its base is mirrored, permanent changes from
+## earlier turns included. The reference base is the one Freaky Funday shows (switched when the unit
+## is switched); the unreversed value is the raw sum, so a loss past zero is mirrored in full; the
+## floor at 0 applies to the result. A unit that cannot gain ATK/DEF (no_gain) is never raised above
+## that base by the mirror either.
 func stat_breakdown(uid: int) -> Dictionary:
 	var inst: Dictionary = cards[uid]
 	var atk := base_atk(uid)
 	var def := base_def(uid)
 	var parts := ["Base %d/%d" % [atk, def]]
+	var ref_atk := atk
+	var ref_def := def
 	var no_gain := has_flag(uid, "no_gain")
 	var sw: bool = swapped.has(uid) and inst["zone"] == "unit"
 	var later_atk := 0
@@ -526,6 +535,8 @@ func stat_breakdown(uid: int) -> Dictionary:
 		var t := atk
 		atk = def
 		def = t
+		ref_atk = base_def(uid)
+		ref_def = base_atk(uid)
 		parts.append("Freaky Funday: ATK/DEF switched")
 	atk += later_atk
 	def += later_def
@@ -538,16 +549,23 @@ func stat_breakdown(uid: int) -> Dictionary:
 				var ta := aa
 				aa = ad
 				ad = ta
-			if reversal_active():
-				aa = -aa
-				ad = -ad
 			if no_gain:
 				aa = mini(aa, 0)
 				ad = mini(ad, 0)
 			atk += aa
 			def += ad
 			if aa != 0 or ad != 0:
-				parts.append("%s %+d/%+d%s" % [aura["src"], aa, ad, " (reversed)" if reversal_active() else ""])
+				parts.append("%s %+d/%+d" % [aura["src"], aa, ad])
+		if reversal_active():
+			var da := atk - ref_atk
+			var dd := def - ref_def
+			if da != 0 or dd != 0:
+				atk = ref_atk - da
+				def = ref_def - dd
+				if no_gain:
+					atk = mini(atk, ref_atk)
+					def = mini(def, ref_def)
+				parts.append("Sneaky Snunday: %+d/%+d reversed to %+d/%+d" % [da, dd, atk - ref_atk, def - ref_def])
 	return {"atk": maxi(atk, 0), "def": maxi(def, 0), "parts": parts}
 
 
@@ -675,7 +693,15 @@ func _clear_statuses_of_class(uid: int, buffs: bool) -> Array:
 
 ## Applies n stacks of a status, honouring Curse/Cleanse prevention and Cleanse
 ## clearing. Runes are counters and bypass both. Returns the stacks actually added.
-func apply_status(uid: int, s: String, n: int) -> int:
+## Curse prevents a Buff (Cleanse included) and Cleanse prevents a Debuff (Curse included).
+## L20 (owner, 2026-11-05): `batch` groups the applications of one effect resolution ("at the same
+## time"; EffectEngine.status_batch). The first application a stack prevents on a unit consumes one
+## stack; every later Buff (for Curse) or Debuff (for Cleanse) of the same batch on that unit is
+## prevented too without consuming another. Each unit is independent. Without a batch every
+## application stands alone. Each prevention emits the presentation event
+## {"k": "status_blocked", "at": fx_pos, "s": prevented status, "n": stacks, "by": "cleanse" | "curse",
+## "used": whether this one consumed the stack}.
+func apply_status(uid: int, s: String, n: int, batch: Dictionary = {}) -> int:
 	if n <= 0 or not cards.has(uid):
 		return 0
 	if s == "rune":
@@ -688,21 +714,24 @@ func apply_status(uid: int, s: String, n: int) -> int:
 	if CardDB.is_buff(s) and has_flag(uid, "no_buffs"):
 		card_log(uid, "§ cannot receive Buffs.")
 		return 0
-	if CardDB.is_buff(s) and status_count(uid, "curse") > 0 and s != "cleanse":
-		_set_status(uid, "curse", status_count(uid, "curse") - 1)
-		card_log(uid, "Curse on § prevents %s (Curse -1)." % s.capitalize())
-		return 0
-	if s == "cleanse" and status_count(uid, "curse") > 0:
-		_set_status(uid, "curse", status_count(uid, "curse") - 1)
-		card_log(uid, "Curse on § prevents Cleanse (Curse -1).")
-		return 0
-	if CardDB.is_debuff(s) and status_count(uid, "cleanse") > 0 and s != "curse":
-		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
-		card_log(uid, "Cleanse on § prevents %s (Cleanse -1)." % s.capitalize())
-		return 0
-	if s == "curse" and status_count(uid, "cleanse") > 0:
-		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
-		card_log(uid, "Cleanse on § prevents Curse (Cleanse -1).")
+	var by := ""
+	if CardDB.is_buff(s) and (status_count(uid, "curse") > 0 or _batch_blocked(batch, "curse", uid)):
+		by = "curse"
+	elif CardDB.is_debuff(s) and (status_count(uid, "cleanse") > 0 or _batch_blocked(batch, "cleanse", uid)):
+		by = "cleanse"
+	if by != "":
+		var used := not _batch_blocked(batch, by, uid)
+		if used:
+			_set_status(uid, by, status_count(uid, by) - 1)
+			if not batch.has(by):
+				batch[by] = {}
+			batch[by][uid] = true
+			card_log(uid, "%s on § prevents %s (%s -1)." % [by.capitalize(), s.capitalize(), by.capitalize()])
+		else:
+			card_log(uid, "%s on § also prevents %s (applied at the same time)." % [by.capitalize(), s.capitalize()])
+		var bpos := fx_pos(uid)
+		if not bpos.is_empty():
+			add_fx({"k": "status_blocked", "at": bpos, "s": s, "n": n, "by": by, "used": used})
 		return 0
 	_set_status(uid, s, status_count(uid, s) + n)
 	card_log(uid, "§ gains %d %s (now %d)." % [n, s.capitalize(), status_count(uid, s)])
@@ -711,6 +740,12 @@ func apply_status(uid: int, s: String, n: int) -> int:
 		add_fx({"k": "status", "at": pos, "s": s, "n": n})
 	_after_status_gain(uid, s)
 	return n
+
+
+## L20: true when a `by` ("cleanse" / "curse") stack already prevented an application on unit `uid`
+## within `batch`.
+static func _batch_blocked(batch: Dictionary, by: String, uid: int) -> bool:
+	return batch.has(by) and (batch[by] as Dictionary).has(uid)
 
 
 ## Cleanse clears all existing debuffs when gained (consuming one stack);

@@ -94,6 +94,8 @@ TEXT_CORRECTIONS = {
     135: {"on_field": "If this Unit is Protected by a Dragon Unit: this Unit cannot be in Attack Stance, then that Dragon Unit gains +14 ATK."},
     146: {"on_field": "Once per turn: you can Summon a Basic Unit from Draw to an Adjacent Zone. This Unit gains +8 ATK/DEF for each of your Adjacent Basic Units."},
     147: {"on_field": "At the start of your turn: your opponent's Units lose -8 DEF. Your opponent's Units cannot attack other Units if they can attack this Unit."},
+    # L15 (owner, 2026-11-05): Sneaky Snunday reverses ATK/DEF only (no longer costs), permanent changes included.
+    154: {"on_summon": "Until the end of this turn: all new and ongoing ATK/DEF gains and losses are reversed."},
     170: {"on_summon": "If your opponent Controls more cards: you can discard a card to gain +1 AP."},
 }
 

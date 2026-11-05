@@ -113,30 +113,32 @@ func test_p19_two_options_draw_six() -> void:
 	assert_int(m.players[1]["hand"].size()).is_equal(6)
 
 
-# S-01: two Sneaky Snundays cancel; S-04: self-cost changes reverse, floored at zero.
+# S-01: two Sneaky Snundays cancel. S-04 is superseded by L15 (2026-11-05): costs are not reversed.
 func test_s01_two_snundays_cancel() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
 	TB.cast(m, 0, 154)
 	TB.cast(m, 0, 154)
-	TB.cast(m, 0, 182)                                    # Shimmer Serum +10 (2026-11-03)
+	TB.cast(m, 0, 182)                                    # Shimmer Serum +10
 	TB.choose_uids(m, [u])                                # target is always the player's choice
-	assert_int(m.atk_of(u)).is_equal(10 + 10)
+	assert_int(m.atk_of(u)).is_equal(20)
 
 
-# 2026-10-18: Shimmer Serum's cost change is on its target unit; it reverses, floored at zero.
-func test_s04_shimmer_cost_change_reverses_but_never_below_zero() -> void:
+# 2026-10-18: Shimmer Serum's cost change is on its target unit. L15 (2026-11-05): Sneaky Snunday
+# no longer reverses it.
+func test_s04_shimmer_cost_change_is_not_reversed_by_snunday() -> void:
 	var m := TB.make()
 	var own := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
+	var printed := m.current_cost(own)
 	TB.cast(m, 0, 154)
 	var s := TB.cast(m, 0, 182)
 	TB.choose_uids(m, [own])
-	assert_int(m.current_cost(own)).is_equal(0)
-	assert_int(m.cards[own]["cost_p"]).is_equal(-1)
+	assert_int(m.current_cost(own)).is_equal(printed + 1)
+	assert_int(m.cards[own]["cost_p"]).is_equal(1)
 	assert_int(m.cards[s]["cost_p"]).is_equal(0)
 
 
-func test_s04_magic_cylinder_cost_change_reverses_under_snunday() -> void:
+func test_s04_magic_cylinder_cost_change_is_not_reversed_by_snunday() -> void:
 	var m := _battle()
 	var mc := TB.set_card(m, 0, 45, 0)
 	m.phase = MatchEngine.PHASE_MAIN1                      # Spells come from the Hand only in a Main Phase
@@ -145,7 +147,7 @@ func test_s04_magic_cylinder_cost_change_reverses_under_snunday() -> void:
 	var a := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
 	TB.attack(m, a, TB.unit(m, 0, TB.WATER, 0))
 	TB.choose(m, ["Activate Magic Cylinder"])
-	assert_int(m.current_cost(mc)).is_equal(0)            # 1 - 1
+	assert_int(m.current_cost(mc)).is_equal(2)            # 1 + 1: L15, costs are not reversed
 
 
 # P-20: Plan B destroys in selected order, each chain fully resolved, healing last.

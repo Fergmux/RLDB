@@ -313,6 +313,9 @@ static func for_fx(e: Dictionary, me: int) -> String:
 			return "ap_gain" if dap > 0.0 else ("ap_loss" if dap < 0.0 else "")
 		"sacrifice":
 			return "sacrifice"
+		"control":
+			# L9: Hypnotise takes a unit, and it goes back at end of turn.
+			return "control_return" if bool(e.get("back", false)) else "control_steal"
 		"destroy":
 			return "exhaust" if String(e.get("dest", "spent")) == "exhaust" else "destroy"
 		"exhaust":

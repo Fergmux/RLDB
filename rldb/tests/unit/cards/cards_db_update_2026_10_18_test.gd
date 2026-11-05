@@ -296,9 +296,9 @@ func test_c154_sneaky_snunday_still_reverses_stat_gains() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, MAGE_WATER, 0)
 	TB.cast(m, 0, 154)
-	TB.cast(m, 0, 182)                                         # Shimmer Serum: +20 ATK this turn
+	TB.cast(m, 0, 182)                                         # Shimmer Serum: +10 ATK this turn
 	TB.choose_uids(m, [u])
-	assert_int(m.atk_of(u)).is_equal(0)                        # 8 - 20, floored at 0
+	assert_int(m.atk_of(u)).is_equal(0)                        # 8 - 10, floored at 0
 
 
 # @cards 154,163

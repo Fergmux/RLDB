@@ -380,7 +380,10 @@ static func _build() -> Dictionary:
 	t[104] = {"spell": [all_({"kind": "unit", "side": "opp", "unprotected": true}), {"op": "stance", "target": "$all"}]}
 	t[136] = {"flags": ["exhaust_on_spent"], "spell": [all_({"kind": "unit", "atk_min": 20}), {"op": "destroy", "target": "$all"}]}
 	t[138] = {"spell": [ch({"kind": "unit", "has_buff": true}, "u", false, "Destroy a unit with a Buff."), {"op": "destroy", "target": "$u"}]}
-	t[180] = {"spell": [ch({"kind": "unit", "side": "opp", "atk_max": 16}, "u", false, "Take control of an opponent's unit with 16 ATK or less."), {"op": "take_control", "target": "$u"}]}
+	# L9 (owner, 2026-11-05): the caster picks the empty zone on their side for it, as when placing a
+	# summon (a lead choice: after the target, before the cost, cancellable).
+	t[180] = {"spell": [ch({"kind": "unit", "side": "opp", "atk_max": 16}, "u", false, "Take control of an opponent's unit with 16 ATK or less."),
+		{"op": "pick_slot", "zone": "unit", "as": "cslot", "for": "$u"}, {"op": "take_control", "target": "$u", "slot": "$cslot"}]}
 	# 2026-10-18: the chosen unit (not the Spell) permanently costs 1 AP more, for the rest of the game.
 	t[182] = {"spell": [ch({"kind": "unit"}, "u", false, "Apply 1 Blind and 1 Infiltrate to a unit; it gains +10 ATK this turn and permanently costs 1 AP more."),
 		st("$u", "blind"), st("$u", "infiltrate"), {"op": "stat", "target": "$u", "atk": 10, "until": "turn"}, {"op": "cost_perm", "target": "$u", "n": 1}]}

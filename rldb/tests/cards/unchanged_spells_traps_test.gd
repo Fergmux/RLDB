@@ -44,8 +44,8 @@ func test_c041_delayed_gratification_never_retains_itself() -> void:
 
 # ---------------------------------------------------------------- 154 Sneaky Snunday
 
-# 2026-10-18: Damage and Healing are not gains or losses, so Snunday leaves HP alone; an AP gain
-# still flips, and only this turn.
+# 2026-10-18: Damage and Healing are not gains or losses, so Snunday leaves HP alone. L15
+# (2026-11-05): it reverses ATK/DEF only, so an AP gain is not reversed either; it lasts this turn.
 func test_c154_sneaky_snunday_reverses_gains_this_turn_only_but_never_damage() -> void:
 	var m := CF.make()
 	var brew := TB.power(m, 0, 167)
@@ -57,7 +57,7 @@ func test_c154_sneaky_snunday_reverses_gains_this_turn_only_but_never_damage() -
 	var f := m.make_frame(-1, 0, [{"op": "ap", "n": 1}], "test")
 	m.push_frame(f)
 	m.run()
-	assert_int(CF.ap(m, 0)).is_equal(maxi(ap - 1, 0))           # an AP gain is reversed
+	assert_int(CF.ap(m, 0)).is_equal(ap + 1)                    # an AP gain is not reversed (L15)
 	CF.end_turn(m)                                               # player 1's turn: reversal over
 	assert_bool(m.reversal_active()).is_false()
 

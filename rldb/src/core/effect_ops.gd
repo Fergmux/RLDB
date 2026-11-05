@@ -182,18 +182,17 @@ func _op_status(f: Dictionary, op: Dictionary) -> int:
 		if op.get("unit_only", false) and not unit_on_field(u):
 			continue                      # e.g. "the Unit that Destroyed it" when a Power/Trap did
 		if on_field(u) or cards[u]["zone"] == "hand":
-			apply_status(u, op["s"], n)
+			apply_status(u, op["s"], n, status_batch(f))
 	return R.CONT
 
 
-## Gain/loss of ATK/DEF from a card effect. Reversible by Sneaky Snunday; while Freaky Funday
-## lasts, ATK and DEF are switched.
+## Gain/loss of ATK/DEF from a card effect; while Freaky Funday lasts, ATK and DEF are switched.
+## L15: the modifier is stored as printed even while Sneaky Snunday is active. Snunday mirrors the
+## unit's whole difference from base when its stats are read (GameCore.stat_breakdown), so the gain
+## reads reversed this turn and as printed afterwards.
 func _op_stat(f: Dictionary, op: Dictionary) -> int:
 	var a := eval_num(f, op.get("atk", 0))
 	var df := eval_num(f, op.get("def", 0))
-	if f["reversed"]:
-		a = -a
-		df = -df
 	if swap_active():
 		var t := a
 		a = df
@@ -207,8 +206,12 @@ func _op_stat(f: Dictionary, op: Dictionary) -> int:
 			ua = mini(ua, 0)
 			ud = mini(ud, 0)
 		cards[u]["mods"].append({"atk": ua, "def": ud, "until": op.get("until", "field"), "src": name_of(f["src"]) if f["src"] != -1 else "effect"})
-		add_log("%s %+d ATK / %+d DEF%s (now %d/%d)." % [name_of(u), ua, ud, " until end of turn" if op.get("until", "") == "turn" else "", atk_of(u), def_of(u)])
+		var rev := reversal_active()
+		add_log("%s %+d ATK / %+d DEF%s%s (now %d/%d)." % [name_of(u), ua, ud, " until end of turn" if op.get("until", "") == "turn" else "",
+			", reversed by Sneaky Snunday this turn" if rev else "", atk_of(u), def_of(u)])
 		var ev := {"k": "stat", "at": fx_pos(u), "atk": ua, "def": ud}
+		if rev:
+			ev["reversed"] = true                # presentation: the change reads mirrored this turn
 		# F03-18: a chosen target shows a short arrow from the effect's source to it (both seats).
 		if op["target"] is String and String(op["target"]).begins_with("$") and f["src"] != -1 and f["src"] != u:
 			var from := fx_pos(f["src"])
@@ -238,10 +241,10 @@ func _op_hp(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
+## AP gain/loss from a card effect. L15 (2026-11-05): Sneaky Snunday reverses ATK/DEF only, so AP is
+## never reversed.
 func _op_ap(f: Dictionary, op: Dictionary) -> int:
 	var n := eval_num(f, op["n"])
-	if f["reversed"] and not op.get("payment", false):
-		n = -n
 	var p := who(f, op.get("who", "self"))
 	if op.get("next_turn", false):
 		players[p]["ap_next"].append({"n": n, "src": f["label"]})
@@ -330,10 +333,30 @@ func _flip_stance(u: int) -> void:
 ## Ends a used Spell/Trap: to Spent (or Exhaust if it says so).
 func _op_finish_card(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op.get("target", "self")):
-		if on_field(u):
-			var dest := "exhaust" if has_flag_raw(u, "exhaust_on_spent") else "spent"
-			_leave_field(u, dest, "used", f)
-		elif cards[u]["zone"] == "limbo":
-			move_to_pile(u, "exhaust" if has_flag_raw(u, "exhaust_on_spent") else "spent")
+		_finish_used_card(u, f)
 	return R.CONT
+
+
+## Sends used Spell/Trap `u` from the Field or from limbo (a cast Spell resolving) to Spent, or to
+## Exhaust if it says so. A card already in a pile is left where it is.
+func _finish_used_card(u: int, f: Dictionary) -> void:
+	if on_field(u):
+		var dest := "exhaust" if has_flag_raw(u, "exhaust_on_spent") else "spent"
+		_leave_field(u, dest, "used", f)
+	elif cards[u]["zone"] == "limbo":
+		move_to_pile(u, "exhaust" if has_flag_raw(u, "exhaust_on_spent") else "spent")
+
+
+## L19 (owner, 2026-11-05: "the fusion card should already be destroyed by the time the fusion
+## happens"): when a Spell or Trap's own effect summons a unit (Fusion Ceremony, Ambush, Saviour
+## Appears), the card is used up as the summon commits: it goes to its pile before the materials are
+## tributed or the unit lands, so it is never a target of the summoned unit's On Summon effects. The
+## rest of its effect still resolves; its closing finish_card then has nothing left to do.
+func _release_resolving_source(f: Dictionary) -> void:
+	var src: int = f["src"]
+	if src == -1 or not cards.has(src) or not (category(src) in ["spell", "trap"]):
+		return
+	var z: String = cards[src]["zone"]
+	if z == "limbo" or (z == "backrow" and is_face_up(src)):
+		_finish_used_card(src, f)
 
