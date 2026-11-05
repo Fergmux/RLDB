@@ -266,8 +266,9 @@ func test_viewer_cannot_mute_themselves(timeout := 30000) -> void:
 func test_player_lobby_list_has_players_and_spectators_sections(timeout := 30000) -> void:
 	await _net()
 	var gs := await _screen(host.local_seat)
-	# Always present, even before anyone watches.
-	assert_bool(gs.spectate.lobby_button.visible).is_true()
+	# Always present (in the in-game menu, L12), even before anyone watches.
+	assert_bool(gs.spectate.lobby_button.visible).is_false()   # L12: View lobby is in the menu only
+	assert_bool((gs.menu.items["spectators"] as Button).visible).is_true()
 	assert_bool(gs.spectate.badge.visible).is_false()
 	await _add_spectator()
 	assert_bool(await _wait(func(): return gs.spectate._chip.visible)).is_true()
@@ -294,7 +295,8 @@ func test_spectator_lobby_list_offers_mute_but_no_permissions(timeout := 30000) 
 	await _add_spectator()
 	var gs := await _screen(spec.local_seat)
 	assert_bool(gs.is_spectator()).is_true()
-	assert_bool(gs.spectate.lobby_button.visible).is_true()
+	assert_bool(gs.spectate.lobby_button.visible).is_false()   # L12: View lobby is in the menu only
+	assert_bool((gs.menu.items["spectators"] as Button).visible).is_true()
 	assert_bool((gs.menu.items["spectators"] as Button).visible).is_true()
 	gs.spectate.toggle_list()
 	var p := gs.spectate.panel
