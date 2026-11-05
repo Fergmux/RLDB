@@ -18,12 +18,15 @@ const RADIUS_TALL := 8.0
 ## Rules-text well fill on the tall kinds.
 const TEXT_WELL := Color(0.847, 0.8, 0.69, 0.07)
 
-## Geometry (base units): rects are [x, y, w, h], points [x, y]; "gem_r" is the cost gem radius.
-## "icons" is [x0, x1, bottom y, icon size, rows].
-const FIELD := {"art": [3, 3, 79, 79], "banner": [2, 73, 81, 19], "gem": [12.5, 12.5], "gem_r": 9.8, "pip": [72.5, 12.5],
-	"icons": [4, 81, 72, 14.0, 2], "atk": [1, 93, 36, 34], "def": [48, 93, 36, 34], "text": [5, 94, 75, 31],
+## Geometry (base units): rects are [x, y, w, h], points [x, y]; "w" is the face width; "gem_r" is the
+## cost gem (and Type pip) radius and "gem_edge" the clearance between the card edge and the round gem's
+## rim, the same for the pip on the right (gem_center / pip_center). "icons" is [x0, x1, bottom y, icon
+## size, rows]. L17 (owner, 5 Nov): every jewel sits inside the frame border with its setting and shadow
+## (card_badge_inset_l17_test); the field gem was 9.8 at (12.5, 12.5), the field ATK / DEF [1|48, 93, 36, 34].
+const FIELD := {"w": 85.0, "art": [3, 3, 79, 79], "banner": [2, 73, 81, 19], "gem_edge": 4.5, "gem_r": 9.4,
+	"icons": [4, 81, 72, 14.0, 2], "atk": [2, 92.5, 34, 32], "def": [49, 92.5, 34, 32], "text": [5, 94, 75, 31],
 	"f_name": 10.5, "f_name_min": 9.0, "f_gem": 12.5, "f_stat": 17.0, "f_text": 8.5}
-const TALL := {"art": [4, 4, 112, 112], "banner": [2, 100, 116, 19], "gem": [16, 16], "gem_r": 11.5, "pip": [104, 16],
+const TALL := {"w": 120.0, "art": [4, 4, 112, 112], "banner": [2, 100, 116, 19], "gem_edge": 4.7, "gem_r": 11.5,
 	"icons": [6, 114, 98, 13.0, 2], "icons_unit": [35, 85, 98, 13.0, 3], "atk": [0, 66, 36, 34], "def": [84, 67, 36, 33],
 	"line": [6, 120, 108, 10], "text": [4, 131, 112, 45],
 	"f_name": 12.5, "f_name_min": 8.0, "f_gem": 14.0, "f_stat": 18.0, "f_line": 9.5, "f_text": 10.0}
@@ -65,7 +68,7 @@ static func draw_square(pt: CardPainter) -> void:
 		flourish(pt.ci, Vector2((a.end.x + d.position.x) / 2.0, a.get_center().y), 14.0 * pt.s, pt.s, FLEURON)
 		CardStatBadge.draw(pt, a, true, g["f_stat"])
 		CardStatBadge.draw(pt, d, false, g["f_stat"])
-	CardFaceParts.gem(pt, pt.p(g["gem"][0], g["gem"][1]), float(g["gem_r"]) * pt.s, pt.fs(g["f_gem"]))
+	_gem(pt, g)
 
 
 ## Field Power / Trap (85x128): art, banner, short rules text.
@@ -80,7 +83,7 @@ static func draw_power(pt: CardPainter) -> void:
 		var t: Array = g["text"]
 		var tp := CardTextLayout.fit_para(txt, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(CardPainter.MIN_FS - 1, pt.fs(g["f_text"] * 0.7)), float(t[2]) * pt.s, float(t[3]) * pt.s)
 		pt.para_text(tp, pt.p(t[0], t[1]), Color(UIStyle.TEXT, 0.9), CardTextLayout.shown_text(tp, txt))
-	CardFaceParts.gem(pt, pt.p(g["gem"][0], g["gem"][1]), float(g["gem_r"]) * pt.s, pt.fs(g["f_gem"]))
+	_gem(pt, g)
 
 
 ## Tall card (hand / mini 120x180 base, big 224x336 drawn from the same layout at a larger scale):
@@ -119,12 +122,68 @@ static func draw_tall(pt: CardPainter, _big: bool = false) -> void:
 	if is_unit:
 		CardStatBadge.draw(pt, _r(pt, g["atk"]), true, g["f_stat"])
 		CardStatBadge.draw(pt, _r(pt, g["def"]), false, g["f_stat"])
-	CardFaceParts.gem(pt, pt.p(g["gem"][0], g["gem"][1]), float(g["gem_r"]) * s, pt.fs(g["f_gem"]))
+	_gem(pt, g)
 
 
 ## The Type pip on the art's top right (same size as the cost gem, user feedback).
 static func _art_corners(pt: CardPainter, g: Dictionary) -> void:
-	CardFaceParts.type_pip(pt, pt.p(g["pip"][0], g["pip"][1]), float(g["gem_r"]) / TypeIcons.PIP_K * pt.s)
+	var pc := pip_center(g)
+	CardFaceParts.type_pip(pt, pt.p(pc.x, pc.y), float(g["gem_r"]) / TypeIcons.PIP_K * pt.s)
+
+
+## The cost gem on the art's top left.
+static func _gem(pt: CardPainter, g: Dictionary) -> void:
+	var gc := gem_center(g, String(pt.view.get("cost_kind", "ap")))
+	CardFaceParts.gem(pt, pt.p(gc.x, gc.y), float(g["gem_r"]) * pt.s, pt.fs(g["f_gem"]))
+
+
+## Centre (base units) of the cost gem of kind `kind` in layout `g`: its outermost point (the round
+## gem's rim, the Ritual lozenge's or Arcane hexagon's tips) "gem_edge" in from the top and left edges.
+static func gem_center(g: Dictionary, kind: String) -> Vector2:
+	var d := float(g["gem_edge"]) + float(g["gem_r"]) * CardFaceParts.gem_reach(kind)
+	return Vector2(d, d)
+
+
+## Centre (base units) of the Type pip in layout `g`: the round gem's clearance, mirrored to the right.
+static func pip_center(g: Dictionary) -> Vector2:
+	var d := float(g["gem_edge"]) + float(g["gem_r"])
+	return Vector2(float(g["w"]) - d, d)
+
+
+## L17 (owner feedback 2026-11-05): the outlines (base units) of the jewels set into card face `g` for a
+## card with cost kind `kind` drawn at painter scale `s`: the cost gem, the Type pip and, on a unit, the
+## ATK and DEF badges. Each is {"name", "solid": the outline out to the setting's dark edge and its
+## anti-aliased stroke, "shadow": its drop shadow}. Mirrors the drawing code (CardFaceParts.gem,
+## TypeIcons.draw_pip_jewel, CardStatBadge.draw, CardJewel) so a test can prove nothing crosses the border.
+static func jewel_outlines(g: Dictionary, kind: String, s: float, unit: bool = true) -> Array:
+	var out := []
+	var gc := gem_center(g, kind)
+	out.append(_jewel("gem", CardFaceParts.gem_outer(gc, float(g["gem_r"]), kind), gc, s, s))
+	# The pip draws in px with its own scale (TypeIcons.draw_pip_jewel: radius / 8, its shadow at 0.8x).
+	var pc := pip_center(g)
+	var ps := maxf(0.5, float(g["gem_r"]) / TypeIcons.PIP_K * s / 8.0)
+	out.append(_jewel("pip", CardGeometry.poly(pc, float(g["gem_r"]), 24, 0.0), pc, s, ps, 0.8))
+	if unit:
+		for is_atk in [true, false]:
+			var a: Array = g["atk" if is_atk else "def"]
+			var rect := CardStatBadge.shape_rect(Rect2(a[0], a[1], a[2], a[3]), is_atk)
+			var pts := CardGeometry.diamond_pts(rect) if is_atk else CardGeometry.shield_pts(rect)
+			out.append(_jewel("atk" if is_atk else "def", pts, rect.get_center(), s, s))
+	return out
+
+
+## One jewel's solid and shadow outlines in base units: `outer` its shape about `c`, `s` the painter
+## scale, `js` the scale its setting and shadow are drawn with, `shadow_k` the shadow's extra factor.
+static func _jewel(name: String, outer: PackedVector2Array, c: Vector2, s: float, js: float, shadow_k: float = 1.0) -> Dictionary:
+	# CardJewel.setting: a dark edge grown maxf(0.8, 0.8 js) px and a 1 px AA stroke grown 0.55 js px.
+	var edge_px := maxf(maxf(0.8, 0.8 * js), 0.55 * js + 0.5)
+	var solid := CardGeometry.grow_pts(outer, c, edge_px / s)
+	# CardJewel.drop_shadow: offset 1.4 js px down, grown 0.9 js px.
+	var off := Vector2(0, 1.4 * js * shadow_k / s)
+	var sh := PackedVector2Array()
+	for p in outer:
+		sh.append(p + off)
+	return {"name": name, "solid": solid, "shadow": CardGeometry.grow_pts(sh, c + off, 0.9 * js * shadow_k / s)}
 
 
 static func _icons(pt: CardPainter, a: Array, align: float) -> void:

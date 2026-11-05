@@ -207,6 +207,7 @@ func attach(c: SeatClient) -> void:
 		_fx_game = -99
 		prev_mv = {}
 		mv = {}
+	fx.views.clear()   # L4: the seat's latest view is shown below; older waiting ones are moot
 	fx.finish_all()
 	hover.clear()
 	hand.reset()
@@ -267,7 +268,54 @@ func _on_status(text: String) -> void:
 	prompt.on_status(text)
 
 
+## A new view from the seat client. L4 (owner feedback 2026-11-05): while earlier effects still play,
+## the view waits its turn (FxPlayer.views) and _pump shows it once they are done, so animations are
+## queued, never cut short, and the board never runs ahead of them. A view of another game is shown at
+## once, with whatever still waits shown first without its effects.
 func _on_view(v: Dictionary) -> void:
+	if FxPlayer.sequence_views and not mv.is_empty():
+		if int(v.get("game_no", -1)) != int(view.get("game_no", -1)):
+			_flush_views()
+		elif not fx.views.is_empty() or not _held.is_empty() or fx.gating():
+			fx.views.push(v)
+			if int(v.get("match", {}).get("winner", -1)) != -1 and int(mv.get("winner", -1)) == -1:
+				# J9: the kill was made; it waits its turn, but from now on no input reaches the board.
+				fx.expect_game_end([{"k": "game_over"}])
+				overlays.clear_board_interactions()
+			for old in fx.views.take_overflow():
+				_apply_view(old, true)   # far behind: the oldest are shown at once, without their effects
+			_hold_seat()
+			return
+	_apply_view(v)
+
+
+## L4: shows the waiting views in order while nothing holds them back (called every frame).
+func _pump() -> void:
+	while not fx.views.is_empty() and _held.is_empty():
+		if fx.gating():
+			if not fx.stalled():
+				return
+			fx.finish_all()   # safety net: a batch that never ends must not freeze the board
+		_apply_view(fx.views.pop())
+
+
+## L4: shows every waiting view at once, without its effects (a seat switch, a new game, a skip).
+func _flush_views() -> void:
+	fx.finish_all()
+	if not _held.is_empty():
+		_release_held()
+		fx.finish_all()
+	while not fx.views.is_empty():
+		_apply_view(fx.views.pop(), true)
+
+
+## L4: a hot-seat hand-over waits while effects play or views wait (SessionLauncher._check_hotseat).
+func _hold_seat() -> void:
+	fx_hold_until = maxi(fx_hold_until, Time.get_ticks_msec() + 150)
+
+
+## Renders view `v` and plays its new events (none when `quiet`: shown at once, effects skipped).
+func _apply_view(v: Dictionary, quiet: bool = false) -> void:
 	# F06-02: battle music while a game is in progress, menu music between games.
 	Music.set_mode("battle" if String(v.get("stage", "")) == "game" else "menu")
 	if not _held.is_empty():
@@ -281,6 +329,8 @@ func _on_view(v: Dictionary) -> void:
 		multi = []
 		_multi_pid = pid
 	var events := _collect_fx()
+	if quiet:
+		events = []
 	fx.expect_game_end(events)   # F03-13: the result modal waits for the victory / defeat presentation
 	if fx.game_end_hold:
 		overlays.clear_board_interactions()   # J9 / J10: the kill was made; nothing else stays in hand
@@ -305,6 +355,8 @@ func _on_view(v: Dictionary) -> void:
 	_maybe_coin_flip()
 	if not events.is_empty():
 		fx.play(events, prev_mv)
+		if fx.gating():
+			_hold_seat()
 
 
 ## Shows the spotlight over the board as it was before the Spell/Trap (a Spell cast from your
@@ -324,17 +376,24 @@ func _hold_for_spotlight(spots: Array, rest: Array) -> void:
 	mv = shown
 	render_all()
 	fx.play(spots, prev_mv)
-	get_tree().create_timer(UIStyle.dur(FxPlayer.SPOT_HOLD) * spots.size()).timeout.connect(func():
+	get_tree().create_timer(UIStyle.dur(FxPlayer.SPOT_HOLD) * spots.size() / fx.speed).timeout.connect(func():
 		if gen == _held_gen and not _held.is_empty():
 			_release_held())
 
 
-## Skips running effects and any held spotlight at once, exactly like a click does (tests use it).
+## Skips running effects and any held spotlight at once and shows every waiting view (L4), so the
+## board is current (tests and the dev drivers use it; play never skips).
 func skip_effects() -> void:
 	fx.finish_all()
 	if not _held.is_empty():
 		_release_held()
 	fx.finish_all()
+	while not fx.views.is_empty():
+		_apply_view(fx.views.pop())
+		fx.finish_all()
+		if not _held.is_empty():
+			_release_held()
+			fx.finish_all()
 
 
 ## Applies a view held back for a spotlight (and plays its effects).
@@ -597,11 +656,8 @@ func _input(event: InputEvent) -> void:
 		keyboard.kb_uid = -1
 		if action_row.stack != null:
 			action_row.rebuild()
-	if (event is InputEventMouseButton and event.pressed) or (event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_SPACE]):
-		if fx != null and fx.busy():
-			fx.finish_all()
-		if not _held.is_empty():
-			_release_held()   # a click skips the spotlight and applies its effects at once
+	# L4 (owner feedback 2026-11-05): a click or key no longer skips the running effects or a spotlight;
+	# they play out and later views wait their turn (a backlog plays faster, FxViewQueue).
 
 
 ## J9: the input swallowed while the game ends: every mouse button but the wheel, and every key outside
@@ -615,6 +671,11 @@ func _ending_blocks(event: InputEvent) -> bool:
 
 
 func _process(_d: float) -> void:
+	if fx != null:
+		if not fx.views.is_empty() or not _held.is_empty():
+			_pump()
+		if not fx.views.is_empty() or not _held.is_empty() or fx.gating():
+			_hold_seat()
 	if not is_visible_in_tree():
 		return
 	targeting.update_arrow()
