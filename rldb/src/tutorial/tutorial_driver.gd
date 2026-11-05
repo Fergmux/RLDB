@@ -225,28 +225,33 @@ func _check_arcane_overpay(h: TutorialHost) -> void:
 		offered.append(int(x.get("card", {}).get("uid", -1)))
 	_check("Arcane picker does not offer the 0-cost Drake", not (int(h.keys["s_drake"]) in offered) and offered.size() == 3)
 	# G04: the headline and the three empty circles ask for the cost; no status line above the circles.
-	_check("Arcane banner asks for exactly 3", gs.prompt.banner_title.text.contains("exactly 3") and gs.prompt.cost_pips.visible 		and gs.prompt.cost_pips.need == 3 and gs.prompt.cost_pips.paid() == 0 and not gs.prompt.banner_sub.visible)
+	# QA final: Boom's requirement is 4 since the 2026-11-03 card values (TutorialLessons._arcane):
+	# both Dragons (2 + 2) are exact, and the Mage on top (5) would over-pay.
+	_check("Arcane banner asks for exactly 4", gs.prompt.banner_title.text.contains("exactly 4") and gs.prompt.cost_pips.visible 		and gs.prompt.cost_pips.need == 4 and gs.prompt.cost_pips.paid() == 0 and not gs.prompt.banner_sub.visible)
 	await _shot("L7_arcane_picker")
-	# F08: after one Dragon (2 of 3) the other Dragon would over-pay, so it is disabled.
+	# F08: with both Dragons (4 of 4) the Mage would over-pay, so it is disabled.
 	await _click(o._card_rect(int(h.keys["s_wyvern"])).get_center())
 	await _wait(0.3)
 	await _click(o._card_rect(int(h.keys["s_hydra"])).get_center())
 	await _wait(0.3)
+	await _click(o._card_rect(int(h.keys["s_mage"])).get_center())
+	await _wait(0.3)
 	var confirm := _find_button(gs.prompt.banner_btns, "Confirm")
-	_check("over-pay option is disabled (Cannot overpay); Confirm stays off", gs.multi.size() == 1 and confirm != null and confirm.disabled)
-	_check("over-pay banner shows 2 of 3 circles paid", gs.prompt.cost_pips.paid() == 2 and gs.prompt.cost_pips.need == 3 		and gs.prompt.cost_pips.tooltip_text.contains("2 of 3 paid") and not gs.prompt.banner_sub.visible)
+	_check("over-pay option is disabled (Cannot overpay); Confirm is on for the exact pair", gs.multi.size() == 2 and confirm != null and not confirm.disabled)
+	_check("over-pay banner shows 4 of 4 circles paid", gs.prompt.cost_pips.paid() == 4 and gs.prompt.cost_pips.need == 4 		and gs.prompt.cost_pips.tooltip_text.contains("4 of 4 paid") and not gs.prompt.banner_sub.visible)
 	await _shot("L7_arcane_overpay")
 	var before := h.refused
-	var both := []
+	var all3 := []
 	for x in gs.pending().get("options", []):
-		if int(x.get("card", {}).get("uid", -1)) in [int(h.keys["s_wyvern"]), int(h.keys["s_hydra"])]:
-			both.append(int(x["i"]))
-	h.handle(TutorialLessons.PLAYER, {"t": "choose", "id": int(h.game().pending["id"]), "indices": both})
+		if int(x.get("card", {}).get("uid", -1)) in [int(h.keys["s_wyvern"]), int(h.keys["s_hydra"]), int(h.keys["s_mage"])]:
+			all3.append(int(x["i"]))
+	h.handle(TutorialLessons.PLAYER, {"t": "choose", "id": int(h.game().pending["id"]), "indices": all3})
 	await _wait(0.3)
 	_check("an over-pay command is refused", h.refused == before + 1 and h.game().pending.get("total_exact", false))
 	await _shot("L7_arcane_overpay_hint")
-	await _click(o._card_rect(int(h.keys["s_wyvern"])).get_center())
-	await _wait(0.3)
+	for k in ["s_wyvern", "s_hydra"]:
+		await _click(o._card_rect(int(h.keys[k])).get_center())
+		await _wait(0.3)
 	_check("deselecting clears the pick", gs.multi.is_empty())
 
 
