@@ -3,6 +3,7 @@ extends SceneTree
 ## simple bot so animations play, recording frame times. Not a unit test.
 ##   godot --path rldb --resolution 1600x1000 -s res://tests/perf/perf_run.gd
 ## Prints average/95th/99th-percentile frame time and the slowest frame.
+## `-- --profile` adds a PerfRecorder (perf_recorder.gd) and prints its frame-time breakdown.
 
 const COMMANDS := 400
 
@@ -10,6 +11,7 @@ var frames: Array = []
 var host: LocalHost
 var screen: GameScreen
 var rng := RandomNumberGenerator.new()
+var recorder: Node = null
 
 
 func _initialize() -> void:
@@ -21,6 +23,9 @@ func _initialize() -> void:
 	screen = GameScreen.new()
 	root.add_child(screen)
 	screen.attach(host.seats[0])
+	if OS.get_cmdline_user_args().has("--profile"):
+		recorder = preload("res://tests/perf/perf_recorder.gd").new()
+		root.add_child(recorder)
 	_run.call_deferred()
 
 
@@ -37,6 +42,8 @@ func _run() -> void:
 		if not cmd.is_empty():
 			host.handle(p, cmd)
 			sent += 1
+			if recorder != null:
+				recorder.cmd_flag = true
 		# let animations run between commands, as a human-paced game would
 		for f in 6:
 			await process_frame
@@ -51,6 +58,8 @@ func _run() -> void:
 	avg /= maxf(n, 1)
 	print("PERF frames=%d avg=%.2fms (%.0f fps) p95=%.2fms p99=%.2fms max=%.2fms commands=%d stage=%s" % [
 		n, avg, 1000.0 / maxf(avg, 0.001), frames[int(n * 0.95)], frames[int(n * 0.99)], frames[n - 1], sent, host.series.stage])
+	if recorder != null:
+		recorder.report()
 	quit()
 
 
