@@ -282,10 +282,20 @@ func _op_move(f: Dictionary, op: Dictionary) -> int:
 			var owner0: int = cards[u]["owner"]
 			xfx = {"k": "exhaust", "p": owner0, "from": from, "at": fx_pos(u)}
 			xfx.merge(fx_identity(u, [0, 1] if was_public else [owner0, f["ctl"]]))
+		var hfx := {}
+		if op["to"] == "hand":
+			# QA final (L1 cue "card_return"): a card added to a Hand. Public: whose Hand and from where;
+			# its identity only for the seats that could see it (everyone when it was public, else its
+			# owner and the effect's controller, who chose it from the revealed pile).
+			var owner1: int = cards[u]["owner"]
+			hfx = {"k": "to_hand", "p": owner1, "from": from, "at": fx_pos(u)}
+			hfx.merge(fx_identity(u, [0, 1] if was_public else ([owner1] if owner1 == f["ctl"] else [owner1, f["ctl"]])))
 		if from == "unit" or from == "backrow" or from == "power":
 			_leave_field(u, op["to"], "effect", f)
 		else:
 			move_to_pile(u, op["to"])
+		if not hfx.is_empty() and cards[u]["zone"] != "hand":
+			hfx = {}                          # an Extra Deck card goes back to the Extra Deck instead
 		var owner: int = cards[u]["owner"]
 		var dest_name: String = {"draw_top": "the top of Draw"}.get(op["to"], op["to"].capitalize())
 		if was_public:
@@ -296,6 +306,8 @@ func _op_move(f: Dictionary, op: Dictionary) -> int:
 				{owner: "%s moves from %s to %s." % [name_of(u), from.capitalize(), dest_name]})
 		if not xfx.is_empty():
 			add_fx(xfx)
+		if not hfx.is_empty():
+			add_fx(hfx)
 	return R.CONT
 
 

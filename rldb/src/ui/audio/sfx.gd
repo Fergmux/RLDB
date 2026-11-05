@@ -334,6 +334,10 @@ static func for_fx(e: Dictionary, me: int) -> String:
 			return "exhaust"
 		"discard":
 			return "card_discard"   # L1: the end-of-turn discard to Spent (a count, never the cards)
+		"to_hand":
+			return "card_return"    # QA final: a card added to a Hand by an effect (identity redacted per seat)
+		"miss":
+			return "miss"           # QA final: a declared attack that does not resolve
 		"stance":
 			return "stance_defense" if String(e.get("to", "")) == "def" else "stance_attack"   # L1
 		"stat":
