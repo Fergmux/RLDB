@@ -11,8 +11,11 @@ re-creates the same commits and the push is a fast-forward; it is never forced. 
 GitHub therefore differ from local ones.
 
 release: zips the playtest build (build/windows -> build/RLDB-friends.zip) and the dev build
-(build/windows-dev -> build/RLDB-dev.zip) and creates the GitHub release v<config/version> at the
-tip of build/rldb-game. Builds must have been exported first; this never exports.
+(build/windows-dev -> build/RLDB-dev.zip), adds the macOS build (build/macos/RLDB-macos.zip, already a
+zip, exported by tools/export_all.py) as a third asset, and creates the GitHub release
+v<config/version> at the tip of build/rldb-game. Builds must have been exported first; this never
+exports. A missing or unreadable macOS zip is a warning (the release goes out without it); a
+missing Windows build is an error.
 
 Needs: git, gh (logged in), uvx (for git-filter-repo). Credentials stay in gh's keyring.
 """
@@ -39,6 +42,16 @@ BUILDS = {
     "RLDB-friends.zip": ("build/windows", "RLDB.exe", "RLDB.pck"),
     "RLDB-dev.zip": ("build/windows-dev", "RLDB-dev.exe", "RLDB-dev.pck"),
 }
+MACOS_ASSET = "RLDB-macos.zip"
+MACOS_ZIP = "build/macos/" + MACOS_ASSET   # written by `--export-release "macOS"`; uploaded as it is
+MACOS_REQUIRED = ["RLDB.app/Contents/MacOS/RLDB", "RLDB.app/Contents/Info.plist",
+                  "RLDB.app/Contents/Resources/RLDB.pck"]
+MACOS_NOTE = (
+    "- **RLDB-macos.zip**: the macOS build (RLDB.app, universal: runs on Apple Silicon and Intel Macs; a recent macOS is "
+    "recommended). It is ad-hoc signed but **not notarized** (there is no Apple developer "
+    "account), so macOS blocks the first launch. Unzip it, move RLDB.app to Applications, then **right-click it and "
+    "choose Open, then Open again**. If macOS says the app is damaged (the download quarantine flag), run "
+    "`xattr -cr /Applications/RLDB.app` in Terminal and open it again. Steam must be running for online play.\n")
 
 
 def gh_exe():
@@ -119,6 +132,42 @@ def zip_build(asset, folder, exe, pck):
     return out, built
 
 
+def macos_asset():
+    """Checks build/macos/RLDB-macos.zip. Returns (path, exported-time), or None after printing why not.
+
+    Missing, not a valid zip, or without the .app files is a warning, never an error: the Windows
+    release can still go out. The result is always printed, so a skipped asset is not silent."""
+    path = os.path.join(ROOT, MACOS_ZIP)
+    if not os.path.exists(path):
+        print("WARNING: %s not found; the release goes out WITHOUT the macOS build. Export it first "
+              "(python -I tools/export_all.py)." % MACOS_ZIP)
+        return None
+    try:
+        with zipfile.ZipFile(path) as z:
+            names = set(z.namelist())
+            bad = z.testzip()
+    except zipfile.BadZipFile:
+        names, bad = set(), "not a zip file"
+    missing = [n for n in MACOS_REQUIRED if n not in names]
+    if bad or missing:
+        print("WARNING: %s is unusable (%s); the release goes out WITHOUT the macOS build."
+              % (MACOS_ZIP, ("bad member: %s" % bad) if bad else "missing " + ", ".join(missing)))
+        return None
+    built = datetime.datetime.fromtimestamp(os.path.getmtime(path))
+    print("%s: %.0f MB (exported %s)" % (MACOS_ASSET, os.path.getsize(path) / 1048576, built.strftime("%Y-%m-%d %H:%M")))
+    return path, built
+
+
+def release_notes(ver, local, notes_extra, log, with_macos):
+    """The release body: what each asset is, then the owner's extra text and the recent commits."""
+    notes = ("RLDB %s\n\n- **RLDB-friends.zip**: the playtest build (RLDB.exe). Unzip and run RLDB.exe; Steam must be running for online play.\n"
+             "- **RLDB-dev.zip**: the dev build (RLDB-dev.exe); records telemetry as `dev`.\n" % ver)
+    if with_macos:
+        notes += MACOS_NOTE
+    return notes + "\nBuilt from local commit %s.\n\n%sRecent changes:\n%s" % (
+        local, (notes_extra + "\n\n") if notes_extra else "", log)
+
+
 def release(clobber, notes_extra):
     gh = gh_exe()
     ver = version()
@@ -126,6 +175,9 @@ def release(clobber, notes_extra):
     if git("status", "--porcelain", "--untracked-files=no", "--", "rldb").stdout.strip():
         print("WARNING: rldb/ has uncommitted changes; the builds may not match the uploaded source.")
     assets = [zip_build(a, *spec) for a, spec in BUILDS.items()]
+    mac = macos_asset()
+    if mac:
+        assets.append(mac)
     head_time = datetime.datetime.fromtimestamp(int(git("log", "-1", "--format=%ct", "--", "rldb", ":!*.uid").stdout.strip()))
     for path, built in assets:
         if built < head_time:
@@ -134,9 +186,7 @@ def release(clobber, notes_extra):
     sync()
     local = git("rev-parse", "--short", "HEAD").stdout.strip()
     log = git("log", "-15", "--format=- %s", RELEASE_BRANCH).stdout
-    notes = ("RLDB %s\n\n- **RLDB-friends.zip**: the playtest build (RLDB.exe). Unzip and run RLDB.exe; Steam must be running for online play.\n"
-             "- **RLDB-dev.zip**: the dev build (RLDB-dev.exe); records telemetry as `dev`.\n\n"
-             "Built from local commit %s.\n\n%sRecent changes:\n%s" % (ver, local, (notes_extra + "\n\n") if notes_extra else "", log))
+    notes = release_notes(ver, local, notes_extra, log, mac is not None)
     exists = run([gh, "release", "view", tag, "--repo", REPO], capture=True, check=False).returncode == 0
     files = [p for p, _ in assets]
     if exists:
