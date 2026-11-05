@@ -92,14 +92,23 @@ var _self_hover := false
 var _mouse_in := false
 ## Quantised on-screen scale the face text was last rasterised for (1.0 = the viewport's own).
 var _text_k := 1.0
+## A change of the on-screen text scale beyond this share repaints the face at once (see _follow_text_k).
+const TEXT_K_SNAP := 0.15
+## Frames the on-screen scale must hold still before a smaller change repaints the face.
+const TEXT_SETTLE_FRAMES := 2
+## Process frame of the last on-screen scale change, and whether a settle check is waiting.
+var _text_k_moved := 0
+var _text_settle_on := false
 var _is_ready := false
 var _pv_stat := ""
 var _pv_value := 0
 var _pv_bonus := 0
 ## Drawing context: the state snapshot and scaled primitives every card part draws with.
-var _paint := CardPainter.new(self)
+var _paint := CardPainter.new(null)
 ## Internal child the state overlays are drawn on (see _init).
 var _overlay: Control
+## Internal child the face is drawn on (see _init), under the overlay.
+var _face: Control
 ## Face redraws so far (tests: an animated overlay must not repaint the face).
 var face_draws := 0
 ## J31 follow-up: the empty zone's static layers were drawn from a shared ZoneMesh by the last redraw.
@@ -124,6 +133,20 @@ func _init() -> void:
 	# A `scale` on the card or above it (FX pulses, the deck builder click, a scaled sidebar) changes the
 	# on-screen text size: redraw so the glyphs are rasterised for it (see _screen_text_k).
 	set_notify_transform(true)
+	# Perf (2026-11-05): the face is drawn on an internal child canvas item, not on the widget's own.
+	# Godot repaints a Control whenever its `scale` changes, and FX animate the card's scale (pulses,
+	# the hand's deal-in, a summon's landing): on the widget itself every frame of those repainted the
+	# whole face. The widget's own item draws nothing; its redraws reach the face only when the face's
+	# inputs changed (_draw, face_key). Same pixels: the child sits at the widget's origin, takes its
+	# dim (self_modulate) and its material (dissolve / burn FX).
+	_face = Control.new()
+	_face.name = "Face"
+	_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_face.texture_filter = texture_filter
+	_face.texture_repeat = texture_repeat
+	_face.use_parent_material = true
+	_face.draw.connect(_draw_face)
+	add_child(_face, false, Node.INTERNAL_MODE_FRONT)
 	# Performance (21 Oct): the state overlays (selection brackets, target / ready glow, FX flash, order
 	# badge) live on an internal child canvas item, drawn over the face. The per-frame redraw of an
 	# animated overlay repaints only it, never the face (frame, art, text, gems).
@@ -173,7 +196,7 @@ func set_rotated(on: bool) -> void:
 		return
 	rotated = on
 	_apply_size()
-	queue_redraw()
+	request_face()
 
 
 ## Card widgets get their 2:3 (or 3:2) size as both size and minimum. Empty zone backgrounds get the
@@ -207,7 +230,8 @@ func set_marks(is_target: bool, is_selected: bool, is_dimmed: bool = false, soft
 		self_modulate = Color(0.8, 0.8, 0.8, 1.0)
 	else:
 		self_modulate = Color.WHITE
-	# self_modulate does not reach children: the overlay takes the same dim.
+	# self_modulate does not reach children: the face and the overlay take the same dim.
+	_face.self_modulate = self_modulate
 	_overlay.self_modulate = self_modulate
 	_update_process()
 	request_face()
@@ -241,7 +265,7 @@ func set_preview(stat: String, value: int, bonus: int) -> void:
 	_pv_stat = st
 	_pv_value = value
 	_pv_bonus = bonus
-	queue_redraw()
+	request_face()
 
 
 func clear_preview() -> void:
@@ -249,7 +273,7 @@ func clear_preview() -> void:
 		_pv_stat = ""
 		_pv_value = 0
 		_pv_bonus = 0
-		queue_redraw()
+		request_face()
 
 
 func has_preview() -> bool:
@@ -411,7 +435,7 @@ func _update_process() -> void:
 func _process(_d: float) -> void:
 	# An empty zone's pick glow is part of its face; a card's animated states are all overlays.
 	if view.is_empty():
-		queue_redraw()
+		_face.queue_redraw()
 	else:
 		_overlay.queue_redraw()
 
@@ -419,10 +443,38 @@ func _process(_d: float) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		pivot_offset = size / 2.0
-		queue_redraw()
+		request_face()
 	elif what == NOTIFICATION_TRANSFORM_CHANGED:
-		if not is_equal_approx(_screen_text_k(), _text_k):
-			queue_redraw()
+		_follow_text_k()
+
+
+## Re-rasterises the face text for a new on-screen scale (an FX `scale` on the card or a parent). Perf
+## (2026-11-05): a scale that animates (a pulse, the hand's deal-in, the board's camera shake) used to
+## repaint the whole face on every frame it crossed a 1/64 step, ~25 faces a frame during a shake.
+## Now a jump of more than TEXT_K_SNAP repaints at once (a big zoom stays crisp); a smaller drift
+## waits until the scale has held still for TEXT_SETTLE_FRAMES frames, then repaints if it ended
+## somewhere new (a shake or a pulse that returns to rest repaints nothing).
+func _follow_text_k() -> void:
+	var k := _screen_text_k()
+	if is_equal_approx(k, _text_k):
+		return
+	_text_k_moved = Engine.get_process_frames()
+	if absf(k / maxf(_text_k, 0.001) - 1.0) > TEXT_K_SNAP:
+		_face.queue_redraw()
+	elif not _text_settle_on and is_inside_tree():
+		_text_settle_on = true
+		get_tree().process_frame.connect(_text_settle, CONNECT_ONE_SHOT)
+
+
+func _text_settle() -> void:
+	_text_settle_on = false
+	if not is_inside_tree():
+		return
+	if Engine.get_process_frames() - _text_k_moved < TEXT_SETTLE_FRAMES:
+		_text_settle_on = true
+		get_tree().process_frame.connect(_text_settle, CONNECT_ONE_SHOT)
+	elif not is_equal_approx(_screen_text_k(), _text_k):
+		_face.queue_redraw()
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -502,33 +554,41 @@ func _exit_tree() -> void:
 ## only the state overlay (selection, target, ready, order badge: drawn from the widget's flags).
 ## Perf (2026-11-05): every new view sets every board and hand card up again and re-applies its marks;
 ## a face costs 0.3-2.5 ms to paint, and repainting ~25 unchanged faces made each command's frame
-## 10-15 ms slower. Callers that need a repaint whatever the state (a test's trace) call queue_redraw().
+## 10-15 ms slower. A queue_redraw() on the widget itself goes the same way (see _draw).
 func request_face() -> void:
 	if face_key() != _drawn_face_key:
-		queue_redraw()
+		_face.queue_redraw()
 	else:
 		_overlay.queue_redraw()
 
 
 ## Hash of everything the face draw reads: the view, kind, size and orientation, the hover and lift,
-## the combat preview, an empty zone's pick state and dim (ZoneMesh keys on it), the on-screen text
-## scale and the viewport's oversampling, reduced motion and face_epoch. The overlay's own flags are not part of it.
+## the combat preview, an empty zone's pick state and dim (ZoneMesh keys on it), the viewport's
+## oversampling, reduced motion and face_epoch. The overlay's own flags are not part of it, nor is the
+## on-screen text scale of an FX `scale` (_follow_text_k re-rasterises for that).
 func face_key() -> int:
 	var empty := view.is_empty()
 	var vp := get_viewport()
 	return hash([view, size_kind, rotated, size, custom_minimum_size, _lifting, lift_k, hovered, _self_hover,
-		empty_text, show_label, _pv_stat, _pv_value, _pv_bonus, _screen_text_k(), UIStyle.reduce_motion, face_epoch,
+		empty_text, show_label, _pv_stat, _pv_value, _pv_bonus, UIStyle.reduce_motion, face_epoch,
 		vp.get_oversampling() if vp != null else 1.0,
 		highlighted if empty else false, _mouse_in if empty else false, self_modulate if empty else Color.WHITE])
 
 
 # ---------------------------------------------------------------- main draw
 
+## The widget's own canvas item draws nothing (the face is on `_face`). Godot redraws it on a `scale`
+## change, a resize or an outside queue_redraw(): the face follows only when its inputs changed.
 func _draw() -> void:
+	if face_key() != _drawn_face_key:
+		_face.queue_redraw()
+
+
+func _draw_face() -> void:
 	face_draws += 1
 	_drawn_face_key = face_key()
 	var pt := _paint
-	pt.ci = self
+	pt.ci = _face
 	pt.view = view
 	pt.size_kind = size_kind
 	pt.rotated = rotated
@@ -588,7 +648,7 @@ func _draw_empty_zone(pt: CardPainter, ls: Vector2) -> void:
 	if base == null:
 		CardLayouts.draw_empty(pt, ls, highlighted)
 		return
-	base.emit(get_canvas_item())
+	base.emit(_face.get_canvas_item())
 
 
 ## True when the last redraw drew this empty zone's static layers from a ZoneMesh (tests, probes).
@@ -603,14 +663,14 @@ func _draw_overlay() -> void:
 	pt.ci = _overlay
 	pt.reset_transform()
 	CardOverlays.draw(pt, self)
-	pt.ci = self
+	pt.ci = _face
 
 
 ## Tests (F05-03): records every text draw's layout (text, font size, face-space position, paragraph
 ## line ranges) from the next redraw on; read it with text_trace().
 func set_text_tracing(on: bool) -> void:
 	_paint.tracing = on
-	queue_redraw()
+	_face.queue_redraw()
 
 
 ## The text layout recorded by the last redraw while tracing (see set_text_tracing).

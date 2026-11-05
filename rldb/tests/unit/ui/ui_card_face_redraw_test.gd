@@ -40,7 +40,7 @@ func test_marks_repaint_the_overlay_not_the_face() -> void:
 	var w := _card(UNIT)
 	await _settle()
 	var before := w.face_draws
-	var overlay: Control = w.get_child(0, true)
+	var overlay: Control = w.get_child(1, true)   # [face, overlay]
 	var od := [0]
 	overlay.draw.connect(func(): od[0] += 1)
 	# Act: selected and soft-dimmed (overlay brackets, self_modulate)
@@ -119,3 +119,35 @@ func test_face_epoch_bump_repaints_on_the_next_request() -> void:
 	await _settle()
 	# Assert
 	assert_int(w.face_draws).is_equal(before + 1)
+
+
+func test_a_scale_wobble_that_returns_to_rest_repaints_nothing() -> void:
+	# Arrange: the camera shake scales the board by about 1.6 % and back, frame by frame
+	var w := _card(UNIT)
+	await _settle()
+	var before := w.face_draws
+	# Act
+	for sc in [1.016, 1.008, 1.012, 1.004, 1.0]:
+		w.scale = Vector2(sc, sc)
+		await get_tree().process_frame
+	await _settle()
+	# Assert
+	assert_int(w.face_draws).is_equal(before)
+
+
+func test_a_small_scale_change_repaints_once_it_holds_still() -> void:
+	# Arrange
+	var w := _card(UNIT)
+	await _settle()
+	var before := w.face_draws
+	# Act: a slow drift to 1.1, then it rests there
+	for sc in [1.02, 1.04, 1.06, 1.08, 1.1]:
+		w.scale = Vector2(sc, sc)
+		await get_tree().process_frame
+	var while_moving := w.face_draws - before
+	await _settle()
+	# Assert: no repaint while it moved, one at the scale it settled on
+	assert_int(while_moving).is_equal(0)
+	assert_int(w.face_draws).is_equal(before + 1)
+	var k := roundf(1.1 * CardWidget.TEXT_OS_STEPS) / CardWidget.TEXT_OS_STEPS
+	assert_float(w.last_draw_scale()[1]).is_equal_approx(w.get_viewport().get_oversampling() * k, 0.0001)
