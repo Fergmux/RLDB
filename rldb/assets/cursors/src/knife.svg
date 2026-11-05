@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- RLDB cursor "knife" (L22). 64-unit grid, hotspot (3,3) at the blade's point. The ritual dagger of sacrifice mode: a steel leaf blade etched with
+       blood runes, a crescent gold guard, a wine-leather grip and a ruby pommel.
+       Rasterised by rldb/src/dev/cursor_bake.gd, which adds the drop shadow. -->
+  <defs>
+    <linearGradient id="lit" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#fff6d2"/>
+      <stop offset="0.35" stop-color="#f6d98a"/>
+      <stop offset="0.75" stop-color="#dcac52"/>
+      <stop offset="1" stop-color="#b47d2c"/>
+    </linearGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e6bb62"/>
+      <stop offset="0.5" stop-color="#b9842f"/>
+      <stop offset="1" stop-color="#7a4d15"/>
+    </linearGradient>
+    <linearGradient id="tailL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ecc56f"/>
+      <stop offset="1" stop-color="#a87228"/>
+    </linearGradient>
+    <linearGradient id="tailR" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a87228"/>
+      <stop offset="1" stop-color="#5e3a0f"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="0.3" stop-color="#f2cf7a"/>
+      <stop offset="0.7" stop-color="#d4a64a"/>
+      <stop offset="1" stop-color="#8e5d1a"/>
+    </linearGradient>
+    <radialGradient id="sapphire" cx="0.38" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#d8ecff"/>
+      <stop offset="0.3" stop-color="#6fb2ff"/>
+      <stop offset="0.75" stop-color="#2557b8"/>
+      <stop offset="1" stop-color="#132a66"/>
+    </radialGradient>
+    <radialGradient id="ruby" cx="0.38" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#ffe0d6"/>
+      <stop offset="0.3" stop-color="#ff6a52"/>
+      <stop offset="0.75" stop-color="#a8160f"/>
+      <stop offset="1" stop-color="#4a0606"/>
+    </radialGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f4f6f8"/>
+      <stop offset="0.48" stop-color="#c3c9d1"/>
+      <stop offset="0.52" stop-color="#8d949e"/>
+      <stop offset="1" stop-color="#555b65"/>
+    </linearGradient>
+    <linearGradient id="ember" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe7a8"/>
+      <stop offset="0.35" stop-color="#ffa040"/>
+      <stop offset="0.8" stop-color="#e2461c"/>
+      <stop offset="1" stop-color="#8e1a0c"/>
+    </linearGradient>
+    <linearGradient id="grip" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8a4b4f"/>
+      <stop offset="1" stop-color="#2e1418"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(38.44,38.44) rotate(-45)">
+    <path d="M0,-48 C2.0,-38 5.2,-24 4.6,-8 L-4.6,-8 C-5.2,-24 -2.0,-38 0,-48 Z" fill="#140b04" stroke="#140b04" stroke-width="3.4" stroke-linejoin="round"/>
+    <path d="M0,-48 C2.0,-38 5.2,-24 4.6,-8 L-4.6,-8 C-5.2,-24 -2.0,-38 0,-48 Z" fill="url(#steel)"/>
+    <path d="M0,-48 C-2.0,-38 -5.2,-24 -4.6,-8 L0,-8 Z" fill="#ffffff" fill-opacity="0.32"/>
+    <path d="M0,-40 L0,-11" stroke="#3a3f48" stroke-width="1.3" stroke-opacity="0.8" stroke-linecap="round"/>
+    <path d="M0.9,-39 L0.9,-11" stroke="#ffffff" stroke-width="0.6" stroke-opacity="0.6" stroke-linecap="round"/>
+    <path d="M-1.6,-30 L0,-32.4 L1.6,-30 M-1.6,-24.5 L0,-26.9 L1.6,-24.5 M-1.6,-19 L0,-21.4 L1.6,-19" fill="none" stroke="#9e1a14" stroke-width="0.9" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M-13,-11.5 Q0,-2.5 13,-11.5 Q12.5,-6.5 10.5,-4.2 Q0,1.5 -10.5,-4.2 Q-12.5,-6.5 -13,-11.5 Z" fill="#140b04" stroke="#140b04" stroke-width="3.2" stroke-linejoin="round"/>
+    <path d="M-13,-11.5 Q0,-2.5 13,-11.5 Q12.5,-6.5 10.5,-4.2 Q0,1.5 -10.5,-4.2 Q-12.5,-6.5 -13,-11.5 Z" fill="url(#gold)"/>
+    <path d="M-11.6,-10.2 Q0,-2.6 11.6,-10.2" fill="none" stroke="#fff6d8" stroke-width="0.8" stroke-opacity="0.7"/>
+    <rect x="-3.0" y="-3.5" width="6.0" height="17" rx="1.6" fill="#140b04" stroke="#140b04" stroke-width="3.0"/>
+    <rect x="-3.0" y="-3.5" width="6.0" height="17" rx="1.6" fill="url(#grip)"/>
+    <path d="M-3,1.6 L3,-0.4" stroke="#e9c06a" stroke-width="1.1"/>
+    <path d="M-3,5.8 L3,3.8" stroke="#e9c06a" stroke-width="1.1"/>
+    <path d="M-3,10.0 L3,8.0" stroke="#e9c06a" stroke-width="1.1"/>
+    <circle cx="0" cy="18.6" r="5.9" fill="#140b04"/>
+    <circle cx="0" cy="18.6" r="4.9" fill="url(#gold)"/>
+    <circle cx="0" cy="18.6" r="3.3" fill="url(#ruby)"/>
+    <circle cx="-1.0" cy="17.5" r="0.75" fill="#ffffff" fill-opacity="0.9"/>
+  </g>
+</svg>
