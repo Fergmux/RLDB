@@ -333,10 +333,30 @@ func _flip_stance(u: int) -> void:
 ## Ends a used Spell/Trap: to Spent (or Exhaust if it says so).
 func _op_finish_card(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op.get("target", "self")):
-		if on_field(u):
-			var dest := "exhaust" if has_flag_raw(u, "exhaust_on_spent") else "spent"
-			_leave_field(u, dest, "used", f)
-		elif cards[u]["zone"] == "limbo":
-			move_to_pile(u, "exhaust" if has_flag_raw(u, "exhaust_on_spent") else "spent")
+		_finish_used_card(u, f)
 	return R.CONT
+
+
+## Sends used Spell/Trap `u` from the Field or from limbo (a cast Spell resolving) to Spent, or to
+## Exhaust if it says so. A card already in a pile is left where it is.
+func _finish_used_card(u: int, f: Dictionary) -> void:
+	if on_field(u):
+		var dest := "exhaust" if has_flag_raw(u, "exhaust_on_spent") else "spent"
+		_leave_field(u, dest, "used", f)
+	elif cards[u]["zone"] == "limbo":
+		move_to_pile(u, "exhaust" if has_flag_raw(u, "exhaust_on_spent") else "spent")
+
+
+## L19 (owner, 2026-11-05: "the fusion card should already be destroyed by the time the fusion
+## happens"): when a Spell or Trap's own effect summons a unit (Fusion Ceremony, Ambush, Saviour
+## Appears), the card is used up as the summon commits: it goes to its pile before the materials are
+## tributed or the unit lands, so it is never a target of the summoned unit's On Summon effects. The
+## rest of its effect still resolves; its closing finish_card then has nothing left to do.
+func _release_resolving_source(f: Dictionary) -> void:
+	var src: int = f["src"]
+	if src == -1 or not cards.has(src) or not (category(src) in ["spell", "trap"]):
+		return
+	var z: String = cards[src]["zone"]
+	if z == "limbo" or (z == "backrow" and is_face_up(src)):
+		_finish_used_card(src, f)
 

@@ -98,6 +98,7 @@ func _op_pick_stance(f: Dictionary, op: Dictionary) -> int:
 
 func _op_place(f: Dictionary, op: Dictionary) -> int:
 	f["committed"] = true
+	_release_resolving_source(f)          # L19: a summoning Spell/Trap is used up before the unit lands
 	var uid: int = refs(f, op["target"])[0]
 	var slot: int = eval_num(f, op["slot"])
 	var stance: String = f["vars"].get("stance", "atk") if op.get("stance", "") is String and String(op.get("stance", "")).begins_with("$") else op.get("stance", "atk")
@@ -105,6 +106,7 @@ func _op_place(f: Dictionary, op: Dictionary) -> int:
 		var free := free_unit_slots(f["ctl"])
 		if free.is_empty():
 			add_log("No free zone; the summon fails.")
+			_emit_tribute_events(f)       # the materials were still tributed
 			return R.END
 		slot = free[0]
 	note("summon", {"uid": uid, "p": f["ctl"], "from": cards[uid]["zone"], "frame": f})
@@ -118,6 +120,7 @@ func _op_place(f: Dictionary, op: Dictionary) -> int:
 
 
 func _op_summoned(f: Dictionary, op: Dictionary) -> int:
+	_emit_tribute_events(f)               # L19: normally already done by tribute_bonus
 	var uid: int = op["target"] if op["target"] is int else refs(f, op["target"])[0]
 	if unit_on_field(uid):
 		emit("summoned", {"self": uid, "ctl": cards[uid]["ctl"], "player": cards[uid]["ctl"]})
@@ -168,8 +171,14 @@ func _op_place_power(f: Dictionary, op: Dictionary) -> int:
 
 ## Tribute materials for a special summon. Field materials go to Spent and fire
 ## tribute triggers; Spent materials (Arcane) are exhausted without field triggers.
+## L19 (2026-11-05): every material has left for its pile before the summoned unit lands, so its On
+## Summon effects never see one. A Field material's own "If this Unit is Tributed" effects
+## (tribute_or_sacrifice) are queued here and emitted once the unit has landed (_op_tribute_bonus),
+## before its On Summon: they may pick the summoned unit, and the materials and the summon reach the
+## presentation in one batch.
 func _op_tribute(f: Dictionary, op: Dictionary) -> int:
 	f["committed"] = true
+	_release_resolving_source(f)          # L19: the Spell/Trap doing the summoning leaves first
 	var p: int = f["ctl"]
 	for m in refs(f, op["target"]):
 		var from: String = cards[m]["zone"]
@@ -185,7 +194,9 @@ func _op_tribute(f: Dictionary, op: Dictionary) -> int:
 			var snap := _leave_field(m, op.get("to", "spent") if op.get("to", "") != "exhaust" else "spent", "tribute")
 			add_log("%s tributes %s." % [pname(p), name_of(m)])
 			add_fx(mfx)
-			emit("tribute_or_sacrifice", {"self": m, "ctl": p, "player": p, "tribute": true, "debilitated": snap["st"].get("debilitate", 0) > 0})
+			if not f["vars"].has("tribute_events"):
+				f["vars"]["tribute_events"] = []
+			f["vars"]["tribute_events"].append({"self": m, "ctl": p, "player": p, "tribute": true, "debilitated": snap["st"].get("debilitate", 0) > 0})
 			# Magentric (2026-10-17): "If this Unit is Tributed, Apply 2 Pierce to the Fusion or
 			# Ritual Unit Summoned". Its On Field text needs it undebilitated on the Field.
 			var tb: Dictionary = script_of(m).get("tribute_bonus", {})
@@ -209,7 +220,8 @@ func _op_tribute(f: Dictionary, op: Dictionary) -> int:
 
 
 ## Applies benefits recorded by `_op_tribute` to the Fusion/Ritual unit that just landed,
-## before its own On Summon effects and the summon-response window.
+## before its own On Summon effects and the summon-response window; then the materials' own
+## "If this Unit is Tributed" effects are emitted (L19), so they resolve next.
 func _op_tribute_bonus(f: Dictionary, op: Dictionary) -> int:
 	var bonuses: Array = f["vars"].get("tribute_bonus", [])
 	f["vars"].erase("tribute_bonus")
@@ -219,7 +231,16 @@ func _op_tribute_bonus(f: Dictionary, op: Dictionary) -> int:
 		for b in bonuses:
 			add_log("%s was tributed: %s gains %d %s." % [b["from"], name_of(u), b["n"], String(b["s"]).capitalize()])
 			apply_status(u, b["s"], b["n"], status_batch(f))
+	_emit_tribute_events(f)
 	return R.CONT
+
+
+## L19: emits the "tribute_or_sacrifice" events `_op_tribute` queued in frame `f` (once).
+func _emit_tribute_events(f: Dictionary) -> void:
+	var evs: Array = f["vars"].get("tribute_events", [])
+	f["vars"].erase("tribute_events")
+	for ev in evs:
+		emit("tribute_or_sacrifice", ev)
 
 
 func _ritual_materials(p: int, uid: int) -> Array:
