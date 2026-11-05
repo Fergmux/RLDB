@@ -51,11 +51,21 @@ func _op_pick_slot(f: Dictionary, op: Dictionary) -> int:
 			"power": label = "Power zone %d" % (s + 1)
 		opts.append({"v": s, "label": label, "slot": s, "zone": op["zone"]})
 	# The prompt names the card being placed (a summoned Fusion unit, not the effect's source).
-	var for_name: String = name_of(int(op["for"])) if op.has("for") else String(f["label"])
+	# `for` is a uid or a reference ("$u": the unit Hypnotise takes, L9).
+	var placing := _placing_uid(f, op)
+	var for_name: String = name_of(placing) if op.has("for") and cards.has(placing) else String(f["label"])
 	# G08: `placing` is the card being placed, so the zone arrow starts at it rather than at
 	# the effect's card (an ability or Spell that summons) or a zone it left.
 	return ask(f, p, "slot", "Choose a zone for %s." % for_name, opts, 1, 1, op.get("cancellable", false),
-		{"placing": int(op.get("for", f["src"]))})
+		{"placing": placing})
+
+
+## The card a pick_slot op places: its `for` (a uid or a reference), else the frame's source.
+func _placing_uid(f: Dictionary, op: Dictionary) -> int:
+	if not op.has("for"):
+		return int(f["src"])
+	var r := refs(f, op["for"])
+	return int(r[0]) if not r.is_empty() else int(f["src"])
 
 
 ## B3 (owner feedback 2026-10-20): whether player `p`, summoning now, is asked Attack or Defense.

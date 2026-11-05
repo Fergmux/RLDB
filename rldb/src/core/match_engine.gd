@@ -186,15 +186,21 @@ func _return_control(u: int) -> void:
 	inst["control_until"] = -1
 	var home: int = inst.get("control_slot", -1)
 	inst.erase("control_slot")
+	# L9: presentation event {"k": "control", "from", "to" ({} when it goes to Spent), "p": owner, "id",
+	# "back": true, "dest": "unit" | "spent"}.
+	var from := fx_pos(u)
 	if home == -1 or players[owner]["units"][home] != -1:
 		add_log("%s cannot return to its zone (now occupied) and is sent to Spent." % name_of(u))
+		var cfx := {"k": "control", "from": from, "to": {}, "p": owner, "id": d(u)["id"], "back": true, "dest": "spent"}
 		_leave_field(u, "spent", "control")
+		add_fx(cfx)
 		return
 	players[inst["ctl"]]["units"][inst["slot"]] = -1
 	inst["ctl"] = owner
 	inst["slot"] = home
 	players[owner]["units"][home] = u
 	add_log("%s returns to %s's control." % [name_of(u), pname(owner)])
+	add_fx({"k": "control", "from": from, "to": fx_pos(u), "p": owner, "id": d(u)["id"], "back": true, "dest": "unit"})
 
 
 # ---------------------------------------------------------------- commands
@@ -716,8 +722,9 @@ func _lead_choices(ops: Array) -> Array:
 	var lead := []
 	var applies := []
 	var i := 0
-	# A Type declaration leads too (owner feedback 2026-10-18: Chaos Witch / Waang can cancel it).
-	while i < ops.size() and ops[i]["op"] in ["choose", "mode", "near_self", "declare_type"] and not ops[i].get("random", false):
+	# A Type declaration leads too (owner feedback 2026-10-18: Chaos Witch / Waang can cancel it), and
+	# so does a zone pick (L9, 2026-11-05: Hypnotise's zone, chosen like a summon's before paying).
+	while i < ops.size() and ops[i]["op"] in ["choose", "mode", "near_self", "declare_type", "pick_slot"] and not ops[i].get("random", false):
 		var c: Dictionary = ops[i].duplicate()
 		if c["op"] != "near_self":       # near_self only lists the units a following choice may pick
 			c["cancellable"] = true

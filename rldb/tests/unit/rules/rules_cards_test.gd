@@ -162,18 +162,22 @@ func test_hypnotised_unit_cannot_be_sacrificed_and_returns_at_end_of_turn() -> v
 	var spell := TB.card(m, 0, 180)
 	assert_str(m.submit(0, {"t": "cast", "uid": spell})).is_empty()
 	assert_str(TB.choose_uids(m, [victim])).is_empty()    # sole legal target is still chosen by the player
+	assert_str(TB.choose(m, ["Front row, column 1"])).is_empty()   # L9: the caster picks the zone
 	assert_int(m.cards[victim]["ctl"]).is_equal(0)
 	assert_str(m.validate(0, {"t": "sacrifice", "uid": victim})).contains("temporarily controlled")
 	TB.to_turn2(m)
 	assert_int(m.cards[victim]["ctl"]).is_equal(1)
 
 
-## Takes control of `victim` for player 0 with Hypnotise.
+## Takes control of `victim` for player 0 with Hypnotise, into player 0's first free zone (L9: the
+## caster picks it).
 func _hypnotise(m: MatchEngine, victim: int) -> void:
 	var spell := TB.card(m, 0, 180)
 	m.players[0]["ap"] = 10
 	assert_str(m.submit(0, {"t": "cast", "uid": spell})).is_empty()
 	assert_str(TB.choose_uids(m, [victim])).is_empty()
+	assert_str(TB.pend_kind(m)).is_equal("slot")
+	assert_str(TB.choose(m, [String(m.pending["options"][0]["label"])])).is_empty()
 
 
 func test_hypnotise_cannot_be_cast_without_a_free_zone() -> void:

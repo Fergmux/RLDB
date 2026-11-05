@@ -309,7 +309,12 @@ func _op_reversal(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Hypnotise: take control of a unit until end of turn; it cannot be sacrificed.
+## Hypnotise: take control of a unit until end of turn; it cannot be sacrificed. L9 (owner,
+## 2026-11-05): it goes to the empty zone the caster chose (`slot`, a var set by the lead pick_slot);
+## if that zone was filled meanwhile, to their first free zone. It remembers its own zone
+## (control_slot) for the return at end of turn (MatchEngine._return_control). Presentation event:
+## {"k": "control", "from": its old position, "to": its new one, "p": the new controller,
+## "id": card id (a face-up unit is public), "back": false}.
 func _op_take_control(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
 		if not unit_on_field(u):
@@ -318,14 +323,20 @@ func _op_take_control(f: Dictionary, op: Dictionary) -> int:
 		if free.is_empty():
 			add_log("No free zone: control of %s cannot be taken." % name_of(u))
 			continue
+		var slot: int = eval_num(f, op["slot"]) if op.has("slot") and f["vars"].has(String(op["slot"]).substr(1)) else -1
+		if not (slot in free):
+			slot = free[0]
 		var prev: int = cards[u]["ctl"]
+		var from := fx_pos(u)
 		cards[u]["control_slot"] = cards[u]["slot"]
 		players[prev]["units"][cards[u]["slot"]] = -1
 		cards[u]["ctl"] = f["ctl"]
-		cards[u]["slot"] = free[0]
+		cards[u]["slot"] = slot
 		cards[u]["control_until"] = turn
-		players[f["ctl"]]["units"][free[0]] = u
-		add_log("%s takes control of %s until end of turn." % [pname(f["ctl"]), name_of(u)])
+		players[f["ctl"]]["units"][slot] = u
+		add_log("%s takes control of %s until end of turn (%s row, column %d)." % [pname(f["ctl"]), name_of(u),
+			"front" if slot_row(slot) == 0 else "back", slot_col(slot) + 1])
+		add_fx({"k": "control", "from": from, "to": fx_pos(u), "p": f["ctl"], "id": d(u)["id"], "back": false})
 	return R.CONT
 
 
