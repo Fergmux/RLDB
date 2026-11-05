@@ -14,15 +14,15 @@ func test_row_kind_names_units_by_how_they_are_summoned() -> void:
 
 func test_row_cost_of_a_fusion_is_its_materials() -> void:
 	# Arrange
-	var c := MatchView.def_view(93)   # Bastion Wyrm: Beast Unit + Dragon Unit
+	var c := MatchView.def_view(93)   # Bastion Wyrm (2026-11-03 materials)
 	# Act
 	var cost := GameDetails.row_cost(c)
 	# Assert
 	assert_str(String(cost["kind"])).is_equal("fusion")
-	assert_str(String(cost["text"])).is_equal("Beast Unit + Dragon Unit")
+	assert_str(String(cost["text"])).is_equal("Unit with 20 or more ATK or DEF + Physical Unit")
 
 
 func test_row_cost_of_ap_ritual_and_arcane_cards() -> void:
 	assert_str(String(GameDetails.row_cost(MatchView.def_view(1))["text"])).ends_with("AP")
 	assert_str(String(GameDetails.row_cost(MatchView.def_view(62))["text"])).is_equal("2 Rune")
-	assert_str(String(GameDetails.row_cost(MatchView.def_view(170))["text"])).is_equal("1 Arcane")
+	assert_str(String(GameDetails.row_cost(MatchView.def_view(170))["text"])).is_equal("2 Arcane")   # Kaya 2A since 2026-11-03
