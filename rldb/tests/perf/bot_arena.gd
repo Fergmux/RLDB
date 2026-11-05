@@ -77,10 +77,16 @@ func _run() -> void:
 				decks.append(s["main"] + s["extra"])
 				names.append(String(s["name"]))
 		for g in 4:
-			var a_seat := g % 2                       # A plays seat 0 in games 0 and 2
-			var swap := g >= 2                          # decks swap in games 2 and 3
-			var dk := [decks[1], decks[0]] if swap else [decks[0], decks[1]]
-			var first := (g / 2 + pi) % 2               # who starts alternates per pairing
+			# Balanced: A plays deck 0 in games 0-1 and deck 1 in games 2-3, and goes first in
+			# games 0 and 2, second in 1 and 3 (so seat order and deck strength never confound).
+			var a_seat := (g + pi) % 2
+			var a_deck := g / 2
+			var dk := []
+			dk.resize(2)
+			dk[a_seat] = decks[a_deck]
+			dk[1 - a_seat] = decks[1 - a_deck]
+			var first := a_seat if g % 2 == 0 else 1 - a_seat
+			var swap := a_deck != a_seat              # deck 1 on seat 0 (for the verbose line)
 			var game_seed := base_seed * 100003 + pi * 17 + g
 			var out := _play(dk, first, game_seed, a_seat)
 			res["games"] += 1
@@ -207,7 +213,8 @@ func _play(decks: Array, first: int, seed_value: int, a_seat: int) -> Dictionary
 			_recover(m, who)
 	if int(opts["log"]) == _game_index:
 		for e in m.log_entries:
-			print("  | " + String(e["pub"]))
+			var priv: Dictionary = e.get("priv", {})
+			print("  | " + String(e["pub"]) + ("   {%s}" % "; ".join(priv.keys().map(func(k): return "seat %s: %s" % [k, priv[k]])) if not priv.is_empty() else ""))
 	_game_index += 1
 	return {"winner": m.winner, "turns": m.turn, "hp": [m.players[0]["hp"], m.players[1]["hp"]], "stall": stall,
 		"refusals": refusals, "refusal_samples": samples}

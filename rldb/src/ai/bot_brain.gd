@@ -43,6 +43,12 @@ static var W_HAND := 0.4
 static var W_HAND_OPP := 0.5
 static var W_RETAIN := 1.5
 static var W_AP := 0.8
+## A back-row unit with no unit in front of it (it is as exposed as a front unit and blocks a
+## protected zone).
+static var W_BACK_EXPOSED := 0.0
+## Extra value of each of the bot's own set cards per AP of its cost (it knows them; a dearer
+## Trap or Spell is usually a stronger one).
+static var W_SET_COST := 0.0
 ## Weight of the bot's follow-up turn in the forecast (it is further away and less certain).
 static var FOLLOW_W := 0.35
 ## Two-step look-ahead: how many of the best first moves get a follow-up search.
@@ -92,6 +98,8 @@ static func tune(d: Dictionary) -> Array:
 			"W_HAND_OPP": W_HAND_OPP = v
 			"W_RETAIN": W_RETAIN = v
 			"W_AP": W_AP = v
+			"W_BACK_EXPOSED": W_BACK_EXPOSED = v
+			"W_SET_COST": W_SET_COST = v
 			"FOLLOW_W": FOLLOW_W = v
 			"TWO_STEP": TWO_STEP = int(v)
 			"HPW": BotForecast.HPW = v
@@ -101,6 +109,7 @@ static func tune(d: Dictionary) -> Array:
 			"VIRTUAL_ATK": BotForecast.VIRTUAL_ATK = int(v)
 			"VIRTUAL_DEF": BotForecast.VIRTUAL_DEF = int(v)
 			"VIRTUAL_WORTH": BotForecast.VIRTUAL_WORTH = v
+			"VIRTUAL_COUNT": BotForecast.VIRTUAL_COUNT = int(v)
 			"W_UNIT": BotForecast.W_UNIT = v
 			"W_ATK": BotForecast.W_ATK = v
 			"W_DEF": BotForecast.W_DEF = v
@@ -272,9 +281,8 @@ func choose(m: MatchEngine, depth: int) -> Dictionary:
 			return {"t": "choose", "id": pd["id"], "indices": [i]}
 	if int(pd["max"]) > 1:
 		return {"t": "choose", "id": pd["id"], "indices": _multi_pick(m, depth)}
-	var need: int = int(pd["min"])
 	if n == 1 or depth >= 2:
-		return {"t": "choose", "id": pd["id"], "indices": [_first_legal(pd)] if need > 0 or n == 1 else [0]}
+		return {"t": "choose", "id": pd["id"], "indices": [_cheap_index(m, pd)]}
 	var best_i := -1
 	var best_s := -INF
 	for i in mini(n, MAX_OPTIONS):
@@ -292,6 +300,51 @@ func choose(m: MatchEngine, depth: int) -> Dictionary:
 	if best_i == -1:
 		return {"t": "choose", "id": pd["id"], "indices": [_first_legal(pd)]}
 	return {"t": "choose", "id": pd["id"], "indices": [best_i]}
+
+
+## Deep in a look-ahead (no more copies): a quick rule instead of trying every option.
+## Unit zone: behind one of its own front units, else in front of one of its back units, else
+## the front row. Attack target: the best battle preview. Otherwise the first legal option.
+func _cheap_index(m: MatchEngine, pd: Dictionary) -> int:
+	var opts: Array = pd["options"]
+	if opts.size() <= 1:
+		return 0
+	if pd["kind"] == "slot" and String(opts[0].get("zone", "")) == "unit":
+		var units: Array = m.players[me]["units"]
+		var best := 0
+		var best_v := -1
+		for i in opts.size():
+			var s: int = int(opts[i]["slot"])
+			var v := 0
+			if s >= 3 and units[s - 3] != -1:
+				v = 3
+			elif s < 3 and units[s + 3] != -1:
+				v = 2
+			elif s < 3:
+				v = 1
+			if v > best_v:
+				best_v = v
+				best = i
+		return best
+	if pd["kind"] == "attack_target":
+		var a: int = int(pd.get("source", -1))
+		var best2 := 0
+		var best_v2 := -INF
+		for i in opts.size():
+			var pv: Dictionary = opts[i].get("preview", {})
+			if pv.is_empty():
+				continue
+			var t: int = int(opts[i]["v"])
+			var v2 := BotForecast.HPW * float(int(pv.get("dmg_opp", 0)) - int(pv.get("dmg_you", 0)))
+			if pv.get("t_dies", false) and m.unit_on_field(t):
+				v2 += BotForecast.worth(m, t)
+			if pv.get("a_dies", false) and m.unit_on_field(a):
+				v2 -= BotForecast.worth(m, a)
+			if v2 > best_v2:
+				best_v2 = v2
+				best2 = i
+		return best2
+	return _first_legal(pd)
 
 
 ## First option that is not "Skip for the rest of this turn" (D13).
@@ -439,11 +492,17 @@ func evaluate(m: MatchEngine) -> float:
 	v += FOLLOW_W * clampf(follow, -60.0, 60.0)
 	for r in s["units"]:
 		if r["alive"]:
-			v += float(r["worth"]) if int(r["p"]) == me else -float(r["worth"])
+			var sign_u := 1.0 if int(r["p"]) == me else -1.0
+			v += sign_u * float(r["worth"])
+			if int(r["row"]) == 1 and not BotForecast._protected(s, r):
+				v -= sign_u * W_BACK_EXPOSED          # a back-row zone with nothing in front of it
 	for p in 2:
 		var sign := 1.0 if p == me else -1.0
 		v += sign * W_POWER * float(m.power_cards(p).size())
 		v += sign * W_SET * float(m.backrow_cards(p).size())
+	if W_SET_COST != 0.0:
+		for u in m.backrow_cards(me):
+			v += W_SET_COST * float(maxi(0, m.current_cost(u)))
 	v += _resources(m)
 	return v
 
@@ -505,10 +564,10 @@ func series_command(s: Series) -> Dictionary:
 			return {"t": "reward_type", "category": BotCards.reward_category(s.decks[me], rng)}
 		Series.STAGE_FIRST:
 			# G05: choose (when the bot lost), then press Start next duel at once, so the bot
-			# never keeps the player waiting. L27: the bot lets the opponent start, since the
-			# player going first has no Battle Phase on turn 1 (measured in the bot arena).
+			# never keeps the player waiting. It goes first itself (L27 arena: neither seat has a
+			# real edge between equal bots, and this bot does better going first).
 			if s.last_loser == me and not s.first_chosen:
-				return {"t": "first_player", "who": 1 - me}
+				return {"t": "first_player", "who": me}
 			if not s.duel_ready[me]:
 				return {"t": "start_duel"}
 	return {}

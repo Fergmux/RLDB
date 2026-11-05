@@ -27,10 +27,13 @@ const LETHAL := 1000.0
 static var ECONOMY := 0.03
 ## Smallest attack value worth making in the model.
 static var MIN_GAIN := 0.25
-## The virtual unit a side is expected to summon next turn (an ordinary 1-AP unit).
-static var VIRTUAL_ATK := 8
-static var VIRTUAL_DEF := 8
+## The virtual unit a side is expected to summon next turn (an ordinary unit; 10/10 measured best in
+## the arena against 0, 8/8 and 12/12).
+static var VIRTUAL_ATK := 10
+static var VIRTUAL_DEF := 10
 static var VIRTUAL_WORTH := 10.0
+## How many such units a side is expected to summon (never more than its free zones).
+static var VIRTUAL_COUNT := 1
 ## Unit worth: presence plus stats (BotBrain uses the same numbers for material).
 static var W_UNIT := 6.0
 static var W_ATK := 0.45
@@ -241,8 +244,9 @@ static func attackers(s: Dictionary, p: int, now: bool, virtual: bool) -> Array:
 			if left > 0:
 				continue
 		out.append(o)
-	if virtual and int(s["free"][p]) > 0:
-		out.append(_virtual(p))
+	if virtual:
+		for i in mini(VIRTUAL_COUNT, int(s["free"][p])):
+			out.append(_virtual(p))
 	return out
 
 
@@ -251,6 +255,7 @@ static func attackers(s: Dictionary, p: int, now: bool, virtual: bool) -> Array:
 static func battle(s: Dictionary, p: int, now: bool, virtual: bool, apply: bool) -> Dictionary:
 	var q := 1 - p
 	var unused := attackers(s, p, now, virtual)
+	var summoned := unused.filter(func(o): return o["virtual"])
 	var res := {"value": 0.0, "dmg": 0, "taken": 0, "kills": 0, "losses": 0}
 	var hp: Array = s["hp"]
 	var saved := []
@@ -275,6 +280,7 @@ static func battle(s: Dictionary, p: int, now: bool, virtual: bool, apply: bool)
 		if best_a.is_empty():
 			break
 		unused.erase(best_a)
+		best_a["fought"] = true
 		res["value"] += best_v
 		best_a["stance"] = "atk"
 		if best_r["t_dies"]:
@@ -298,7 +304,35 @@ static func battle(s: Dictionary, p: int, now: bool, virtual: bool, apply: bool)
 			e[0]["alive"] = e[1]
 			e[0]["eternal"] = e[2]
 			e[0]["stance"] = e[3]
+		return res
+	# The units the side was expected to summon stay on its board (in a free zone, front row
+	# first; in Defense if they did not attack), so the follow-up turn meets them.
+	for v in summoned:
+		if not v["alive"]:
+			continue
+		var slot := _free_slot(s, p)
+		if slot == -1:
+			break
+		v["virtual"] = false
+		v["slot"] = slot
+		v["col"] = slot % 3
+		v["row"] = slot / 3
+		if not v.get("fought", false):
+			v["stance"] = "def"
+		s["units"].append(v)
 	return res
+
+
+## First free unit zone of side p in the snapshot (front row first), or -1.
+static func _free_slot(s: Dictionary, p: int) -> int:
+	var used := {}
+	for o in s["units"]:
+		if o["alive"] and int(o["p"]) == p:
+			used[int(o["slot"])] = true
+	for slot in 6:
+		if not used.has(slot):
+			return slot
+	return -1
 
 
 ## Whether `t` would be destroyed by `a` without its Eternal / guard (so Eternal is consumed).
