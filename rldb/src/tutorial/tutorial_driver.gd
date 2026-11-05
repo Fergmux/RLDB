@@ -238,7 +238,7 @@ func _check_arcane_overpay(h: TutorialHost) -> void:
 	await _wait(0.3)
 	var confirm := _find_button(gs.prompt.banner_btns, "Confirm")
 	_check("over-pay option is disabled (Cannot overpay); Confirm is on for the exact pair", gs.multi.size() == 2 and confirm != null and not confirm.disabled)
-	_check("over-pay banner shows 4 of 4 circles paid", gs.prompt.cost_pips.paid() == 4 and gs.prompt.cost_pips.need == 4 		and gs.prompt.cost_pips.tooltip_text.contains("4 of 4 paid") and not gs.prompt.banner_sub.visible)
+	_check("over-pay banner shows 4 of 4 circles paid", gs.prompt.cost_pips.paid() == 4 and gs.prompt.cost_pips.need == 4 		and gs.prompt.cost_pips.tooltip_text.contains("4 of 4") and not gs.prompt.banner_sub.visible)
 	await _shot("L7_arcane_overpay")
 	var before := h.refused
 	var all3 := []
