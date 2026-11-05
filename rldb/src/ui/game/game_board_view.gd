@@ -573,7 +573,7 @@ func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, target
 	w.set_marks(opt != -1 and not zone_pick, is_sel or chosen, dim)
 	w.set_ready(vis and ready_uids.has(uid))
 	w.order_no = sel.order_no(opt)
-	w.queue_redraw()
+	w.request_face()   # perf: repaints the face only when it changed (the setters above do the rest)
 
 
 ## D9: shows (refs non-empty) or clears (empty) the target preview of the hovered effect button of card

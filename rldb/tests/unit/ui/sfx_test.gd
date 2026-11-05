@@ -151,6 +151,25 @@ func test_limiter_burst_cap() -> void:
 	assert_bool(Sfx._allow("heal", 5000 + Sfx.BURST_WINDOW_MS + 60)).is_true()
 
 
+func test_turn_start_draw_is_heard_after_a_full_burst() -> void:
+	# QA 2026-11-05: the turn-start draw shares its batch with turn, ap_gain and phase (and a status
+	# tick); the burst cap dropped it. Arrange: the burst is full.
+	for i in Sfx.BURST_MAX:
+		assert_bool(Sfx._allow(["turn", "ap_gain", "phase", "burn"][i], 7000 + i)).is_true()
+	# Act / Assert: the draw still plays, once
+	assert_bool(Sfx._allow("card_draw", 7005)).is_true()
+	assert_bool(Sfx._allow("card_draw", 7010)).is_false()
+
+
+func test_exempt_draw_does_not_open_the_burst_to_others() -> void:
+	# Arrange: a full burst plus the draw
+	for i in Sfx.BURST_MAX:
+		Sfx._allow(["turn", "ap_gain", "phase", "burn"][i], 8000 + i)
+	Sfx._allow("card_draw", 8005)
+	# Act / Assert: any other cue in the same window is still dropped
+	assert_bool(Sfx._allow("impact", 8006)).is_false()
+
+
 func test_play_is_safe_noop_for_unknown_and_empty() -> void:
 	Sfx.play("")
 	Sfx.play("no_such_sound")

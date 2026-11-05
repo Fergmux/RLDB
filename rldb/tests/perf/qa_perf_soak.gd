@@ -7,6 +7,7 @@ extends SceneTree
 ##
 ##   godot --path rldb --resolution 1600x1000 -s res://tests/perf/qa_perf_soak.gd -- [--commands=N] [--pace=F]
 ##
+## --profile: adds a PerfRecorder (perf_recorder.gd) and prints its frame-time breakdown.
 ## --pace: frames between commands (default 4: faster than a human, so the L4 queue builds a backlog).
 ## Prints "PERF ..." and "NODES ..." lines, then "QA PERF OK" or "QA PERF FAIL <reason>" (exit 0 / 1).
 
@@ -27,6 +28,7 @@ var bots: Array = []
 var samples: Array = []   # [command index, turn, game, nodes, orphans]
 ## Milliseconds the authority + both views + the screen's render take per command (inside a frame).
 var handle_ms: Array = []
+var recorder: Node = null
 
 
 func _initialize() -> void:
@@ -41,6 +43,9 @@ func _initialize() -> void:
 	root.add_child(screen)
 	screen.attach(host.seats[0])
 	bots = [BotBrain.new(0, 11), BotBrain.new(1, 12)]
+	if opts.has("profile"):
+		recorder = preload("res://tests/perf/perf_recorder.gd").new()
+		root.add_child(recorder)
 	_run.call_deferred()
 
 
@@ -100,6 +105,8 @@ func _run() -> void:
 			host.handle(who, cmd)
 			handle_ms.append((Time.get_ticks_usec() - h0) / 1000.0)
 			sent += 1
+			if recorder != null:
+				recorder.cmd_flag = true
 		for f in pace:
 			await process_frame
 			var now := Time.get_ticks_usec()
@@ -123,6 +130,8 @@ func _report(sent: int) -> void:
 	if not handle_ms.is_empty():
 		print("HANDLE per command: p50=%.1fms p95=%.1fms max=%.1fms" % [handle_ms[handle_ms.size() / 2],
 			handle_ms[int(handle_ms.size() * 0.95)], handle_ms[-1]])
+	if recorder != null:
+		recorder.report()
 	for s in samples:
 		print("NODES cmd=%d turn=%d game=%d nodes=%d orphans=%d" % s)
 	# Leak check: compare the first and last thirds of the samples taken at drained turn starts.
