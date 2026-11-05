@@ -18,8 +18,10 @@ func _builder(host_size: Vector2) -> DeckBuilder:
 	return db
 
 
+## A long card may need a few frames: each step down of the pane's density (DeckBuilder.FIT_STEPS)
+## is taken one frame after the layout settles.
 func _settle() -> void:
-	for i in 3:
+	for i in 8:
 		await get_tree().process_frame
 
 
@@ -60,6 +62,41 @@ func test_long_cards_with_many_copies_still_fit() -> void:
 		await _settle()
 		var f := db.preview_fit()
 		assert_float(float(f["used"])).is_less_equal(float(f["room"]) + 0.5)
+
+
+## 5 Nov (L batch follow-up): the longest cards (146 Akiramari, 147 Demented Apparition) once
+## needed 819 / 794 px of a 770 px pane. When the art at its minimum is not enough, the pane steps
+## down its density (tighter spacing, then slightly smaller text and art) until the card fits.
+## Here the pane is ~150 px shorter than at 1280x800, so the longest cards must step down.
+func test_longest_cards_step_down_to_fit_a_shorter_pane() -> void:
+	# Arrange
+	var db := _builder(LAYOUT_1280X800 - Vector2(0, 150))
+	await _settle()
+	for id in [146, 147, 156]:
+		# Act
+		db.show_preview(id)
+		await _settle()
+		# Assert
+		var f := db.preview_fit()
+		assert_float(float(f["used"])).override_failure_message("%d used %d of %d" % [id, f["used"], f["room"]]) 			.is_less_equal(float(f["room"]) + 0.5)
+		assert_float(float(f["need"])).is_less_equal(float(f["room"]) + 0.5)
+
+
+## A short card keeps the roomy layout: full text size and the big art, also right after a long card.
+func test_short_card_keeps_full_size_text_and_art_after_a_long_one() -> void:
+	# Arrange
+	var db := _builder(LAYOUT_1280X800 - Vector2(0, 150))
+	await _settle()
+	db.show_preview(146)
+	await _settle()
+	# Act
+	db.show_preview(1)
+	await _settle()
+	# Assert
+	var f := db.preview_fit()
+	assert_int(int(f["step"])).is_equal(0)
+	assert_float(db._details.text_scale).is_equal(1.0)
+	assert_float(float(f["art_h"])).is_equal(DeckBuilder.ART_MAX_H)
 
 
 ## The pane draws one rule block per timing part, with its heading, like the match panel.
