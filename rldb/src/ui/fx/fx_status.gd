@@ -44,7 +44,12 @@ const STAMP_FLY := 0.38
 const STAMP_END := 0.62
 ## Floating name: font size (base px) and rise (px).
 const NAME_FS := 17
-const NAME_RISE := 26.0
+const NAME_RISE := 14.0
+## Final review (2026-11-05): the name rises inside its own card, under the badge stamp, instead of
+## above the card, where it covered the stats of the card in the row above for a second. Its centre
+## starts at NAME_Y of the card's height; it shrinks to fit NAME_MAX_W of the card's width.
+const NAME_Y := 0.74
+const NAME_MAX_W := 1.3
 ## Ward colours: Cleanse white-gold, Curse violet.
 const WARD_CLEANSE := Color("ffe9a8")
 const WARD_CURSE := Color("b98aff")
@@ -136,8 +141,9 @@ static func _slot_key(at: Dictionary) -> String:
 	return "%d:%s:%d" % [int(at.get("p", 0)), String(at.get("zone", "")), int(at.get("slot", 0))]
 
 
-## The status name in its colour, rising from just above the card (clear of the badge stamp). A name
-## still showing on that card is lifted away and faded first, so two never overlap.
+## The status name in its colour, rising over the lower part of its own card (under the badge stamp,
+## clear of the neighbouring cards). A name still showing on that card is lifted away and faded
+## first, so two never overlap.
 func _name(at: Dictionary, rect: Rect2, text: String, col: Color, fs: int, life: float) -> void:
 	var key := _slot_key(at)
 	var old: Label = _names.get(key, null)
@@ -155,9 +161,14 @@ func _name(at: Dictionary, rect: Rect2, text: String, col: Color, fs: int, life:
 	l.add_theme_constant_override("outline_size", 6)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sz := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+	var max_w := (_fx.fx_pos(rect.end).x - _fx.fx_pos(rect.position).x) * NAME_MAX_W
+	if sz.x > max_w and sz.x > 0.0:
+		fs = maxi(10, floori(fs * max_w / sz.x))
+		l.add_theme_font_size_override("font_size", fs)
+		sz = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
 	l.size = Vector2(sz.x + 8, fs * 1.4)
 	l.pivot_offset = l.size / 2.0
-	var p0 := _fx.fx_pos(Vector2(rect.get_center().x, rect.position.y - rect.size.y * 0.02)) - Vector2(l.size.x / 2.0, l.size.y * 0.8)
+	var p0 := name_origin(_fx.fx_pos(rect.position), _fx.fx_pos(rect.end), l.size)
 	l.position = p0
 	_fx.add_text(l)
 	_names[key] = l
@@ -175,6 +186,13 @@ func _name(at: Dictionary, rect: Rect2, text: String, col: Color, fs: int, life:
 		if _names.get(key, null) == l:
 			_names.erase(key)
 		_fx.free_node(l))
+
+
+## Top-left of a floating name of `label_size` over the card box from `a` to `b` (fx-layer
+## coordinates): centred across the card, its middle at NAME_Y of the card's height.
+static func name_origin(a: Vector2, b: Vector2, label_size: Vector2) -> Vector2:
+	var c := Vector2((a.x + b.x) / 2.0, a.y + (b.y - a.y) * NAME_Y)
+	return c - label_size / 2.0
 
 
 func _rect(at: Dictionary) -> Rect2:
