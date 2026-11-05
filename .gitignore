@@ -1,1 +1,17 @@
 build/
+
+# Local-only (2026-11-04, GitHub upload): agent worktrees, personal settings, session transcripts,
+# machine setup, Python caches, stray screenshots and editor temp files.
+.claude/worktrees/
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/agent-memory/
+**/session-logs/
+rldb/production/
+production/remote/
+__pycache__/
+*.TMP
+/rldb/*.png
+/rldb/*.png.import
+/rldb/assets/art/backup/
+/rldb/assets/art/background[0-9]*

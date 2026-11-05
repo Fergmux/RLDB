@@ -1,0 +1,16 @@
+id,name,type,description
+rune,Rune,buff,You can summon a Ritual Unit from the Extra Deck by Tributing a Unit that has the required Runes
+retain,Retain,buff,This card is not discarded at the end of your turn. at the start of your turn reduce Retain by 1
+reveal,Reveal,debuff,A card with Reveal is face up
+eternal,Eternal,buff,"The first time this Unit would be destroyed it is not, reduce Eternal by 1"
+burn,Burn,debuff,"If this Unit attacks, you lose HP equal to the number of Burn on this Unit and remove all Burn"
+pierce,Pierce,buff,"If this Unit attacks a Defense Stance Unit, excess ATK Damages your opponent, reduce Pierce by 1"
+cleanse,Cleanse,buff,"Remove all Debuffs or prevent a Debuff being Applied, reduce curse by 1."
+paralyse,Paralyse,debuff,This Unit cannot declare an attack or move Zone. At the end of your turn reduce Paralyse by 1
+medic,Medic,buff,"At the start of your turn gain HP equal to the number of Medic on this Unit, reduce Medic by 1"
+curse,Curse,debuff,"Remove all Buffs or prevent a Buff being Applied, reduce curse by 1."
+poison,Poison,debuff,"At the end of your turn lose HP equal to the number of Poison on this Unit, reduce Poison by 1"
+infiltrate,Infiltrate,buff,This Unit can attack Protected Units. If it attacks a Protected Unit reduce Infiltrate by 1
+blind,Blind,debuff,"If this Unit attacks, the target is selected at random. If it attacks reduce Blind by 1"
+nimble,Nimble,buff,"Once per turn this Unit can move to an Adjacent Zone, reduce Nimble by 1"
+debilitate,Debilitate,debuff,"Unit cannot be Sacrificed, Tributed, or use its Effects. At the end of your turn reduce Debilitate by 1"
