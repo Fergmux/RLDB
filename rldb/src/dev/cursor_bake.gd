@@ -1,6 +1,6 @@
 extends SceneTree
 ## Development tool (L22): rasterises the layered cursor art in `res://assets/cursors/src/<name>.svg`
-## to `res://assets/cursors/<name>_<size>.png` for every CursorSkin.ART entry and CursorSkin.SIZES.
+## to `res://assets/cursors/<name>_<size>.png` for every CursorSkin.ART entry at every CursorSkin.SIZES.
 ##
 ##     godot --headless --path rldb -s res://src/dev/cursor_bake.gd [-- --sheet=<dir>]
 ##
@@ -189,7 +189,7 @@ static func _over(dst: Image, top: Image) -> void:
 
 
 ## Review sheet: one row per cursor; each size at 1x on the table, a gold panel, a light card face
-## and mid grey, then the 64 px image at 4x (nearest) with its hotspot marked.
+## and mid grey, then the 64 px image at 4x and the 32 px image at 8x (nearest), hotspots marked.
 static func review_sheet(made: Dictionary) -> Image:
 	var bgs := [Color("2a1d14"), Color("d4a64a"), Color("ece4d2"), Color("6a6a6a")]
 	var table := Image.new()
@@ -198,9 +198,9 @@ static func review_sheet(made: Dictionary) -> Image:
 		table = tex.get_image()
 		table.convert(Image.FORMAT_RGBA8)
 	var keys := CursorSkin.ART.keys().filter(func(k): return made.has("%s_32" % k))
-	var cell := 80
+	var cell := 96
 	var zoom := 4
-	var w := 16 + (bgs.size() + 1) * (cell * 3 + 8) + (64 * zoom + 16) * 2
+	var w := 16 + (bgs.size() + 1) * (cell * CursorSkin.SIZES.size() + 8) + (64 * zoom + 16) * 2
 	var row_h := maxi(64 * zoom, cell) + 16
 	var sheet := Image.create(w, 16 + keys.size() * row_h, false, Image.FORMAT_RGBA8)
 	sheet.fill(Color("141110"))
@@ -213,13 +213,13 @@ static func review_sheet(made: Dictionary) -> Image:
 				var n: int = CursorSkin.SIZES[si]
 				var rect := Rect2i(x + si * cell, y0, cell, cell)
 				if bi == 0 and not table.is_empty():
-					var src := Rect2i(1200 + r * 60 + si * 90, 900, cell, cell)
+					var src := Rect2i(1200 + r * 60 + si * 100, 900, cell, cell)
 					sheet.blit_rect(table, src, rect.position)
 				else:
 					sheet.fill_rect(rect, bgs[bi - 1 if bi > 0 else 0])
 				var img: Image = made["%s_%d" % [key, n]]
 				sheet.blend_rect(img, Rect2i(0, 0, n, n), rect.position + Vector2i((cell - n) / 2, (cell - n) / 2))
-			x += cell * 3 + 8
+			x += cell * CursorSkin.SIZES.size() + 8
 		# Pixel views: 64 px at 4x and 32 px at 8x, the hotspot pixel marked in cyan.
 		for n in [64, 32]:
 			var z: int = 64 * zoom / int(n)

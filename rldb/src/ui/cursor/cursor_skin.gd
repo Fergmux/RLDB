@@ -16,9 +16,10 @@ extends RefCounted
 ## the reticle, then the knife again). `set_suspended(true)` hides every mode without forgetting it
 ## (a menu or modal over the board).
 ##
-## Size. The art is baked at 32, 48 and 64 px (src/dev/cursor_bake.gd). `install()` picks the size
-## from the window's UI scale and the screen's DPI (ui_scale / size_for_scale) and picks again when
-## the window is resized or its DPI changes, so the cursor matches the UI at 1080p, 1440p and 4K.
+## Size. The art is baked at 32, 40, 48, 64 and 80 px (src/dev/cursor_bake.gd). `install()` picks the
+## size from the window's UI scale and the screen's DPI (ui_scale / size_for_scale: the baked size
+## nearest BASE_PX x scale) and picks again when the window is resized or its DPI changes, so the
+## cursor grows with the UI: 32 px in the 1600x1000 window, 40 at 1080p, 48 at 1440p, 80 at 4K.
 ##
 ## Setting. "Custom cursor" (Settings > Interface, default on) is saved in the UI settings file
 ## (TEST_SETTINGS_PATH in automated runs). Off: every custom shape is cleared at once and the system
@@ -31,11 +32,11 @@ extends RefCounted
 ## Folder of the baked images (<key>_<size>.png); the SVG sources are in DIR/src.
 const DIR := "res://assets/cursors"
 ## Baked sizes (px, square), smallest first.
-const SIZES := [32, 48, 64]
+const SIZES := [32, 40, 48, 64, 80]
 ## The design viewport (project.godot window/size): UI scale 1.0.
 const BASE_VIEWPORT := Vector2(1600, 1000)
-## UI scale below which the smaller size is used: < 1.3 -> 32 px, < 1.75 -> 48 px, else 64 px.
-const SIZE_STEPS := [1.3, 1.75]
+## Cursor size (px) at UI scale 1.0; the baked size nearest BASE_PX x scale is used (ties: smaller).
+const BASE_PX := 36.0
 ## The art: hotspot in the 64-unit design grid of the SVG (the pixel the click lands on), and an
 ## optional glow baked around it.
 const ART := {
@@ -45,7 +46,7 @@ const ART := {
 	&"target_lock": {"hot": Vector2(32, 32), "glow": Color(1.0, 0.85, 0.29, 0.75)},
 	&"target_no": {"hot": Vector2(32, 32)},
 	&"knife": {"hot": Vector2(4.5, 4.5)},
-	&"knife_hot": {"hot": Vector2(4.5, 4.5), "glow": Color(1.0, 0.42, 0.16, 0.8)},
+	&"knife_hot": {"hot": Vector2(4.5, 4.5), "glow": Color(1.0, 0.93, 0.7, 0.85)},
 	&"forbidden": {"hot": Vector2(3, 3)},
 	&"help": {"hot": Vector2(3, 3)},
 }
@@ -246,12 +247,14 @@ static func current_art(shape: int) -> StringName:
 	return art_for(shape, active_mode())
 
 
-## The baked size (px) for UI scale `s`.
+## The baked size (px) for UI scale `s`: the one nearest BASE_PX x s (a tie takes the smaller).
 static func size_for_scale(s: float) -> int:
-	for i in SIZE_STEPS.size():
-		if s < float(SIZE_STEPS[i]):
-			return int(SIZES[i])
-	return int(SIZES[SIZES.size() - 1])
+	var want := BASE_PX * s
+	var best: int = SIZES[0]
+	for n in SIZES:
+		if absf(float(n) - want) < absf(float(best) - want) - 0.001:
+			best = n
+	return best
 
 
 ## The cursor's UI scale: the larger of the window's content scale (the 1600x1000 design stretched

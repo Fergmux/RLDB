@@ -176,20 +176,23 @@ func test_l22_settings_form_has_the_custom_cursor_toggle() -> void:
 
 # ---------------------------------------------------------------- size
 
-func test_l22_size_steps_with_the_ui_scale() -> void:
-	assert_int(CursorSkin.size_for_scale(1.0)).is_equal(32)
-	assert_int(CursorSkin.size_for_scale(1.29)).is_equal(32)
-	assert_int(CursorSkin.size_for_scale(1.3)).is_equal(48)
-	assert_int(CursorSkin.size_for_scale(1.74)).is_equal(48)
-	assert_int(CursorSkin.size_for_scale(1.75)).is_equal(64)
-	assert_int(CursorSkin.size_for_scale(3.0)).is_equal(64)
+func test_l22_size_is_the_baked_size_nearest_the_scaled_base() -> void:
+	# BASE_PX 36 x scale, nearest of 32/40/48/64/80; a tie takes the smaller.
+	assert_int(CursorSkin.size_for_scale(1.0)).is_equal(32)     # 36: tie 32/40
+	assert_int(CursorSkin.size_for_scale(1.08)).is_equal(40)
+	assert_int(CursorSkin.size_for_scale(1.25)).is_equal(48)    # 45
+	assert_int(CursorSkin.size_for_scale(1.5)).is_equal(48)     # 54
+	assert_int(CursorSkin.size_for_scale(2.0)).is_equal(64)     # 72: tie 64/80
+	assert_int(CursorSkin.size_for_scale(2.16)).is_equal(80)
+	assert_int(CursorSkin.size_for_scale(3.0)).is_equal(80)
 
 
 func test_l22_ui_scale_follows_the_window_and_the_screen_dpi() -> void:
-	# 1080p full screen at 100%: 32 px. 1440p: 48 px. 4K: 64 px.
-	assert_int(CursorSkin.size_for_scale(CursorSkin.ui_scale(Vector2(1920, 1080), 96))).is_equal(32)
+	# The 1600x1000 window: 32 px. 1080p full screen at 100%: 40 px. 1440p: 48 px. 4K: 80 px.
+	assert_int(CursorSkin.size_for_scale(CursorSkin.ui_scale(Vector2(1600, 1000), 96))).is_equal(32)
+	assert_int(CursorSkin.size_for_scale(CursorSkin.ui_scale(Vector2(1920, 1080), 96))).is_equal(40)
 	assert_int(CursorSkin.size_for_scale(CursorSkin.ui_scale(Vector2(2560, 1440), 96))).is_equal(48)
-	assert_int(CursorSkin.size_for_scale(CursorSkin.ui_scale(Vector2(3840, 2160), 96))).is_equal(64)
+	assert_int(CursorSkin.size_for_scale(CursorSkin.ui_scale(Vector2(3840, 2160), 96))).is_equal(80)
 	# A small window on a 150% screen still gets the 150% cursor.
 	assert_int(CursorSkin.size_for_scale(CursorSkin.ui_scale(Vector2(1600, 1000), 144))).is_equal(48)
 	# Never below the smallest size.
@@ -207,6 +210,7 @@ func test_l22_hotspots_land_on_a_pixel_centre_at_every_size() -> void:
 	assert_object(CursorSkin.hotspot_px(Vector2(3, 3), 48)).is_equal(Vector2i(2, 2))
 	assert_object(CursorSkin.hotspot_px(Vector2(3, 3), 64)).is_equal(Vector2i(3, 3))
 	assert_object(CursorSkin.hotspot_px(Vector2(32, 32), 32)).is_equal(Vector2i(16, 16))
+	assert_object(CursorSkin.hotspot_px(Vector2(3, 3), 80)).is_equal(Vector2i(3, 3))
 	for key in CursorSkin.ART:
 		for n in CursorSkin.SIZES:
 			var u := CursorSkin.hotspot_units(key)
