@@ -47,6 +47,9 @@ const SLIM_PAD_Y := 4
 var block_pad: int = -1
 ## Section ids in the order they were built by the last show_* call (used by tests).
 var sections: Array[String] = []
+## L23 follow-up: [name, control] of each named section shown (rule blocks by their timing caption,
+## headed sections such as Statuses), so a scroll cue can say which ones lie below the fold.
+var _marks: Array = []
 ## #43: open with a wide crop of the card's art (the match sidebar). Off in the other panels.
 var art_crop: bool = false
 ## Height (px) of that crop (the owner sets `art_crop_h` to fit its panel).
@@ -174,6 +177,50 @@ func show_card(c: Dictionary, _notes: Array = []) -> void:
 	_build_statuses(c)
 
 
+## L23 follow-up: names of the shown sections (timing captions such as "Evolve", "On Field", and
+## headed sections such as "Statuses") whose caption does not show above `fold_y` (px from this
+## panel's top, e.g. the scroll offset plus the visible height), in display order.
+func sections_below(fold_y: float) -> PackedStringArray:
+	var out := PackedStringArray()
+	var tops: Array = []
+	for mk in _marks:
+		var c: Control = mk[1]
+		if is_instance_valid(c) and c.get_parent() == self and c.visible:
+			tops.append([String(mk[0]), c.position.y])
+	for i in tops.size():
+		var top: float = tops[i][1]
+		var end: float = tops[i + 1][1] if i + 1 < tops.size() else size.y
+		if top + minf(MARK_READ_H, end - top) > fold_y and not out.has(String(tops[i][0])):
+			out.append(String(tops[i][0]))
+	return out
+
+
+## How much of a section (px) must show above the fold to count as read: its caption and a first
+## line (a "Statuses" heading alone does not show the statuses).
+const MARK_READ_H := 40.0
+
+
+## L23 follow-up (the match sidebar): the art crop yields to the text. Sizes the crop so the whole
+## card fits `room` px when it can, between `floor_h` and `art_crop_h` (never larger than the crop
+## it was built with). No rebuild: the text's height does not depend on the crop's. Returns true
+## when the crop changed.
+func fit_art_crop(room: float, floor_h: float) -> bool:
+	var crop: ArtCrop = null
+	for ch in get_children():
+		if ch is ArtCrop:
+			crop = ch
+			break
+	if crop == null:
+		return false
+	var cur := crop.custom_minimum_size.y
+	var rest := get_combined_minimum_size().y - cur
+	var h := clampf(floorf(room - rest), minf(floor_h, art_crop_h), art_crop_h)
+	if absf(h - cur) < 1.0:
+		return false
+	crop.custom_minimum_size.y = h
+	return true
+
+
 ## All label text currently shown, newline separated (test/debug helper).
 func all_text() -> String:
 	var out := PackedStringArray()
@@ -192,6 +239,7 @@ func count_text(needle: String) -> int:
 
 func _reset() -> void:
 	sections.clear()
+	_marks.clear()
 	for ch in get_children():
 		remove_child(ch)
 		ch.free()   # children are passive display nodes; freeing now keeps min-size and tests exact
@@ -258,8 +306,8 @@ func _build_stats(c: Dictionary) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	add_child(row)
-	row.add_child(_stat_tile("ATK", c.get("atk"), c.get("printed_atk")))
-	row.add_child(_stat_tile("DEF", c.get("def"), c.get("printed_def")))
+	row.add_child(_stat_tile("ATK", c.get("atk"), c.get("printed_atk"), c.get("base_atk")))
+	row.add_child(_stat_tile("DEF", c.get("def"), c.get("printed_def"), c.get("base_def")))
 	var flags := _flow()
 	if c.get("zone", "") == "unit":
 		# Owner (21 Oct): no Attack / Defense stance tag; the card's rotation on the field shows it.
@@ -310,8 +358,10 @@ const STAT_PX := 26
 
 ## One stat tile (#45): an F3 inset with an ATK-red / DEF-blue edge. In a match (H11) the caption sits
 ## over "Base: N" at the left and the value (with its up / down marker when changed) at the right,
-## in one short row.
-func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
+## in one short row. `set_base` is the base an effect set (Loak / Mimic copying a unit, Roma, ...), or
+## null: the tile then reads "Base: printed → set base" (just the set base when the printed stat
+## varies), and the up / down marker measures the current value from the set base.
+func _stat_tile(cap: String, cur: Variant, printed: Variant, set_base: Variant = null) -> Control:
 	var pc := PanelContainer.new()
 	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var sb := UIStyle.inset_style(UIStyle.PANEL_INK, 6)
@@ -353,15 +403,24 @@ func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	cap_l.add_theme_font_size_override("font_size", _fs(14))
 	left.alignment = BoxContainer.ALIGNMENT_CENTER
 	left.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var base_l := _lbl("Base: %s" % ("?" if printed == null else str(printed)), BASE_PX - 1, UIStyle.MUTED, false, false, false)
-	left.add_child(base_l)
+	# The base line: "Base: 8", or with a base an effect set "Base: 8 →" and the set base in gold.
+	var bp := base_parts(printed, set_base)
+	var base_row := HBoxContainer.new()
+	base_row.add_theme_constant_override("separation", 3)
+	left.add_child(base_row)
+	base_row.add_child(_lbl(bp[0], BASE_PX - 1, UIStyle.MUTED, false, false, false))
+	if bp[1] != "":
+		base_row.add_child(_lbl(bp[1], BASE_PX, UIStyle.GOLD_HI, true, false, false))
+	var ref: Variant = set_base if set_base != null else printed
+	if set_base != null and set_base != printed:
+		pc.tooltip_text = "%s: printed %s, set to %s by an effect." % [cap, "varies" if printed == null else str(printed), str(set_base)]
 	var col := UIStyle.TEXT
 	var nrow := HBoxContainer.new()
 	nrow.add_theme_constant_override("separation", 4)
 	nrow.alignment = BoxContainer.ALIGNMENT_END
 	nrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	if cur != null and printed != null and cur != printed:
-		var up: bool = cur > printed
+	if cur != null and ref != null and cur != ref:
+		var up: bool = cur > ref
 		col = UIStyle.GOOD if up else UIStyle.BAD
 		nrow.add_child(Mark.new("up" if up else "down", col, 11))   # beside the resulting value
 	var num := Label.new()
@@ -374,6 +433,17 @@ func _stat_tile(cap: String, cur: Variant, printed: Variant) -> Control:
 	nrow.add_child(num)
 	hb.add_child(nrow)
 	return pc
+
+
+## A match stat tile's base line as [muted part, gold part]: ["Base: 8", ""], ["Base: ?", ""] (the
+## printed stat varies), or with a base an effect set, ["Base: 8 →", "30"] (printed → set base) or
+## ["Base:", "20"] when the printed stat varies. The gold part marks a base an effect set.
+static func base_parts(printed: Variant, set_base: Variant = null) -> Array[String]:
+	if set_base == null or set_base == printed:
+		return ["Base: %s" % ("?" if printed == null else str(printed)), ""]
+	if printed == null:
+		return ["Base:", str(set_base)]
+	return ["Base: %s →" % str(printed), str(set_base)]
 
 
 ## Construction-mode tile body: big caption on the left, large value on the right. A printed
@@ -443,6 +513,8 @@ func _rule_block(caption: String, body: String, col: Color) -> PanelContainer:
 	var bl := _lbl(body, BODY, UIStyle.TEXT)
 	StatusHelp.watch_label(bl)      # hover a status name: its effect (2026-10-18)
 	vb.add_child(bl)
+	if caption != "":
+		_marks.append([caption.get_slice(" · ", 0), pc])
 	return pc
 
 
@@ -662,6 +734,8 @@ func _lbl(text: String, size: int, color: Color, bold: bool = false, display: bo
 ## Section heading: gold caption followed by a bronze rule line.
 func _heading(text: String) -> Control:
 	var hb := HBoxContainer.new()
+	if text != "Rules":   # the rule blocks name themselves
+		_marks.append([text, hb])
 	hb.add_theme_constant_override("separation", 8)
 	hb.add_child(_lbl(text.to_upper(), SMALL, UIStyle.GOLD, true, false, false))
 	var line := HSeparator.new()

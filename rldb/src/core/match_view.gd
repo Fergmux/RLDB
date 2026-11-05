@@ -114,6 +114,12 @@ static func card_view(m: MatchEngine, uid: int, viewer: int) -> Dictionary:
 		v["type"] = m.unit_type(uid)
 		v["printed_atk"] = df["atk"]
 		v["printed_def"] = df["def"]
+		# The base an effect set (Loak / Mimic copying a unit, Roma, Mirrorflesh, set_base), only when
+		# one did: the details pane's "Base" reads it. Safe: a card the viewer cannot see returned above.
+		if inst["base_atk"] != null:
+			v["base_atk"] = m.base_atk(uid)
+		if inst["base_def"] != null:
+			v["base_def"] = m.base_def(uid)
 		if inst["zone"] == "unit":
 			var b := m.stat_breakdown(uid)
 			v["atk"] = b["atk"]

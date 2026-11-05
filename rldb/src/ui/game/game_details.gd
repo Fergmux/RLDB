@@ -37,6 +37,8 @@ var pile_hint: Label
 
 ## Signature of the details last rendered ("" forces a re-render).
 var details_sig: String = ""
+## L23 follow-up: an art-crop fit is queued (deferred, once per change of the pane or its content).
+var _art_fit_queued := false
 ## Card opened from the game log (a definition view, not a game instance); cleared by selecting
 ## another card.
 var log_card: Dictionary = {}
@@ -127,7 +129,28 @@ func build(col: VBoxContainer) -> PanelContainer:
 	var vb := details_scroll.get_v_scroll_bar()
 	vb.changed.connect(_update_scroll_cue)
 	vb.value_changed.connect(func(_v): _update_scroll_cue())
+	details_view.minimum_size_changed.connect(_queue_art_fit)
+	details_scroll.resized.connect(_queue_art_fit)
 	return panel
+
+
+func _queue_art_fit() -> void:
+	if _art_fit_queued:
+		return
+	_art_fit_queued = true
+	_fit_art.call_deferred()
+
+
+## L23 follow-up: the art crop yields to the text (down to ART_MIN_H) so a long card's sections
+## (Evolve, Statuses...) show without scrolling when they can. Sized from the pane's height now,
+## not the one at render time (the pane may still have been laying out).
+func _fit_art() -> void:
+	_art_fit_queued = false
+	if details_view == null or not details_view.sections.has("art") or details_scroll.size.y < 1.0:
+		return
+	details_view.art_crop_h = art_crop_height(details_scroll.size.y)
+	details_view.fit_art_crop(details_scroll.size.y, ART_MIN_H)
+	_update_scroll_cue()
 
 
 func _update_scroll_cue() -> void:
@@ -138,6 +161,8 @@ func _update_scroll_cue() -> void:
 	# The cue follows the card details only: never over the illustrated empty state (#42), nor under
 	# a pile or draft list (the empty "Your draft (0)" list showed it).
 	scroll_cue.set_shown(more and details_scroll.visible and not empty_art.visible)
+	if more and details_view != null:
+		scroll_cue.set_more(details_view.sections_below(vb.value + vb.page))   # L23: name what is below
 	scroll_cue.place()
 
 

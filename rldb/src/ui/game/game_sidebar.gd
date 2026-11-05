@@ -252,7 +252,7 @@ func render_turnbar() -> void:
 		var resp: bool = pd["kind"] == "trap_response"
 		if pd["mine"]:
 			chip_mine = true
-			chip = "Your response" if resp else ("Choose a target" if gs.selection.board_targeting() else "Your choice")
+			chip = "Your response" if resp else choice_chip(String(pd["kind"]), gs.selection.board_targeting())
 		else:
 			chip = "Opponent is responding…" if resp else "Opponent is choosing…"
 	elif mv["active"] != gs.me():
@@ -279,6 +279,15 @@ func render_turnbar() -> void:
 		note = "SNEAKY SNUNDAY: all ATK/DEF gains and losses are reversed this turn"
 	turn_note.text = note
 	turn_note.visible = note != ""
+
+
+## The turn panel's chip for my own pending choice of `kind` (not a trap response): a zone choice
+## (kind "slot": placing a summon, Hypnotise's L9 zone pick) reads "Choose a zone", a pick on the
+## board or in a pile `picking` reads "Choose a target", anything else "Your choice".
+static func choice_chip(kind: String, picking: bool) -> String:
+	if kind == "slot":
+		return "Choose a zone"
+	return "Choose a target" if picking else "Your choice"
 
 
 ## #41: true when none of `actions` is a legal play other than moving on (stance changes and

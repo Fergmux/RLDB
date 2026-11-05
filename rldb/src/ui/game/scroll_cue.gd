@@ -15,6 +15,10 @@ const TINT := Color(0.085, 0.075, 0.068, 0.97)
 
 ## True while the cue is meant to be showing (it may still be fading in or out).
 var shown: bool = false
+## L23 follow-up: names of the sections below the fold (e.g. "Evolve", "Statuses"); the caption
+## names them when they fit ("Scroll for Evolve, Statuses"), else "Scroll for more".
+var more: PackedStringArray = PackedStringArray()
+const PX := 13
 var _host: ScrollContainer
 
 
@@ -63,6 +67,34 @@ func place() -> void:
 	queue_redraw()
 
 
+## Sets the names of the sections below the fold (redraws when they change).
+func set_more(names: PackedStringArray) -> void:
+	if names == more:
+		return
+	more = names
+	queue_redraw()
+
+
+## The caption drawn now: the hidden sections by name when they fit the cue's width.
+func text() -> String:
+	return caption_for(more, size.x)
+
+
+## The caption for hidden sections `names` in a cue `width` px wide: all of them, else the first
+## "and more", else the plain "Scroll for more" (the arrows beside it need 40 px).
+static func caption_for(names: PackedStringArray, width: float) -> String:
+	var font := UIStyle.font_bold()
+	var tries: Array[String] = []
+	if not names.is_empty():
+		tries.append("Scroll for %s" % ", ".join(names))
+		if names.size() > 1:
+			tries.append("Scroll for %s and more" % names[0])
+	for t in tries:
+		if font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, PX).x + 40.0 <= width:
+			return t
+	return "Scroll for more"
+
+
 ## Shows or hides the cue with a fade (instant with reduced motion).
 func set_shown(on: bool) -> void:
 	if on == shown:
@@ -92,8 +124,8 @@ static func fade(c: CanvasItem, on: bool) -> void:
 
 func _draw() -> void:
 	var font := UIStyle.font_bold()
-	var txt := "Scroll for more"
-	var px := 13
+	var txt := text()
+	var px := PX
 	var sz := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, px)
 	var cx := size.x / 2.0
 	# The content fades into the panel over the top half, then a solid band carries the caption.

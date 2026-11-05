@@ -295,9 +295,10 @@ func cancel() -> bool:
 		return _went_back()
 	if menu.close_dialog():
 		return _went_back()
-	if menu.game_menu.visible:
-		menu.game_menu.visible = false
-		return _went_back()
+	# L13: Esc closes the in-game menu like a click off it (close motion and panel_close, not
+	# "back"). A menu already closing lets the key through (a second Esc reopens it).
+	if menu.close_menu():
+		return true
 	if gs.overlays.pile_popup.visible:
 		gs.overlays.pile_popup.visible = false
 		return _went_back()
