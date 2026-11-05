@@ -188,29 +188,40 @@ class BadgeSheet extends Control:
 func _mode_clock() -> void:
 	var bg := _backdrop()
 	var now := [0]
-	var clk := DuelClock.new()
-	clk.now_ms = func() -> int: return now[0]
-	clk.observe({"match": {"turn": 1}})
-	var views := []
-	for i in 6:
+	var clocks := []
+	# Two plaques on their own clocks (each view advances its clock's glass): native size, and 5x.
+	for i in 2:
+		var clk := DuelClock.new()
+		clk.now_ms = func() -> int: return now[0]
+		clk.observe({"match": {"turn": 1}})
+		clocks.append(clk)
 		var v := DuelClockView.new()
 		v.set_clock(clk)
-		v.position = Vector2(30 + i * 250, 60)
-		v.scale = Vector2(1.8, 1.8)
+		v.position = Vector2(60, 40) if i == 0 else Vector2(60, 140)
+		v.scale = Vector2.ONE if i == 0 else Vector2(5, 5)
 		bg.add_child(v)
-		views.append(v)
-	var big := DuelClockView.new()
-	big.set_clock(clk)
-	big.position = Vector2(60, 260)
-	big.scale = Vector2(5, 5)
-	bg.add_child(big)
-	# Frames across a minute of turn time, then the flip.
-	for f in [0, 15, 30, 45, 58]:
+	# Frames across a minute of running time.
+	for f in [0, 15, 30, 45, 59]:
 		now[0] = f * 1000
-		await _wait(0.4)
+		await _wait(0.35)
 		await _snap("t%02ds" % f)
-	now[0] = 60500
-	await _seq("flip", 14, 0.06)
+	# The top has run dry: after a short hold the glass turns over by itself.
+	now[0] = 61600
+	await _seq("flip", 16, 0.06)
+	now[0] = 75000
+	await _wait(0.4)
+	await _snap("after_flip_14s")
+	# A new turn with less than half on top turns it over again.
+	now[0] = 100000
+	await _wait(0.3)
+	for c in clocks:
+		(c as DuelClock).observe({"match": {"turn": 2}})
+	await _seq("turnflip", 8, 0.12)
+	# Paused (network): dimmed, no stream.
+	for c in clocks:
+		(c as DuelClock).observe({"match": {"turn": 2}, "net": {"paused": true}})
+	await _wait(0.3)
+	await _snap("paused")
 	_done()
 
 
