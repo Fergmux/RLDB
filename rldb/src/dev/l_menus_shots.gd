@@ -358,7 +358,8 @@ func _tutorial() -> void:
 	var mm := _menu()
 	if mm == null:
 		return
-	mm.tutorial_requested.emit(0)
+	# Straight to Main (a request through the fader is ignored while a fade still runs).
+	main._start_tutorial(0)
 	await _shot("13_tutorial", 3.0)
 	main._go(main._show_menu)
 	await _wait(1.0)
