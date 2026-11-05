@@ -15,6 +15,7 @@ extends SceneTree
 ##   --out=PATH       write the JSON report there
 ##   --verbose        one line per game
 ##   --log=K          print the full public log of game K (0-based, in play order)
+##   --tune=K=V,K=V   override BotBrain tuning weights (BotBrain.tune) for this run
 ##
 ## Fairness: brain A and brain B each see the same MatchEngine; the current BotBrain redacts it
 ## to its own seat's information before thinking (it never reads hidden cards). The frozen brain
@@ -47,6 +48,13 @@ func _brain(kind: String, seat: int, seed_value: int):
 
 func _run() -> void:
 	CardDB.ensure_loaded()
+	if String(opts.get("tune", "")) != "":
+		var d := {}
+		for pair in String(opts["tune"]).split(","):
+			var kv2 := pair.split("=")
+			d[kv2[0]] = float(kv2[1])
+		var bad := BotBrain.tune(d)
+		print("TUNE %s%s" % [d, "  unknown: %s" % [bad] if not bad.is_empty() else ""])
 	var base_seed := int(opts["seed"])
 	var pairs := int(opts["pairs"])
 	var draft_share := float(opts["draft"])
@@ -105,8 +113,8 @@ func _run() -> void:
 	res["a_ms"] = _stats(times["a"])
 	res["b_ms"] = _stats(times["b"])
 	res["refusal_samples"] = refusal_samples
-	print("ARENA %s vs %s: %d games, A wins %.1f%% (first %.1f%%, second %.1f%%), mean %.1f turns, draws %d (stalls %d), refusals %d" % [
-		res["a"], res["b"], res["games"], 100.0 * res["a_win_rate"], 100.0 * res["a_win_rate_first"], 100.0 * res["a_win_rate_second"],
+	print("ARENA %s vs %s%s: %d games, A wins %.1f%% (first %.1f%%, second %.1f%%), mean %.1f turns, draws %d (stalls %d), refusals %d" % [
+		res["a"], res["b"], " [%s]" % opts["tune"] if opts.has("tune") else "", res["games"], 100.0 * res["a_win_rate"], 100.0 * res["a_win_rate_first"], 100.0 * res["a_win_rate_second"],
 		res["mean_turns"], res["draws"], res["stalls"], res["refusals"]])
 	print("  decision ms  A: %s" % JSON.stringify(res["a_ms"]))
 	print("  decision ms  B: %s" % JSON.stringify(res["b_ms"]))
