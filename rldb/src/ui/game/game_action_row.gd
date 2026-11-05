@@ -252,12 +252,29 @@ class ActionButton extends JuicyButton:
 			if v == lamp:
 				return
 			lamp = v
-			var st := ActionButton.styles(keyboard_pick, lamp != -1)
+			var st := ActionButton.styles(keyboard_pick, lamp != -1, latched)
 			for k in st:
 				add_theme_stylebox_override(k, st[k])
 			queue_redraw()
 	## Room (px) the lamp takes at the right of the label.
 	const LAMP_W := 18.0
+	## L5: the latched state's ember (rim, glow, label) and its face.
+	const LATCH_EMBER := Color("ff6a2a")
+	const LATCH_FACE := Color("2e1510")
+	## L5: the plate is latched down in its lit ember state (sacrifice mode on): pressed in, an ember
+	## rim and a breathing ember glow, the medallion burning.
+	var latched := false:
+		set(v):
+			if v == latched:
+				return
+			latched = v
+			var st := ActionButton.styles(keyboard_pick, lamp != -1, latched)
+			for k in st:
+				add_theme_stylebox_override(k, st[k])
+			add_theme_color_override("font_color", Color("ffd9c2") if latched else (UIStyle.GOLD_HI if keyboard_pick else UIStyle.TEXT))
+			add_theme_color_override("font_hover_color", Color.WHITE if latched else UIStyle.GOLD_HI)
+			set_process(latched and not UIStyle.reduce_motion)
+			queue_redraw()
 
 	func _init(text_: String = "", kind_: String = "", stance_: String = "", kb_pick: bool = false) -> void:
 		super()
@@ -291,15 +308,24 @@ class ActionButton extends JuicyButton:
 		if on == keyboard_pick:
 			return
 		keyboard_pick = on
-		var st := ActionButton.styles(on, lamp != -1)
+		var st := ActionButton.styles(on, lamp != -1, latched)
 		for k in st:
 			add_theme_stylebox_override(k, st[k])
-		add_theme_color_override("font_color", UIStyle.GOLD_HI if on else UIStyle.TEXT)
+		if not latched:
+			add_theme_color_override("font_color", UIStyle.GOLD_HI if on else UIStyle.TEXT)
 		queue_redraw()
 
+	func _process(delta: float) -> void:
+		super(delta)
+		if latched:
+			queue_redraw()
+
 	## The plate's state boxes {normal, hover, pressed, hover_pressed, disabled}; `kb_pick` gives the
-	## normal plate the hover rim (the keyboard's choice); `lamp_room` keeps room for a toggle lamp.
-	static func styles(kb_pick: bool = false, lamp_room: bool = false) -> Dictionary:
+	## normal plate the hover rim (the keyboard's choice); `lamp_room` keeps room for a toggle lamp;
+	## `latch` (L5) draws it latched down in ember (sacrifice mode on).
+	static func styles(kb_pick: bool = false, lamp_room: bool = false, latch: bool = false) -> Dictionary:
+		if latch:
+			return _latched_styles(lamp_room)
 		var n := UIStyle.flat(FACE, Color(UIStyle.GOLD, 0.8), 1, RADIUS)
 		n.border_width_bottom = 2
 		var h := UIStyle.flat(FACE_HOVER, UIStyle.GOLD_HI, 1, RADIUS)
@@ -330,6 +356,31 @@ class ActionButton extends JuicyButton:
 			"disabled": d,
 		}
 
+	## L5: the latched plate's boxes: a dark ember face sunk 1 px (pressed in), a 2 px ember rim and an
+	## ember glow; hover brightens the rim.
+	static func _latched_styles(lamp_room: bool) -> Dictionary:
+		var n := UIStyle.flat(LATCH_FACE, LATCH_EMBER, 2, RADIUS)
+		var h := UIStyle.flat(LATCH_FACE.lightened(0.06), Color("ffa070"), 2, RADIUS)
+		var p := UIStyle.flat(LATCH_FACE.darkened(0.2), LATCH_EMBER, 2, RADIUS)
+		var d := UIStyle.flat(UIStyle.PANEL, UIStyle.DISABLED_EDGE, 1, RADIUS)
+		for sb in [n, h, p, d]:
+			sb.content_margin_left = GLYPH_W + 6.0
+			sb.content_margin_right = 12 + (LAMP_W if lamp_room else 0.0)
+			sb.content_margin_top = 3
+			sb.content_margin_bottom = 0
+			sb.anti_aliasing = true
+		UIStyle.lift_style(n, Color(LATCH_EMBER, 0.45), 10, 0)
+		UIStyle.lift_style(h, Color(LATCH_EMBER, 0.6), 12, 0)
+		UIStyle.lift_style(p, Color(LATCH_EMBER, 0.35), 6, 0)
+		var grain := UIStyle.BUTTON_GRAIN
+		return {
+			"normal": UiSurface.box(n, UiSurface.METAL, grain, UIStyle.BUTTON_SHEEN * 0.5),
+			"hover": UiSurface.box(h, UiSurface.METAL, grain, UIStyle.BUTTON_SHEEN * 0.8),
+			"pressed": UiSurface.box(p, UiSurface.METAL, grain, UIStyle.BUTTON_SHEEN * 0.3),
+			"hover_pressed": UiSurface.box(p, UiSurface.METAL, grain, UIStyle.BUTTON_SHEEN * 0.3),
+			"disabled": d,
+		}
+
 	## The state the plate is drawn in: "disabled", "pressed", "hover" or "normal".
 	func plate_state() -> String:
 		if disabled:
@@ -343,10 +394,24 @@ class ActionButton extends JuicyButton:
 		if size.x < 24.0 or size.y < 16.0:
 			return
 		var st := plate_state()
-		var lit := st == "hover" or st == "pressed"
 		var off := st == "disabled"
-		var dy := 1.0 if st == "pressed" else 0.0
+		var latch := latched and not off
+		var lit := st == "hover" or st == "pressed" or latch
+		var dy := 1.0 if (st == "pressed" or latch) else 0.0
 		var gold: Color = UIStyle.DISABLED if off else (UIStyle.GOLD_HI if lit else UIStyle.GOLD)
+		if latch:
+			gold = Color("ffb07a")
+			# L5: a breathing ember glow inside the latched plate.
+			var b := 0.5 if UIStyle.reduce_motion else 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 1000.0 * TAU / 1.4)
+			for i in 4:
+				var k := float(i) / 4.0
+				var ring := StyleBoxFlat.new()
+				ring.draw_center = false
+				ring.anti_aliasing = true
+				ring.set_corner_radius_all(maxi(1, RADIUS - 2 - i))
+				ring.set_border_width_all(2)
+				ring.border_color = Color(LATCH_EMBER, (0.22 + 0.18 * b) * (1.0 - k))
+				draw_style_box(ring, Rect2(Vector2.ONE * (2.0 + k * 7.0), size - Vector2.ONE * (4.0 + 2.0 * k * 7.0)))
 		# The engraved inner line, 3 px inside the rim.
 		var inner := StyleBoxFlat.new()
 		inner.draw_center = false
@@ -366,9 +431,13 @@ class ActionButton extends JuicyButton:
 		var acc: Color = ACCENT.get(kind, UIStyle.GOLD)
 		if kind == "stance" and to_stance == "atk":
 			acc = Color("e8605a")
+		if latch:
+			draw_circle(c, r + 4.0, Color(LATCH_EMBER, 0.25), true, -1.0, true)
 		draw_circle(c, r + 1.2, Color(0, 0, 0, 0.55))
 		draw_circle(c, r, UIStyle.PANEL_INK if off else acc.darkened(0.7))
-		if lit and not off:
+		if latch:
+			draw_circle(c, r - 1.5, Color(LATCH_EMBER, 0.55))
+		elif lit and not off:
 			draw_circle(c, r - 1.5, Color(acc, 0.22))
 		draw_arc(c, r, 0.0, TAU, 28, Color(gold, 0.95 if lit else 0.8), 1.3, true)
 		var gc: Color = UIStyle.DISABLED if off else (Color(1, 0.96, 0.84) if lit else gold.lightened(0.2))

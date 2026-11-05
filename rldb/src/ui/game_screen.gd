@@ -98,6 +98,8 @@ var inspect: GameInspect
 var chat: GameChat
 ## A2 spectating: badges, the Spectators list, the live cursor.
 var spectate: GameSpectate
+## L5: sacrifice mode (the Sacrifice button toggles it).
+var sacrifice: GameSacrificeMode
 
 var _fx_seq: int = -1
 var _fx_game: int = -99
@@ -131,6 +133,7 @@ func _init() -> void:
 	inspect = GameInspect.new(self)
 	chat = GameChat.new(self)
 	spectate = GameSpectate.new(self)
+	sacrifice = GameSacrificeMode.new(self)
 
 
 func _ready() -> void:
@@ -191,6 +194,7 @@ func attach(c: SeatClient) -> void:
 	keyboard.kb_uid = -1
 	row_open = false
 	acting_uid = -1
+	sacrifice.reset()   # L5: a new seat or game starts outside sacrifice mode
 	prompt.seen_toast_seq = -1
 	preview.reset()
 	action_row.clear()

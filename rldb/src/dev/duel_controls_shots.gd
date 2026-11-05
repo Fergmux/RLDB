@@ -139,25 +139,19 @@ func _controls_steps() -> void:
 	_check("J14 Esc cancels the pick", m.pending.is_empty() and m.cards[uids["beast"]]["zone"] == "unit")
 	await _key(KEY_ESCAPE)
 	await _wait(0.3)
-	# J11: Sacrifice Unit: pick, confirm.
+	# J11 / L5 (2026-11-05): Sacrifice Unit turns sacrifice mode on; a click sacrifices at once.
 	var ap0: int = m.players[a]["ap"]
 	await _click(_ctl_btn(0).get_global_rect().get_center())
 	await _wait(0.5)
-	_check("J11 pick prompt opens", m.pending.get("kind", "") == "select" and gs.selection.board_targeting(), gs.prompt.banner_title.text)
+	_check("L5 sacrifice mode on, no prompt", gs.sacrifice.active and m.pending.is_empty())
 	await _move(_slot_rect(a, "unit", 0).get_center())
 	await _wait(0.4)
-	await _shot("07_sacrifice_pick")
+	await _shot("07_sacrifice_mode")
 	await _click(_slot_rect(a, "unit", 0).get_center())
-	await _wait(0.5)
-	_check("J11 confirm prompt after the pick", m.pending.get("kind", "") == "confirm", str(m.pending.get("prompt", "")))
-	await _move(Vector2(700, 470))
-	await _wait(0.3)
-	await _shot("08_sacrifice_confirm")
-	var yes := _find_button(gs.prompt.ctx_banner, "Sacrifice")
-	_check("J11 Sacrifice answer button shown", yes != null)
-	if yes != null:
-		await _click(yes.get_global_rect().get_center())
 	await _wait(1.6)
+	if gs.sacrifice.active:
+		await _click(_ctl_btn(0).get_global_rect().get_center())   # leave the mode
+		await _wait(0.3)
 	_check("J11 unit sacrificed for +1 AP", m.cards[uids["water"]]["zone"] == "spent" and int(m.players[a]["ap"]) == ap0 + 1,
 		"zone %s ap %d -> %d" % [m.cards[uids["water"]]["zone"], ap0, m.players[a]["ap"]])
 	await _shot("09_after_sacrifice")
