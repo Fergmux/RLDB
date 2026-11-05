@@ -136,6 +136,7 @@ func reset() -> void:
 	_sent = {}
 	if vignette != null and is_instance_valid(vignette):
 		vignette.set_on(false, true)
+	_yield_scoreboard(false)
 	if was:
 		changed.emit(false)
 
@@ -250,3 +251,11 @@ func _show_vignette(on: bool) -> void:
 		vignette = SacrificeVignette.new()
 		gs.add_child(vignette)
 	vignette.set_on(on)
+	_yield_scoreboard(on)
+
+
+## The hint pill takes the middle of the top strip, where the series scoreboard sits: the scoreboard
+## steps aside while the mode is on (final review 2026-11-05: it covered the pill).
+func _yield_scoreboard(on: bool) -> void:
+	if gs.menu != null and gs.menu.scoreboard != null and is_instance_valid(gs.menu.scoreboard):
+		gs.menu.scoreboard.yield_to(on)
