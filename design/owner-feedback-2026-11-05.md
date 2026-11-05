@@ -140,7 +140,7 @@ Owner answers, 2026-11-05 (these are confirmed rules, follow them exactly):
 | L5 | Sacrifice mode | merged cdcd8cd | Ember screen-edge glow, lit button, knife cursor via L22. |
 | L6 | Cancel is a real button | merged cdcd8cd | |
 | L7 | Arrow hides on pick | merged cdcd8cd | |
-| L8 | Status FX + badges | in progress | status FX agent |
+| L8 | Status FX + badges | merged ca635a3 | 15 animated looks with sounds, Cleanse/Curse ward flash, tick and expiry effects; enamelled effect-coloured badges (poison green goo, burn flames...). Hypnotise glide added for L9. |
 | L9 | Hypnotise zone choice | merged 0326066 | |
 | L10 | Themed fonts everywhere | merged 0e9aae7 | Project default font plus a symbols fallback subset (OFL). |
 | L11 | Loak / Mimic copied art | merged d464003 | |
