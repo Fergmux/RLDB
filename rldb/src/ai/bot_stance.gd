@@ -20,6 +20,10 @@ extends RefCounted
 ## can beat gives the opponent a high offense value, a Defense-stance unit usually gives them none.
 ## A guard in front of a protected unit adds PROTECTEE_W of the protected unit's worth to what
 ## killing it is worth (the value of a protected position). Only public board data is read.
+##
+## L27 (2026-11-05): BotBrain now scores stances through its whole-board forecast (BotForecast:
+## its own battle, the opponent's reply, its follow-up). This per-unit breakdown is kept as the
+## readable explanation in BotBrain.last_debug and as a public helper.
 
 const W_PRESSURE := 0.6
 const POSTURE_SPAN := 40.0

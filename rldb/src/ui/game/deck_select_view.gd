@@ -201,7 +201,7 @@ func _bot_bar(box: VBoxContainer, second: bool) -> void:
 		var back := UIStyle.size_button(UIStyle.secondary_button("‹  Back", 14), "small")
 		back.name = "BotDeckBack"
 		back.custom_minimum_size.x = 110
-		back.tooltip_text = "Back to choosing your own deck (Esc)"
+		back.tooltip_text = "Back to choosing your own deck"
 		back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		back.pressed.connect(back_to_own)
 		row.add_child(back)

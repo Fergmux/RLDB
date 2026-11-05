@@ -7,7 +7,7 @@ extends Button
 ## keeps the colour changes and skips the scaling. Drawn with circles and lines, crisp at any size.
 ##
 ##     var x := RoundCloseButton.new(30.0)
-##     x.tooltip_text = "Close (Esc)"
+##     x.tooltip_text = "Close"
 ##     x.pressed.connect(close_me)
 
 const HOVER_SCALE := 1.08

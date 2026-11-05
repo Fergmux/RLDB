@@ -75,7 +75,7 @@ func build_top_strip() -> void:
 	var menu_b := UIStyle.secondary_button("☰  Menu", 15)
 	menu_b.name = "MenuButton"
 	menu_b.custom_minimum_size = MENU_BUTTON
-	menu_b.tooltip_text = "Menu (Esc)"
+	menu_b.tooltip_text = "Menu"
 	menu_b.pressed.connect(toggle)
 	row.add_child(menu_b)
 	menu_button = menu_b
@@ -114,7 +114,7 @@ func build_popups() -> void:
 	# Design review #14: 16 px inset, 12 px between items, a divider before the destructive group,
 	# which uses the Danger family (Concede game, Quit to desktop). J13 (owner, 22 Oct): Concede game
 	# comes below Return to menu.
-	var menu_plate := HousePanel.new("Menu", "Esc", Vector2(UIStyle.sp("lg"), UIStyle.sp("lg")), UIStyle.sp("md"))
+	var menu_plate := HousePanel.new("Menu", "", Vector2(UIStyle.sp("lg"), UIStyle.sp("lg")), UIStyle.sp("md"))
 	game_menu = menu_plate
 	game_menu.visible = false
 	game_menu.z_index = UiLayers.GAME_MENU
