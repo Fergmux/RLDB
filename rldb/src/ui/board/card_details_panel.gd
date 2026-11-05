@@ -581,7 +581,9 @@ func _build_statuses(c: Dictionary) -> void:
 	add_child(_heading("Statuses"))
 	for r in rows:
 		var kind: String = r[2]
-		var col: Color = UIStyle.GOOD if kind == "buff" else (UIStyle.BAD if kind == "debuff" else UIStyle.RUNE_BLUE)
+		# L8: each status speaks in its own badge colour (poison green, burn orange...); the Buff /
+		# Debuff tag and the badge shape keep the kind readable without colour.
+		var col: Color = status_color(String(r[4]))
 		var pc := _block(col, 0.6)
 		var vb: VBoxContainer = pc.get_child(0)
 		var hb := HBoxContainer.new()
@@ -616,11 +618,10 @@ static func timing_color(k: String) -> Color:
 	return _timing_color(k)
 
 
-## The colour of status `key`'s section: buffs GOOD, debuffs BAD, Runes RUNE_BLUE (as in the panel).
+## The colour of status `key`'s section: its badge's accent (CardStatusIcons.accent), as on the
+## status tip and the application effect.
 static func status_color(key: String) -> Color:
-	if key == "rune":
-		return UIStyle.RUNE_BLUE
-	return UIStyle.GOOD if CardDB.is_buff(key) else UIStyle.BAD
+	return CardStatusIcons.accent(key)
 
 
 ## The stylebox of a rule / status block: dark ink with a BLOCK_BAR_W accent bar in `col` (alpha

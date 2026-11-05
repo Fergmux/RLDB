@@ -34,20 +34,41 @@ static func para(text: String, font: Font, tag: String, fs: int, width: float, m
 ## the lines the box holds and ends with an ellipsis, so it can never run past the box (a
 ## TextParagraph's own max_lines_visible still draws every line). The text actually shown is the
 ## paragraph's "shown" meta (shown_text()); status-word marking must use it. Shared cache like para().
-static func fit_para(text: String, font: Font, fs_max: int, fs_min: int, width: float, height: float) -> TextParagraph:
-	var key := "fit|%s|%d|%d|%d|%d" % [text, fs_max, fs_min, int(width), int(height)]
+##
+## Final review #13: with `tight` > 0, a text that does not fit at fs_min with the font's own leading
+## tries again from fs_min down to `fs_floor` with the leading tightened by `tight` of the size (a
+## last resort for the longest texts), and only then is cut. The size chosen is the "fs" meta.
+static func fit_para(text: String, font: Font, fs_max: int, fs_min: int, width: float, height: float, fs_floor: int = -1, tight: float = 0.0) -> TextParagraph:
+	var key := "fit|%s|%d|%d|%d|%d|%d|%.3f" % [text, fs_max, fs_min, int(width), int(height), fs_floor, tight]
 	if _para_shared.has(key):
 		return _para_shared[key]
 	if _para_shared.size() > PARA_CACHE_MAX:
 		_para_shared.clear()
 	var tp: TextParagraph = null
 	var lo := mini(fs_min, fs_max)
+	var fit := false
+	var last_fs := lo
+	var last_sp := 0.0
 	for fs in range(fs_max, lo - 1, -1):
 		tp = _shape(text, font, fs, width)
+		last_fs = fs
 		if tp.get_size().y <= height + 0.5:
+			fit = true
 			break
-		if fs == lo:
-			tp = _clip_para(tp, text, font, fs, width, height)
+	if not fit and tight > 0.0:
+		for fs in range(lo, mini(lo, fs_floor if fs_floor > 0 else lo) - 1, -1):
+			last_sp = -tight * float(fs)
+			tp = _shape(text, font, fs, width, last_sp)
+			last_fs = fs
+			if tp.get_size().y <= height + 0.5:
+				fit = true
+				break
+	if not fit:
+		# A text cut anyway keeps the font's own leading (the tight pass only serves a whole fit).
+		if last_sp != 0.0:
+			tp = _shape(text, font, last_fs, width)
+		tp = _clip_para(tp, text, font, last_fs, width, height)
+	tp.set_meta("fs", last_fs)
 	if not tp.has_meta("shown"):
 		tp.set_meta("shown", text)
 	_para_shared[key] = tp
@@ -59,22 +80,25 @@ static func shown_text(tp: TextParagraph, fallback: String) -> String:
 	return String(tp.get_meta("shown", fallback))
 
 
-static func _shape(text: String, font: Font, fs: int, width: float) -> TextParagraph:
+## A paragraph `width` wide; `spacing` (px, negative tightens) is added between its lines.
+static func _shape(text: String, font: Font, fs: int, width: float, spacing: float = 0.0) -> TextParagraph:
 	var tp := TextParagraph.new()
 	tp.width = width
+	tp.line_spacing = spacing
 	tp.add_string(text, font, fs)
 	return tp
 
 
-## `full` (all of `text` at size `fs`) cut to the lines that fit in `height`: whole words, then "…".
-static func _clip_para(full: TextParagraph, text: String, font: Font, fs: int, width: float, height: float) -> TextParagraph:
+## `full` (all of `text` at size `fs`, line `spacing`) cut to the lines that fit in `height`: whole
+## words, then "…". A paragraph's height is n lines plus n - 1 spacings.
+static func _clip_para(full: TextParagraph, text: String, font: Font, fs: int, width: float, height: float, spacing: float = 0.0) -> TextParagraph:
 	var n := full.get_line_count()
-	var line_h := full.get_size().y / maxf(1.0, float(n))
-	var keep := clampi(int(floor((height + 0.5) / maxf(1.0, line_h))), 1, n)
+	var pitch := (full.get_size().y + spacing) / maxf(1.0, float(n))
+	var keep := clampi(int(floor((height + 0.5 + spacing) / maxf(1.0, pitch))), 1, n)
 	var shown := text.substr(0, full.get_line_range(keep - 1).y).strip_edges(false, true)
 	while true:
 		var cand := shown.rstrip(" ,;:\n") + ELLIPSIS
-		var tp := _shape(cand, font, fs, width)
+		var tp := _shape(cand, font, fs, width, spacing)
 		if tp.get_line_count() <= keep or shown.length() <= 1:
 			tp.set_meta("shown", cand)
 			return tp

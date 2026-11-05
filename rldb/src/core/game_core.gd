@@ -732,6 +732,8 @@ func apply_status(uid: int, s: String, n: int, batch: Dictionary = {}) -> int:
 		var bpos := fx_pos(uid)
 		if not bpos.is_empty():
 			add_fx({"k": "status_blocked", "at": bpos, "s": s, "n": n, "by": by, "used": used})
+			if used and status_count(uid, by) <= 0:
+				status_fx(uid, "status_expire", by)   # QA final: the ward's last stack is gone
 		return 0
 	_set_status(uid, s, status_count(uid, s) + n)
 	card_log(uid, "§ gains %d %s (now %d)." % [n, s.capitalize(), status_count(uid, s)])
@@ -750,15 +752,21 @@ static func _batch_blocked(batch: Dictionary, by: String, uid: int) -> bool:
 
 ## Cleanse clears all existing debuffs when gained (consuming one stack);
 ## Curse clears all existing buffs when gained (consuming one stack).
+## QA final: each cleared status, and the Cleanse / Curse stack when its last one is spent, emits
+## "status_expire" (L8), so no badge vanishes without its fade.
 func _after_status_gain(uid: int, s: String) -> void:
 	if s == "cleanse" and has_any_debuff(uid):
 		var removed := _clear_statuses_of_class(uid, false)
-		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
 		card_log(uid, "Cleanse removes %s from § (Cleanse -1)." % ", ".join(removed))
+		for r in removed:
+			status_fx(uid, "status_expire", r)
+		decrement_status(uid, "cleanse")
 	elif s == "curse" and has_any_buff(uid):
 		var removed := _clear_statuses_of_class(uid, true)
-		_set_status(uid, "curse", status_count(uid, "curse") - 1)
 		card_log(uid, "Curse removes %s from § (Curse -1)." % ", ".join(removed))
+		for r in removed:
+			status_fx(uid, "status_expire", r)
+		decrement_status(uid, "curse")
 
 
 ## True when player p's deck (every card they own, wherever it is) has a printed 0-cost card.

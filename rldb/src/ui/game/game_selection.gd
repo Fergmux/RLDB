@@ -305,9 +305,12 @@ func cancel() -> bool:
 	if details.pile_zone != "" and gs.pending().is_empty():
 		details.close_pile()
 		return _went_back()
-	if menu.settings_popup.visible:
-		menu.settings_popup.visible = false
-		return _went_back()
+	# Final review: Settings and the Lobby list close with their motion and panel_close, as the menu.
+	if menu.close_settings():
+		return true
+	if gs.spectate.is_open():
+		gs.spectate.close_list()
+		return true
 	if gs.sacrifice.active:
 		gs.sacrifice.stop()    # L5: Esc / right-click ends sacrifice mode (sacrifice_mode_off)
 		gs.hover.clear()

@@ -18,7 +18,8 @@ L8 (2026-11-05): the glyphs are composited (dark outline, drop shadow, tinted fi
 gold-bezelled badges by `tools/gen_status_badges.py`, which writes `badge_<key>.svg` next to them;
 `CardStatusIcons` draws the badges. The badge frames, enamels and motifs are RLDB's own. The
 Paralyse badge uses RLDB's own lightning bolt; `paralyse.svg` (crossed-chains) stays as the
-plain-token fallback only.
+plain-token fallback only. Since the final review (2026-11-05) the Cleanse badge uses RLDB's own
+bold sparkle too (`cleanse.svg` stays as the plain-token fallback).
 
 | File | Icon | Author |
 |---|---|---|
@@ -26,7 +27,7 @@ plain-token fallback only.
 | retain.svg | anchor | Lorc |
 | eternal.svg | ankh | Lorc |
 | pierce.svg | broadhead-arrow | Lorc |
-| cleanse.svg | sparkles | Delapouite |
+| cleanse.svg | sparkles (fallback only; the badge uses RLDB's own sparkle) | Delapouite |
 | medic.svg | heart-plus | Zeromancer |
 | infiltrate.svg | hood | Lorc |
 | nimble.svg | sprint | Lorc |

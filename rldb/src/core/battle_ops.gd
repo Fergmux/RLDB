@@ -196,7 +196,7 @@ func _apply_burn(a: int, p: int, burn: int) -> void:
 		return
 	if unit_on_field(a):
 		status_fx(a, "status_tick", "burn", burn)   # L8
-		_set_status(a, "burn", 0)
+		decrement_status(a, "burn", status_count(a, "burn"))   # QA final: with its "status_expire"
 	change_hp(p, -burn, " (Burn on %s after its attack)" % name_of(a))
 
 
@@ -345,6 +345,13 @@ func battle_preview(a: int, target: int) -> Dictionary:
 	return pv
 
 
+## QA final (L1 cue "miss"): the public presentation event of a declared attack that does not
+## resolve (its attacker or target is gone, or the target is now Protected): {"k": "miss", "p": the
+## attacking player, "at": the attacker's board position, or {} when it has left the Field}.
+func _miss_fx(a: int, p: int) -> void:
+	add_fx({"k": "miss", "p": p, "at": fx_pos(a) if cards.has(a) and cards[a]["zone"] == "unit" else {}})
+
+
 func _op_battle(f: Dictionary, op: Dictionary) -> int:
 	var a: int = f["src"]
 	var target: int = f["vars"]["target"]
@@ -352,10 +359,12 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 	var q := opp(p)
 	if not unit_on_field(a) or cards[a]["ctl"] != p or cards[a]["stance"] != "atk":
 		add_log("The attack does not resolve (attacker no longer able to attack).")
+		_miss_fx(a, p)
 		return R.END
 	if target == -1:
 		if not (-1 in attack_targets(a)):
 			add_log("The direct attack is no longer legal.")
+			_miss_fx(a, p)
 			return R.END
 		var dburn := status_count(a, "burn")
 		var dmg := atk_of(a)
@@ -369,9 +378,11 @@ func _op_battle(f: Dictionary, op: Dictionary) -> int:
 		return R.CONT
 	if not unit_on_field(target) or cards[target]["ctl"] != q:
 		add_log("The attack does not resolve (target left the Field).")
+		_miss_fx(a, p)
 		return R.END
 	if is_protected(target) and not f["vars"].get("infiltrated", false):
 		add_log("The attack does not resolve (target is now protected).")
+		_miss_fx(a, p)
 		return R.END
 	# Snapshot both combatants first: destruction is simultaneous for immunity checks.
 	var snap_a := {"atk": atk_of(a), "type": unit_type(a), "debilitated": is_debilitated(a)}

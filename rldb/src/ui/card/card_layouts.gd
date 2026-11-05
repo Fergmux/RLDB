@@ -26,7 +26,7 @@ const TEXT_WELL := Color(0.847, 0.8, 0.69, 0.07)
 ## L8: the status badges grew (field 14 -> 17, tall 13 -> 15) so the enamelled badges read at a glance;
 ## a field row still holds four.
 const FIELD := {"w": 85.0, "art": [3, 3, 79, 79], "banner": [2, 73, 81, 19], "gem_edge": 4.5, "gem_r": 9.4,
-	"icons": [4, 81, 72, 17.0, 2], "atk": [2, 92.5, 34, 32], "def": [49, 92.5, 34, 32], "text": [5, 94, 75, 31],
+	"icons": [4, 81, 72, 17.0, 2], "atk": [2, 92.5, 34, 32], "def": [49, 92.5, 34, 32], "text": [5, 94, 75, 25],
 	"f_name": 10.5, "f_name_min": 9.0, "f_gem": 12.5, "f_stat": 17.0, "f_text": 8.5}
 const TALL := {"w": 120.0, "art": [4, 4, 112, 112], "banner": [2, 100, 116, 19], "gem_edge": 4.7, "gem_r": 11.5,
 	"icons": [6, 114, 98, 15.0, 2], "icons_unit": [35, 85, 98, 15.0, 3], "atk": [0, 66, 36, 34], "def": [84, 67, 36, 33],
@@ -34,6 +34,17 @@ const TALL := {"w": 120.0, "art": [4, 4, 112, 112], "banner": [2, 100, 116, 19],
 	"f_name": 12.5, "f_name_min": 8.0, "f_gem": 14.0, "f_stat": 18.0, "f_line": 9.5, "f_text": 10.0}
 ## Smallest rules-text size, as a fraction of the layout's text size.
 const TEXT_MIN_K := 0.5
+## Rules text inside the tall well (base units): [side, top, bottom] padding. Final review #13: the
+## bottom was 1.5, so the longest texts ended 2.7 units over the frame's filet ("touching the rim");
+## 4.8 keeps 6 units clear (the sides keep 4.2 to the ink; a last line's empty descent area adds
+## less at the bottom, so it needs the larger room to look as clear).
+const TALL_TEXT_PAD := [3.0, 1.5, 4.8]
+## Last resort for the longest rules texts (final review #13): below TEXT_MIN_K of the size the text
+## steps on down to TEXT_FLOOR_K with its leading tightened by TEXT_TIGHT of the size, before any cut.
+const TEXT_FLOOR_K := 0.4
+const TEXT_TIGHT := 0.12
+## Width of the kind-coloured frame border (base units); a fine gold filet runs along its inner edge.
+const FRAME_W := 2.8
 
 
 ## H16: corner radius (px) of the art window: concentric with the card's outer corner `frame_radius`
@@ -82,9 +93,8 @@ static func draw_power(pt: CardPainter) -> void:
 	CardFaceParts.name_plate(pt, _r(pt, g["banner"]), g["f_name"], 0.0, 0.0, pt.accent(), g["f_name_min"], true)
 	var txt := CardText.card_text(pt.view)
 	if txt != "":
-		var t: Array = g["text"]
-		var tp := CardTextLayout.fit_para(txt, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(CardPainter.MIN_FS - 1, pt.fs(g["f_text"] * 0.7)), float(t[2]) * pt.s, float(t[3]) * pt.s)
-		pt.para_text(tp, pt.p(t[0], t[1]), Color(UIStyle.TEXT, 0.9), CardTextLayout.shown_text(tp, txt))
+		var tp := power_rules_para(txt, pt.s)
+		pt.para_text(tp, power_text_rect(pt.s).position, Color(UIStyle.TEXT, 0.9), CardTextLayout.shown_text(tp, txt))
 	_gem(pt, g)
 
 
@@ -113,8 +123,8 @@ static func draw_tall(pt: CardPainter, _big: bool = false) -> void:
 		rules = "[Effect not implemented] " + rules
 	pt.round_rect(_r(pt, t), TEXT_WELL, 3.0 * s)
 	if rules != "":
-		var tp := CardTextLayout.fit_para(rules, UIStyle.font_body(), pt.fs(g["f_text"]), maxi(5, pt.fs(g["f_text"] * TEXT_MIN_K)), (float(t[2]) - 6.0) * s, (float(t[3]) - 3.0) * s)
-		pt.para_text(tp, pt.p(float(t[0]) + 3.0, float(t[1]) + 1.5), UIStyle.TEXT, CardTextLayout.shown_text(tp, rules))
+		var tp := tall_rules_para(rules, s)
+		pt.para_text(tp, tall_text_rect(s).position, UIStyle.TEXT, CardTextLayout.shown_text(tp, rules))
 	else:
 		# No rules (Basic Units, #75): a small engraved filigree with a diamond, never a lone glyph that
 		# reads as a missing asset.
@@ -125,6 +135,42 @@ static func draw_tall(pt: CardPainter, _big: bool = false) -> void:
 		CardStatBadge.draw(pt, _r(pt, g["atk"]), true, g["f_stat"])
 		CardStatBadge.draw(pt, _r(pt, g["def"]), false, g["f_stat"])
 	_gem(pt, g)
+
+
+## Final review #13: the box (face px at scale `s`) the rules text of a tall card (hand, mini, big)
+## is fitted into: the text well less TALL_TEXT_PAD.
+static func tall_text_rect(s: float) -> Rect2:
+	var t: Array = TALL["text"]
+	var pad: Array = TALL_TEXT_PAD
+	return Rect2((float(t[0]) + float(pad[0])) * s, (float(t[1]) + float(pad[1])) * s,
+		(float(t[2]) - 2.0 * float(pad[0])) * s, (float(t[3]) - float(pad[1]) - float(pad[2])) * s)
+
+
+## The rules paragraph of a tall card at scale `s`: the largest size (TALL f_text down to TEXT_MIN_K of
+## it) at which all of `rules` fits tall_text_rect, then down to TEXT_FLOOR_K with tighter leading,
+## else cut with an ellipsis.
+static func tall_rules_para(rules: String, s: float) -> TextParagraph:
+	var r := tall_text_rect(s)
+	var fs_max := maxi(CardPainter.MIN_FS, roundi(float(TALL["f_text"]) * s))
+	var fs_min := maxi(5, maxi(CardPainter.MIN_FS, roundi(float(TALL["f_text"]) * TEXT_MIN_K * s)))
+	var fs_floor := maxi(CardPainter.MIN_FS, roundi(float(TALL["f_text"]) * TEXT_FLOOR_K * s))
+	return CardTextLayout.fit_para(rules, UIStyle.font_body(), fs_max, fs_min, r.size.x, r.size.y, fs_floor, TEXT_TIGHT)
+
+
+## Final review #13: the box (face px at scale `s`) of a field Power / Trap's rules text. Its height
+## was 31 (to 1.2 units over the 128 card's bottom, 0.2 over the filet); 27 keeps the tall cards' room.
+static func power_text_rect(s: float) -> Rect2:
+	var t: Array = FIELD["text"]
+	return Rect2(float(t[0]) * s, float(t[1]) * s, float(t[2]) * s, float(t[3]) * s)
+
+
+## The rules paragraph of a field Power / Trap at scale `s` (fitted like tall_rules_para, down to 0.7
+## of the size, then with tighter leading at that size).
+static func power_rules_para(rules: String, s: float) -> TextParagraph:
+	var r := power_text_rect(s)
+	var fs_max := maxi(CardPainter.MIN_FS, roundi(float(FIELD["f_text"]) * s))
+	var fs_min := maxi(CardPainter.MIN_FS - 1, maxi(CardPainter.MIN_FS, roundi(float(FIELD["f_text"]) * 0.7 * s)))
+	return CardTextLayout.fit_para(rules, UIStyle.font_body(), fs_max, fs_min, r.size.x, r.size.y, fs_min, TEXT_TIGHT)
 
 
 ## The Type pip on the art's top right (same size as the cost gem, user feedback).

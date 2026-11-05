@@ -13,8 +13,8 @@ func _labels(n: Node, out: Array) -> Array:
 
 
 func test_build_version_reads_project_setting_expected_0_3_6() -> void:
-	assert_str(SteamBridge.build_version()).is_equal("0.3.10")
-	assert_str(String(ProjectSettings.get_setting("application/config/version"))).is_equal("0.3.10")
+	assert_str(SteamBridge.build_version()).is_equal("0.4.0")
+	assert_str(String(ProjectSettings.get_setting("application/config/version"))).is_equal("0.4.0")
 
 
 func test_display_name_capitalises_first_letter_only() -> void:
@@ -30,7 +30,7 @@ func test_identity_block_without_steam_shows_reason_and_version_no_app_id() -> v
 	var box: VBoxContainer = auto_free(MainMenu.identity_block())
 	var texts := _labels(box, [])
 	# Assert
-	assert_array(texts).contains(["Build version 0.3.10"])
+	assert_array(texts).contains(["Build version 0.4.0"])
 	var all := " ".join(texts)
 	assert_str(all).not_contains("App ID")
 	assert_str(all).not_contains("Steam ready")

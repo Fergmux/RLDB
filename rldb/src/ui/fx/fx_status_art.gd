@@ -624,11 +624,40 @@ func _infiltrate(k: float) -> void:
 			var wj := u * 3.4 * k * (1.0 - float(j) / float(segs)) + u * 0.25
 			left.append(pts[j] + nrm * wj)
 			right.append(pts[j] - nrm * wj)
-		right.reverse()
-		left.append_array(right)
 		if ln > u:
-			draw_colored_polygon(left, Color(0.01, 0.01, 0.05, 0.92 * env))
+			draw_ribbon(self, left, right, Color(0.01, 0.01, 0.05, 0.92 * env))
 			draw_polyline(pts.slice(0, segs / 2), Color(0.45, 0.5, 1.0, 0.35 * env), maxf(1.0, u * 0.8), true)
+
+
+## Draws a ribbon between the paired edge points `left[j]` / `right[j]` filled in `col` on `ci`. A
+## simple outline is one polygon, as before; a ribbon whose curl crosses itself (Infiltrate's shadow
+## tendrils, QA 2026-11-05: Godot logged "Invalid polygon data" and dropped the tendril) is drawn as
+## its strip of quads instead. Returns the triangle indices of the strip, or empty when it was drawn
+## as a polygon (tests).
+static func draw_ribbon(ci: CanvasItem, left: PackedVector2Array, right: PackedVector2Array, col: Color) -> PackedInt32Array:
+	var outline := left.duplicate()
+	var back := right.duplicate()
+	back.reverse()
+	outline.append_array(back)
+	if not Geometry2D.triangulate_polygon(outline).is_empty():
+		ci.draw_colored_polygon(outline, col)
+		return PackedInt32Array()
+	var idx := ribbon_strip(mini(left.size(), right.size()))
+	var pts := left.slice(0, mini(left.size(), right.size()))
+	pts.append_array(right.slice(0, pts.size()))
+	var cols := PackedColorArray()
+	cols.resize(pts.size())
+	cols.fill(col)
+	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), idx, pts, cols)
+	return idx
+
+
+## Triangle indices of a strip of `n` point pairs laid out as [left 0..n-1, right 0..n-1].
+static func ribbon_strip(n: int) -> PackedInt32Array:
+	var idx := PackedInt32Array()
+	for j in n - 1:
+		idx.append_array([j, j + 1, n + j, j + 1, n + j + 1, n + j])
+	return idx
 
 
 # ---------------------------------------------------------------- blocked and expire

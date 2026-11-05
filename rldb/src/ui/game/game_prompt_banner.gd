@@ -76,6 +76,14 @@ const PASS_TURN_TIP := "Stop offering me Traps until this turn ends."
 const LIST_KINDS := ["trap_response", "confirm", "order", "evolve"]
 ## L23: the Evolve prompt's explanation line.
 const EVOLVE_HOW := "Free, no AP. It keeps its zone, stance, statuses and stat changes. Not a Summon."
+## Final review #10: the Evolve prompt lists its two forms as rows (card, role, name, stats) joined
+## by an Evolve arrow, instead of two ~40 px thumbnails; hovering them opens EvolveCompare. The row
+## card's size, its compact (short column) size, the name's start and floor sizes, the arrow's height.
+const EVOLVE_ROW_CARD := Vector2(52, 78)
+const EVOLVE_ROW_CARD_MIN := Vector2(44, 66)
+const EVOLVE_NAME_PX := 15
+const EVOLVE_NAME_MIN_PX := 11
+const EVOLVE_ARROW_H := 20.0
 ## Stance answers (#34): full-width 44 px plates with the card badge glyph, Attack in the ember
 ## family and Defense in steel, so the two answers read apart at a glance.
 const STANCE_FAMILY := {"atk": "danger", "def": "steel"}
@@ -131,6 +139,8 @@ var mention_box: PanelContainer
 var mention_row: HBoxContainer
 var respond_col: VBoxContainer
 var _has_mentions := false
+## Final review #10: the Evolve prompt's hover comparison of its two forms (beside the panel).
+var evolve_compare: EvolveCompare
 ## Whether the strip was built for the top strip (one row) or the side column.
 var _mentions_top := false
 ## G03: option buttons of a response, yes / no or ordering prompt, one per row, the declining
@@ -252,6 +262,8 @@ func build() -> void:
 	tray_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tray_box.add_theme_constant_override("separation", 8)
 	tsc.add_child(tray_box)
+	evolve_compare = EvolveCompare.new()
+	gs.add_child(evolve_compare)
 
 
 ## F05: the card-context strip of the input panel: the card on the left, its name and rules
@@ -416,9 +428,21 @@ func _render_mentions(pd: Dictionary) -> void:
 	GameUi.clear(mention_row)
 	GameUi.clear(respond_col)
 	if not _has_mentions:
+		if evolve_compare != null:
+			evolve_compare.disarm()
 		return
 	var cause := ms.filter(func(e): return String(e.get("role", "")) != "response")
 	var resp := ms.filter(func(e): return String(e.get("role", "")) == "response")
+	_arm_evolve_compare(pd, cause)
+	if String(pd.get("kind", "")) == "evolve" and not _in_top_strip:
+		# Final review #10: the two forms as readable rows, "Now" over "Evolves into".
+		for i in cause.size():
+			if i > 0:
+				respond_col.add_child(_evolve_arrow())
+			respond_col.add_child(_evolve_row(cause[i]))
+		mention_row.visible = false
+		respond_col.visible = true
+		return
 	for i in cause.size():
 		var e: Dictionary = cause[i]
 		if i > 0:
@@ -486,6 +510,12 @@ func _mention_figure(e: Dictionary) -> Control:
 		if role == "response":
 			w.set_meta("response", true)
 		w.right_pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
+		if role in ["evolve_from", "evolve_to"]:
+			# Final review #10: the forms open their inspector on a click too; the hover comparison
+			# (EvolveCompare) replaces the tooltip.
+			w.pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
+			w.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			w.show_tooltip = false
 		var hidden := bool(c.get("hidden", false)) or not c.has("name")
 		nm = ("Set Spell/Trap" if String(c.get("zone", "")) == "backrow" else "Hidden card") if hidden else String(c.get("name", ""))
 		# D11: the card's effect (the rich tooltip), headed by its role; a hidden card names only its role.
@@ -508,6 +538,98 @@ func _mention_figure(e: Dictionary) -> Control:
 	name_l.mouse_filter = Control.MOUSE_FILTER_PASS
 	fig.add_child(name_l)
 	return fig
+
+
+## Final review #10: arms the hover comparison for an Evolve prompt `pd` (its "Now" and "Evolves
+## into" cards from `cause`), or disarms it for any other prompt.
+func _arm_evolve_compare(pd: Dictionary, cause: Array) -> void:
+	if evolve_compare == null:
+		return
+	var from := {}
+	var to := {}
+	for e in cause:
+		match String(e.get("role", "")):
+			"evolve_from": from = e.get("card", {})
+			"evolve_to": to = e.get("card", {})
+	if String(pd.get("kind", "")) != "evolve" or from.is_empty() or to.is_empty():
+		evolve_compare.disarm()
+		return
+	evolve_compare.arm(pane_view(from), pane_view(to), mention_box, ctx_banner)
+
+
+## Final review #10: one form of the Evolve prompt: its card (click or right-click to inspect it,
+## hover to compare both forms large), its role ("Now" / "Evolves into"), its name and its stats.
+func _evolve_row(e: Dictionary) -> Control:
+	var role := String(e.get("role", ""))
+	var c: Dictionary = e.get("card", {})
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.set_meta("evolve_row", role)
+	var w := CardWidget.new().setup(pane_view(c), "mini")
+	w.auto_hover = false
+	w.show_tooltip = false   # EvolveCompare shows both forms large on hover
+	w.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	w.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	w.set_meta("mention", true)
+	w.pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
+	w.right_pressed.connect(func(cw): gs.inspect.inspect_widget(cw))
+	w.mouse_entered.connect(_evolve_glow.bind(w, true))
+	w.mouse_exited.connect(_evolve_glow.bind(w, false))
+	row.add_child(w)
+	GameUi.resize_card(w, EVOLVE_ROW_CARD)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 1)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(v)
+	var to := role == "evolve_to"
+	var cap := UIStyle.label(String(ROLE_CAPTIONS.get(role, role.capitalize())).to_upper(), 11,
+		EvolveGlyph.COLOR if to else UIStyle.MUTED)
+	cap.add_theme_font_override("font", UIStyle.font_bold())
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(cap)
+	var nm := String(c.get("name", ""))
+	var name_l := UIStyle.label(nm, EVOLVE_NAME_PX, UIStyle.GOLD_HI, true, true)
+	name_l.autowrap_mode = TextServer.AUTOWRAP_WORD
+	name_l.max_lines_visible = 2
+	name_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_l.tooltip_text = nm
+	name_l.mouse_filter = Control.MOUSE_FILTER_PASS
+	name_l.set_meta("ename", true)
+	v.add_child(name_l)
+	var st := UIStyle.label(evolve_stats(c), 13, UIStyle.TEXT, true)
+	st.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	st.set_meta("estats", true)
+	v.add_child(st)
+	return row
+
+
+## Final review #10: the stats line of an Evolve form: "ATK 8 · DEF 4" for a unit (its current
+## values), else its kind line.
+static func evolve_stats(c: Dictionary) -> String:
+	if c.has("atk") and c.has("def"):
+		return "ATK %d · DEF %d" % [int(c["atk"]), int(c["def"])]
+	return StatusHelp.tip_kind_line(c)
+
+
+## The Evolve arrow between the prompt's two rows, under the cards' centres.
+func _evolve_arrow() -> Control:
+	var a := EvolveCompare.EvolveArrow.new()
+	a.down = true
+	a.custom_minimum_size = Vector2(EVOLVE_ROW_CARD.x, EVOLVE_ARROW_H)
+	a.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	a.set_meta("evolve_arrow", true)
+	return a
+
+
+## The hover glow of an Evolve row's card (the inspector preview's look, EvolvePreview._hover).
+func _evolve_glow(w: CardWidget, on: bool) -> void:
+	if not is_instance_valid(w):
+		return
+	var tw := UIStyle.restart_tween(w, &"evolve_glow_tw")
+	tw.tween_property(w, "fx_glow", Color(EvolveGlyph.COLOR, 0.85 if on else 0.0), UIStyle.motion("hover" if on else "hover_out"))
 
 
 ## A card of mine that may respond: the card, its name and the start of its rules text (like the
@@ -579,7 +701,20 @@ func _fit_mentions(w: float, compact: bool = false) -> void:
 			elif n is Label and n.has_meta("name"):
 				_fit_name(n as Label, fw)
 	var rsz := Vector2(MENTION_CARD_COMPACT, MENTION_CARD_COMPACT * 1.5) if compact else Vector2(48, 72)
+	var esz := EVOLVE_ROW_CARD_MIN if compact else EVOLVE_ROW_CARD
 	for row in respond_col.get_children():
+		if row.has_meta("evolve_arrow"):
+			(row as Control).custom_minimum_size = Vector2(esz.x, EVOLVE_ARROW_H * (0.7 if compact else 1.0))
+			continue
+		if row.has_meta("evolve_row"):
+			for n in (row as Node).get_children():
+				if n is CardWidget:
+					GameUi.resize_card(n, esz)
+				elif n is VBoxContainer:
+					for l in (n as Node).get_children():
+						if l.has_meta("ename"):
+							_fit_name(l as Label, content - esz.x - 10.0, EVOLVE_NAME_PX, EVOLVE_NAME_MIN_PX)
+			continue
 		for n in (row as Node).get_children():
 			if n is CardWidget:
 				GameUi.resize_card(n, rsz)
@@ -593,11 +728,11 @@ func _fit_mentions(w: float, compact: bool = false) -> void:
 
 ## A strip name in the largest size (MENTION_NAME_PX down to MENTION_NAME_MIN_PX) at which its
 ## longest word fits the figure width `w`, so a name wraps between words instead of being cut.
-static func _fit_name(l: Label, w: float, start_px: int = MENTION_NAME_PX) -> void:
+static func _fit_name(l: Label, w: float, start_px: int = MENTION_NAME_PX, min_px: int = MENTION_NAME_MIN_PX) -> void:
 	var font := l.get_theme_font("font")
 	var px := start_px
 	var longest := 0.0
-	while px > MENTION_NAME_MIN_PX:
+	while px > min_px:
 		longest = 0.0
 		for word in l.text.split(" ", false):
 			longest = maxf(longest, font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x)
@@ -777,6 +912,8 @@ func _render_banner() -> void:
 	var pd := gs.pending()
 	var on: bool = not pd.is_empty() and pd.get("mine", false) and not gs.overlays.overlay.visible and gs.view.get("stage", "") == "game"
 	ctx_banner.visible = on
+	if not on and evolve_compare != null:
+		evolve_compare.disarm()
 	_animate_banner(on, int(pd.get("id", -1)) if on else -1)
 	GameUi.clear(banner_btns)
 	GameUi.clear(cancel_row)

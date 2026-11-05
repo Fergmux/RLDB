@@ -85,6 +85,10 @@ const POOL_SIZE := 16
 const MIN_INTERVAL_MS := 70
 const BURST_MAX := 4
 const BURST_WINDOW_MS := 120
+## Cues the burst cap never drops (they still count towards it, and the per-name MIN_INTERVAL_MS still
+## applies, so one can never repeat into a roll). QA 2026-11-05: the turn-start draw shares its batch
+## with `turn`, `ap_gain` and `phase`, and the draw, the one the player most needs, was the one dropped.
+const BURST_EXEMPT := ["card_draw"]
 const DEFAULT_VOLUME := 0.5
 
 static var _instance: Sfx = null
@@ -334,6 +338,10 @@ static func for_fx(e: Dictionary, me: int) -> String:
 			return "exhaust"
 		"discard":
 			return "card_discard"   # L1: the end-of-turn discard to Spent (a count, never the cards)
+		"to_hand":
+			return "card_return"    # QA final: a card added to a Hand by an effect (identity redacted per seat)
+		"miss":
+			return "miss"           # QA final: a declared attack that does not resolve
 		"stance":
 			return "stance_defense" if String(e.get("to", "")) == "def" else "stance_attack"   # L1
 		"stat":
@@ -398,13 +406,14 @@ static func load_settings() -> void:
 
 
 ## Rate limiter with injectable clock: false if `name` repeated within MIN_INTERVAL_MS or more
-## than BURST_MAX sounds started within BURST_WINDOW_MS. Records the start when allowed.
+## than BURST_MAX sounds started within BURST_WINDOW_MS (except a BURST_EXEMPT cue). Records the start
+## when allowed.
 static func _allow(name: String, now_ms: int) -> bool:
 	if _last_by_name.has(name) and now_ms - int(_last_by_name[name]) < MIN_INTERVAL_MS:
 		return false
 	while not _recent_starts.is_empty() and now_ms - _recent_starts[0] >= BURST_WINDOW_MS:
 		_recent_starts.pop_front()
-	if _recent_starts.size() >= BURST_MAX:
+	if _recent_starts.size() >= BURST_MAX and not BURST_EXEMPT.has(name):
 		return false
 	_last_by_name[name] = now_ms
 	_recent_starts.append(now_ms)

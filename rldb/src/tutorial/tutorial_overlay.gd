@@ -75,6 +75,8 @@ var _last_do: bool = false
 const STEP_DONE_DELAY := 0.35
 const STEP_DONE_DB := -3.0
 var _hint_gen: int = 0
+## The timer of the floating hint shown last (tests).
+var _hint_timer: SceneTreeTimer
 var _banner_lesson: int = -1
 var _avoid_tick: int = 0
 var _avoid_target: Rect2 = Rect2()
@@ -282,9 +284,13 @@ static func step_done_due(l0: int, s0: int, was_do: bool, l1: int, s1: int, comp
 func _chime_step_done() -> void:
 	if not is_inside_tree():
 		return
-	get_tree().create_timer(UIStyle.dur(STEP_DONE_DELAY)).timeout.connect(func() -> void:
-		if is_instance_valid(self):
-			Sfx.play("step_done", STEP_DONE_DB, 0.02))
+	# A bound method, not a lambda capturing self: Godot drops the connection if the overlay is freed
+	# first (a lambda's freed capture logs "Lambda capture ... was freed").
+	get_tree().create_timer(UIStyle.dur(STEP_DONE_DELAY)).timeout.connect(_play_step_done)
+
+
+func _play_step_done() -> void:
+	Sfx.play("step_done", STEP_DONE_DB, 0.02)
 
 
 ## Short fade of a freshly changed block (skipped with reduced motion).
@@ -330,10 +336,21 @@ func show_hint(text: String) -> void:
 	p.position = hint_position(get_local_mouse_position(), p.get_combined_minimum_size(), size)
 	UIStyle.tween_in(p, "tooltip_in")
 	ring.flash()
-	get_tree().create_timer(HINT_SECS).timeout.connect(func():
-		if gen == _hint_gen and is_instance_valid(p):
-			hint_plate = null
-			UIStyle.tween_out(p, true))
+	# QA 2026-11-05: the timer used to call a lambda capturing the plate, which a rebuild (_hide_hint)
+	# can free first, and Godot logged "Lambda capture at index 1 was freed". It now calls a method of
+	# the overlay with only the hint's generation bound; the plate is looked up when it fires.
+	_hint_timer = get_tree().create_timer(HINT_SECS)
+	_hint_timer.timeout.connect(_expire_hint.bind(gen))
+
+
+## Fades out the floating hint of generation `gen` when its time is up; a newer hint, or one already
+## hidden (and freed), is left alone.
+func _expire_hint(gen: int) -> void:
+	if gen != _hint_gen or hint_plate == null or not is_instance_valid(hint_plate):
+		return
+	var p := hint_plate
+	hint_plate = null
+	UIStyle.tween_out(p, true)
 
 
 ## Where the floating hint of `sz` goes for a pointer at `at` in a layer of `layer` size: up and
