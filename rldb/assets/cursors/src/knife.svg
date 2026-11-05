@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <!-- RLDB cursor "knife" (L22). 64-unit grid, hotspot (3,3) at the blade's point. The ritual dagger of sacrifice mode: a steel leaf blade etched with
+  <!-- RLDB cursor "knife" (L22). 64-unit grid, hotspot (4.5,4.5) at the blade's point. The ritual dagger of sacrifice mode: a steel leaf blade etched with
        blood runes, a crescent gold guard, a wine-leather grip and a ruby pommel.
        Rasterised by rldb/src/dev/cursor_bake.gd, which adds the drop shadow. -->
   <defs>

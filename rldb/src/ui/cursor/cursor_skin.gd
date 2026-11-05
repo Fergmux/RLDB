@@ -44,8 +44,8 @@ const ART := {
 	&"target": {"hot": Vector2(32, 32)},
 	&"target_lock": {"hot": Vector2(32, 32), "glow": Color(1.0, 0.85, 0.29, 0.75)},
 	&"target_no": {"hot": Vector2(32, 32)},
-	&"knife": {"hot": Vector2(3, 3)},
-	&"knife_hot": {"hot": Vector2(3, 3), "glow": Color(1.0, 0.42, 0.16, 0.8)},
+	&"knife": {"hot": Vector2(4.5, 4.5)},
+	&"knife_hot": {"hot": Vector2(4.5, 4.5), "glow": Color(1.0, 0.42, 0.16, 0.8)},
 	&"forbidden": {"hot": Vector2(3, 3)},
 	&"help": {"hot": Vector2(3, 3)},
 }

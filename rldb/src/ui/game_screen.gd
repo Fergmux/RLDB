@@ -82,6 +82,8 @@ var prompt: GamePromptBanner
 var preview: GameCombatPreview
 ## Targeting component.
 var targeting: GameTargeting
+## L22: the board's cursor modes (reticle while aiming, knife in sacrifice mode).
+var cursor: GameCursor
 ## Sidebar component.
 var sidebar: GameSidebar
 ## Details component.
@@ -129,6 +131,7 @@ func _init() -> void:
 	prompt = GamePromptBanner.new(self)
 	preview = GameCombatPreview.new(self)
 	targeting = GameTargeting.new(self)
+	cursor = GameCursor.new(self)
 	sidebar = GameSidebar.new(self)
 	details = GameDetails.new(self)
 	game_log = GameLog.new(self)
@@ -713,6 +716,7 @@ func _process(_d: float) -> void:
 	if not is_visible_in_tree():
 		return
 	targeting.update_arrow()
+	cursor.update()
 	spectate.process()
 	if not hover.forced:
 		hover.update(get_global_mouse_position())
