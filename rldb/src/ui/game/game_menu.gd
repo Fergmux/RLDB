@@ -467,6 +467,7 @@ static func audio_controls(fs: int) -> Control:
 		sl.value = row[1]
 		sl.custom_minimum_size = Vector2(170, 24)
 		sl.value_changed.connect(row[3])
+		sl.value_changed.connect(func(_v: float): Sfx.slider_tick())   # L1: a bead click per step
 		if row[0] == "Sound effects":
 			sl.drag_ended.connect(func(_c): Sfx.play("select"))
 		g.add_child(sl)

@@ -209,6 +209,17 @@ func destroy_ghost(e: Dictionary, prev_mv: Dictionary) -> CardWidget:
 
 
 ## The card view an event may show (FxPileEffects.ghost_view: public or authorised cards only).
+## L1: the public view of the unit an attack event `e` targets, from the view before the batch
+## (null when there is none: a direct attack, an empty slot or no previous view).
+static func _defender_view(e: Dictionary, prev_mv: Dictionary) -> Variant:
+	var to: Dictionary = e.get("to", {})
+	if prev_mv.is_empty() or to.is_empty() or to.get("direct", false) or not prev_mv.has("players"):
+		return null
+	var arr: Array = prev_mv["players"][int(to.get("p", 0))].get(Zones.KEY["unit"], [])
+	var slot := int(to.get("slot", -1))
+	return arr[slot] if slot >= 0 and slot < arr.size() else null
+
+
 func pile_view(e: Dictionary, prev_mv: Dictionary) -> Dictionary:
 	return _piles.ghost_view(e, prev_mv)
 
@@ -339,7 +350,8 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			var st0 := maxf(t, attack_end) if k == "attack" else (t + 0.2 if k == "game_over" else t)
 			sched.append([st0, Sfx.play.bind(snd, 0.0, 0.04), "sfx:" + snd])
 			if k == "attack" and not e.get("to", {}).get("direct", false) and not (lmode == "unit" and i == int(lethal["attack"])):
-				sched.append([st0 + (0.12 if fast else 0.26), Sfx.play.bind("impact", 0.0, 0.04), "sfx:impact"])
+				var hit := Sfx.hit_for(_defender_view(e, prev_mv))   # L1: a shield clang into Defense stance
+				sched.append([st0 + (0.12 if fast else 0.26), Sfx.play.bind(hit, 0.0, 0.04), "sfx:" + hit])
 		match k:
 			"attack":
 				var st := maxf(t, attack_end)

@@ -160,6 +160,8 @@ var _banner_how: String = ""
 ## Who must act and that input is needed (the header strip title of the plate).
 var banner_tag: Label
 var _banner_pid: int = -2
+## L1: a new choice this soon after the player's own command is part of that action (no prompt_alert).
+const PROMPT_ALERT_QUIET_MS := 1500
 var _toast_game: int = -99
 ## G09: the card of the last command sent and when (a refusal of it shows over that card).
 var _sent_uid: int = -1
@@ -1129,6 +1131,16 @@ func _animate_banner(on: bool, pid: int) -> void:
 	var fresh := pid != _banner_pid
 	_banner_pid = pid
 	plate.attend(fresh)
+	if wants_alert(fresh, Time.get_ticks_msec(), _sent_ms):
+		Sfx.play("prompt_alert")   # L1: a choice arrived that the player did not just ask for
+
+
+## L1: whether a new choice of the local player (`fresh`) sounds prompt_alert at clock `now_ms`. A
+## choice that follows the player's own command (sent at `sent_ms`, within PROMPT_ALERT_QUIET_MS:
+## a target or stance step of their own action) is already answered by its click; one that arrives
+## on its own (a Trap window opened by the opponent, a turn-start Evolve offer) is announced.
+static func wants_alert(fresh: bool, now_ms: int, sent_ms: int) -> bool:
+	return fresh and now_ms - sent_ms > PROMPT_ALERT_QUIET_MS
 
 
 ## True when every option of a choice is a Type name (Waang, Chaos Witch, ...): those render as
