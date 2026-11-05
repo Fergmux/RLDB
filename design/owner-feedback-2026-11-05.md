@@ -99,6 +99,13 @@ make a way for ai to automatically upload the build for us
   "(Space)", hotkey labels in tooltips or buttons) may be shown anywhere in the game. The shortcuts themselves keep
   working.
 
+- **Final report request (owner, 2026-11-05, verbatim):** "also when you're done give me a list of sound effects you've
+  added for me to review". The final message must list every sound effect cue (new and replaced), what plays it,
+  and which to listen to first. Source: design/audio/sfx-design-2026-11-05.md.
+
+- **L31 (owner, 2026-11-05, verbatim):** "and can you add some other card back options to fill in the customisation
+  panel section". Add several selectable card backs to Options > Customisation > Card back, applied in game.
+
 ## Facts found during the up-front inspection (2026-11-05)
 
 - ElevenLabs MCP: the `sfx` flow node (model `eleven_text_to_sound_v2`, 0.5-30 s, loop option) is available, and so is
