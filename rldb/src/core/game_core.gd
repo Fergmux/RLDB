@@ -419,7 +419,7 @@ func base_def(uid: int) -> int:
 	return 0 if v == null else v
 
 
-## True while effects are reversed this turn.
+## True while Sneaky Snunday reverses ATK/DEF gains and losses this turn (an even number of copies cancels).
 func reversal_active() -> bool:
 	return reversal_turn == turn and reversal_count % 2 == 1
 
@@ -432,11 +432,20 @@ func swap_active() -> bool:
 ## Returns {"atk", "def", "parts": [explanations]} for a unit, recalculated live. A unit switched
 ## by Freaky Funday shows base + earlier modifiers switched; modifiers applied since were switched
 ## when applied and auras are switched while Funday lasts, so they are added as they are.
+## L15 (owner, 2026-11-05) Sneaky Snunday: "Until the end of this turn: all new and ongoing ATK/DEF
+## gains and losses are reversed." While it is active a unit on the Field reads
+## base - (unreversed - base): the whole difference from its base is mirrored, permanent changes from
+## earlier turns included. The reference base is the one Freaky Funday shows (switched when the unit
+## is switched); the unreversed value is the raw sum, so a loss past zero is mirrored in full; the
+## floor at 0 applies to the result. A unit that cannot gain ATK/DEF (no_gain) is never raised above
+## that base by the mirror either.
 func stat_breakdown(uid: int) -> Dictionary:
 	var inst: Dictionary = cards[uid]
 	var atk := base_atk(uid)
 	var def := base_def(uid)
 	var parts := ["Base %d/%d" % [atk, def]]
+	var ref_atk := atk
+	var ref_def := def
 	var no_gain := has_flag(uid, "no_gain")
 	var sw: bool = swapped.has(uid) and inst["zone"] == "unit"
 	var later_atk := 0
@@ -463,6 +472,8 @@ func stat_breakdown(uid: int) -> Dictionary:
 		var t := atk
 		atk = def
 		def = t
+		ref_atk = base_def(uid)
+		ref_def = base_atk(uid)
 		parts.append("Freaky Funday: ATK/DEF switched")
 	atk += later_atk
 	def += later_def
@@ -475,16 +486,23 @@ func stat_breakdown(uid: int) -> Dictionary:
 				var ta := aa
 				aa = ad
 				ad = ta
-			if reversal_active():
-				aa = -aa
-				ad = -ad
 			if no_gain:
 				aa = mini(aa, 0)
 				ad = mini(ad, 0)
 			atk += aa
 			def += ad
 			if aa != 0 or ad != 0:
-				parts.append("%s %+d/%+d%s" % [aura["src"], aa, ad, " (reversed)" if reversal_active() else ""])
+				parts.append("%s %+d/%+d" % [aura["src"], aa, ad])
+		if reversal_active():
+			var da := atk - ref_atk
+			var dd := def - ref_def
+			if da != 0 or dd != 0:
+				atk = ref_atk - da
+				def = ref_def - dd
+				if no_gain:
+					atk = mini(atk, ref_atk)
+					def = mini(def, ref_def)
+				parts.append("Sneaky Snunday: %+d/%+d reversed to %+d/%+d" % [da, dd, atk - ref_atk, def - ref_def])
 	return {"atk": maxi(atk, 0), "def": maxi(def, 0), "parts": parts}
 
 

@@ -277,7 +277,8 @@ func test_divine_serpent_damages_opponent_without_reversal() -> void:
 	assert_int(m.players[1]["hp"]).is_equal(30)
 
 
-func test_delayed_gratification_under_snunday_locks_in_minus_one_ap() -> void:
+# L15 (2026-11-05): Sneaky Snunday reverses ATK/DEF only, so the AP next turn is not reversed.
+func test_delayed_gratification_under_snunday_still_gives_plus_one_ap() -> void:
 	var m := TB.make()
 	_cast(m, 0, 154)
 	_cast(m, 0, 41)
@@ -287,7 +288,7 @@ func test_delayed_gratification_under_snunday_locks_in_minus_one_ap() -> void:
 	for i in 3:
 		m.submit(1, {"t": "next_phase"})
 	assert_int(m.active).is_equal(0)
-	assert_int(m.players[0]["ap"]).is_equal(1)
+	assert_int(m.players[0]["ap"]).is_equal(GameCore.BASE_AP + 1)
 
 
 func test_snunday_flips_continuous_aura_while_active_and_restores_after() -> void:
@@ -301,13 +302,14 @@ func test_snunday_flips_continuous_aura_while_active_and_restores_after() -> voi
 	assert_int(m.def_of(friend)).is_equal(30)
 
 
-func test_snunday_does_not_flip_already_resolved_instant_bonus() -> void:
+# L15 (2026-11-05): "all new and ongoing" gains are reversed, so a gain from before Snunday is too.
+func test_snunday_reverses_an_already_resolved_gain() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
-	_cast(m, 0, 182, u)                         # +20 before reversal
-	assert_int(m.atk_of(u)).is_equal(30)
+	_cast(m, 0, 182, u)                         # Shimmer Serum +10 before the reversal
+	assert_int(m.atk_of(u)).is_equal(20)
 	_cast(m, 0, 154)
-	assert_int(m.atk_of(u)).is_equal(30)
+	assert_int(m.atk_of(u)).is_equal(0)
 
 
 func test_snunday_does_not_reverse_battle_damage_or_ap_payment() -> void:

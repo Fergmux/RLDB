@@ -243,7 +243,7 @@ func render_turnbar() -> void:
 		state_arrow.visible = false
 		var waiting_s: bool = not pd.is_empty() and mv["winner"] == -1
 		gs.prompt.show_wait(chip if waiting_s else "")
-		turn_note.text = "SNEAKY SNUNDAY: card-effect gains/losses reversed (not Damage or Healing)" if mv["reversal"] else ""
+		turn_note.text = "SNEAKY SNUNDAY: all ATK/DEF gains and losses are reversed this turn" if mv["reversal"] else ""
 		turn_note.visible = turn_note.text != ""
 		return
 	if mv["winner"] != -1:
@@ -276,7 +276,7 @@ func render_turnbar() -> void:
 	phase_btn.tooltip_text = tip
 	var note := ""
 	if mv["reversal"]:
-		note = "SNEAKY SNUNDAY: card-effect gains/losses reversed (not Damage or Healing)"
+		note = "SNEAKY SNUNDAY: all ATK/DEF gains and losses are reversed this turn"
 	turn_note.text = note
 	turn_note.visible = note != ""
 

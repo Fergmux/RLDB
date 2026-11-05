@@ -52,7 +52,7 @@ func _on_game_over() -> void:
 ## Builds an effect frame for card src controlled by ctl.
 func make_frame(src: int, ctl: int, ops: Array, label: String, event: Dictionary = {}) -> Dictionary:
 	return {"src": src, "ctl": ctl, "ops": ops, "pc": 0, "vars": {}, "label": label,
-		"event": event, "reversed": reversal_active(), "negated": false, "committed": false}
+		"event": event, "negated": false, "committed": false}
 
 
 ## Pushes a frame to resolve.

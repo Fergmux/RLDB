@@ -2947,11 +2947,11 @@
    "def": null,
    "keywords": [],
    "condition": "",
-   "on_summon": "Until the end of this turn: all new and ongoing gains and losses are reversed.",
+   "on_summon": "Until the end of this turn: all new and ongoing ATK/DEF gains and losses are reversed.",
    "on_field": "",
    "on_destruction": "",
    "material": "",
-   "description": "Until the end of this turn: all new and ongoing gains and losses are reversed.",
+   "description": "Until the end of this turn: all new and ongoing ATK/DEF gains and losses are reversed.",
    "art": {
     "image": "154.png",
     "card_img": "102.png",
@@ -2960,7 +2960,10 @@
    "source": {
     "file": "RLDB Master - Card Database (2026-11-03).csv",
     "sheet": "spell",
-    "index": 102
+    "index": 102,
+    "raw": {
+     "On Summon/Play": "Until the end of this turn: all new and ongoing gains and losses are reversed."
+    }
    }
   },
   {

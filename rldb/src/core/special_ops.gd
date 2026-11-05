@@ -28,10 +28,11 @@ func _op_cost_turn(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Persistent cost change for the rest of this game (resets between games).
+## Persistent cost change for the rest of this game (resets between games). L15 (2026-11-05): no
+## longer reversed by Sneaky Snunday (it reverses ATK/DEF only).
 func _op_cost_perm(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
-		change_cost_perm(u, -op["n"] if f["reversed"] else op["n"])
+		change_cost_perm(u, op["n"])
 	return R.CONT
 
 
@@ -291,18 +292,20 @@ func _op_swap_all(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Sneaky Snunday: until end of turn, numerical gains/losses from card effects (ATK/DEF, AP, costs)
-## are reversed. Applied per frame when a card is played, and to continuous auras while active.
-## Damage and Healing are not gains or losses (2026-10-18), so HP is never reversed.
+## Sneaky Snunday (L15, owner 2026-11-05): "Until the end of this turn: all new and ongoing ATK/DEF
+## gains and losses are reversed." Only switches the reversal on: every unit's ATK/DEF is mirrored
+## around its base while it lasts (GameCore.stat_breakdown), so every rule reading ATK/DEF (battle,
+## thresholds, Fusion materials, comparisons) and the view see the reversed values, and it ends with
+## the turn. Costs, AP, Damage and Healing are not touched. A second copy cancels the first (S-01).
 func _op_reversal(f: Dictionary, op: Dictionary) -> int:
 	if reversal_turn != turn:
 		reversal_turn = turn
 		reversal_count = 0
 	reversal_count += 1
 	if reversal_active():
-		add_log("Sneaky Snunday: gains and losses from card effects are reversed until end of turn (Damage and Healing are not).")
+		add_log("Sneaky Snunday: all ATK/DEF gains and losses are reversed until end of turn.")
 	else:
-		add_log("Sneaky Snunday: a second reversal cancels the first; gains and losses are normal again.")
+		add_log("Sneaky Snunday: a second reversal cancels the first; ATK/DEF gains and losses are normal again.")
 	return R.CONT
 
 
