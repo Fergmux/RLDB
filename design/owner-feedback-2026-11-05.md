@@ -133,7 +133,7 @@ Owner answers, 2026-11-05 (these are confirmed rules, follow them exactly):
 
 | # | Item | Status | Commit / notes |
 |---|------|--------|----------------|
-| L1 | ElevenLabs sound set | in progress | audio agent |
+| L1 | ElevenLabs sound set | merged b90c644 | 108 cues (59 replaced, 49 new), ~3,130 credits. Takes picked by measurement; alternates in production/audio-staging/. Listen first: ritual_choir, fusion_vortex, hp_low_heartbeat, boom, card_play, card_set, victory/defeat stingers. |
 | L2 | New cards via draft lost | merged 7ed71c5 | Root cause in the between-games "Add a card" reward: the add command was sent at the end of a fold animation that a modal rebuild could kill. Drafting itself was fine for all cards. |
 | L3 | Extra Deck offer F/R/A | merged 7ed71c5 | Also applied to the "Add a card > Extra Deck" reward. |
 | L4 | Animations queue | merged 21a532e | Clicks no longer skip animations; a backlog speeds up (max 2x). |
