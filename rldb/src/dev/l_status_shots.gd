@@ -106,6 +106,7 @@ func _steps() -> void:
 	await _stack_strip()
 	await _ticks_sheet()
 	await _control_strip()
+	await _reduced_sheet()
 
 
 # ---------------------------------------------------------------- shots
@@ -337,6 +338,19 @@ func _control_strip() -> void:
 		await _wait(0.6)
 		await _settle()
 	await _show_sheet("hypnotise_glide", tiles, 4)
+
+
+## Reduce motion: a tinted flash, the badge shown in place and the name; no particles, no travel.
+func _reduced_sheet() -> void:
+	var was := UIStyle.reduce_motion
+	UIStyle.reduce_motion = true   # in memory only: the settings file is never written
+	var tiles := []
+	for s in ["poison", "burn", "eternal"]:
+		tiles.append([await _apply_and_grab(uids["t1"], [s], 0.12), "%s (reduce motion)" % s.capitalize()])
+		_check("L8 reduce motion: no particle looks for %s" % s, gs.fx_layer.find_children("*", "FxStatusArt", true, false).is_empty())
+	tiles.append([await _apply_and_grab(uids["t1"], ["poison"], 0.12, "cleanse"), "Blocked (reduce motion)"])
+	UIStyle.reduce_motion = was
+	await _show_sheet("reduce_motion_flash", tiles, 4)
 
 
 func _grab(uid: int) -> ImageTexture:
