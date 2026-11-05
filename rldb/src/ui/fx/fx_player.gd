@@ -50,6 +50,8 @@ var _game_end := FxGameEnd.new(self)
 var _strike := FxStrike.new(self)
 var _summon := FxSummon.new(self)
 var _serpent := FxSerpent.new(self)
+## L23 / L11: the Evolve set piece and the copied-art shimmer.
+var _evolve := FxEvolve.new(self)
 ## B5: ghosts of cards summoned and removed in the same batch, by transient_key().
 var _transient := {}
 ## True from the moment a view that ends the game arrives until its victory / defeat presentation has
@@ -400,6 +402,12 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			"trigger":
 				sched.append([t, _cards.trigger.bind(e["at"]), "trigger"])
 				t += 0.1
+			"evolve", "copy_form":
+				# L23 / L11 (FxEvolve): the old look covers the slot from now until its effect plays,
+				# which holds the rest of the batch.
+				sched.append([t, _evolve.play.bind(e, _evolve.prepare(e, prev_mv)), k])
+				holds.append([sched.size(), FxEvolve.length_for() if k == "evolve" else FxEvolve.copy_hold()])
+				t += 0.05
 			"spotlight":
 				# The card is shown first; everything after it in this batch (statuses, destroys,
 				# HP changes) waits until it has left the screen.

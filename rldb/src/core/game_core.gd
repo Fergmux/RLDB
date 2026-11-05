@@ -105,6 +105,9 @@ func _create_instance(def_id: int, owner: int) -> int:
 		"summoned_turn": -1, "summoned_phase": "", "attacked_turn": -1, "moved_turn": -1, "opt": {},
 		"type_o": null, "race_o": null, "base_atk": null, "base_def": null,
 		"orig_slot": -1, "control_until": -1, "set_turn": -1,
+		# L11: id of the card whose art this unit shows while on the Field (Shapeshifter Loak / Mimic
+		# copying a unit's form), or null for its own art. Cleared when it leaves the Field.
+		"art_o": null,
 	}
 	return uid
 
@@ -417,6 +420,66 @@ func base_def(uid: int) -> int:
 		return inst["base_def"]
 	var v = d(uid)["def"]
 	return 0 if v == null else v
+
+
+# ---------------------------------------------------------------- L11 art override, L23 Evolve
+
+## L11 (owner feedback 2026-11-05): unit `uid` (Shapeshifter Loak, Mimic) takes on the ARTWORK of the
+## unit `from_uid` whose ATK/DEF/Race/Type it copies, for as long as it stays on the Field. Its name,
+## frame, text and category stay its own. A copy of a copy shows the art the copied unit shows.
+## Presentation fx "copy_form" (public: both units are face up on the Field).
+func copy_art(uid: int, from_uid: int) -> void:
+	if not unit_on_field(uid) or not cards.has(from_uid):
+		return
+	var shown := art_id(from_uid)
+	if shown == art_id(uid):
+		return
+	cards[uid]["art_o"] = shown
+	var pos := fx_pos(uid)
+	if not pos.is_empty():
+		add_fx({"k": "copy_form", "at": pos, "id": int(cards[uid]["id"]), "art": shown})
+
+
+## L11: the card id whose art unit `uid` shows: its art override while on the Field, else its own id.
+func art_id(uid: int) -> int:
+	var o = cards[uid].get("art_o")
+	if o != null and cards[uid]["zone"] == "unit":
+		return int(o)
+	return int(cards[uid]["id"])
+
+
+## L23 (owner feedback 2026-11-05): true when unit `uid` may Evolve now: a face-up Unit on the Field
+## whose card has an Evolve section, its effects not suppressed (Debilitate suppresses all of its
+## effects, Evolve included).
+func can_evolve(uid: int) -> bool:
+	if not unit_on_field(uid) or not is_face_up(uid) or is_debilitated(uid):
+		return false
+	return CardDB.evolves_into(int(cards[uid]["id"])) != -1
+
+
+## L23: replaces unit `uid`'s card with the card it evolves into, for the rest of THIS game (the
+## instance keeps the new card wherever it goes: Spent, Hand, Draw, Exhaust...; the next game of a
+## series starts from the series deck, which keeps the base card). Not a Summon: no On Summon and no
+## summon-triggered Trap. State carries over (confirmed rule): zone, slot and stance; statuses,
+## Runes, counters and every temporary or permanent stat and cost change. Base ATK/DEF and the
+## printed cost become the new card's, so a copied base (base_atk/base_def) and a copied art go;
+## once-per-turn uses belong to the old card's abilities and are cleared.
+func evolve_unit(uid: int) -> void:
+	var inst: Dictionary = cards[uid]
+	var from_id: int = int(inst["id"])
+	var to_id := CardDB.evolves_into(from_id)
+	if to_id == -1:
+		return
+	var from_name := name_of(uid)
+	inst["id"] = to_id
+	inst["evolved_turn"] = turn          # its new form's start-of-turn effects first fire next turn
+	inst["base_atk"] = null
+	inst["base_def"] = null
+	inst["art_o"] = null
+	inst["opt"] = {}
+	add_log("%s evolves %s into %s." % [pname(int(inst["ctl"])), from_name, name_of(uid)])
+	add_fx({"k": "evolve", "at": fx_pos(uid), "from": from_id, "to": to_id})
+	note("evolve", {"uid": uid, "p": int(inst["ctl"]), "from": from_id, "to": to_id})
 
 
 ## True while effects are reversed this turn.
@@ -770,6 +833,7 @@ func _reset_field_state(uid: int) -> void:
 	inst["race_o"] = null
 	inst["base_atk"] = null
 	inst["base_def"] = null
+	inst["art_o"] = null               # L11: a copied unit's art lasts only while on the Field
 	inst["stance"] = "atk"
 	inst["face_up"] = false
 	inst["ctl"] = inst["owner"]

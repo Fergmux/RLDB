@@ -764,7 +764,7 @@ func _build_catalogue(body: HBoxContainer) -> void:
 	browser.card_hovered.connect(_on_hover)
 	v.add_child(browser)
 	browser.build()
-	for d in CardDB.all():
+	for d in CardDB.collectible():
 		var id := int(d["id"])
 		var tag := count_tag()
 		tag.visible = false

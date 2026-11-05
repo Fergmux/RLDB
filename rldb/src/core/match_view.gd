@@ -102,6 +102,10 @@ static func card_view(m: MatchEngine, uid: int, viewer: int) -> Dictionary:
 		"text": _rules_text(df), "text_parts": rules_parts(df), "support": CardScripts.support_status(df["id"]), "art": df["art"],
 		"keywords": df["keywords"],
 	}
+	_add_evolve(v, df)
+	# L11: a unit on the Field showing a copied unit's art (Loak / Mimic): every renderer draws `art_id`.
+	if inst["zone"] == "unit" and m.art_id(uid) != int(df["id"]):
+		v["art_id"] = m.art_id(uid)
 	var abs: Array = m.script_of(uid).get("abilities", [])
 	if not abs.is_empty():
 		v["abilities"] = ability_views(abs)
@@ -141,6 +145,7 @@ static func def_view(id: int) -> Dictionary:
 		"text": _rules_text(df), "text_parts": rules_parts(df), "support": CardScripts.support_status(id), "art": df["art"],
 		"keywords": df["keywords"],
 	}
+	_add_evolve(v, df)
 	var abs: Array = CardScripts.get_entry(id).get("abilities", [])
 	if not abs.is_empty():
 		v["abilities"] = ability_views(abs)
@@ -164,10 +169,19 @@ static func summary_view(c: Dictionary) -> Dictionary:
 		"arcane": kind = "arcane"
 	var d := CardDB.get_def(c["id"])
 	var printed = d["cost"]
-	return {"uid": -1000 - c["id"], "id": c["id"], "name": c["name"], "category": c["category"], "cost_kind": kind,
+	var v := {"uid": -1000 - c["id"], "id": c["id"], "name": c["name"], "category": c["category"], "cost_kind": kind,
 		"cost_text": c["cost_text"], "cost": printed if printed != null else 0, "printed_cost": printed,
 		"race": c["race"], "type": c["type"], "atk": c["atk"], "def": c["def"], "printed_atk": c["atk"], "printed_def": c["def"],
 		"text": c["text"], "support": c["support"], "art": d["art"], "statuses": {}, "runes": 0, "zone": "pile"}
+	_add_evolve(v, d)
+	return v
+
+
+## L23: `evolves_into` (the id of the card it evolves into) on a view of a card with an Evolve section.
+static func _add_evolve(v: Dictionary, df: Dictionary) -> void:
+	var nxt = df.get("evolves_into")
+	if nxt != null:
+		v["evolves_into"] = int(nxt)
 
 
 static func _rules_text(df: Dictionary) -> String:
@@ -188,7 +202,14 @@ static func rules_parts(df: Dictionary) -> Array:
 		out.append({"k": "Effect" if df["category"] == "power" else "On Field", "t": df["on_field"]})
 	if df["on_destruction"] != "":
 		out.append({"k": "On Destruction", "t": df["on_destruction"]})
+	# L23: the Evolve section, apart from the timings (like a Fusion's Materials), last.
+	if String(df.get("evolve", "")) != "":
+		out.append({"k": EVOLVE_PART, "t": String(df["evolve"])})
 	return out
+
+
+## L23: the caption of a card's Evolve section in text_parts.
+const EVOLVE_PART := "Evolve"
 
 
 ## Activated abilities with their short button label and full description (F02-04).
@@ -274,6 +295,11 @@ static func _pending_view(m: MatchEngine, viewer: int) -> Dictionary:
 	if pd["kind"] == "trap_response" and pd.has("event"):
 		out["cause"] = _cause_refs(m, pd["event"])
 		out["mentions"] = event_cards(m, pd["event"], viewer)
+	# L23: an Evolve prompt shows the unit beside the card it becomes (both public information).
+	if pd["kind"] == "evolve" and m.cards.has(int(pd.get("source", -1))) and pd.has("evolve_to"):
+		out["evolve_to"] = int(pd["evolve_to"])
+		out["mentions"] = [{"role": "evolve_from", "card": card_view(m, int(pd["source"]), viewer)},
+			{"role": "evolve_to", "card": def_view(int(pd["evolve_to"]))}]
 	# The card itself, so the input panel can show it wherever it is (a resolving Spell is in no
 	# pile the viewer's player view lists). Given only with source_uid, i.e. when visible.
 	if out.has("source_uid"):
@@ -398,6 +424,7 @@ static func _public_kind(kind: String) -> String:
 		"stance": return "choosing a stance"
 		"attack_target": return "choosing an attack target"
 		"confirm": return "deciding whether to use an effect"
+		"evolve": return "deciding whether to evolve a unit"
 	return "making a choice"
 
 

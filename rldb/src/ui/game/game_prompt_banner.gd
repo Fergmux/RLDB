@@ -73,7 +73,9 @@ const DECLINE_LABELS := ["Pass", "No", "Skip"]
 const SKIP_TIP := "Let this one go. You are asked again at the next chance to respond."
 const PASS_TURN_TIP := "Stop offering me Traps until this turn ends."
 ## Prompt kinds whose options are a vertical list (accept first, decline last) rather than a flow.
-const LIST_KINDS := ["trap_response", "confirm", "order"]
+const LIST_KINDS := ["trap_response", "confirm", "order", "evolve"]
+## L23: the Evolve prompt's explanation line.
+const EVOLVE_HOW := "Free, no AP. It keeps its zone, stance, statuses and stat changes. Not a Summon."
 ## Stance answers (#34): full-width 44 px plates with the card badge glyph, Attack in the ember
 ## family and Defense in steel, so the two answers read apart at a glance.
 const STANCE_FAMILY := {"atk": "danger", "def": "steel"}
@@ -86,7 +88,8 @@ const TOAST_FADE := 0.12
 const STATUS_ANCHOR_MS := 1500
 ## G03: caption under each card of the response strip, by role.
 const ROLE_CAPTIONS := {"attacker": "Attacker", "target": "Target", "summoned": "Summoned",
-	"activated": "Activated", "destroyed": "Destroyed", "direct": "Direct attack"}
+	"activated": "Activated", "destroyed": "Destroyed", "direct": "Direct attack",
+	"evolve_from": "Now", "evolve_to": "Evolves into"}   # L23: the Evolve prompt
 
 ## The host screen this component works on.
 var gs: GameScreen
@@ -297,7 +300,7 @@ func _build_subject(col: VBoxContainer) -> void:
 ## is given only when visible (MatchView._add_source) and the name is matched among my own visible
 ## cards; a Trap response names no card (which face-down card may respond stays hidden).
 func subject_for(pd: Dictionary) -> Dictionary:
-	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) == "trap_response":
+	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) in ["trap_response", "evolve"]:
 		return {}
 	# G08: a zone choice is about the card it places (e.g. a unit summoned from Spent).
 	var placing := gs.details.find_card(int(pd.get("placing_uid", -1)))
@@ -386,7 +389,7 @@ func _build_mentions(col: VBoxContainer) -> void:
 ## responds to (MatchView.event_cards, already redacted for this seat), then {"role": "response"}
 ## for each card of mine that may respond (an "Activate" option). [] for any other prompt.
 static func mentions_for(pd: Dictionary) -> Array:
-	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) != "trap_response":
+	if pd.is_empty() or not bool(pd.get("mine", false)) or not (String(pd.get("kind", "")) in ["trap_response", "evolve"]):
 		return []
 	var out: Array = []
 	for e in pd.get("mentions", []):
@@ -419,6 +422,8 @@ func _render_mentions(pd: Dictionary) -> void:
 		if i > 0:
 			var arrow := MentionArrow.new()
 			arrow.attack = String(e.get("role", "")) in ["target", "direct"]
+			if String(e.get("role", "")) == "evolve_to":
+				arrow.tint = EvolveGlyph.COLOR   # L23
 			arrow.custom_minimum_size = Vector2(MENTION_ARROW_W, 0)
 			arrow.size_flags_vertical = Control.SIZE_FILL
 			arrow.tooltip_text = "attacks" if arrow.attack else ""
@@ -606,12 +611,16 @@ class MentionArrow extends Control:
 	var attack := true
 	## Height of the cards beside it (the arrow sits on their middle, above the captions).
 	var card_h := 0.0
+	## L23: the arrow's colour when set (alpha > 0), e.g. the Evolve colour between the two forms.
+	var tint := Color(0, 0, 0, 0)
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_PASS
 
 	func _draw() -> void:
 		var col := GameTargeting.HOSTILE_COLOR if attack else Color(UIStyle.BRONZE, 0.9)
+		if tint.a > 0.0:
+			col = tint
 		var y := card_h / 2.0 if card_h > 0.0 else size.y * 0.38
 		var x0 := 2.0
 		var x1 := size.x - 2.0
@@ -799,6 +808,8 @@ func _render_banner() -> void:
 		# G03: with my responding cards shown under what they answer, the buttons say the rest.
 		var responders := mentions_for(pd).filter(func(e): return String(e.get("role", "")) == "response")
 		how = "" if not responders.is_empty() else ("Your opponent is waiting: activate a Trap or skip." if _has_activate(pd) else "Your opponent is waiting: skip to continue.")
+	elif pd["kind"] == "evolve":
+		how = EVOLVE_HOW   # L23
 	elif int(pd["max"]) > 1:
 		how = _multi_status(pd)
 	_banner_how = how
@@ -832,7 +843,7 @@ func _render_banner() -> void:
 			b.set_meta("type_choice", String(o["label"]))
 		elif pd["kind"] == "confirm" and String(o["label"]) == MatchEngine.SACRIFICE_YES:
 			b = UIStyle.danger_button(label, 14)       # J11: a sacrifice cannot be undone
-		elif pd["kind"] == "attack_target" or (not pick and not decline and (String(o["label"]).begins_with("Activate") or (pd["kind"] == "confirm" and String(o["label"]) == "Yes"))):
+		elif pd["kind"] == "attack_target" or (not pick and not decline and (String(o["label"]).begins_with("Activate") or (pd["kind"] == "confirm" and String(o["label"]) == "Yes") or (pd["kind"] == "evolve" and String(o["label"]) == MatchEngine.EVOLVE_YES))):
 			b = UIStyle.primary_button(label, 14)
 		elif String(o["label"]) == EffectEngine.TRAP_PASS_TURN:
 			b = UIStyle.wine_button(label, 14)        # D13: the third, "stand down" answer

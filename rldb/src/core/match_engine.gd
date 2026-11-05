@@ -35,7 +35,9 @@ func setup(decks: Array, first_player: int, seed_value: int, cfg: Dictionary = {
 	for p in 2:
 		if cfg.has("names"):
 			players[p]["name"] = cfg["names"][p]
-		for id in decks[p]:
+		# L23: an evolution-only form never starts a game as its own card (an older saved deck or
+		# series may list one): it is its base card, which can evolve into it.
+		for id in CardDB.sanitize_deck(decks[p]):
 			var uid := _create_instance(int(id), p)
 			if CardDB.is_extra_category(CardDB.get_def(int(id))["category"]):
 				cards[uid]["zone"] = "extra"
@@ -91,8 +93,51 @@ func _start_turn(p: int) -> void:
 		if cards[du]["zone"] == "spent":
 			push_frame(make_frame(du, p, [{"op": "summon", "target": du, "place": "orig", "stance": "choose"}], "%s returns" % name_of(du)))
 	players[p]["delayed"] = []
-	emit("start_turn", {"player": p})
+	# L23: Evolve prompts come first among the start-of-turn effects, one per evolvable unit in Field
+	# order; the "at the start of your turn" effects follow (start_turn_effects), and a unit that just
+	# evolved skips them this turn (its new form's first fire next turn).
+	var evolvers := field_units(p).filter(func(u): return can_evolve(u))
+	if evolvers.is_empty():
+		emit("start_turn", {"player": p})
+	else:
+		push_frame(make_frame(-1, p, [{"op": "start_turn_effects"}], "start of turn"))
+		for i in range(evolvers.size() - 1, -1, -1):
+			push_frame(make_frame(evolvers[i], p, [{"op": "evolve_offer"}], "Evolve %s" % name_of(evolvers[i])))
 	run()
+
+
+## L23: the two answers of an Evolve prompt (the bot always takes EVOLVE_YES).
+const EVOLVE_YES := "Evolve"
+const EVOLVE_SKIP := "Skip"
+
+
+## L23 (owner feedback 2026-11-05, confirmed rules): "Evolve <card> into <next>?" for the frame's unit,
+## at the start of its controller's turn: free (no AP), Evolve or Skip, no response window (it is not
+## a Summon and not an effect activation). Asked only while the unit can still evolve.
+func _op_evolve_offer(f: Dictionary, op: Dictionary) -> int:
+	var uid: int = f["src"]
+	var ans: Variant = take_answer(f)
+	var ok: bool = cards.has(uid) and can_evolve(uid) and int(cards[uid]["ctl"]) == int(f["ctl"])
+	if ans != null:
+		if int(ans[0]) == 1 and ok:
+			evolve_unit(uid)
+		elif ok:
+			add_log("%s does not evolve %s." % [pname(f["ctl"]), name_of(uid)])
+		return R.CONT
+	if not ok:
+		return R.CONT
+	var to := CardDB.evolves_into(int(cards[uid]["id"]))
+	return ask(f, f["ctl"], "evolve", "Evolve %s into %s?" % [name_of(uid), String(CardDB.get_def(to)["name"])],
+		[{"v": 1, "label": EVOLVE_YES}, {"v": 0, "label": EVOLVE_SKIP}], 1, 1, false, {"evolve_to": to})
+
+
+## L23: the start-of-turn triggers after the Evolve prompts. A unit that evolved this turn does not
+## fire its new form's "at the start of your turn" effects until its controller's next turn.
+func _op_start_turn_effects(f: Dictionary, op: Dictionary) -> int:
+	emit("start_turn", {"player": f["ctl"]})
+	trigger_queue = trigger_queue.filter(func(t): return not (String(t["event"].get("name", "")) == "start_turn" \
+			and cards.has(int(t["uid"])) and int(cards[int(t["uid"])].get("evolved_turn", -1)) == turn))
+	return R.CONT
 
 
 ## Advances to the next phase, or ends the turn from Main Phase 2.

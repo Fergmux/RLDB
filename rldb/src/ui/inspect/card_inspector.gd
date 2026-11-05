@@ -30,6 +30,8 @@ var _dim: ColorRect
 var _card_box: Control
 var _card_widget: CardWidget
 var _details: CardDetailsPanel
+## L23: the "Evolves into" section under the details.
+var _evolve: EvolvePreview
 var _scroll: ScrollContainer
 var _sig: int = 0
 ## Where the card came from (global rect; empty: no fly) and the flying copy while it moves.
@@ -119,6 +121,11 @@ func details() -> CardDetailsPanel:
 	return _details
 
 
+## L23: the "Evolves into" section (visible only for a card that evolves).
+func evolve_preview() -> EvolvePreview:
+	return _evolve
+
+
 ## Shows `c` (rebuilds only when it changed). A non-inspectable view closes the inspector.
 func show_card(c: Dictionary) -> void:
 	if not is_inspectable(c):
@@ -139,6 +146,7 @@ func show_card(c: Dictionary) -> void:
 	# D14: a Spell / Trap / Power has no stats section, so its rules read larger and fill the column.
 	_details.text_scale = DETAILS_TEXT_SCALE if CardDetailsPanel.is_unit_view(c) else DETAILS_TEXT_SCALE * 1.3
 	_details.show_card(c)
+	_evolve.show_for(c)
 	_scroll.set_deferred("scroll_vertical", keep if same_card else 0)
 
 
@@ -235,10 +243,21 @@ func _build() -> void:
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(_scroll)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 14)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(body)
 	_details = CardDetailsPanel.new()
 	_details.text_scale = DETAILS_TEXT_SCALE
 	_details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroll.add_child(_details)
+	body.add_child(_details)
+	# L23: "Evolves into" (hidden unless the card evolves). Its preview opens the next card's inspector
+	# on top of this one, so the chain can be walked and each one closes back to the last.
+	_evolve = EvolvePreview.new()
+	_evolve.open_requested.connect(func(v: Dictionary, from: Rect2) -> void:
+		if not _closing and is_inside_tree():
+			CardInspector.open(get_parent(), v, Callable(), from))
+	body.add_child(_evolve)
 	resized.connect(_relayout)
 
 

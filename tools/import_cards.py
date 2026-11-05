@@ -117,6 +117,14 @@ AMBIGUOUS_ARCANE = "equivilant"
 # F03-09: basic-unit display names drop the redundant "(Type)" suffix; Type stays in `type`.
 BASIC_TYPE_SUFFIX = " ("
 
+# L23 (owner feedback 2026-11-05): the Evolve mechanic. A card with `evolves_into` carries its own
+# Evolve section (`evolve`, shown apart from the rules texts, like a Fusion's Material) and, at the
+# start of its controller's turn, may be replaced by that card for the rest of the game. The evolved
+# forms are evolution-only: never drafted, offered or deck-built (CardDB.is_collectible). Not a sheet
+# column yet, so the chain is declared here. Every card gets both fields ("" / null when none).
+EVOLVE_TEXT = "At the start of your turn you can Evolve this Unit."
+EVOLUTIONS = {155: 156, 156: 157}    # Symbiote Spawn -> Symbiote Larva -> Symbiote Siphonophore
+
 
 # 2026-10-20 export: a find-and-replace left some rules texts starting "change the Stance". A text
 # (or a section after its "On Summon:" / "On Play:" / "On Destroy:" label) starts with a capital.
@@ -248,6 +256,8 @@ def build(card_csv=None):
             "on_field": row["On Field"].strip(),
             "on_destruction": row["On Destruction"].strip(),
             "material": material,
+            "evolve": EVOLVE_TEXT if cid in EVOLUTIONS else "",
+            "evolves_into": EVOLUTIONS.get(cid),
             "description": description,
             "art": {"image": art["image"], "card_img": art["card_img"], "type_icon": art["type_icon"]},
             # A new card can arrive without a sheet index (2026-11-03): null, sorted after the rest.
@@ -285,6 +295,10 @@ def build(card_csv=None):
     assert len(set(ids)) == len(ids), "duplicate ids"
     for c in cards:
         assert "temp" not in (c["condition"] + c["on_summon"]).lower().split(), c["id"]
+    by_id = {c["id"]: c for c in cards}
+    for base, nxt in EVOLUTIONS.items():
+        assert base in by_id and nxt in by_id and nxt != base, (base, nxt)
+        assert {by_id[base]["category"], by_id[nxt]["category"]} <= {"basic_unit", "unit"}, (base, nxt)
     cards.sort(key=lambda c: (c["source"]["index"] is None, c["source"]["index"] or 0, c["id"]))
     return {"cards": cards, "unassigned_source_notes": []}
 
