@@ -29,6 +29,8 @@ const STEP_LIMIT := 6000
 var opts := {"pairs": 30, "seed": 1, "a": "new", "b": "old", "draft": 0.25, "series": 0, "out": "", "verbose": false, "log": -1}
 var _game_index := 0
 var times := {"a": [], "b": []}
+## Commands sent per brain, by type (what each brain actually plays).
+var tallies := {"a": {}, "b": {}}
 var report := {}
 
 
@@ -124,6 +126,9 @@ func _run() -> void:
 		res["mean_turns"], res["draws"], res["stalls"], res["refusals"]])
 	print("  decision ms  A: %s" % JSON.stringify(res["a_ms"]))
 	print("  decision ms  B: %s" % JSON.stringify(res["b_ms"]))
+	res["tallies"] = tallies
+	print("  commands A: %s" % JSON.stringify(tallies["a"]))
+	print("  commands B: %s" % JSON.stringify(tallies["b"]))
 	if not refusal_samples.is_empty():
 		print("  refusals: %s" % str(refusal_samples))
 	if int(opts["series"]) > 0:
@@ -205,6 +210,9 @@ func _play(decks: Array, first: int, seed_value: int, a_seat: int) -> Dictionary
 			break
 		if per_turn > 80 and m.pending.is_empty():
 			cmd = {"t": "next_phase"}      # the BotPlayer's per-turn safety valve
+		var tk: Dictionary = tallies["a" if who == a_seat else "b"]
+		var key := String(cmd.get("t", "?"))
+		tk[key] = int(tk.get(key, 0)) + 1
 		var err := m.submit(who, cmd)
 		if err != "":
 			refusals += 1
