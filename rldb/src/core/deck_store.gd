@@ -42,7 +42,8 @@ static func list() -> Array:
 		return []
 	var out := []
 	for e in d:
-		out.append({"name": String(e.get("name", "Deck")), "cards": e.get("cards", []).map(func(i): return int(i))})
+		# L23: a deck saved with an evolution-only form (Symbiote Larva / Siphonophore) lists its base card.
+		out.append({"name": String(e.get("name", "Deck")), "cards": CardDB.sanitize_deck(e.get("cards", []))})
 	return out
 
 

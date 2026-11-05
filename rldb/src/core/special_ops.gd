@@ -99,6 +99,8 @@ func _op_copy_stats(f: Dictionary, op: Dictionary) -> int:
 	if op.get("type", false):
 		cards[me]["type_o"] = unit_type(s)
 	add_log("%s copies %s: now %d/%d." % [name_of(me), name_of(s), atk_of(me), def_of(me)])
+	if op.get("art", false):
+		copy_art(me, s)                   # L11: it shows the copied unit's art while on the Field
 	return R.CONT
 
 

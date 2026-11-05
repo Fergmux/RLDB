@@ -348,7 +348,7 @@ static func from_save(d: Dictionary) -> Series:
 		# means vs bot), so a resumed hot-seat series keeps its one-press Start (G05).
 		s.cfg["mode"] = "bot" if String(s.names[1]) == "Bot" else "local"
 	s.stage = d["stage"]
-	s.decks = d["decks"].map(func(dk): return dk.map(func(i): return int(i)))
+	s.decks = d["decks"].map(func(dk): return CardDB.sanitize_deck(dk))   # L23: no evolution-only cards
 	s.deck_names = d["deck_names"]
 	s.scores = d["scores"].map(func(x): return int(x))
 	s.game_no = int(d["game_no"])
@@ -443,7 +443,7 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 			var cap_err := DeckStore.validate(ids)   # F16: Main + Extra <= 99, Extra <= 15
 			if cap_err != "":
 				return cap_err
-			decks[p] = ids        # Main/Extra placement follows each card's category at game start
+			decks[p] = CardDB.sanitize_deck(ids)   # L23: base cards only; Main/Extra placement follows category at game start
 			deck_names[p] = String(cmd.get("name", "Custom deck")).substr(0, 40)
 			deck_ready[p] = true
 			note("deck_locked", {"p": p, "source": "custom", "name": ""})
@@ -533,7 +533,7 @@ func _finish_draft(p: int) -> void:
 func _draft_pool(cat: String) -> Array:
 	var out := []
 	for d in CardDB.all():
-		if not CardScripts.is_implemented(d["id"]):
+		if not CardScripts.is_implemented(d["id"]) or not CardDB.is_collectible(d["id"]):   # L23
 			continue
 		var c: String = d["category"]
 		var ok := false
@@ -637,7 +637,7 @@ static func reward_pool(cat: String) -> Array:
 	var cats: Array = EXTRA_CATEGORIES if cat == "extra" else [cat]
 	var pool := []
 	for d in CardDB.all():
-		if CardScripts.is_implemented(d["id"]) and d["category"] in cats:
+		if CardScripts.is_implemented(d["id"]) and CardDB.is_collectible(d["id"]) and d["category"] in cats:   # L23
 			pool.append(d["id"])
 	return pool
 

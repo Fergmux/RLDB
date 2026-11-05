@@ -16,7 +16,7 @@ func _screen() -> CardListScreen:
 
 func test_opens_with_every_card_and_first_selected() -> void:
 	var s := _screen()
-	assert_int(s.browser.visible_count()).is_equal(CardDB.all().size())
+	assert_int(s.browser.visible_count()).is_equal(CardDB.collectible().size())
 	assert_int(s.shown_id()).is_equal(int(CardDB.all()[0]["id"]))
 	assert_bool(s.preview_is_empty()).is_false()
 
@@ -45,7 +45,7 @@ func test_search_and_no_results_state() -> void:
 	assert_bool(s.browser._no_match.visible).is_true()
 	assert_bool(s.preview_is_empty()).is_true()
 	s.browser.clear_filters()
-	assert_int(s.browser.visible_count()).is_equal(CardDB.all().size())
+	assert_int(s.browser.visible_count()).is_equal(CardDB.collectible().size())
 	assert_bool(s.browser._no_match.visible).is_false()
 	assert_bool(s.preview_is_empty()).is_false()
 

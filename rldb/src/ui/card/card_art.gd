@@ -261,10 +261,19 @@ static func texture_for(view: Dictionary) -> Texture2D:
 	return _art_texture(view)
 
 
+## L11: the card id whose art a card view shows: `art_id` (a unit on the Field showing a copied
+## unit's art, MatchView.card_view) when present, else the card's own id.
+static func art_id_of(view: Dictionary) -> int:
+	var a = view.get("art_id")
+	if a != null:
+		return int(a)
+	return int(view.get("id", -1))
+
+
 static func _art_texture(view: Dictionary) -> Texture2D:
 	if not view.has("id") or view.get("id") == null:
 		return null
-	var path := path_for(int(view["id"]))
+	var path := path_for(art_id_of(view))
 	if _tex_cache.has(path):
 		return _tex_cache[path]
 	var tex: Texture2D = null

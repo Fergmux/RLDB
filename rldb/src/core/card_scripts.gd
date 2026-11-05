@@ -246,8 +246,9 @@ static func _build() -> Dictionary:
 	# unit summoned gets 1 Pierce as it lands (the Magentric hook).
 	t[15] = {"tribute_bonus": {"s": "pierce", "n": 1}, "abilities": [abil("Apply 1 Pierce to a unit", [ch({"kind": "unit"}, "u"), st("$u", "pierce")])],
 		"on": [trig("destroyed", [ch({"kind": "unit", "race": "Mage", "column": true}, "u", true, "Apply 1 Eternal to a Mage unit in this column?"), st("$u", "eternal")])]}
+	# L11 (2026-11-05): Loak (19) and Mimic (95) also take the copied unit's art while on the Field ("art").
 	t[19] = {"on": [trig("summoned", [ch({"kind": "unit", "side": "opp", "unprotected": true, "column": true}, "u", false, "Choose an opponent's unprotected unit in this column."),
-		need("u"), st("$u", "eternal"), {"op": "copy_stats", "from": "$u", "race": true}])]}
+		need("u"), st("$u", "eternal"), {"op": "copy_stats", "from": "$u", "race": true, "art": true}])]}
 	t[20] = {"on": [trig("summoned", [{"op": "copy_all_buffs"}]), trig("destroyed", [ch({"kind": "unit"}, "u", true, "Apply 1 Pierce to a unit?"), st("$u", "pierce")])],
 		"aura": [{"to": "self", "atk": {"count": {"kind": "unit", "side": "opp"}, "mul": 4}, "def": {"count": {"kind": "unit", "side": "opp"}, "mul": 4}}]}
 	# 2026-11-03: every unit the opponent summons (any kind of summon) while Shen is on the Field
@@ -349,6 +350,8 @@ static func _build() -> Dictionary:
 		trig("tribute_or_sacrifice", [{"op": "ap", "n": 1}])]}
 	t[162] = {"flags": ["direct_attack"], "on": [trig("destroyed", [by_unit_st("blind", 1)]),
 		trig("sacrificed", [{"op": "cost_perm", "target": "self", "n": 1}])]}
+	# L23 (2026-11-05): Spawn (155) evolves into Larva (156), which evolves into Siphonophore (157). The
+	# chain is card data (cards.json `evolves_into`); MatchEngine asks at the start of the turn.
 	t[155] = {"on": [trig("summoned", [st("self", "eternal")])], "aura": [{"to": "protector", "atk": 6}]}
 	t[156] = {"on": [trig("summoned", [st("self", "eternal")]),
 			trig("start_turn", [{"op": "draw", "n": 1}, ch({"kind": "hand", "side": "self"}, "h", false, "Discard a card: send it from Hand to Spent."),
@@ -574,7 +577,7 @@ static func _build() -> Dictionary:
 	t[66] = {"on": [trig("summoned", [ch({"kind": "unit", "side": "self", "adjacent": true}, "u", false, "Apply 1 Eternal to an adjacent unit."), st("$u", "eternal")])],
 		"abilities": [abil("Draw a card, then discard a card", [{"op": "draw", "n": 1}, ch({"kind": "hand", "side": "self"}, "h", false, "Discard a card: send it from Hand to Spent."), {"op": "move", "target": "$h", "to": "spent"}])]}
 	t[95] = {"on": [trig("summoned", [ch({"kind": "unit", "side": "opp", "unprotected": true, "column": true}, "u", false, "Choose an opponent's unprotected unit in this column."),
-		need("u"), st("$u", "paralyse", 2), {"op": "copy_stats", "from": "$u", "type": true}]),
+		need("u"), st("$u", "paralyse", 2), {"op": "copy_stats", "from": "$u", "type": true, "art": true}]),
 		trig("destroyed", [{"op": "double_debuffs", "side": "opp"}])]}
 	# The Creeping Null (2026-11-03): an optional Rune On Summon; On Destroy its controller destroys a
 	# unit with at least 1 Rune, either side (mandatory while one exists).

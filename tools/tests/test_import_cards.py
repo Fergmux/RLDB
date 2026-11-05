@@ -197,6 +197,20 @@ class ImportRegressionTest(unittest.TestCase):
             self.assertEqual(self.by_id[cid]["art"], {"image": "", "card_img": "", "type_icon": ""}, cid)
         self.assertEqual([c["id"] for c in self.data["cards"][-3:]], [189, 190, 191])   # no index: sorted last
 
+    def test_evolve_chain_of_2026_11_05(self):
+        # L23: Spawn -> Larva -> Siphonophore, each step with the owner's exact Evolve text; every
+        # other card carries the empty fields, and the Evolve text never joins the rules texts.
+        text = "At the start of your turn you can Evolve this Unit."
+        self.assertEqual((self.by_id[155]["evolve"], self.by_id[155]["evolves_into"]), (text, 156))
+        self.assertEqual((self.by_id[156]["evolve"], self.by_id[156]["evolves_into"]), (text, 157))
+        self.assertEqual((self.by_id[157]["evolve"], self.by_id[157]["evolves_into"]), ("", None))
+        for c in self.data["cards"]:
+            self.assertIn("evolve", c)
+            self.assertIn("evolves_into", c)
+            if c["id"] not in (155, 156):
+                self.assertEqual((c["evolve"], c["evolves_into"]), ("", None), c["id"])
+            self.assertNotIn("Evolve", c["description"], c["id"])
+
     def test_damage_conversion_costs_one_by_owner_ruling(self):
         self.assertEqual(self.by_id[47]["cost"], 1)
         self.assertEqual(self.by_id[47]["source"]["raw"]["cost"], "0")

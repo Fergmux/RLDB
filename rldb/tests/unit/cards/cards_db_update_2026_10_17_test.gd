@@ -405,6 +405,7 @@ func test_c156_symbiote_larva_boosts_protector_by_ten_and_draws_then_discards() 
 	var hand_before: int = m.players[1]["hand"].size()
 	var spent_before: int = m.players[1]["spent"].size()
 	TB.to_turn2(m)                                               # player 1's turn starts
+	TB.choose(m, ["Skip"])                                       # L23: the Evolve prompt comes first
 	assert_int(int(m.pending.get("player", -1))).is_equal(1)
 	assert_str(String(m.pending.get("prompt", ""))).contains("Discard")
 	var pick: int = int(m.pending["options"][0]["v"])
