@@ -33,6 +33,8 @@ const TRANSIENT_HOLD := 0.55
 ## attacker; without the hold the hand-over cut it (and the Trap's spotlight) at once.
 const HANDOVER_TAIL := 0.6
 const HANDOVER_TAGS := ["attack", "direct", "lethal", "spotlight"]
+## L8: the status events FxStatus shows (applied, stopped by a ward, paying out, wearing off).
+const STATUS_FX := ["status", "status_blocked", "status_tick", "status_expire"]
 
 ## L4: seconds past a batch's planned end after which a batch that still holds the queue (a tween that
 ## never ends would be a bug) is finished so the views behind it are shown.
@@ -70,6 +72,10 @@ var _summon := FxSummon.new(self)
 var _serpent := FxSerpent.new(self)
 ## L23 / L11: the Evolve set piece and the copied-art shimmer.
 var _evolve := FxEvolve.new(self)
+## L8: status application, ward, tick and expiry looks.
+var _status := FxStatus.new(self)
+## L9: Hypnotise's glide of a unit to its new zone (and home again).
+var _control := FxControlMove.new(self)
 ## B5: ghosts of cards summoned and removed in the same batch, by transient_key().
 var _transient := {}
 ## True from the moment a view that ends the game arrives until its victory / defeat presentation has
@@ -324,9 +330,17 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			lp.hold_hp(before)
 			add_cleanup_on(lp, func(p: PlayerPlate) -> void: p.release_hp(true))
 	var mats := {}   # player -> material events of the special summon that follows (F03-17 / D8)
+	var status_next := {}   # L8: card slot -> earliest time its next status look may start
 	for i in events.size():
 		var e: Dictionary = events[i]
 		var k := String(e["k"])
+		# L8: statuses landing on one card play one after another (FxStatus.STAGGER), never piled up.
+		var st_status := t
+		if k in STATUS_FX:
+			var sat: Dictionary = e.get("at", {})
+			var sk := "%d:%s:%d" % [int(sat.get("p", -1)), String(sat.get("zone", "")), int(sat.get("slot", -1))]
+			st_status = maxf(t, float(status_next.get(sk, 0.0)))
+			status_next[sk] = st_status + (0.12 if fast else FxStatus.STAGGER)
 		# F12: the attack was declared in an earlier batch (trap window): the killing blow plays here.
 		if lstrike and int(lethal["attack"]) < 0 and i == int(lethal["start"]):
 			var st_l := maxf(t, attack_end)
@@ -346,8 +360,10 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			snd = ""   # the killing blow plays its own boom
 		elif k == "destroy" and i == ldestroy:
 			snd = ""   # F12: shown (with its sound) at the impact of the killing blow
+		elif k in STATUS_FX:
+			snd = FxStatus.sound_for(e)   # L8: one cue per status ("status_poison" ...), ward, tick, expiry
 		if snd != "":
-			var st0 := maxf(t, attack_end) if k == "attack" else (t + 0.2 if k == "game_over" else t)
+			var st0 := maxf(t, attack_end) if k == "attack" else (t + 0.2 if k == "game_over" else (st_status if k in STATUS_FX else t))
 			sched.append([st0, Sfx.play.bind(snd, 0.0, 0.04), "sfx:" + snd])
 			if k == "attack" and not e.get("to", {}).get("direct", false) and not (lmode == "unit" and i == int(lethal["attack"])):
 				var hit := Sfx.hit_for(_defender_view(e, prev_mv))   # L1: a shield clang into Defense stance
@@ -443,8 +459,34 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 					sched.append([t, _piles.destroy.bind(e, prev_mv), "destroy:%d:%d" % [int(e["at"]["p"]), int(e["at"]["slot"])]])
 					t += 0.12
 			"status":
-				sched.append([t, _cards.status.bind(e["at"], String(e["s"]), int(e.get("n", 1))), "status"])
+				# L8 (FxStatus): the status's own look, its badge stamped onto the card and its name.
+				sched.append([st_status, _status.apply.bind(e["at"], String(e["s"]), int(e.get("n", 1))), "status:" + String(e["s"])])
 				t += 0.06
+			"status_blocked":
+				sched.append([st_status, _status.blocked.bind(e["at"], String(e.get("s", "")), String(e.get("by", "cleanse"))), "status_blocked"])
+				t += 0.06
+			"status_tick":
+				sched.append([st_status, _status.tick.bind(e["at"], String(e.get("s", "")), int(e.get("n", 1))), "status_tick"])
+				t += 0.04
+			"status_expire":
+				sched.append([st_status, _status.expire.bind(e["at"], String(e.get("s", ""))), "status_expire"])
+				t += 0.04
+			"control":
+				# L9 (FxControlMove): the unit lifts, glides to its new zone with a violet swirl and settles;
+				# sent to Spent on its return (its zone was filled), it swirls and flies to the pile.
+				var cto: Dictionary = e.get("to", {})
+				var cfrom: Dictionary = e.get("from", {})
+				if cto.is_empty():
+					sched.append([t, _control.swirl_at.bind(cfrom), "control_swirl"])
+					if not cfrom.is_empty():
+						var dfx := {"k": "destroy", "at": cfrom, "dest": String(e.get("dest", "spent"))}
+						if e.has("id"):
+							dfx["id"] = e["id"]
+						sched.append([t + 0.15, _piles.destroy.bind(dfx, prev_mv), "control_spent"])
+				else:
+					_prehide(int(cto["p"]), String(cto.get("zone", "unit")), int(cto["slot"]), t, sched, _control.move.bind(e))
+					sched[-1].append("control")
+				t += 0.2
 			"stat":
 				if e.has("from"):
 					sched.append([t, _cards.effect_arrow.bind(e["from"], e["at"]), "arrow"])

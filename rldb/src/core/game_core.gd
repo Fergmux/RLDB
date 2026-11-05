@@ -785,9 +785,25 @@ func change_cost_perm(uid: int, n: int, private_log: bool = false) -> void:
 		add_log(text)
 
 
-## Removes n stacks of status s from uid.
+## Removes n stacks of status s from uid. L8: a status that wears off a card on the Field emits the
+## presentation event {"k": "status_expire", "at": fx_pos, "s": s}.
 func decrement_status(uid: int, s: String, n: int = 1) -> void:
-	_set_status(uid, s, status_count(uid, s) - n)
+	var before := status_count(uid, s)
+	_set_status(uid, s, before - n)
+	if before > 0 and status_count(uid, s) <= 0:
+		status_fx(uid, "status_expire", s)
+
+
+## L8: a presentation event about status `s` on card `uid` ("status_tick" / "status_expire"), when the
+## card is on the Field (field statuses are public). `n` > 0 adds the amount (a tick's Damage / Heal).
+func status_fx(uid: int, k: String, s: String, n: int = 0) -> void:
+	var pos := fx_pos(uid)
+	if pos.is_empty():
+		return
+	var ev := {"k": k, "at": pos, "s": s}
+	if n > 0:
+		ev["n"] = n
+	add_fx(ev)
 
 
 # ---------------------------------------------------------------- HP and AP

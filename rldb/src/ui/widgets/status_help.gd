@@ -123,7 +123,7 @@ static func _label_hover(label: Label, at: Vector2) -> void:
 			var b := label.get_character_bounds(c)
 			r = b if r.size == Vector2.ZERO else r.merge(b)
 		if r.grow(1.0).has_point(at):
-			StatusTip.show_for(label, "", label.get_global_transform_with_canvas() * r, describe(sp["key"]))
+			StatusTip.show_for(label, "", label.get_global_transform_with_canvas() * r, describe(sp["key"]), String(sp["key"]))
 			return
 	StatusTip.hide_for(label)
 
@@ -137,7 +137,8 @@ static func watch_rich(rtl: RichTextLabel) -> void:
 		var m := str(meta)
 		if m.begins_with(META):
 			var at := rtl.get_local_mouse_position()
-			StatusTip.show_for(rtl, "", rtl.get_global_transform_with_canvas() * Rect2(at - Vector2(4, 10), Vector2(8, 20)), describe(m.substr(META.length()))))
+			var key := m.substr(META.length())
+			StatusTip.show_for(rtl, "", rtl.get_global_transform_with_canvas() * Rect2(at - Vector2(4, 10), Vector2(8, 20)), describe(key), key))
 	rtl.meta_hover_ended.connect(func(meta):
 		if str(meta).begins_with(META):
 			StatusTip.hide_for(rtl))

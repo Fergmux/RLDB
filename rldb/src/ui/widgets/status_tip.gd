@@ -6,8 +6,13 @@ extends CanvasLayer
 ## StatusHelp shows the same tip for a status name in text). One shared tip per scene tree, drawn
 ## above everything; it never takes the mouse.
 ##
-##   StatusTip.show_for(owner, "Poison ×2", owner.get_global_transform_with_canvas() * icon_rect, effect)
+##   StatusTip.show_for(owner, "Poison ×2", owner.get_global_transform_with_canvas() * icon_rect, effect, "poison")
 ##   StatusTip.hide_for(owner)     # only hides it while `owner` is the one showing it
+##
+## L8 (owner feedback 2026-11-05): given the status key, the tip's header repeats the card's enamelled
+## badge, writes the name in that badge's accent colour and adds a small "Buff" / "Debuff" / "Counter"
+## caption, so the tip and the badge read as one thing. A status word hovered in text gets the same
+## header with the bare name.
 
 ## Canvas layer of the tip: above the card inspector and every modal.
 const LAYER := 120
@@ -17,6 +22,8 @@ const FONT_SIZE := 15
 const DETAIL_FONT_SIZE := 14
 ## Width the effect section wraps at.
 const DETAIL_W := 320.0
+## L8: size (px) of the badge in the tip's header.
+const BADGE_PX := 24.0
 ## F5 tooltip (design review 1.4.3 / #104): parchment-dark body with a light leather grain, a 4 px
 ## radius and a 6 px pointer notch toward the source.
 const BODY := Color("1b1712")
@@ -27,6 +34,9 @@ static var _tip: StatusTip
 
 var _panel: PanelContainer
 var _label: Label
+var _head: HBoxContainer
+var _badge: CardStatusIcons.Token
+var _kind: Label
 var _detail_box: PanelContainer
 var _detail: Label
 var _owner_id: int = 0
@@ -37,13 +47,13 @@ var _motion: Tween
 ## Shows `text` next to `anchor` (a screen-space rect, normally the icon: a rect in the owner's local
 ## space times owner.get_global_transform_with_canvas()) for `owner`; `detail` (the effect) goes
 ## in its own section below, when given. An empty `text` shows only the effect.
-static func show_for(owner: Control, text: String, anchor: Rect2, detail: String = "") -> void:
+static func show_for(owner: Control, text: String, anchor: Rect2, detail: String = "", key: String = "") -> void:
 	if owner == null or not owner.is_inside_tree():
 		return
 	if _tip == null or not is_instance_valid(_tip) or not _tip.is_inside_tree():
 		_tip = StatusTip.new()
 		owner.get_tree().root.add_child(_tip)
-	_tip._show(owner, text, anchor, detail)
+	_tip._show(owner, text, anchor, detail, key)
 
 
 ## Hides the tip if `owner` is showing it.
@@ -66,6 +76,13 @@ static func shown_text() -> String:
 	if _tip == null or not is_instance_valid(_tip) or not _tip._panel.visible:
 		return ""
 	return _tip._label.text
+
+
+## The status key whose badge the header shows, or "" (tests).
+static func shown_key() -> String:
+	if _tip == null or not is_instance_valid(_tip) or not _tip._panel.visible or not _tip._badge.visible:
+		return ""
+	return _tip._badge.key
 
 
 ## The effect section shown, or "" (tests).
@@ -94,7 +111,19 @@ func _init() -> void:
 	_label = UIStyle.label("", FONT_SIZE, UIStyle.TEXT)
 	_label.add_theme_font_override("font", UIStyle.font_bold())
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(_label)
+	_head = HBoxContainer.new()
+	_head.add_theme_constant_override("separation", 7)
+	_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_badge = CardStatusIcons.Token.new("", CardStatusIcons.KIND_BUFF, BADGE_PX)
+	_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_head.add_child(_badge)
+	_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_head.add_child(_label)
+	_kind = UIStyle.label("", 12, UIStyle.MUTED)
+	_kind.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_kind.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_head.add_child(_kind)
+	v.add_child(_head)
 	_detail_box = StatusHelp.section_box()
 	_detail = StatusHelp.section_label("")
 	_detail_box.add_child(_detail)
@@ -124,11 +153,22 @@ class Notch extends Control:
 		draw_polyline(PackedVector2Array([pts[0], pts[2], pts[1]]), Color(UIStyle.GOLD, 0.6), 1.0, true)
 
 
-func _show(owner: Control, text: String, anchor: Rect2, detail: String) -> void:
+func _show(owner: Control, text: String, anchor: Rect2, detail: String, key: String = "") -> void:
 	var was_hidden := not _panel.visible
 	_owner_id = owner.get_instance_id()
+	var known := key != "" and CardStatusIcons.ACCENT.has(key)
+	if known and text == "":
+		text = key.capitalize()       # a status word in text: the header names it next to its badge
 	_label.text = text
 	_label.visible = text != ""
+	_label.add_theme_color_override("font_color", CardStatusIcons.accent(key) if known else UIStyle.TEXT)
+	_badge.visible = known
+	_kind.visible = known
+	if known:
+		_badge.key = key
+		_badge.kind = CardStatusIcons.kind_of(key)
+		_kind.text = "Counter" if key == "rune" else ("Buff" if CardDB.is_buff(key) else "Debuff")
+	_head.visible = _label.visible or known
 	_detail.text = detail
 	_detail_box.visible = detail != ""
 	_panel.visible = true

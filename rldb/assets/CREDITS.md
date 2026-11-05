@@ -13,7 +13,11 @@ The in-game list (main menu, Options > Credits) is read from `rldb/data/credits.
 
 ## Status icons (game-icons.net, CC BY 3.0)
 
-Used unmodified (white glyphs), drawn on coloured tokens by `CardStatusIcons`.
+L8 (2026-11-05): the glyphs are composited (dark outline, drop shadow, tinted fill) onto enamelled,
+gold-bezelled badges by `tools/gen_status_badges.py`, which writes `badge_<key>.svg` next to them;
+`CardStatusIcons` draws the badges. The badge frames, enamels and motifs are RLDB's own. The
+Paralyse badge uses RLDB's own lightning bolt; `paralyse.svg` (crossed-chains) stays as the
+plain-token fallback only.
 
 | File | Icon | Author |
 |---|---|---|
@@ -27,7 +31,7 @@ Used unmodified (white glyphs), drawn on coloured tokens by `CardStatusIcons`.
 | nimble.svg | sprint | Lorc |
 | reveal.svg | semi-closed-eye | Lorc |
 | burn.svg | flame | Carl Olsen |
-| paralyse.svg | crossed-chains | Lorc |
+| paralyse.svg | crossed-chains (fallback only; the badge uses RLDB's own bolt) | Lorc |
 | curse.svg | pentacle | Skoll |
 | poison.svg | death-juice | Darkzaitzev |
 | blind.svg | sight-disabled | Skoll |

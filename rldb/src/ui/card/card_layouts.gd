@@ -23,11 +23,13 @@ const TEXT_WELL := Color(0.847, 0.8, 0.69, 0.07)
 ## rim, the same for the pip on the right (gem_center / pip_center). "icons" is [x0, x1, bottom y, icon
 ## size, rows]. L17 (owner, 5 Nov): every jewel sits inside the frame border with its setting and shadow
 ## (card_badge_inset_l17_test); the field gem was 9.8 at (12.5, 12.5), the field ATK / DEF [1|48, 93, 36, 34].
+## L8: the status badges grew (field 14 -> 17, tall 13 -> 15) so the enamelled badges read at a glance;
+## a field row still holds four.
 const FIELD := {"w": 85.0, "art": [3, 3, 79, 79], "banner": [2, 73, 81, 19], "gem_edge": 4.5, "gem_r": 9.4,
-	"icons": [4, 81, 72, 14.0, 2], "atk": [2, 92.5, 34, 32], "def": [49, 92.5, 34, 32], "text": [5, 94, 75, 31],
+	"icons": [4, 81, 72, 17.0, 2], "atk": [2, 92.5, 34, 32], "def": [49, 92.5, 34, 32], "text": [5, 94, 75, 31],
 	"f_name": 10.5, "f_name_min": 9.0, "f_gem": 12.5, "f_stat": 17.0, "f_text": 8.5}
 const TALL := {"w": 120.0, "art": [4, 4, 112, 112], "banner": [2, 100, 116, 19], "gem_edge": 4.7, "gem_r": 11.5,
-	"icons": [6, 114, 98, 13.0, 2], "icons_unit": [35, 85, 98, 13.0, 3], "atk": [0, 66, 36, 34], "def": [84, 67, 36, 33],
+	"icons": [6, 114, 98, 15.0, 2], "icons_unit": [35, 85, 98, 15.0, 3], "atk": [0, 66, 36, 34], "def": [84, 67, 36, 33],
 	"line": [6, 120, 108, 10], "text": [4, 131, 112, 45],
 	"f_name": 12.5, "f_name_min": 8.0, "f_gem": 14.0, "f_stat": 18.0, "f_line": 9.5, "f_text": 10.0}
 ## Smallest rules-text size, as a fraction of the layout's text size.

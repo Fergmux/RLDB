@@ -85,6 +85,7 @@ func _start_turn(p: int) -> void:
 	for u in field_units(p):
 		var m := status_count(u, "medic")
 		if m > 0:
+			status_fx(u, "status_tick", "medic", m)   # L8
 			if change_hp(p, m, " (Medic on %s)" % name_of(u)):
 				return
 			decrement_status(u, "medic")
@@ -174,6 +175,7 @@ func _op_end_turn_statuses(f: Dictionary, op: Dictionary) -> int:
 	for u in field_units(p):
 		var po := status_count(u, "poison")
 		if po > 0:
+			status_fx(u, "status_tick", "poison", po)   # L8
 			if change_hp(p, -po, " (Poison on %s)" % name_of(u)):
 				return R.END
 			decrement_status(u, "poison")
