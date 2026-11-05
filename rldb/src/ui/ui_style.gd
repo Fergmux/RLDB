@@ -770,12 +770,9 @@ static func wine_button(text: String, size: int = 14) -> Button:
 	return style_button(button(text, size), "wine")
 
 
-const BACKGROUND := "res://assets/art/background.jpg"   # full 4096x4096 original (a JPEG), kept for 4K screens
-
-
-## Full-screen background (user-supplied wood table art): scaled to cover the whole rect with the
-## overflow cropped, plus an optional dark veil (`dim` 0..1) so cards and text keep their contrast.
-const MENU_BACKGROUND := "res://assets/art/menu_background.jpg"   # 4096x4096 forest arch (a JPEG)
+## The main menu's forest arch (4096x4096 JPEG). The game table is the player's choice
+## (Customisation.TABLES, L28: four tables, forest ruins by default).
+const MENU_BACKGROUND := "res://assets/art/menu_background.jpg"
 
 
 ## Loaded background textures, kept for the whole run: a screen change (back to the menu after
@@ -795,7 +792,12 @@ static func background_texture(path: String) -> Texture2D:
 	return t
 
 
-static func background(dim: float = 0.0, path: String = BACKGROUND) -> Control:
+## Full-screen background art at `path` (the chosen table when ""): scaled to cover the whole rect
+## with the overflow cropped, plus an optional dark veil (`dim` 0..1) so cards and text keep their
+## contrast.
+static func background(dim: float = 0.0, path: String = "") -> Control:
+	if path == "":
+		path = Customisation.table_path()
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -814,6 +816,14 @@ static func background(dim: float = 0.0, path: String = BACKGROUND) -> Control:
 		veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		root.add_child(veil)
 	return root
+
+
+## The game table (L28): the art of the player's chosen table (Customisation) under that table's
+## own veil, so every table reads equally well behind zones and cards.
+static func table_background() -> Control:
+	var bg := background(Customisation.table_veil(), Customisation.table_path())
+	bg.name = "Table_" + Customisation.table_id()
+	return bg
 
 
 ## Drop shadow / glow on a button style (depth instead of a flat slab).

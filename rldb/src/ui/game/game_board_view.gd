@@ -89,8 +89,8 @@ func build_table() -> void:
 	base.material = mat
 	gs.add_child(base)
 	# ... and the table art covering only the play field (sized in layout), with a light veil
-	# so zones and cards stay readable over it.
-	table = UIStyle.background(0.32)
+	# so zones and cards stay readable over it. L28: the player's chosen table (Options).
+	table = UIStyle.table_background()
 	table.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	table.clip_contents = true
 	gs.add_child(table)
