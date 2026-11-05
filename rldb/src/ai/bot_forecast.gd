@@ -36,7 +36,7 @@ static var VIRTUAL_WORTH := 10.0
 static var VIRTUAL_COUNT := 1
 ## Unit worth: presence plus stats (BotBrain uses the same numbers for material).
 static var W_UNIT := 6.0
-static var W_ATK := 0.45
+static var W_ATK := 0.6
 static var W_DEF := 0.35
 static var W_STATUS := 1.5
 static var W_EFFECT := 2.0

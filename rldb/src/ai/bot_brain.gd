@@ -52,9 +52,12 @@ static var W_SET_COST := 0.0
 ## Weight of the bot's follow-up turn in the forecast (it is further away and less certain).
 static var FOLLOW_W := 0.35
 ## Two-step look-ahead: how many of the best first moves get a follow-up search.
-static var TWO_STEP := 3
+static var TWO_STEP := 5
 ## Cap on look-ahead copies per decision (keeps every decision fast).
 const MAX_SIMS := 260
+## Hard brake: past this many copies in one decision every further choice uses the quick rules
+## (_cheap_index), so no decision can run long (one took 2.8 s in the arena before this).
+const HARD_SIMS := 600
 const MAX_OPTIONS := 12
 const MAX_RESOLVE_STEPS := 40
 const MAX_COMBOS := 20
@@ -124,6 +127,7 @@ static func tune(d: Dictionary) -> Array:
 func decide(m: MatchEngine) -> Dictionary:
 	if m.winner != -1:
 		return {}
+	_sims = 0
 	if not m.pending.is_empty():
 		if int(m.pending["player"]) != me:
 			return {}
@@ -283,7 +287,7 @@ func choose(m: MatchEngine, depth: int) -> Dictionary:
 			return {"t": "choose", "id": pd["id"], "indices": [i]}
 	if int(pd["max"]) > 1:
 		return {"t": "choose", "id": pd["id"], "indices": _multi_pick(m, depth)}
-	if n == 1 or depth >= 2:
+	if n == 1 or depth >= 2 or _sims > HARD_SIMS:
 		return {"t": "choose", "id": pd["id"], "indices": [_cheap_index(m, pd)]}
 	var best_i := -1
 	var best_s := -INF
@@ -371,7 +375,7 @@ func _multi_pick(m: MatchEngine, depth: int) -> Array:
 		return SummonOps.exact_subset(vals, int(pd["total_required"]))
 	var need: int = clampi(int(pd["min"]), 1, n)
 	var combos := _combinations(n, need, MAX_COMBOS + 1)
-	if depth < 2 and combos.size() <= MAX_COMBOS:
+	if depth < 2 and combos.size() <= MAX_COMBOS and _sims < HARD_SIMS:
 		var best: Array = []
 		var best_s := -INF
 		for cmb in combos:
