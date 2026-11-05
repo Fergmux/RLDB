@@ -78,10 +78,19 @@ const STATUS_SHORT := {
 }
 
 # ---- fonts ----
-const FONT_BODY := "res://assets/fonts/AlegreyaSans-Regular.ttf"
-const FONT_BOLD := "res://assets/fonts/AlegreyaSans-Bold.ttf"
-const FONT_ITALIC := "res://assets/fonts/AlegreyaSans-Italic.ttf"
-const FONT_DISPLAY := "res://assets/fonts/Cinzel-Variable.ttf"
+## L10 (owner, 5 Nov: "no default Arial looking font in the game"): every face is a FontVariation
+## resource over the bundled TTF with a themed fallback chain, so no glyph is ever drawn in a system
+## font. Alegreya Sans (body) falls back to Noto Sans Symbols 2 for UI symbols (check mark, bullet,
+## menu bars); Cinzel (display) falls back to Alegreya Sans (arrows, rare punctuation), then to the
+## symbols. The same body face is the project-wide default (project.godot gui/theme/custom_font and
+## the base theme assets/themes/base_theme.tres), so text outside the game theme is themed too.
+const FONT_BODY := "res://assets/fonts/body_regular.tres"
+const FONT_BOLD := "res://assets/fonts/body_bold.tres"
+const FONT_ITALIC := "res://assets/fonts/body_italic.tres"
+const FONT_BOLD_ITALIC := "res://assets/fonts/body_bold_italic.tres"
+const FONT_DISPLAY := "res://assets/fonts/display.tres"
+## The project-wide base theme (fonts only; colours and boxes come from make_theme()).
+const BASE_THEME := "res://assets/themes/base_theme.tres"
 const WGHT_TAG := 2003265652   # OpenType 'wght'
 
 static var _fonts := {}
@@ -103,6 +112,32 @@ static func font_bold() -> Font:
 
 static func font_italic() -> Font:
 	return _font(FONT_ITALIC)
+
+
+## Alegreya Sans Bold Italic (RichTextLabel [b][i]).
+static func font_bold_italic() -> Font:
+	return _font(FONT_BOLD_ITALIC)
+
+
+## True when `font` or one of its fallbacks (FontVariation bases and fallback chains, followed
+## recursively) has a glyph for code point `ch`, so it never falls through to a system font.
+static func font_covers(font: Font, ch: int, _depth: int = 0) -> bool:
+	if font == null or _depth > 8:
+		return false
+	if font is FontFile and (font as FontFile).has_char(ch):
+		return true
+	if font is FontVariation:
+		var fv := font as FontVariation
+		if fv.base_font != null and font_covers(fv.base_font, ch, _depth + 1):
+			return true
+		if fv.fallbacks.is_empty() and fv.base_font != null:
+			for fb in fv.base_font.fallbacks:
+				if font_covers(fb, ch, _depth + 1):
+					return true
+	for fb in font.fallbacks:
+		if font_covers(fb, ch, _depth + 1):
+			return true
+	return false
 
 
 ## Cinzel at its default weight, unvaried (menu items and screen titles).
@@ -1007,4 +1042,83 @@ static func make_theme() -> Theme:
 	th.set_font("normal_font", "RichTextLabel", font_body())
 	th.set_font("bold_font", "RichTextLabel", font_bold())
 	th.set_font("italics_font", "RichTextLabel", font_italic())
+	# L10: [b][i] and [code] stay in the house face too (the engine default was a faux-bold sans).
+	th.set_font("bold_italics_font", "RichTextLabel", font_bold_italic())
+	th.set_font("mono_font", "RichTextLabel", font_body())
+	apply_popup_theme(th)
 	return th
+
+
+## Popup list rows: inner padding, row gap and the marker size (px).
+const POPUP_PAD := Vector2(10, 6)
+const POPUP_ROW_GAP := 6
+const POPUP_FONT := 15
+const POPUP_MARK := 14
+
+
+## L10 (extra): dropdown lists (OptionButton / PopupMenu) in the house style instead of the engine's
+## grey box: an ink panel with a bronze rim and a soft shadow, a faint gold hover band, body text at
+## 15 px, and a small gold diamond marking the chosen item. Returns `th`.
+static func apply_popup_theme(th: Theme) -> Theme:
+	var panel_sb := flat(Color(0.045, 0.038, 0.03, 0.98), Color(BRONZE, 0.95), 1, 6)
+	panel_sb.content_margin_left = POPUP_PAD.x / 2.0
+	panel_sb.content_margin_right = POPUP_PAD.x / 2.0
+	panel_sb.content_margin_top = POPUP_PAD.y
+	panel_sb.content_margin_bottom = POPUP_PAD.y
+	lift(panel_sb, DEPTH_FLOATING)
+	panel_sb.border_color = Color(BRONZE, 0.95)
+	th.set_stylebox("panel", "PopupMenu", panel_sb)
+	var hover := flat(Color(GOLD, 0.14), Color(GOLD, 0.35), 1, 4)
+	th.set_stylebox("hover", "PopupMenu", hover)
+	var sep := StyleBoxLine.new()
+	sep.color = Color(BRONZE, 0.6)
+	sep.thickness = 1
+	th.set_stylebox("separator", "PopupMenu", sep)
+	th.set_font("font", "PopupMenu", font_body())
+	th.set_font_size("font_size", "PopupMenu", POPUP_FONT)
+	th.set_color("font_color", "PopupMenu", TEXT)
+	th.set_color("font_hover_color", "PopupMenu", GOLD_HI)
+	th.set_color("font_disabled_color", "PopupMenu", DISABLED)
+	th.set_color("font_accelerator_color", "PopupMenu", TEXT_DIM)
+	th.set_color("font_separator_color", "PopupMenu", GOLD)
+	th.set_constant("v_separation", "PopupMenu", POPUP_ROW_GAP)
+	th.set_constant("h_separation", "PopupMenu", 8)
+	th.set_constant("item_start_padding", "PopupMenu", int(POPUP_PAD.x))
+	th.set_constant("item_end_padding", "PopupMenu", int(POPUP_PAD.x) + 6)
+	var on := _marker_icon(true)
+	var off := _marker_icon(false)
+	for k in ["radio_checked", "checked"]:
+		th.set_icon(k, "PopupMenu", on)
+		th.set_icon(k + "_disabled", "PopupMenu", on)
+	for k in ["radio_unchecked", "unchecked"]:
+		th.set_icon(k, "PopupMenu", off)
+		th.set_icon(k + "_disabled", "PopupMenu", off)
+	return th
+
+
+static var _markers := {}
+
+
+## The popup row marker (POPUP_MARK px): a gold diamond for the chosen row, a blank of the same
+## size for the others so every label lines up. Drawn at 4x and downsampled. Cached.
+static func _marker_icon(on: bool) -> ImageTexture:
+	if _markers.has(on):
+		return _markers[on]
+	var n := POPUP_MARK * 4
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	if on:
+		var c := (n - 1) / 2.0
+		var r := n * 0.3
+		for y in n:
+			for x in n:
+				var d := absf(x - c) + absf(y - c)
+				if d <= r:
+					# Lit from above: a brighter upper half, a pale core.
+					var col := GOLD_HI if y < c else GOLD
+					if d < r * 0.35:
+						col = col.lerp(Color.WHITE, 0.35)
+					img.set_pixel(x, y, col)
+	img.resize(POPUP_MARK, POPUP_MARK, Image.INTERPOLATE_LANCZOS)
+	_markers[on] = ImageTexture.create_from_image(img)
+	return _markers[on]
