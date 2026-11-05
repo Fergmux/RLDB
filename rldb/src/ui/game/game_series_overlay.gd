@@ -350,6 +350,7 @@ func _show_deck() -> void:
 func render() -> void:
 	var view := gs.view
 	var stage: String = view.get("stage", "")
+	gs.sidebar.update_scoreboard()   # L26 (also when the game-end hold releases: FxPlayer calls render)
 	if stage != "game" and stage != "" and gs.fx != null and gs.fx.game_end_hold:
 		return   # F03-13: held back until the victory / defeat presentation has played
 	if rewards != null and rewards.folding() and overlay.visible:

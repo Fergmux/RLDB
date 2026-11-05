@@ -174,7 +174,8 @@ func render() -> void:
 	var net: Dictionary = gs.view.get("net", {})
 	var names: Array = gs.view.get("names", ["", ""])
 	var sig := hash([net.get("spectators", []), net.get("people", []), net.get("spectator", false), net.get("follow", -1), net.get("allowed", false),
-		names, net.get("spectator_count", 0), net.get("opponent_connected", true), gs.is_network()])
+		names, net.get("spectator_count", 0), net.get("opponent_connected", true), gs.is_network(),
+		gs.view.get("scores"), gs.view.get("history"), gs.view.get("stage")])   # L26: the series section
 	if sig == _sig:
 		return
 	_sig = sig
@@ -237,6 +238,13 @@ func _render_list() -> void:
 	var list := watchers()
 	var spec := gs.is_spectator()
 	panel.set_tag("%d watching" % list.size() if not list.is_empty() else "")
+	# L26 (owner, 5 Nov): the series results in full at the top of the list (more than one game).
+	if SeriesResults.shows_for(gs.view):
+		_list.add_child(_section("Series", "Best of %d" % int(gs.view.get("best_of", 3))))
+		var sr := SeriesResults.new().setup(SeriesResults.model(gs.view, gs.me()))
+		sr.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_list.add_child(sr)
+		_list.add_child(_gap(6))
 	_list.add_child(_section("Players", "2"))
 	for p in players():
 		_list.add_child(_player_row(p))

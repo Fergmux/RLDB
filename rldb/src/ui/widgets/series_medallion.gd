@@ -24,6 +24,12 @@ var best_of: int = 3
 var results: Array = []
 ## Index of the next game (its socket breathes); -1 for none (the series is over).
 var current: int = -1
+## L26: the gem colours [my games, my opponent's] (default: gold and ember); the sidebar passes the
+## players' seat colours, as the top strip scoreboard and the lobby list use.
+var colors: Array = []:
+	set(v):
+		colors = v
+		queue_redraw()
 ## Seconds clock (tests and frozen shots inject one).
 var clock: Callable = func() -> float: return float(Time.get_ticks_msec()) / 1000.0
 
@@ -91,14 +97,15 @@ func socket_pos(i: int) -> Vector2:
 
 func _draw() -> void:
 	_draw_coin(Vector2(size.x / 2.0, COIN_R + 8.0))
-	var amber: Color = UIStyle.GOLD
+	var mine: Color = colors[0] if colors.size() == 2 else UIStyle.GOLD
+	var theirs: Color = colors[1] if colors.size() == 2 else EMBER
 	for i in best_of:
 		var p := socket_pos(i)
 		match socket_state(i):
 			"won":
-				PickPips.draw_gem(self, p, SOCKET_R, amber)
+				PickPips.draw_gem(self, p, SOCKET_R, mine)
 			"lost":
-				PickPips.draw_gem(self, p, SOCKET_R, EMBER)
+				PickPips.draw_gem(self, p, SOCKET_R, theirs)
 			_:
 				PickPips.draw_socket(self, p, SOCKET_R)   # "next" breathes on the Breath overlay
 

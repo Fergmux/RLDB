@@ -33,6 +33,8 @@ var settings_popup: PanelContainer
 var items: Dictionary = {}
 ## The Menu button in the top strip.
 var menu_button: Button
+## L26: the compact series scoreboard in the middle of the top strip.
+var scoreboard: SeriesScoreboard
 ## The veil behind the in-game settings (shown with it).
 var settings_veil: ColorRect
 ## The shared settings form inside the settings popup.
@@ -77,6 +79,10 @@ func build_top_strip() -> void:
 	menu_b.pressed.connect(toggle)
 	row.add_child(menu_b)
 	menu_button = menu_b
+	# L26 (owner, 5 Nov): the series at a glance, centred in the strip over the board (hidden in a
+	# single game); GameSidebar.update_scoreboard keeps it current and pops each new point in.
+	scoreboard = SeriesScoreboard.new()
+	top_strip.add_child(scoreboard)
 	# A1 / A2: Chat sits right before Menu; the spectator badge (and Watch button) before Chat.
 	gs.chat.build(row, menu_b)
 	if gs.chat.button != null:
