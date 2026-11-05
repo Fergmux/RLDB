@@ -63,6 +63,8 @@ var _col: VBoxContainer
 var _head_end: Control
 var _header: bool = true
 var _tween: Tween
+## True while dismiss() plays the closing motion (the panel is still visible until it ends).
+var dismissing: bool = false
 var _gen := 0
 
 
@@ -256,6 +258,7 @@ func _settle(w: float, gen: int) -> void:
 func appear() -> void:
 	_kill()
 	_rest()
+	dismissing = false
 	if is_inside_tree() and open_sound:
 		Sfx.play("panel_open")
 	if UIStyle.reduce_motion or not is_inside_tree():
@@ -263,6 +266,31 @@ func appear() -> void:
 	modulate.a = 0.0
 	_pop()
 	_tween.tween_property(self, "modulate:a", 1.0, UIStyle.dur(FADE_TIME))
+
+
+## Closing motion of a popover (final review 2026-11-05: every in-game panel closes the same way as
+## the in-game menu, L13): the panel_close cue, then UIStyle.tween_out (fade and 0.97 scale; a short
+## fade under reduced motion) and hidden, left at rest for the next appear(). A second call while it
+## closes, or on a hidden panel, does nothing; appear() during the motion takes it back.
+func dismiss() -> void:
+	if not visible or dismissing:
+		return
+	_kill()
+	_rest()
+	if not is_inside_tree():
+		visible = false
+		return
+	Sfx.play("panel_close")
+	dismissing = true
+	_tween = UIStyle.tween_out(self)
+	_tween.tween_callback(func() -> void:
+		dismissing = false
+		_rest())
+
+
+## True while the panel is shown and not on its way out.
+func is_open() -> bool:
+	return visible and not dismissing
 
 
 ## Attention treatment of the input prompt (F03-25): a pop and gold flare when `fresh` (a new

@@ -30,6 +30,8 @@ var lobby_button: Button
 var flip_button: Button
 ## The Lobby list popover.
 var panel: HousePanel
+## Final review: the full-window catcher under the open Lobby list (a press on it closes the list).
+var outside_catcher: Control
 ## J20 / J22: the list's round close button.
 var close_button: RoundCloseButton
 var _list: VBoxContainer
@@ -114,6 +116,17 @@ func build(row: HBoxContainer, before: Control) -> void:
 	panel.name = "LobbyPanel"
 	panel.visible = false
 	panel.z_index = UiLayers.GAME_MENU
+	# Final review (2026-11-05): a press anywhere off the Lobby list closes it, as off the in-game
+	# menu it opens from (L13); the press goes no further.
+	outside_catcher = Control.new()
+	outside_catcher.name = "LobbyOutsideCatcher"
+	outside_catcher.mouse_filter = Control.MOUSE_FILTER_STOP
+	outside_catcher.z_index = UiLayers.GAME_MENU - 1
+	outside_catcher.visible = false
+	outside_catcher.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	outside_catcher.gui_input.connect(_on_outside_input)
+	gs.add_child(outside_catcher)
+	panel.visibility_changed.connect(func(): outside_catcher.visible = panel.visible and not panel.dismissing)
 	gs.add_child(panel)
 	close_button = GameChat.add_close(panel, close_list)
 	_list = VBoxContainer.new()
@@ -213,7 +226,7 @@ func _fit_badge() -> void:
 
 ## Opens or closes the Lobby list.
 func toggle_list() -> void:
-	if panel.visible:
+	if panel.is_open():
 		close_list()
 		return
 	gs.menu.close_popups()
@@ -227,10 +240,22 @@ func toggle_list() -> void:
 
 ## Closes the Lobby list.
 func close_list() -> void:
-	if not panel.visible:
+	if not panel.is_open():
 		return
-	panel.visible = false
-	Sfx.play("back")
+	outside_catcher.visible = false
+	panel.dismiss()   # final review: the panel_close cue and closing motion, as every popover
+
+
+## True while the Lobby list is open (not while it plays its closing motion).
+func is_open() -> bool:
+	return panel != null and panel.is_open()
+
+
+## A press off the open Lobby list closes it (and goes no further).
+func _on_outside_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton and ev.pressed and (ev as InputEventMouseButton).button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+		outside_catcher.accept_event()
+		close_list()
 
 
 func _render_list() -> void:
