@@ -38,6 +38,10 @@ var _basic_type: String = ""
 var _ledger_seen: int = 0
 ## True while a chosen reward / card is folding the others away (blocks a second choice).
 var _collapsing: bool = false
+## L2: true while a taken card's fold plays, before its `reward_add` is sent.
+var _taking: bool = false
+## L2: seconds after a take is sent before a refused take's offer is shown again.
+const RECOVER_AFTER := 2.1
 ## True from choosing a reward kind until its panel is first shown (it then opens with motion).
 var _fresh_panel: bool = false
 ## The game whose rewards opening has played its reveal (#63): it plays once per rewards stage.
@@ -450,7 +454,8 @@ func choose_mode(key: String, row: Control = null) -> void:
 		_remove_sel = -1
 		_basic_type = ""
 		_basic_race = ""
-		gs.overlays.refresh()
+		if is_instance_valid(gs) and gs.is_inside_tree():
+			gs.overlays.refresh()
 	if row == null or UIStyle.reduce_motion or not gs.is_inside_tree():
 		go.call()
 		return
@@ -458,7 +463,9 @@ func choose_mode(key: String, row: Control = null) -> void:
 	_fold(row, go)
 
 
-## Fades `c` out while its height eases to nothing, then calls `done`.
+## Fades `c` out while its height eases to nothing, then calls `done`. L2: `done` runs on a timer
+## owned by the screen, not by `c`, so a rebuild of the modal that frees `c` mid-fold can no longer
+## swallow it (it used to leave `_collapsing` set for good, so no reward kind opened again).
 func _fold(c: Control, done: Callable) -> void:
 	var h := c.size.y
 	c.custom_minimum_size.y = h
@@ -467,7 +474,21 @@ func _fold(c: Control, done: Callable) -> void:
 	tw.set_parallel(true)
 	tw.tween_property(c, "modulate:a", 0.0, UIStyle.dur(COLLAPSE_TIME)).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(c, "custom_minimum_size:y", 0.0, UIStyle.dur(COLLAPSE_TIME)).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	tw.chain().tween_callback(done)
+	_after(UIStyle.dur(COLLAPSE_TIME), done)
+
+
+## L2: runs `fn` after `sec` seconds on a tween bound to the game screen, which outlives every
+## rebuild of the modal (a tween bound to a folding row dies with the row).
+func _after(sec: float, fn: Callable) -> void:
+	var tw := gs.create_tween()
+	tw.tween_interval(maxf(sec, 0.0))
+	tw.tween_callback(fn)
+
+
+## L2: true while a chosen reward kind or a taken card is folding the others away. The series modal
+## holds its rebuilds meanwhile (GameSeriesOverlay.render) and catches up when the fold ends.
+func folding() -> bool:
+	return _collapsing or _taking
 
 
 ## The bar that stands in for the reward tiles once one is chosen: its icon and name, and a button
@@ -548,17 +569,40 @@ func pick_offer(idx: int, sig: int, holders: Array, flow: Control) -> bool:
 	flow.get_parent().add_child(note)
 	flow.get_parent().move_child(note, flow.get_index() + 1)
 	tw.tween_property(note, "modulate:a", 1.0, UIStyle.dur(COLLAPSE_TIME))
-	tw.chain().tween_callback(func():
-		gs.send({"t": "reward_add", "index": idx})
-		_recover_after(2.1))
+	# L2: the take is sent from a screen-owned timer once the fold has played. It used to be this
+	# tween's last step, so a rebuild of the modal during the fold (the opponent finishing, or the
+	# previous take's recover refresh) freed `flow`, killed the tween and the take was never sent.
+	_taking = true
+	_after(UIStyle.dur(COLLAPSE_TIME), func(): _send_take(idx, sig))
 	return true
 
 
-## If the take was refused (the offer is still showing) put the offer back so it can be tried again.
-func _recover_after(sec: float) -> void:
-	await gs.get_tree().create_timer(sec).timeout
-	if is_instance_valid(gs) and gs.view.get("rewards", {}).get("pending", false):
-		gs.overlays.refresh()
+## L2: sends the take of offer `sig` card `idx` once its fold has played (if that offer is still the
+## live one), then lets the held modal catch up with the view.
+func _send_take(idx: int, sig: int) -> void:
+	_taking = false
+	if not is_instance_valid(gs) or not gs.is_inside_tree():
+		return
+	if _offer_live(sig):
+		gs.send({"t": "reward_add", "index": idx})
+		_recover_after(RECOVER_AFTER, sig)
+	gs.overlays.render()
+
+
+## True while offer `sig` is the pending offer of the current view.
+func _offer_live(sig: int) -> bool:
+	var r: Dictionary = gs.view.get("rewards", {})
+	return String(gs.view.get("stage", "")) == Series.STAGE_REWARDS and bool(r.get("pending", false)) and offer_sig(r) == sig
+
+
+## If the take of offer `sig` was refused (that same offer is still pending) put it back so it can
+## be tried again. L2: only that offer; this used to refresh whatever offer was pending by then, so
+## a quick second take was rebuilt away mid-fold and lost.
+func _recover_after(sec: float, sig: int) -> void:
+	_after(sec, func():
+		if is_instance_valid(gs) and gs.is_inside_tree() and _offer_live(sig):
+			_took_sig = 0
+			gs.overlays.refresh())
 
 
 ## Signature of an offer: which cards, and how many picks are left (a new offer differs).
