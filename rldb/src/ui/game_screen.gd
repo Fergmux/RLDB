@@ -109,6 +109,9 @@ var _held: Dictionary = {}
 var _held_gen: int = 0
 ## Series whose game-1 coin flip has been shown (static: hot-seat seats share it).
 static var _coin_shown: Dictionary = {}
+## L1: games (series key # game number) whose opening shuffle and call to battle have played (static,
+## like _coin_shown, so hot-seat seats hear them once).
+static var _start_heard: Dictionary = {}
 ## The game-1 coin flip while it plays (null otherwise).
 var _coin: CoinFlip
 
@@ -303,6 +306,7 @@ func _on_view(v: Dictionary) -> void:
 	render_all()
 	prompt.show_log_toasts()
 	_maybe_coin_flip()
+	_maybe_game_start()
 	if not events.is_empty():
 		fx.play(events, prev_mv)
 
@@ -386,6 +390,20 @@ func _maybe_coin_flip() -> void:
 	coin.play(String(pv(first)["name"]), String(pv(1 - first)["name"]), first == me() and not is_spectator(), first)
 
 
+## L1: game 2 on of a series opens with the deck shuffle, then the call to battle. Game 1 plays
+## them with its coin flip (the stinger as the coin lands, the shuffle with the deal).
+func _maybe_game_start() -> void:
+	if mv.is_empty() or view.get("stage", "") != "game" or int(view.get("game_no", 0)) < 2 or int(mv.get("turn", 0)) != 1:
+		return
+	var key := "%s#%d" % [String(view.get("save_id", "local")), int(view.get("game_no", 0))]
+	if _start_heard.has(key):
+		return
+	_start_heard[key] = true
+	Sfx.play("card_shuffle", 0.0, 0.0)
+	if is_inside_tree():
+		get_tree().create_timer(0.45).timeout.connect(func(): Sfx.play("game_start", 0.0, 0.0))
+
+
 ## K3 (owner, 23 Oct): the coin flip covers the whole window (its dim fills every edge, like the
 ## series modal's, J15) and centres the coin on the play field.
 func _place_coin() -> void:
@@ -415,6 +433,7 @@ func _deal_after_coin() -> void:
 	if hand.layer.modulate.a >= 1.0:
 		return
 	hand.layer.modulate.a = 1.0
+	Sfx.play("card_shuffle", 0.0, 0.0)   # L1: the deck is shuffled as the opening hand is dealt
 	hand.deal_all()
 	create_tween().tween_property(board.opp_hand_box, "modulate:a", 1.0, UIStyle.dur(0.3))
 
