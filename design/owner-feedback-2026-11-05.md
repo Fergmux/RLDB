@@ -94,6 +94,11 @@ make a way for ai to automatically upload the build for us
   (`publish-release` / `tools/publish_github.py` need a mac asset).
 - No more questions: decide, work around blockers, and list every decision and anything not done in the final report.
 
+- **L30 (owner, 2026-11-05, verbatim):** "remove the escx button prompt from the cancel button, i don't want keyboard
+  shortcuts prompts visible anywhere in the game". Standing rule: no keyboard-shortcut hints (keycaps, "Esc", "Enter",
+  "(Space)", hotkey labels in tooltips or buttons) may be shown anywhere in the game. The shortcuts themselves keep
+  working.
+
 ## Facts found during the up-front inspection (2026-11-05)
 
 - ElevenLabs MCP: the `sfx` flow node (model `eleven_text_to_sound_v2`, 0.5-30 s, loop option) is available, and so is
@@ -128,7 +133,7 @@ Owner answers, 2026-11-05 (these are confirmed rules, follow them exactly):
 
 | # | Item | Status | Commit / notes |
 |---|------|--------|----------------|
-| L1 | ElevenLabs sound set | in progress | audio agent |
+| L1 | ElevenLabs sound set | merged b90c644 | 108 cues (59 replaced, 49 new), ~3,130 credits. Takes picked by measurement; alternates in production/audio-staging/. Listen first: ritual_choir, fusion_vortex, hp_low_heartbeat, boom, card_play, card_set, victory/defeat stingers. |
 | L2 | New cards via draft lost | merged 7ed71c5 | Root cause in the between-games "Add a card" reward: the add command was sent at the end of a fold animation that a modal rebuild could kill. Drafting itself was fine for all cards. |
 | L3 | Extra Deck offer F/R/A | merged 7ed71c5 | Also applied to the "Add a card > Extra Deck" reward. |
 | L4 | Animations queue | merged 21a532e | Clicks no longer skip animations; a backlog speeds up (max 2x). |
@@ -149,14 +154,15 @@ Owner answers, 2026-11-05 (these are confirmed rules, follow them exactly):
 | L19 | Materials gone before On Summon | merged 0326066 | |
 | L20 | Cleanse/Curse block the whole batch | merged 0326066 | |
 | L21 | Pile click deselects | merged cdcd8cd | |
-| L22 | Custom cursor + setting | in progress | cursor agent |
+| L22 | Custom cursor + setting | merged 9d6b92d | 9 gilded cursors (arrow, gauntlet, reticle open/locked/barred, dagger plain/hot, forbidden, magnifier), sized by DPI; "Custom cursor" in Settings. |
 | L23 | Evolve (Symbiotes) | merged d464003 | |
 | L24 | Art for 189-191 | done 3251bd0 | |
 | L25 | New table background | merged 0e9aae7 | Forest Ruins is the default. |
 | L26 | Series results display | merged 7ed71c5 | |
-| L27 | Smarter bot | in progress | bot agent |
+| L27 | Smarter bot | merged | Fair (no hidden-info peeking), forecast-driven. Held-out seeds vs old bot: 65.8% (75.4% first, 56.3% second). Review: design/bot-review-2026-11-05.md |
 | L28 | Options menu, tables, card back | merged 0e9aae7 | |
 | L29 | macOS build on GitHub | merged fddc96a | Re-export at the end. |
+| L30 | No keyboard hints anywhere | done 9eddfdc | Scan test ui_no_key_hints_test.gd. |
 | - | Stale tests re-pinned | merged 2c34eec | 114 baseline failures fixed. |
 
 ## Extra improvements (found while working)

@@ -6,7 +6,7 @@ The in-game list (main menu, Options > Credits) is read from `rldb/data/credits.
 |---|---|---|---|
 | Card art (188 cards) | `assets/art/cards/<id>.webp` | RLDB team, accepted through the card art review tool; imported by `tools/godot/import_card_art.gd` | Project-owned |
 | Table / menu backgrounds, soundtrack | `assets/art/tables/`, `assets/art/menu_background.jpg`, `assets/audio/music/` | RLDB team | Project-owned |
-| Sound effects | `assets/audio/sfx/` | Generated with ElevenLabs | See `assets/audio/sfx/README.md` |
+| Sound effects | `assets/audio/sfx/` | Generated with ElevenLabs Sound Effects (`eleven_text_to_sound_v2`), Nov 2026; mastered by `tools/sfx_master.py` | ElevenLabs output; commercial use needs a paid ElevenLabs plan at generation time (see `assets/audio/sfx/README.md`) |
 | Status icons | `assets/icons/status/*.svg` | [game-icons.net](https://game-icons.net) | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) |
 | Surface relief maps | `assets/art/materials/*.png` | [ambientCG](https://ambientcg.com) scans, converted by `tools/godot/bake_ui_materials.gd` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Fonts | `assets/fonts/` | Cinzel, Alegreya Sans; RLDB Symbols, a subset of Noto Sans Symbols 2 made by `tools/fonts/make_symbols.py` (see the `*-OFL.txt` files) | SIL OFL 1.1 |

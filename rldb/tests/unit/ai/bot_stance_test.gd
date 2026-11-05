@@ -26,9 +26,13 @@ func test_attack_is_chosen_although_def_is_higher_when_the_target_is_beatable() 
 	assert_str(b.last_debug).contains("stance")
 
 
+## L27 (2026-11-05): the unit must also be safe in Attack stance through the opponent's next turn
+## (stance is locked after the Setup Phase). A 5/20 unit flipped for 5 direct damage is killed by
+## the first unit they summon, so the reworked bot rightly keeps that one in Defense; a 25/20 unit
+## takes the direct attack and stays safe.
 func test_direct_attack_opportunity_moves_a_defense_unit_to_attack() -> void:
 	var m := _setup()
-	var u := TB.unit(m, 1, TB.WATER, 0, "def", 5, 20)
+	var u := TB.unit(m, 1, TB.WATER, 0, "def", 25, 20)
 	var cmd := BotBrain.new(1, 4).decide(m)
 	assert_str(String(cmd.get("t", ""))).is_equal("stance")
 	assert_int(int(cmd.get("uid", -1))).is_equal(u)

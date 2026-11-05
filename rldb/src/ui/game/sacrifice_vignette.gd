@@ -11,7 +11,7 @@ const FADE_IN := 0.3
 const FADE_OUT := 0.25
 ## The hint pill's text, size (px) and its top margin under the top strip.
 const HINT_TITLE := "Sacrifice mode"
-const HINT := "Click a glowing unit to sacrifice it (+1 AP)  ·  Esc to stop"
+const HINT := "Click a glowing unit to sacrifice it (+1 AP)"
 const HINT_PX := 15
 ## In the top strip, clear of the opponent's Trap row.
 const HINT_TOP := 7.0

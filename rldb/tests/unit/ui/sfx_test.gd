@@ -34,12 +34,81 @@ func test_for_fx_mapping() -> void:
 	assert_str(Sfx.for_fx({"k": "status", "at": {}, "s": "rune", "n": 1}, 0)).is_equal("buff")
 	assert_str(Sfx.for_fx({"k": "status", "at": {}, "s": CardDB.BUFFS[0], "n": 1}, 0)).is_equal("buff")
 	assert_str(Sfx.for_fx({"k": "status", "at": {}, "s": CardDB.DEBUFFS[0], "n": 1}, 0)).is_equal("debuff")
-	assert_str(Sfx.for_fx({"k": "stat", "at": {}, "atk": 1, "def": 1}, 0)).is_equal("")
+	# L1: stat changes now sound (a net gain is a buff, a loss a debuff, no change is silent).
+	assert_str(Sfx.for_fx({"k": "stat", "at": {}, "atk": 1, "def": 1}, 0)).is_equal("buff")
+	assert_str(Sfx.for_fx({"k": "stat", "at": {}, "atk": -2, "def": 0}, 0)).is_equal("debuff")
+	assert_str(Sfx.for_fx({"k": "stat", "at": {}, "atk": 1, "def": -1}, 0)).is_equal("")
 	# D6 (2026-10-20): AP changes now have their own sounds (they were silent).
 	assert_str(Sfx.for_fx({"k": "ap", "p": 0, "d": 1}, 0)).is_equal("ap_gain")
 	assert_str(Sfx.for_fx({"k": "ap", "p": 0, "d": -1}, 0)).is_equal("ap_loss")
 	assert_str(Sfx.for_fx({"k": "turn", "p": 0, "turn": 2}, 0)).is_equal("turn")
 	assert_str(Sfx.for_fx({"k": "phase", "phase": "battle", "turn": 2}, 0)).is_equal("phase")
+
+
+func test_for_fx_discard_and_stance_have_their_own_cues() -> void:
+	# L1: the discard to Spent and a stance change were silent.
+	assert_str(Sfx.for_fx({"k": "discard", "p": 0, "n": 2}, 0)).is_equal("card_discard")
+	assert_str(Sfx.for_fx({"k": "stance", "at": {}, "to": "def"}, 0)).is_equal("stance_defense")
+	assert_str(Sfx.for_fx({"k": "stance", "at": {}, "to": "atk"}, 0)).is_equal("stance_attack")
+
+
+func test_hit_for_defense_stance_is_block_else_impact() -> void:
+	# L1: an attack into a Defense-stance unit clangs on a shield.
+	assert_str(Sfx.hit_for({"stance": "def"})).is_equal("block")
+	assert_str(Sfx.hit_for({"stance": "atk"})).is_equal("impact")
+	assert_str(Sfx.hit_for(null)).is_equal("impact")
+	assert_str(Sfx.hit_for({"hidden": true})).is_equal("impact")
+
+
+func test_defender_view_reads_the_attacked_slot_of_the_previous_view() -> void:
+	# Arrange: player 1 has a Defense-stance unit in slot 2 of the view before the batch.
+	var units := [null, null, {"id": 7, "stance": "def"}]
+	var prev := {"players": [{"units": []}, {"units": units}]}
+	var hit := {"k": "attack", "from": {"p": 0, "slot": 0}, "to": {"p": 1, "slot": 2}}
+	var direct := {"k": "attack", "from": {"p": 0, "slot": 0}, "to": {"p": 1, "direct": true}}
+	# Act / Assert: the attack into it clangs; a direct attack or no previous view stays an impact
+	assert_str(Sfx.hit_for(FxPlayer._defender_view(hit, prev))).is_equal("block")
+	assert_object(FxPlayer._defender_view(direct, prev)).is_null()
+	assert_object(FxPlayer._defender_view(hit, {})).is_null()
+	assert_object(FxPlayer._defender_view({"k": "attack", "to": {"p": 1, "slot": 5}}, prev)).is_null()
+
+
+func test_slider_tick_is_rate_limited_with_the_hover_cues() -> void:
+	# Arrange
+	Sfx._reset_hover()
+	# Act: two ticks in the same instant (a fast drag)
+	var first := Sfx.slider_tick()
+	var second := Sfx.slider_tick()
+	# Assert: one bead click, and it is the slider cue
+	assert_bool(first).is_true()
+	assert_bool(second).is_false()
+	assert_array(Sfx.debug_hover).contains_exactly([Sfx.SLIDER_SFX])
+	Sfx._reset_hover()
+
+
+func test_prompt_alert_only_for_a_choice_the_player_did_not_just_ask_for() -> void:
+	var q := GamePromptBanner.PROMPT_ALERT_QUIET_MS
+	# A fresh choice long after the last command (a Trap window, a turn-start offer) is announced.
+	assert_bool(GamePromptBanner.wants_alert(true, 100000, 100000 - q - 1)).is_true()
+	# A fresh choice right after the player's own command (its next step) is not.
+	assert_bool(GamePromptBanner.wants_alert(true, 100000, 100000 - 200)).is_false()
+	# The same choice re-rendered never sounds again.
+	assert_bool(GamePromptBanner.wants_alert(false, 100000, 0)).is_false()
+
+
+func test_pick_sound_zone_target_or_banner() -> void:
+	# L1: placing a card in a zone sets a token; other board picks lock in; banner answers confirm.
+	assert_str(GameSelection.pick_sound({"kind": "slot"}, true)).is_equal("zone_pick")
+	assert_str(GameSelection.pick_sound({"kind": "card"}, true)).is_equal("target_lock")
+	assert_str(GameSelection.pick_sound({"kind": "slot"}, false)).is_equal("confirm")
+
+
+func test_every_named_sound_is_registered_once() -> void:
+	# The cue names are the contract with the asset set (design/audio/sfx-cues.json): no duplicates.
+	var seen := {}
+	for n in Sfx.NAMES:
+		assert_bool(seen.has(n)).override_failure_message("%s twice" % n).is_false()
+		seen[n] = true
 
 
 func test_for_fx_game_over_perspective_and_unknown() -> void:
@@ -52,8 +121,17 @@ func test_for_fx_game_over_perspective_and_unknown() -> void:
 
 
 func test_all_named_sounds_have_assets() -> void:
+	# L1: a cue may ship as .wav or .ogg (Sfx.asset_path tries both).
 	for n in Sfx.NAMES:
-		assert_bool(ResourceLoader.exists(Sfx.DIR + n + ".wav")).is_true()
+		assert_bool(Sfx.has_asset(n)).override_failure_message("%s has no .wav / .ogg" % n).is_true()
+
+
+func test_asset_path_prefers_wav_and_is_empty_when_missing() -> void:
+	# Arrange: summon ships as a .wav; a made-up name has no file.
+	# Act / Assert
+	assert_str(Sfx.asset_path("summon")).is_equal(Sfx.DIR + "summon.wav")
+	assert_str(Sfx.asset_path("no_such_cue_l1")).is_equal("")
+	assert_bool(Sfx.has_asset("no_such_cue_l1")).is_false()
 
 
 func test_limiter_drops_same_name_repeat() -> void:

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- RLDB cursor "help" (L22). 64-unit grid, hotspot (3,3) at the tip. The gilded arrow with a gold-rimmed magnifier: hover to read.
+       Rasterised by rldb/src/dev/cursor_bake.gd, which adds the drop shadow. -->
+  <defs>
+    <linearGradient id="lit" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#fff6d2"/>
+      <stop offset="0.35" stop-color="#f6d98a"/>
+      <stop offset="0.75" stop-color="#dcac52"/>
+      <stop offset="1" stop-color="#b47d2c"/>
+    </linearGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e6bb62"/>
+      <stop offset="0.5" stop-color="#b9842f"/>
+      <stop offset="1" stop-color="#7a4d15"/>
+    </linearGradient>
+    <linearGradient id="tailL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ecc56f"/>
+      <stop offset="1" stop-color="#a87228"/>
+    </linearGradient>
+    <linearGradient id="tailR" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a87228"/>
+      <stop offset="1" stop-color="#5e3a0f"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="0.3" stop-color="#f2cf7a"/>
+      <stop offset="0.7" stop-color="#d4a64a"/>
+      <stop offset="1" stop-color="#8e5d1a"/>
+    </linearGradient>
+    <radialGradient id="sapphire" cx="0.38" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#d8ecff"/>
+      <stop offset="0.3" stop-color="#6fb2ff"/>
+      <stop offset="0.75" stop-color="#2557b8"/>
+      <stop offset="1" stop-color="#132a66"/>
+    </radialGradient>
+    <radialGradient id="ruby" cx="0.38" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#ffe0d6"/>
+      <stop offset="0.3" stop-color="#ff6a52"/>
+      <stop offset="0.75" stop-color="#a8160f"/>
+      <stop offset="1" stop-color="#4a0606"/>
+    </radialGradient>
+    <radialGradient id="glass" cx="0.4" cy="0.35" r="0.8">
+      <stop offset="0" stop-color="#e4f2ff"/>
+      <stop offset="0.45" stop-color="#8fc3f2"/>
+      <stop offset="1" stop-color="#2f5f8f"/>
+    </radialGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8a4b4f"/>
+      <stop offset="1" stop-color="#3b1d22"/>
+    </linearGradient>
+  </defs>
+  <path d="M4.20,4.20 L4.20,46.00 L14.40,37.00 L22.60,55.80 L25.90,51.20 L31.00,52.00 L22.50,34.00 L36.40,34.00 Z" fill="#140b04" stroke="#140b04" stroke-width="3.6" stroke-linejoin="round"/>
+  <path d="M4.20,4.20 L4.20,46.00 L14.40,37.00 L18.40,35.50 Z" fill="url(#lit)"/>
+  <path d="M4.20,4.20 L18.40,35.50 L22.50,34.00 L36.40,34.00 Z" fill="url(#shade)"/>
+  <path d="M14.40,37.00 L22.60,55.80 L25.90,51.20 L18.40,35.50 Z" fill="url(#tailL)"/>
+  <path d="M18.40,35.50 L25.90,51.20 L31.00,52.00 L22.50,34.00 Z" fill="url(#tailR)"/>
+  <path d="M7.7,37.4 L7.7,12.4 L26.6,29.9" fill="none" stroke="#6b4512" stroke-width="1.0" stroke-opacity="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M8.6,36.6 L8.6,14.2 L25.4,29.9" fill="none" stroke="#fff6d8" stroke-width="0.7" stroke-opacity="0.45" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M5.9,8.6 L5.9,41.6" stroke="#fffbe6" stroke-width="1.1" stroke-opacity="0.8" stroke-linecap="round"/>
+  <path d="M7.4,6.9 L32.6,32.0" stroke="#fff3c4" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round"/>
+  <path d="M16.1,39.6 L22.8,53.6" stroke="#fff3c4" stroke-width="0.9" stroke-opacity="0.45" stroke-linecap="round"/>
+  <path d="M47.55,45.55 L56.20,54.20" stroke="#140b04" stroke-width="7.6" stroke-linecap="round"/>
+  <circle cx="41.50" cy="39.50" r="11.70" fill="#140b04"/>
+  <path d="M48.15,46.15 L56.20,54.20" stroke="url(#wood)" stroke-width="4.2" stroke-linecap="round"/>
+  <circle cx="41.50" cy="39.50" r="10.30" fill="url(#gold)"/>
+  <circle cx="41.50" cy="39.50" r="8.20" fill="url(#glass)"/>
+  <path d="M36.29,39.08 A5.21,5.21 0 0 1 41.08,34.29" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.85" stroke-linecap="round"/>
+</svg>

@@ -6,6 +6,8 @@ extends Node
 ## Only public presentation events are mapped (positions/amounts, never card identities).
 
 const DIR := "res://assets/audio/sfx/"
+## Asset extensions tried in order (asset_path).
+const EXTENSIONS: PackedStringArray = [".wav", ".ogg"]
 const BUS := "SFX"
 const SETTINGS_PATH := "user://audio_settings.cfg"
 const NAMES: PackedStringArray = [
@@ -63,6 +65,8 @@ const UI_PRIORITY := {
 const HOVER_SFX := "ui_hover"
 ## The card variant of the hover cue (design review #32): a soft paper slide. Shares the limiter.
 const CARD_HOVER_SFX := "card_hover"
+## L1: the volume-slider step cue (shares the hover limiter).
+const SLIDER_SFX := "slider_tick"
 const HOVER_MIN_MS := 60
 const HOVER_JITTER := 0.04
 const HOVER_DB := 0.0
@@ -75,7 +79,9 @@ const FAMILY_META := "sfx_family"
 const DROP := 0
 const PLAY := 1
 const REPLACE := 2
-const POOL_SIZE := 8
+## L1: the ElevenLabs set pieces ring for 2-4 s, so a busy turn (a set piece, its slam, statuses,
+## damage and UI clicks) holds more voices at once than the short procedural set did.
+const POOL_SIZE := 16
 const MIN_INTERVAL_MS := 70
 const BURST_MAX := 4
 const BURST_WINDOW_MS := 120
@@ -193,6 +199,12 @@ static func hover_item() -> bool:
 ## rate-limited with the other hover cues so sweeping across a row never chatters.
 static func hover_card() -> bool:
 	return hover_at(Time.get_ticks_msec(), CARD_HOVER_SFX)
+
+
+## L1: a volume slider step: the soft bead click, rate-limited with the hover cues so a fast drag
+## never chatters. Returns true when it played.
+static func slider_tick() -> bool:
+	return hover_at(Time.get_ticks_msec(), SLIDER_SFX)
 
 
 ## Forgets the hover limiter (tests).
@@ -320,6 +332,14 @@ static func for_fx(e: Dictionary, me: int) -> String:
 			return "exhaust" if String(e.get("dest", "spent")) == "exhaust" else "destroy"
 		"exhaust":
 			return "exhaust"
+		"discard":
+			return "card_discard"   # L1: the end-of-turn discard to Spent (a count, never the cards)
+		"stance":
+			return "stance_defense" if String(e.get("to", "")) == "def" else "stance_attack"   # L1
+		"stat":
+			# L1: ATK / DEF changes were silent; a net gain shimmers up, a net loss sinks.
+			var net := float(e.get("atk", 0)) + float(e.get("def", 0))
+			return "buff" if net > 0.0 else ("debuff" if net < 0.0 else "")
 		"status":
 			var s: String = String(e.get("s", ""))
 			return "buff" if (s == "rune" or CardDB.is_buff(s)) else "debuff"
@@ -330,6 +350,15 @@ static func for_fx(e: Dictionary, me: int) -> String:
 		"game_over":
 			return "victory" if int(e.get("winner", -1)) == me else "defeat"
 	return ""
+
+
+## L1: the hit sound of an attack into a unit: "block" (a shield clang) when the defender's public
+## view `defender` shows Defense stance, else "impact". Units on the field are face up, so the stance
+## is public; a missing view (the slot was empty or changed) falls back to "impact".
+static func hit_for(defender: Variant) -> String:
+	if defender is Dictionary and String((defender as Dictionary).get("stance", "")) == "def":
+		return "block"
+	return "impact"
 
 
 ## Sets master SFX volume (linear 0..1, clamped) and persists it.
@@ -411,12 +440,27 @@ static func _apply_bus() -> void:
 	AudioServer.set_bus_mute(idx, _muted or _volume <= 0.0)
 
 
+## The asset path of sound `name`: `<name>.wav`, else `<name>.ogg` (L1: the ElevenLabs set may ship a
+## long cue as Ogg Vorbis), or "" when neither exists (the sound is then silent).
+static func asset_path(name: String) -> String:
+	for ext in EXTENSIONS:
+		var path: String = DIR + name + ext
+		if ResourceLoader.exists(path):
+			return path
+	return ""
+
+
+## True when sound `name` has an asset file (tests and QA).
+static func has_asset(name: String) -> bool:
+	return asset_path(name) != ""
+
+
 static func _stream_for(name: String) -> AudioStream:
 	if _streams.has(name):
 		return _streams[name] as AudioStream
-	var path: String = DIR + name + ".wav"
+	var path := asset_path(name)
 	var s: AudioStream = null
-	if ResourceLoader.exists(path):
+	if path != "":
 		s = load(path) as AudioStream
 	_streams[name] = s
 	return s
