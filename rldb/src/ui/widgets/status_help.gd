@@ -291,7 +291,23 @@ static func draw_marked(ci: CanvasItem, tp: TextParagraph, pos: Vector2, col: Co
 	var sp := spans(text)
 	var y := pos.y
 	for i in tp.get_line_count():
-		y += draw_marked_line(ci, tp, i, Vector2(pos.x, y), col, sp, link, oversampling)
+		# The paragraph's own line spacing between lines, as TextParagraph.draw lays them (final review #13).
+		y += draw_marked_line(ci, tp, i, Vector2(pos.x, y), col, sp, link, oversampling) + tp.line_spacing
+
+
+## The clip ranges [left, right] (line space; -1 = no clip on that side) of a line's plain text
+## around its status words `marks` (x ranges, sorted). Final review #13: a status word at the very
+## start of a line gave the range [-1, 0], and TextServer reads a right clip of 0 as "no clip", so the
+## whole line drew twice (it read as bold, e.g. Dante's "Burn to a Unit..."). Empty ranges are skipped.
+static func plain_ranges(marks: Array) -> Array:
+	var out: Array = []
+	var at := -1.0
+	for r in marks:
+		if r.x > maxf(at, 0.0):
+			out.append(Vector2(at, r.x))
+		at = maxf(at, r.y)
+	out.append(Vector2(at, -1.0))
+	return out
 
 
 ## Draws line `i` of `tp` with its top-left at `pos` (status words recoloured and underlined, `sp` from
@@ -310,11 +326,8 @@ static func draw_marked_line(ci: CanvasItem, tp: TextParagraph, i: int, pos: Vec
 			for r in srv.shaped_text_get_selection(rid, a, b):
 				marks.append(r)
 	marks.sort_custom(func(p, q): return p.x < q.x)
-	var at := -1.0
-	for r in marks:
-		srv.shaped_text_draw(rid, canvas, ofs, at, r.x, col, oversampling)
-		at = r.y
-	srv.shaped_text_draw(rid, canvas, ofs, at, -1.0, col, oversampling)
+	for g in plain_ranges(marks):
+		srv.shaped_text_draw(rid, canvas, ofs, g.x, g.y, col, oversampling)
 	for r in marks:
 		srv.shaped_text_draw(rid, canvas, ofs, r.x, r.y, link, oversampling)
 		var uy := ofs.y + srv.shaped_text_get_underline_position(rid) + 0.5
