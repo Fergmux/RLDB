@@ -74,9 +74,9 @@ func _stage() -> void:
 	uids["h_water"] = _new(a, 1, "hand")
 	uids["h_anduras"] = _new(a, 99, "hand")            # On Summon: move a unit from Spent to Draw
 	uids["h_loak"] = _new(a, 19, "hand")               # On Summon: opponent unit in this column
-	for i in 3:
+	for i in 4:                                          # Anduras returns one; three pay Tyde's 3
 		uids["spent%d" % i] = _new(a, 1, "spent")
-	uids["tyde"] = _new(a, 172, "extra")               # Arcane, cost 2
+	uids["tyde"] = _new(a, 172, "extra")               # Arcane, cost 3 (2026-11-03)
 	uids["o_fire"] = _put(o, 110, 0, "atk", 10)
 	uids["o_water"] = _put(o, 1, 1, "def")
 	var trap := m._create_instance(46, o)              # Mirror Force, face-down in column 3
@@ -192,7 +192,7 @@ func _steps() -> void:
 	await _wait(0.3)
 	await _click(_zone_rect(a, "unit", 2).get_center())
 	await _wait(0.6)
-	_check("F02-10 pile cards offered in the tray", gs.prompt.tray.visible and _tray_widgets().size() == 3, "tray %s n %d" % [gs.prompt.tray.visible, _tray_widgets().size()])
+	_check("F02-10 pile cards offered in the tray", gs.prompt.tray.visible and _tray_widgets().size() == 4, "tray %s n %d" % [gs.prompt.tray.visible, _tray_widgets().size()])
 	_check("F02-10 no per-card Choose buttons", _tray_buttons() == 0)
 	var tw0: CardWidget = _tray_widgets()[0]
 	await _move(tw0.get_global_rect().get_center())
@@ -244,6 +244,12 @@ func _steps() -> void:
 			_check("F02-10 multi keeps click order (badges 2,1)", order[0] == 2 and order[1] == 1, str(order))
 			_check("F02-10 multi not committed before Confirm", m.pending.get("kind", "") == "select")
 			await _shot("11_tray_ordered_multi")
+			# QA final: Tyde costs 3 since 2026-11-03, so a third 1-cost Mage completes the exact total.
+			for w in _tray_widgets():
+				if (w as CardWidget).order_no == 0 and int((w as CardWidget).view.get("cost", -1)) == 1:
+					await _click((w as Control).get_global_rect().get_center())
+					await _wait(0.3)
+					break
 			await _click(_banner_button("Confirm").get_global_rect().get_center())
 			await _wait(0.5)
 			if m.pending.get("kind", "") == "slot":
@@ -383,7 +389,7 @@ func _fusion_zone_steps() -> void:
 	var p := m.active
 	var beast := _put(p, 4, 3, "atk")                    # Basic Beast (Water), back row column 1
 	var dragon := _put(p, 2, 1, "atk")                   # Basic Dragon (Water), front row column 2
-	var wyrm := _new(p, 93, "extra")
+	var wyrm := _new(p, 94, "extra")                     # Mirrorflesh Construct: 2 Units with the same Type (Bastion Wyrm needs a Physical unit since 2026-11-03)
 	var tt := _new(p, 8, "hand")                         # Tag Team - S
 	m.players[p]["ap"] = 5
 	host.broadcast()
@@ -413,6 +419,10 @@ func _fusion_zone_steps() -> void:
 	# B3 (2026-10-20): on your own turn outside the Battle Phase there is no stance choice; the zone is
 	# the final, committing step and the Fusion unit enters in Attack stance (no Confirm follows).
 	_check("B3 Fusion commits on the zone with no stance or Confirm prompt", m.pending.is_empty(), str(m.pending.get("prompt", "")))
+	# QA final: the starter deck may hold its own Mirrorflesh Construct, so read the unit that landed.
+	var landed: int = m.players[p]["units"][1]
+	if landed != -1 and m.name_of(landed) == m.name_of(wyrm):
+		wyrm = landed
 	_check("B3 Fusion unit enters in Attack stance", m.cards[wyrm].get("stance", "") == "atk", str(m.cards[wyrm].get("stance", "")))
 	await _shot("24_fusion_committed")
 	_check("FB4-15 Fusion unit summoned into the material's zone", m.cards[wyrm]["zone"] == "unit" and m.cards[wyrm]["slot"] == 1 and m.cards[dragon]["zone"] != "unit" and m.cards[beast]["zone"] != "unit")
