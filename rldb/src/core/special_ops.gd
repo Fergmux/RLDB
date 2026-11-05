@@ -160,6 +160,8 @@ func _op_spread_debuffs(f: Dictionary, op: Dictionary) -> int:
 		add_log("%s has no Debuffs to spread." % name_of(me))
 		return R.CONT
 	add_log("%s doubles its Debuffs (%s)." % [name_of(me), ", ".join(have.keys().map(func(s): return "%d %s" % [have[s], String(s).capitalize()]))])
+	for s in have:
+		_doubled_fx(me, s, int(have[s]) / 2)
 	for u in refs(f, op["target"]):
 		if unit_on_field(u):
 			for s in have:
@@ -430,12 +432,24 @@ func _op_roma(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
+## QA final: a doubling in place shows like an application of the stacks it added (L8 "status"
+## presentation event; the rules treat it as no new application).
+func _doubled_fx(u: int, s: String, added: int) -> void:
+	var pos := fx_pos(u)
+	if added > 0 and not pos.is_empty():
+		add_fx({"k": "status", "at": pos, "s": s, "n": added})
+
+
 ## Doubles debuff stacks directly (not a new application, so Cleanse does not intervene).
 func _op_double_debuffs(f: Dictionary, op: Dictionary) -> int:
 	var units: Array = all_field_units() if op["side"] == "any" else field_units(opp(f["ctl"]))
+	var added := []
 	for u in units:
 		for s in cards[u]["st"].keys():
 			if CardDB.is_debuff(s):
+				added.append([u, s, int(cards[u]["st"][s])])
 				cards[u]["st"][s] *= 2
 	add_log("All Debuffs on %s are doubled." % ("the Field" if op["side"] == "any" else "the opponent's units"))
+	for a in added:
+		_doubled_fx(a[0], a[1], a[2])
 	return R.CONT

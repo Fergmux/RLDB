@@ -196,7 +196,7 @@ func _apply_burn(a: int, p: int, burn: int) -> void:
 		return
 	if unit_on_field(a):
 		status_fx(a, "status_tick", "burn", burn)   # L8
-		_set_status(a, "burn", 0)
+		decrement_status(a, "burn", status_count(a, "burn"))   # QA final: with its "status_expire"
 	change_hp(p, -burn, " (Burn on %s after its attack)" % name_of(a))
 
 
