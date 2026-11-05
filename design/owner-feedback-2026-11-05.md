@@ -170,8 +170,34 @@ Owner answers, 2026-11-05 (these are confirmed rules, follow them exactly):
 | L28 | Options menu, tables, card back | merged 0e9aae7 | |
 | L29 | macOS build on GitHub | merged fddc96a | Re-export at the end. |
 | L30 | No keyboard hints anywhere | done 9eddfdc | Scan test ui_no_key_hints_test.gd. |
+| L31 | More card backs | merged | Six painted backs (Crimson Wyrm, Verdant Grove, Abyssal Tide, Obsidian Runes, Gilded Sun, Arcane Starfield) plus the refreshed Violet Sigil; picker with hover preview in Options > Customisation > Card back. Local display only. |
 | - | Stale tests re-pinned | merged 2c34eec | 114 baseline failures fixed. |
 
 ## Extra improvements (found while working)
 
+- Tutorial: a learner was stuck after one wrong answer (lessons 2-7); fixed with a regression test.
+- Status badges no longer vanish silently when Cleanse/Curse clears them, a ward stack is spent, Burn ends or debuffs are doubled.
+- `card_return` and `miss` sounds are wired to new engine events (they had nothing to play on).
+- Status names no longer break after a skip (freed label error).
+- Sacrifice-mode hint no longer hides under the series scoreboard.
+- Badge glyph contrast at field size; status names rise inside their own card.
+- Every in-game popover closes with the same sound and motion; the Lobby list closes on click-off.
+- Card details name statuses in their own colours; the Options panel no longer jumps between leaves.
+- Evolve prompt shows readable Now / Evolves into rows with a hover comparison.
+- Scoreboard cartouche spacing, Credits readability, mini-card rules text fits on all 191 cards (and a double-drawn line fixed).
+- Deck builder details pane no longer overflows at 1280x800; turn chip says "Choose a zone" in zone prompts; Esc closes the menu with its animation.
+- Performance: frame time p95 35 ms -> 15 ms (card faces repaint only when they change).
+- 114 stale failing tests re-pinned; suite fully green.
+- Violet Sigil card back enriched to sit beside the new painted backs.
+
 ## Deviations for your review
+
+- Evolution-only cards (Symbiote Larva, Siphonophore) are not draftable or offered as rewards.
+- The bot always evolves; it plays fair (no hidden-info peeking) and wins 56% going second vs the old bot (target was 65%).
+- L16: the responding notice centres, then docks under the opponent plate after 2.2 s, where it covers the top of the opponent's piles (fades while hovered). Owner decision welcome.
+- The series score shows in the modal header, sidebar and top strip while a series modal is up (top strip deliberately above the dim).
+- The chat box does not close on click-off (it would lose a half-typed message).
+- Card backs are a local display choice: each player sees their own chosen back on all face-down cards, including the opponent's.
+- L3's one-Fusion/one-Ritual/one-Arcane offer also applies to the "Add a card > Extra Deck" reward.
+- Sounds were chosen by measurement (loudness, length, spectrum), not by ear; `timer_tick` / `timer_warning` exist but are unused (no turn limit).
+- The macOS build is checked structurally only (universal binary, signature present, textures); not launched on a Mac.
