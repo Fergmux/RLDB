@@ -148,23 +148,6 @@ func declare(e: Dictionary) -> void:
 	tw.chain().tween_callback(_fx.reset_widget.bind(w, holder))
 
 
-## A status `s` is gained on the card at `at`: coloured glow plus a floating label.
-func status(at: Dictionary, s: String, _n: int) -> void:
-	var p := int(at["p"])
-	var zone := String(at["zone"])
-	var slot := int(at["slot"])
-	var it: Dictionary = _fx.screen.fx_slot_item(p, zone, slot)
-	var col := UIStyle.RUNE_BLUE if s == "rune" else (Color("6fd38a") if CardDB.is_buff(s) else Color("e8605a"))
-	if not it.is_empty():
-		var w: CardWidget = it["widget"]
-		w.fx_glow = Color(col, 0.9)
-		_clear_glow_on_finish(w)
-		var tw := _fx.new_tween()
-		tw.tween_property(w, "fx_glow", Color(col, 0.0), UIStyle.dur(0.2 if UIStyle.reduce_motion else 0.4)).set_trans(Tween.TRANS_SINE)
-	var rect: Rect2 = _fx.screen.fx_slot_global_rect(p, zone, slot)
-	_fx.float_text(s.capitalize(), col.lightened(0.3), rect.get_center() + Vector2(0, -rect.size.y * 0.3), 15, 24.0, 0.7, false, false)
-
-
 ## The card at `at` changed ATK / DEF: a short gold glow.
 func stat(at: Dictionary) -> void:
 	var it: Dictionary = _fx.screen.fx_slot_item(int(at["p"]), String(at["zone"]), int(at["slot"]))
