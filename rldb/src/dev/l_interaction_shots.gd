@@ -229,7 +229,7 @@ func _arrow_steps() -> void:
 	await _move(tgt)
 	await _wait(0.5)
 	await _shot("10_arrow_aiming")
-	_check("L7 arrow shown while aiming", gs.arrow.on)
+	_check("L7 arrow shown while aiming", gs.arrow.on, "answered %s targeting %s opt %d" % [gs.selection.answered(), gs.selection.board_targeting(), gs.targeting.option_under_pointer()])
 	await _click(tgt)
 	await _shot("11_arrow_frame_after_pick")
 	_check("L7 arrow hidden the moment the target is picked", not gs.arrow.on)

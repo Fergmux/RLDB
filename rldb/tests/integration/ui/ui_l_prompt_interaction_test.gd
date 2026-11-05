@@ -186,6 +186,54 @@ func test_a_refused_answer_lets_the_choice_be_aimed_again() -> void:
 	assert_bool(gs.arrow.on).is_true()
 
 
+# ---------------------------------------------------------------- L16
+
+const DAMAGE_CONVERSION := 47   # Trap: responds when an opposing Unit in its Column declares an Attack
+
+
+func test_responding_notice_names_the_opponent_and_clears_after_their_answer() -> void:
+	# Arrange: my attacker in column 1 faces the opponent's set Trap in column 1, in the Battle Phase.
+	var o := 1 - me
+	var atk := TB.unit(m, me, TB.FIRE, 1, "atk", 14)
+	TB.unit(m, o, TB.WATER, 1)
+	var tr := m._create_instance(DAMAGE_CONVERSION, o)
+	m.cards[tr]["zone"] = "backrow"
+	m.cards[tr]["slot"] = 1
+	m.cards[tr]["ctl"] = o
+	m.cards[tr]["set_turn"] = m.turn - 1
+	m.players[o]["backrow"][1] = tr
+	m.turn = maxi(m.turn, 2)
+	m.phase = "battle"
+	host.broadcast()
+	gs.skip_effects()
+	var wn := gs.prompt.wait_chip as WaitNotice
+	# Act: attack; the opponent's Trap window opens.
+	host.handle(me, {"t": "attack", "uid": atk})
+	if String(m.pending.get("kind", "")) == "attack_target":
+		TB.choose(m, [m.name_of(m.players[o]["units"][1])])
+		host.broadcast()
+	gs.skip_effects()
+	await await_idle_frame()
+	# Assert: the notice is up, naming the opponent, and says what they decide.
+	assert_str(String(m.pending.get("kind", ""))).is_equal("trap_response")
+	assert_bool(wn.waiting()).is_true()
+	assert_str(wn.label.base).is_equal("%s is responding" % String(m.players[o]["name"]))
+	assert_str(wn.sub.text).is_not_empty()
+	# Act: the opponent skips.
+	host.handle(o, {"t": "choose", "id": m.pending["id"], "indices": [_skip_index()]})
+	gs.skip_effects()
+	await await_idle_frame()
+	# Assert
+	assert_bool(wn.waiting()).is_false()
+
+
+func _skip_index() -> int:
+	for i in m.pending["options"].size():
+		if String(m.pending["options"][i]["label"]).begins_with("Skip"):
+			return i
+	return 0
+
+
 func _cancel_case() -> void:
 	# Arrange
 	_open_target_pick()
