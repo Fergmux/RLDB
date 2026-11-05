@@ -155,7 +155,7 @@ const SHORT_LABELS := {
 	"Exhaust a unit you control: destroy a unit": "Exhaust & Destroy",
 	"Heal 4 HP or your opponent takes 4 Damage": "Heal or Drain",
 	"Change Stance of your opponent's unprotected units": "Topple Foes",
-	"Apply 1 Infiltrate and 1 Nimble to a unit": "Infiltrate + Nimble",
+	"Apply 1 Infiltrate and 1 Nimble to a unit": "Infiltrate, Nimble",   # F02-04: at most 18 characters
 	"Discard a card to draw a card": "Discard & Draw",
 	"Discard a unit to gain +1 AP": "Discard for AP",
 	"Switch ATK/DEF of all units until end of turn": "Switch ATK/DEF",
