@@ -100,8 +100,8 @@ var banner_name: Label
 var banner_sub: RichTextLabel
 ## Banner buttons (skip, confirm ...).
 var banner_btns: HFlowContainer
-## Row under the buttons holding the Cancel link (design review #34: the escape hatch is a text
-## link, 16 px under the answers, not a button of the same weight).
+## Row under the buttons holding the Cancel button (L6, owner 2026-11-05: a real Secondary-family
+## button as wide as the panel, quieter than the gold answers; it replaced design review #34's link).
 var cancel_row: HBoxContainer
 ## Banner flow of option buttons.
 var banner_flow: HFlowContainer
@@ -887,8 +887,7 @@ func _render_banner() -> void:
 	if type_choice:
 		even_type_widths(row)
 	if pd["cancellable"] and not gs.view.has("tutorial"):   # a forced tutorial step has no Cancel button
-		var x := TextLink.make("Cancel", 13)
-		x.name = "CancelLink"
+		var x := PromptPlate.CancelButton.new()   # L6: a real button, not a text link
 		x.pressed.connect(gs.selection.cancel)
 		cancel_row.add_child(x)
 		cancel_row.visible = true
