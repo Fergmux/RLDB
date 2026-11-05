@@ -227,7 +227,7 @@ func test_hypnotised_unit_can_be_ritual_material_and_goes_to_its_owners_spent() 
 	assert_str(TB.choose_uids(m, [victim])).is_empty()
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
-	assert_int(m.atk_of(roma)).is_equal(36)
+	assert_int(m.atk_of(roma)).is_equal(3 * 10)                # Roma +10 per Rune since 2026-11-03
 	assert_bool(victim in m.players[1]["spent"]).is_true()
 
 
@@ -304,10 +304,10 @@ func test_snunday_flips_continuous_aura_while_active_and_restores_after() -> voi
 func test_snunday_does_not_flip_already_resolved_instant_bonus() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
-	_cast(m, 0, 182, u)                         # +20 before reversal
-	assert_int(m.atk_of(u)).is_equal(30)
+	_cast(m, 0, 182, u)                         # +10 before reversal (Shimmer Serum, 2026-11-03)
+	assert_int(m.atk_of(u)).is_equal(10 + 10)
 	_cast(m, 0, 154)
-	assert_int(m.atk_of(u)).is_equal(30)
+	assert_int(m.atk_of(u)).is_equal(10 + 10)
 
 
 func test_snunday_does_not_reverse_battle_damage_or_ap_payment() -> void:

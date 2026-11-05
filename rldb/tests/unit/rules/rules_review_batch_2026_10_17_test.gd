@@ -111,11 +111,12 @@ func test_review_ritual_cancel_each_step_then_commit() -> void:
 func test_review_arcane_cancel_each_step_then_exact_commit() -> void:
 	for k in 4:
 		var m := TB.make()
-		var tyde := TB.card(m, 0, 172, "extra")               # Tyde 2A
+		# 2026-11-03: Tyde is 3A now; Flying Sandworm (2A, no On Summon) keeps the requirement of 2.
+		var tyde := TB.card(m, 0, 171, "extra")               # Flying Sandworm 2A
 		var a := TB.card(m, 0, TB.WATER, "spent")             # cost 1
 		var b := TB.card(m, 0, TB.FIRE, "spent")              # cost 1
 		var two := TB.card(m, 0, 28, "spent")                 # cost 2
-		var three := TB.card(m, 0, 23, "spent")               # cost 3: more than the total
+		var three := TB.card(m, 0, 23, "spent")               # Auric, cost 4: more than the requirement
 		var before := _state(m)
 		assert_str(m.submit(0, {"t": "arcane", "uid": tyde})).is_empty()
 		if k == 0:
@@ -197,28 +198,31 @@ func test_review_opponent_view_hides_searched_cards() -> void:
 ## F04 Extra Deck rows: the opponent's view never lists the active player's Extra summons.
 func test_review_extra_availability_is_private() -> void:
 	var m := TB.make()
-	var tyde := TB.card(m, 0, 172, "extra")
+	var tyde := TB.card(m, 0, 171, "extra")                    # Flying Sandworm 2A (Tyde is 3A since 2026-11-03)
 	TB.card(m, 0, TB.WATER, "spent")
 	TB.card(m, 0, TB.FIRE, "spent")
 	var v0 := MatchView.build(m, 0)
 	var v1 := MatchView.build(m, 1)
 	assert_bool(v0["extra_avail"]["any"]).is_true()
 	assert_bool(v1["extra_avail"]["any"]).is_false()
-	assert_str(JSON.stringify(v1)).not_contains("Tyde")
+	assert_str(JSON.stringify(v1)).not_contains("Sandworm")
 	assert_int(int(v0["extra_avail"]["methods"][0]["uid"])).is_equal(tyde)
 
 
-## Magentric tributed through Tag Team - S's On Summon Fusion still gives the Fusion unit 2 Pierce.
+## Magentric tributed through Tag Team - S's On Summon Fusion still gives the Fusion unit its tribute
+## bonus: 1 Cleanse since 2026-11-03 (it was 2 Pierce).
 func test_review_magentric_bonus_through_tag_team_s_trigger() -> void:
 	var m := TB.make()
 	var mag := TB.unit(m, 0, 69, 3)                            # Beast, back row column 1
-	var dr := TB.unit(m, 0, 2, 1)                              # Dragon
-	var wyrm := TB.card(m, 0, 93, "extra")                     # Bastion Wyrm: Beast + Dragon
+	var dr := TB.unit(m, 0, 116, 1)                            # Basic Dragon (Physical)
+	# Bastion Wyrm needs a 20+ ATK-or-DEF unit since 2026-11-03; Owlbear Druid takes Magentric.
+	var wyrm := TB.card(m, 0, 189, "extra")                    # Owlbear Druid: Beast + Physical
 	TB.summon(m, 0, 8, 0)                                      # Tag Team - S in front of Magentric
 	for v in [1, wyrm, mag, dr, 1]:
 		assert_str(_answer(m, v)).is_empty()
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
-	assert_int(m.status_count(wyrm, "pierce")).is_equal(2)
+	assert_int(m.status_count(wyrm, "cleanse")).is_equal(1)
+	assert_int(m.status_count(wyrm, "pierce")).is_equal(0)
 
 
 ## Chaos Witch's Type carries Mage Fusion materials: a Water Mage under a Fire Witch is a Fire Mage.

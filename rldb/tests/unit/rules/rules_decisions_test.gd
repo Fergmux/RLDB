@@ -119,9 +119,9 @@ func test_s01_two_snundays_cancel() -> void:
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
 	TB.cast(m, 0, 154)
 	TB.cast(m, 0, 154)
-	TB.cast(m, 0, 182)                                    # Shimmer Serum +20
+	TB.cast(m, 0, 182)                                    # Shimmer Serum +10 (2026-11-03)
 	TB.choose_uids(m, [u])                                # target is always the player's choice
-	assert_int(m.atk_of(u)).is_equal(30)
+	assert_int(m.atk_of(u)).is_equal(10 + 10)
 
 
 # 2026-10-18: Shimmer Serum's cost change is on its target unit; it reverses, floored at zero.
