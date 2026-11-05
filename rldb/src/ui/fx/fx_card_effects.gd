@@ -192,7 +192,7 @@ func effect_arrow(from: Dictionary, at: Dictionary) -> void:
 	arrow.modulate.a = 0.0
 	_fx.add_node(arrow)
 	arrow.queue_redraw()
-	var tw := _fx.new_tween()
+	var tw := _fx.tail_tween()   # L4: its long fade never holds the next view back
 	tw.tween_property(arrow, "modulate:a", 1.0, UIStyle.dur(EFFECT_ARROW_IN))
 	tw.tween_interval(UIStyle.dur(EFFECT_ARROW_HOLD))
 	tw.tween_property(arrow, "modulate:a", 0.0, UIStyle.dur(EFFECT_ARROW_FADE))

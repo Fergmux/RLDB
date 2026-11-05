@@ -35,7 +35,9 @@ func setup(decks: Array, first_player: int, seed_value: int, cfg: Dictionary = {
 	for p in 2:
 		if cfg.has("names"):
 			players[p]["name"] = cfg["names"][p]
-		for id in decks[p]:
+		# L23: an evolution-only form never starts a game as its own card (an older saved deck or
+		# series may list one): it is its base card, which can evolve into it.
+		for id in CardDB.sanitize_deck(decks[p]):
 			var uid := _create_instance(int(id), p)
 			if CardDB.is_extra_category(CardDB.get_def(int(id))["category"]):
 				cards[uid]["zone"] = "extra"
@@ -91,8 +93,51 @@ func _start_turn(p: int) -> void:
 		if cards[du]["zone"] == "spent":
 			push_frame(make_frame(du, p, [{"op": "summon", "target": du, "place": "orig", "stance": "choose"}], "%s returns" % name_of(du)))
 	players[p]["delayed"] = []
-	emit("start_turn", {"player": p})
+	# L23: Evolve prompts come first among the start-of-turn effects, one per evolvable unit in Field
+	# order; the "at the start of your turn" effects follow (start_turn_effects), and a unit that just
+	# evolved skips them this turn (its new form's first fire next turn).
+	var evolvers := field_units(p).filter(func(u): return can_evolve(u))
+	if evolvers.is_empty():
+		emit("start_turn", {"player": p})
+	else:
+		push_frame(make_frame(-1, p, [{"op": "start_turn_effects"}], "start of turn"))
+		for i in range(evolvers.size() - 1, -1, -1):
+			push_frame(make_frame(evolvers[i], p, [{"op": "evolve_offer"}], "Evolve %s" % name_of(evolvers[i])))
 	run()
+
+
+## L23: the two answers of an Evolve prompt (the bot always takes EVOLVE_YES).
+const EVOLVE_YES := "Evolve"
+const EVOLVE_SKIP := "Skip"
+
+
+## L23 (owner feedback 2026-11-05, confirmed rules): "Evolve <card> into <next>?" for the frame's unit,
+## at the start of its controller's turn: free (no AP), Evolve or Skip, no response window (it is not
+## a Summon and not an effect activation). Asked only while the unit can still evolve.
+func _op_evolve_offer(f: Dictionary, op: Dictionary) -> int:
+	var uid: int = f["src"]
+	var ans: Variant = take_answer(f)
+	var ok: bool = cards.has(uid) and can_evolve(uid) and int(cards[uid]["ctl"]) == int(f["ctl"])
+	if ans != null:
+		if int(ans[0]) == 1 and ok:
+			evolve_unit(uid)
+		elif ok:
+			add_log("%s does not evolve %s." % [pname(f["ctl"]), name_of(uid)])
+		return R.CONT
+	if not ok:
+		return R.CONT
+	var to := CardDB.evolves_into(int(cards[uid]["id"]))
+	return ask(f, f["ctl"], "evolve", "Evolve %s into %s?" % [name_of(uid), String(CardDB.get_def(to)["name"])],
+		[{"v": 1, "label": EVOLVE_YES}, {"v": 0, "label": EVOLVE_SKIP}], 1, 1, false, {"evolve_to": to})
+
+
+## L23: the start-of-turn triggers after the Evolve prompts. A unit that evolved this turn does not
+## fire its new form's "at the start of your turn" effects until its controller's next turn.
+func _op_start_turn_effects(f: Dictionary, op: Dictionary) -> int:
+	emit("start_turn", {"player": f["ctl"]})
+	trigger_queue = trigger_queue.filter(func(t): return not (String(t["event"].get("name", "")) == "start_turn" \
+			and cards.has(int(t["uid"])) and int(cards[int(t["uid"])].get("evolved_turn", -1)) == turn))
+	return R.CONT
 
 
 ## Advances to the next phase, or ends the turn from Main Phase 2.
@@ -186,15 +231,21 @@ func _return_control(u: int) -> void:
 	inst["control_until"] = -1
 	var home: int = inst.get("control_slot", -1)
 	inst.erase("control_slot")
+	# L9: presentation event {"k": "control", "from", "to" ({} when it goes to Spent), "p": owner, "id",
+	# "back": true, "dest": "unit" | "spent"}.
+	var from := fx_pos(u)
 	if home == -1 or players[owner]["units"][home] != -1:
 		add_log("%s cannot return to its zone (now occupied) and is sent to Spent." % name_of(u))
+		var cfx := {"k": "control", "from": from, "to": {}, "p": owner, "id": d(u)["id"], "back": true, "dest": "spent"}
 		_leave_field(u, "spent", "control")
+		add_fx(cfx)
 		return
 	players[inst["ctl"]]["units"][inst["slot"]] = -1
 	inst["ctl"] = owner
 	inst["slot"] = home
 	players[owner]["units"][home] = u
 	add_log("%s returns to %s's control." % [name_of(u), pname(owner)])
+	add_fx({"k": "control", "from": from, "to": fx_pos(u), "p": owner, "id": d(u)["id"], "back": true, "dest": "unit"})
 
 
 # ---------------------------------------------------------------- commands
@@ -716,8 +767,9 @@ func _lead_choices(ops: Array) -> Array:
 	var lead := []
 	var applies := []
 	var i := 0
-	# A Type declaration leads too (owner feedback 2026-10-18: Chaos Witch / Waang can cancel it).
-	while i < ops.size() and ops[i]["op"] in ["choose", "mode", "near_self", "declare_type"] and not ops[i].get("random", false):
+	# A Type declaration leads too (owner feedback 2026-10-18: Chaos Witch / Waang can cancel it), and
+	# so does a zone pick (L9, 2026-11-05: Hypnotise's zone, chosen like a summon's before paying).
+	while i < ops.size() and ops[i]["op"] in ["choose", "mode", "near_self", "declare_type", "pick_slot"] and not ops[i].get("random", false):
 		var c: Dictionary = ops[i].duplicate()
 		if c["op"] != "near_self":       # near_self only lists the units a following choice may pick
 			c["cancellable"] = true

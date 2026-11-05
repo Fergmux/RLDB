@@ -275,9 +275,11 @@ func choose(m: MatchEngine, depth: int) -> Dictionary:
 		if pd.get("cancellable", false):
 			return {"t": "cancel", "id": pd["id"]}
 		return {"t": "choose", "id": pd["id"], "indices": []}
-	# L23: the bot always evolves (owner rule, 2026-11-05).
+	# L23 (owner, 2026-11-05): the bot always evolves: the Evolve prompt's Evolve answer, or any
+	# option labelled "Evolve..." should the prompt change shape.
 	for i in n:
-		if String(opts[i].get("label", "")).strip_edges().to_lower().begins_with("evolve"):
+		var label := String(opts[i].get("label", ""))
+		if (String(pd["kind"]) == "evolve" and label == MatchEngine.EVOLVE_YES) or label.strip_edges().to_lower().begins_with("evolve"):
 			return {"t": "choose", "id": pd["id"], "indices": [i]}
 	if int(pd["max"]) > 1:
 		return {"t": "choose", "id": pd["id"], "indices": _multi_pick(m, depth)}

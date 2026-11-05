@@ -158,7 +158,7 @@ func test_c023_auric_can_destroy_a_revealed_spell_trap_now() -> void:
 	assert_array(CF.offered(m)).contains_exactly([revealed])
 	TB.choose_uids(m, [revealed])
 	assert_str(CF.zone(m, revealed)).is_equal("spent")
-	assert_int(CF.hp(m, 0)).is_equal(50)                      # Take 10 Damage is the cost
+	assert_int(CF.hp(m, 0)).is_equal(GameCore.START_HP - 8)   # Take 8 Damage is the cost (10 before 2026-11-03)
 
 
 func test_c026_brinekeeper_destroyed_takes_all_your_spell_traps_revealed_or_not() -> void:
@@ -236,7 +236,7 @@ func test_c182_shimmer_serum_raises_the_targets_cost_not_its_own() -> void:
 	TB.choose_uids(m, [u])
 	assert_int(m.status_count(u, "blind")).is_equal(1)
 	assert_int(m.status_count(u, "infiltrate")).is_equal(1)
-	assert_int(m.atk_of(u)).is_equal(8 + 20)
+	assert_int(m.atk_of(u)).is_equal(8 + 10)                  # +10 since 2026-11-03 (was +20)
 	assert_int(m.current_cost(u)).is_equal(2)
 	assert_int(m.current_cost(spell)).is_equal(0)             # the Spell's own cost is unchanged
 	m.move_to_pile(u, "hand")
@@ -296,9 +296,9 @@ func test_c154_sneaky_snunday_still_reverses_stat_gains() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, MAGE_WATER, 0)
 	TB.cast(m, 0, 154)
-	TB.cast(m, 0, 182)                                         # Shimmer Serum: +20 ATK this turn
+	TB.cast(m, 0, 182)                                         # Shimmer Serum: +10 ATK this turn
 	TB.choose_uids(m, [u])
-	assert_int(m.atk_of(u)).is_equal(0)                        # 8 - 20, floored at 0
+	assert_int(m.atk_of(u)).is_equal(0)                        # 8 - 10, floored at 0
 
 
 # @cards 154,163
@@ -493,7 +493,8 @@ func test_c169_options_draws_one_card_per_copy_at_the_start_of_your_turn() -> vo
 	assert_int(idx).is_greater(TB.log_index(m, "Player 1 draws 4 cards"))
 
 
-func test_c178_reinforcements_costs_2_and_cuts_unit_costs_by_2() -> void:
+# 2026-11-03: the discount is -1 AP (was -2); the Power still costs 2.
+func test_c178_reinforcements_costs_2_and_cuts_unit_costs_by_1() -> void:
 	assert_int(CardDB.get_def(178)["cost"]).is_equal(2)
 	var m := TB.make()
 	TB.power(m, 0, 178, 0)
@@ -503,8 +504,8 @@ func test_c178_reinforcements_costs_2_and_cuts_unit_costs_by_2() -> void:
 	assert_int(m.current_cost(three)).is_equal(3)              # nobody controls a unit yet
 	TB.unit(m, 1, MAGE_WATER, 0)
 	assert_int(m.current_cost(one)).is_equal(0)
-	assert_int(m.current_cost(two)).is_equal(0)
-	assert_int(m.current_cost(three)).is_equal(1)
+	assert_int(m.current_cost(two)).is_equal(1)
+	assert_int(m.current_cost(three)).is_equal(2)
 	TB.unit(m, 0, MAGE_WATER, 0)
 	assert_int(m.current_cost(three)).is_equal(3)              # you control a unit too
 

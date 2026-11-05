@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## J6 / J11 (owner feedback 2026-10-22) on the real GameScreen bound to a local host: the duel
-## controls under the local player's plate. Sacrifice Unit (enabled only while legal; pick, confirm)
+## controls under the local player's plate. Sacrifice Unit (enabled only while legal; L5: it toggles sacrifice mode)
 ## replaces the Sacrifice card action; the Trap Prompts toggle is the viewer's saved choice and sets
 ## the seat's prompts on the authority. The windowed run with screenshots is
 ## src/dev/duel_controls_shots.gd (evidence in production/qa/evidence/2026-10-22-batch/duel-controls).
@@ -83,24 +83,19 @@ func test_sacrifice_button_is_enabled_only_while_legal() -> void:
 		assert_bool(_controls().sacrifice_btn.disabled).is_true()
 
 
-func test_sacrifice_button_picks_then_confirms() -> void:
+## L5 (owner feedback 2026-11-05) replaced the pick-and-confirm flow: the button toggles sacrifice
+## mode, and a click on a unit sacrifices it at once (ui_l5_sacrifice_mode_test.gd covers the mode).
+func test_sacrifice_button_starts_sacrifice_mode_without_a_prompt() -> void:
 	var u := _field_unit()
 	await await_idle_frame()
 	var ap: int = m.players[me]["ap"]
 	_controls().sacrifice_btn.pressed.emit()
+	await await_idle_frame()
+	assert_bool(gs.sacrifice.active).is_true()
+	assert_bool(m.pending.is_empty()).is_true()
+	gs.selection.on_widget_pressed(gs.board.slot_item(me, "unit", 0)["widget"])
 	gs.skip_effects()
 	await await_idle_frame()
-	assert_str(TB.pend_kind(m)).is_equal("select")
-	assert_bool(gs.selection.board_targeting()).is_true()             # pick on the board
-	assert_int(gs.selection.option_for_ref(me, "unit", 0)).is_not_equal(-1)
-	gs.selection.pick_option(gs.selection.option_for_ref(me, "unit", 0))
-	gs.skip_effects()
-	await await_idle_frame()
-	assert_str(TB.pend_kind(m)).is_equal("confirm")
-	var labels: Array = gs.prompt.banner_list.find_children("*", "Button", true, false).map(func(b): return (b as Button).text)
-	assert_array(labels).contains([MatchEngine.SACRIFICE_YES])
-	TB.choose(m, [MatchEngine.SACRIFICE_YES])
-	host.broadcast()
 	assert_str(String(m.cards[u]["zone"])).is_equal("spent")
 	assert_int(m.players[me]["ap"]).is_equal(ap + 1)
 
@@ -164,22 +159,24 @@ func test_hot_seat_keeps_one_choice_per_seat() -> void:
 	assert_str(DuelControls.pref_key(false, 1)).is_equal(DuelControls.PREF_KEY)
 
 
-func test_sacrifice_button_stays_lit_during_its_flow_and_a_second_click_cancels() -> void:
+func test_sacrifice_button_stays_latched_in_the_mode_and_a_second_click_ends_it() -> void:
 	_field_unit()
+	TB.unit(m, me, TB.FIRE, 1)
+	host.broadcast()
 	await await_idle_frame()
 	var c := _controls()
 	c.sacrifice_btn.pressed.emit()
-	gs.skip_effects()
 	await await_idle_frame()
 	assert_bool(c.sacrifice_engaged()).is_true()
 	assert_bool(c.sacrifice_btn.disabled).is_false()
-	assert_bool(c.sacrifice_btn.keyboard_pick).is_true()
+	assert_bool(c.sacrifice_btn.latched).is_true()
+	assert_str(c.sacrifice_btn.text).is_equal(DuelControls.SACRIFICE_STOP_LABEL)
 	c.sacrifice_btn.pressed.emit()
-	gs.skip_effects()
 	await await_idle_frame()
-	assert_bool(m.pending.is_empty()).is_true()
+	assert_bool(gs.sacrifice.active).is_false()
 	assert_bool(c.sacrifice_engaged()).is_false()
-	assert_bool(c.sacrifice_btn.keyboard_pick).is_false()
+	assert_bool(c.sacrifice_btn.latched).is_false()
+	assert_str(c.sacrifice_btn.text).is_equal(DuelControls.SACRIFICE_LABEL)
 
 
 ## A 0.3.8 settings file saved the toggle as a bool: true reads as Usable, false as Off.

@@ -2,8 +2,12 @@ class_name MainMenu
 extends Control
 ## The main menu screen: title column on a darkened band at the left with a tree of MenuItem
 ## levels (sub-levels slide in), and the chosen leaf's panel (play vs bot, hot-seat, LAN, Steam,
-## resume, settings) centred on screen. Edits the shared SessionOptions; everything that leaves
-## the menu is a signal handled by Main.
+## resume, the Options sections) centred on screen. Edits the shared SessionOptions; everything
+## that leaves the menu is a signal handled by Main.
+##
+## L28 (owner, 5 Nov): the top-level "Settings" became "Options", a sub-level whose items are its
+## sections (Settings, Customisation, Credits; more can be added to MENU["options"]). Opening it
+## shows its first section at once, and a section's Close leaves Options.
 
 ## Emitted when a game against the bot is chosen.
 signal bot_requested
@@ -31,12 +35,16 @@ signal tutorial_requested(lesson: int)
 ## Menu tree: level -> items [label, target]. A target starting with "@" opens a sub-level;
 ## anything else is a leaf shown in the centre (or an action).
 const MENU := {
-	"root": [["Resume", "resume"], ["Play", "@play"], ["Decks", "@decks"], ["Settings", "settings"], ["Credits", "credits"], ["Quit", "quit"]],
+	"root": [["Resume", "resume"], ["Play", "@play"], ["Decks", "@decks"], ["Options", "@options"], ["Quit", "quit"]],
 	"play": [["Tutorial", "tutorial"], ["Play online", "@online"], ["Play local", "@local"]],
 	"online": [["Host game", "host_online"], ["Join game", "join_online"]],
 	"local": [["Play vs Bot", "bot"], ["Hot-seat", "hotseat"], ["Host LAN", "host_lan"], ["Join LAN", "join_lan"]],
 	"decks": [["Deck builder", "builder"], ["Card list", "cards"], ["Statistics", "stats"]],
+	"options": [["Settings", "settings"], ["Customisation", "customisation"], ["Credits", "credits"]],
 }
+## The section a sub-level opens with (L28: Options lands on Settings, like the old Settings item).
+## In these levels a section's Close (and Esc) leaves the level instead of leaving it empty.
+const LEVEL_OPENS := {"options": "settings"}
 ## Top item of the root level for a profile that has not played yet (F04-09); opens lesson 1.
 const PLAY_TUTORIAL_ITEM := ["Play tutorial", "play_tutorial"]
 ## Third-party asset credits shown under Credits, and the height of their scroll area.
@@ -75,8 +83,13 @@ const LEAF_TAGS := {
 	"host_lan": ["Play · local", "LAN"], "join_lan": ["Play · local", "LAN"],
 	"host_online": ["Play · online", "Steam"], "join_online": ["Play · online", "Steam"],
 	"tutorial": ["Play", "Guided lessons"], "resume": ["Play", "Saved series"],
-	"settings": ["Options", "This device"], "credits": ["About", "v%s"],
+	"settings": ["Options", "This device"], "customisation": ["Options", "Table and cards"],
+	"credits": ["Options", "v%s"],
 }
+## Width of the Options section panels (one width for all, so switching sections never jumps).
+const OPTIONS_PANEL_W := 640.0
+## The Options sections (their panels share OPTIONS_PANEL_W).
+const OPTIONS_LEAVES := ["settings", "customisation", "credits"]
 
 ## The menu backdrop (static, J2), its ambient motes and the hero logo.
 var backdrop: Control
@@ -314,9 +327,10 @@ func _slide_in(mi: MenuItem, i: int, animate: bool) -> void:
 func pick(target: String) -> void:
 	# F25: the menu item's own click is the sound (MenuItem through Sfx.install_button_sounds).
 	if target.begins_with("@"):
-		_menu_path.append(target.substr(1))
-		_menu_leaf = ""
-		_set_center(null)
+		var level := target.substr(1)
+		_menu_path.append(level)
+		_menu_leaf = String(LEVEL_OPENS.get(level, ""))
+		_set_center(null if _menu_leaf == "" else _leaf_panel(_menu_leaf))
 		_build_menu_level()
 		return
 	match target:
@@ -349,9 +363,12 @@ func back_out() -> void:
 	_build_menu_level()
 
 
-## Esc: closes the shown leaf panel, else goes up one level (nothing at the root).
+## Esc: closes the shown leaf panel, else goes up one level (nothing at the root). In a level that
+## opens with a section (Options), closing its section leaves the level too.
 func step_back() -> void:
-	if _menu_leaf != "":
+	if _menu_leaf != "" and LEVEL_OPENS.has(String(_menu_path[-1])):
+		back_out()
+	elif _menu_leaf != "":
 		Sfx.play("back")   # F22
 		_menu_leaf = ""
 		_set_center(null)
@@ -403,10 +420,10 @@ func _retire(old: Control) -> void:
 ## A house plate for centre content: returns [panel, content VBox]. The header strip carries the
 ## leaf's section on the left and its context on the right (`tag`, review #7); the title is a
 ## SCREEN-tier TitleText (D3) that sweeps once when the panel opens (its "headline" meta).
-static func _center_panel(title: String, note: String = "", section: String = "", tag: String = "") -> Array:
+static func _center_panel(title: String, note: String = "", section: String = "", tag: String = "", width: float = CENTER_PANEL_W) -> Array:
 	var p := HousePanel.new(section if section != "" else title, tag, CENTER_PAD, UIStyle.sp("md"))
 	p.arm = 18.0
-	p.custom_minimum_size = Vector2(CENTER_PANEL_W, 0)
+	p.custom_minimum_size = Vector2(width, 0)
 	var v := p.body
 	var t := UIStyle.label(title, 30, UIStyle.GOLD_HI)
 	t.name = "Headline"
@@ -433,7 +450,8 @@ static func leaf_tags(target: String) -> Array:
 ## _center_panel with the leaf's header tags.
 static func _leaf(target: String, title: String, note: String = "") -> Array:
 	var tags := leaf_tags(target)
-	return _center_panel(title, note, tags[0], tags[1])
+	var w := OPTIONS_PANEL_W if target in OPTIONS_LEAVES else CENTER_PANEL_W
+	return _center_panel(title, note, tags[0], tags[1], w)
 
 
 ## Third-party asset credits and licences from data/credits.json, in a ScrollArea (design review
@@ -682,9 +700,16 @@ func _leaf_panel(target: String) -> Control:
 			SavedSeriesList.add_to(pv[1], SeriesStore.list(), resume_requested.emit, delete_save_requested.emit)
 		"settings":
 			pv = _leaf(target, "Settings")
-			# The shared settings form (review #9-#11): the same builder as the in-game settings.
-			pv[1].add_child(SettingsForm.new(Callable(), [{"key": "privacy", "text": "Privacy screen between turns (hot-seat)",
-					"on": _options.privacy, "toggled": func(on): _options.privacy = on}]))
+			# The shared settings form (review #9-#11): the same builder as the in-game settings,
+			# centred in the Options width (L28).
+			var form := SettingsForm.new(Callable(), [{"key": "privacy", "text": "Privacy screen between turns (hot-seat)",
+					"on": _options.privacy, "toggled": func(on): _options.privacy = on}])
+			form.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			pv[1].add_child(form)
+			pv[1].add_child(_close_row())
+		"customisation":
+			pv = _leaf(target, "Customisation")
+			pv[1].add_child(CustomisationPanel.new())
 			pv[1].add_child(_close_row())
 		"credits":
 			pv = _leaf(target, "Credits")

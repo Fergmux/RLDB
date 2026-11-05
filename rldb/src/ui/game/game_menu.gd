@@ -33,11 +33,19 @@ var settings_popup: PanelContainer
 var items: Dictionary = {}
 ## The Menu button in the top strip.
 var menu_button: Button
+## L26: the compact series scoreboard in the middle of the top strip.
+var scoreboard: SeriesScoreboard
 ## The veil behind the in-game settings (shown with it).
 var settings_veil: ColorRect
 ## The shared settings form inside the settings popup.
 var settings_form: SettingsForm
+## L13: the full-window click catcher under the open in-game menu (a click on it closes the menu).
+var outside_catcher: Control
 var _dialog_root: ConfirmDialog
+## L13: true while the in-game menu plays its closing motion; its tween.
+var _closing: bool = false
+var _close_tw: Tween
+var _menu_rest: Vector2
 
 
 func _init(screen: GameScreen) -> void:
@@ -71,6 +79,10 @@ func build_top_strip() -> void:
 	menu_b.pressed.connect(toggle)
 	row.add_child(menu_b)
 	menu_button = menu_b
+	# L26 (owner, 5 Nov): the series at a glance, centred in the strip over the board (hidden in a
+	# single game); GameSidebar.update_scoreboard keeps it current and pops each new point in.
+	scoreboard = SeriesScoreboard.new()
+	top_strip.add_child(scoreboard)
 	# A1 / A2: Chat sits right before Menu; the spectator badge (and Watch button) before Chat.
 	gs.chat.build(row, menu_b)
 	if gs.chat.button != null:
@@ -128,6 +140,17 @@ func build_popups() -> void:
 		gmv.add_child(gb)
 		items[it[0]] = gb
 	refresh_items()
+	# L13 (owner, 5 Nov): a click anywhere off the open menu closes it (with its close cue and
+	# motion). A transparent catcher under the menu takes that click, so it never reaches the board.
+	outside_catcher = Control.new()
+	outside_catcher.name = "MenuOutsideCatcher"
+	outside_catcher.mouse_filter = Control.MOUSE_FILTER_STOP
+	outside_catcher.z_index = UiLayers.GAME_MENU - 1
+	outside_catcher.visible = false
+	outside_catcher.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	outside_catcher.gui_input.connect(_on_outside_input)
+	gs.add_child(outside_catcher)
+	game_menu.visibility_changed.connect(func(): outside_catcher.visible = game_menu.visible and not _closing)
 	# Settings (design review #12, #13): the shared SettingsForm (the same builder as the main
 	# menu's Settings), centred on the board over the standard veil, with a 44 px Close.
 	settings_veil = ColorRect.new()
@@ -233,12 +256,61 @@ func toggle() -> void:
 		gs.chat.panel.visible = false
 	if gs.spectate.panel != null:
 		gs.spectate.panel.visible = false
-	if game_menu.visible:
-		game_menu.visible = false
+	if game_menu.visible and not _closing:
+		close_menu()
 	else:
+		_stop_closing()
 		refresh_items()
 		_show_popup(game_menu)
+		outside_catcher.visible = true   # L13 (a menu reopened mid-close never stopped being visible)
 		gs.hover.clear()
+
+
+## L13: closes the in-game menu with the panel_close cue and the reverse of its opening motion (it
+## shrinks back into the Menu button corner, rising 8 px as it fades; a plain hide under reduce
+## motion). Returns false when the menu was not open.
+func close_menu() -> bool:
+	if not game_menu.visible or _closing:
+		return false
+	Sfx.play("panel_close")
+	if UIStyle.reduce_motion or not game_menu.is_inside_tree():
+		game_menu.visible = false
+		return true
+	_closing = true
+	outside_catcher.visible = false
+	game_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE   # no clicks on a closing menu
+	var rest := game_menu.position
+	_menu_rest = rest
+	game_menu.pivot_offset = Vector2(game_menu.size.x, 0)
+	_close_tw = game_menu.create_tween().set_parallel(true)
+	UIStyle.tween_token(_close_tw, game_menu, "modulate:a", 0.0, "panel_out")
+	UIStyle.tween_token(_close_tw, game_menu, "scale", Vector2.ONE * MENU_OPEN_SCALE, "panel_out")
+	UIStyle.tween_token(_close_tw, game_menu, "position", rest - Vector2(0, MENU_OPEN_DROP), "panel_out")
+	_close_tw.chain().tween_callback(func():
+		_stop_closing()
+		game_menu.visible = false)
+	return true
+
+
+## L13: ends a closing motion at once and leaves the menu at rest (still visible).
+func _stop_closing() -> void:
+	if _close_tw != null and _close_tw.is_valid():
+		_close_tw.kill()
+	_close_tw = null
+	if _closing:
+		_closing = false
+		game_menu.modulate.a = 1.0
+		game_menu.scale = Vector2.ONE
+		game_menu.position = _menu_rest
+		game_menu.pivot_offset = game_menu.size / 2.0
+		game_menu.mouse_filter = Control.MOUSE_FILTER_STOP
+
+
+## L13: a press anywhere off the open menu closes it (and goes no further).
+func _on_outside_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton and ev.pressed and (ev as InputEventMouseButton).button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+		outside_catcher.accept_event()
+		close_menu()
 
 
 ## Shows a house popover with its opening animation. The in-game menu grows out of the Menu

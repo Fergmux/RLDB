@@ -288,7 +288,8 @@ func render() -> void:
 		if t.begins_with("—"):
 			# Turn header: a centred divider ("TURN 2 · BEN") with breathing room above it.
 			var head := t.trim_prefix("—").trim_suffix("—").strip_edges().replace(": ", " · ").to_upper()
-			label.append_text("\n[center]%s[color=#8a7350]━━━  [/color][color=#f0cf7a][b]%s[/b][/color][color=#8a7350]  ━━━[/color]%s[/center]\n" % [fresh_open, head.replace("[", "("), fresh_close])
+			# L10: the rules are em dashes in the house face (box-drawing lines fell back to a system font).
+			label.append_text("\n[center]%s[color=#8a7350]———  [/color][color=#f0cf7a][b]%s[/b][/color][color=#8a7350]  ———[/color]%s[/center]\n" % [fresh_open, head.replace("[", "("), fresh_close])
 			continue
 		if t.begins_with("GAME OVER"):
 			# #47: the winner line in gold after a crown (no off-palette magenta).

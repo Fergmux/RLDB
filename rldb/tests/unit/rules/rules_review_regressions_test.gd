@@ -150,8 +150,9 @@ func test_no_legal_choice_message_is_private() -> void:
 ## (the effect's source) instead of naming the Fusion unit being summoned; the zone prompt too.
 func test_fusion_zone_prompt_names_the_fusion_unit() -> void:
 	var m := TB.make()
-	var beast := TB.unit(m, 0, 4, 3)                     # Basic Beast (Water)
-	var dragon := TB.unit(m, 0, 2, 1)                    # Basic Dragon (Water)
+	# 2026-11-03 Bastion Wyrm: a unit with 20 or more ATK or DEF + a Physical unit.
+	var beast := TB.unit(m, 0, 28, 3)                    # Guardian of the Forest, 22 DEF
+	var dragon := TB.unit(m, 0, 116, 1)                  # Basic Dragon (Physical)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.summon(m, 0, 8, 0)                                # Tag Team - S: On Summon may Fusion Summon
 	TB.choose(m, ["Yes"])
@@ -188,8 +189,8 @@ func test_polymerization_needs_a_summonable_fusion() -> void:
 	var poly := TB.card(m, 0, 82)
 	m.players[0]["ap"] = 5
 	assert_str(m.validate(0, {"t": "cast", "uid": poly})).is_equal("No Fusion unit can be summoned.")
-	TB.unit(m, 0, 4, 3)                                  # Basic Beast + Basic Dragon: Bastion Wyrm materials
-	TB.unit(m, 0, 2, 1)
+	TB.unit(m, 0, 28, 3)                                 # Guardian (22 DEF) + Physical Dragon: Bastion Wyrm
+	TB.unit(m, 0, 116, 1)                                # materials since 2026-11-03
 	TB.card(m, 0, 93, "extra")
 	assert_str(m.validate(0, {"t": "cast", "uid": poly})).is_empty()
 
@@ -274,17 +275,17 @@ func test_lead_mode_applies_after_response_window() -> void:
 	assert_bool(TB.log_index(m, "Shaman's Snunday Brew is destroyed") < TB.log_index(m, "Player 2 takes 4 Damage")).is_true()
 
 
-## Auric: the HP cost is paid before the chosen mode's +10 ATK applies.
+## Auric: the HP cost is paid before the chosen mode's ATK gain applies (8 and +8 since 2026-11-03).
 func test_lead_mode_effect_follows_the_hp_cost() -> void:
 	var m := TB.make()
 	var a := TB.unit(m, 0, 23, 0)
 	var atk0 := m.atk_of(a)
 	TB.ability(m, a)
-	TB.choose(m, ["gains +10 ATK"])
-	assert_int(m.players[0]["hp"]).is_equal(50)
-	assert_int(m.atk_of(a)).is_equal(atk0 + 10)
+	TB.choose(m, ["gains +8 ATK"])
+	assert_int(m.players[0]["hp"]).is_equal(GameCore.START_HP - 8)
+	assert_int(m.atk_of(a)).is_equal(atk0 + 8)
 	var hp_i := TB.log_index(m, "pays") if TB.log_index(m, "pays") != -1 else TB.log_index(m, "cost of")
-	var atk_i := TB.log_index(m, "+10 ATK")
+	var atk_i := TB.log_index(m, "+8 ATK")
 	assert_bool(hp_i != -1 and atk_i > hp_i).is_true()
 
 
@@ -332,30 +333,28 @@ func test_column_summon_ability_refused_without_a_free_zone() -> void:
 	assert_int(m.players[0]["ap"]).is_equal(2)
 
 
-## Seppuku: when the self-destroy cost is prevented (Man's Best Friend), no Fusion happens
-## and Seppuku is never offered as its own material.
-func test_sepukku_prevented_self_destroy_does_not_fusion() -> void:
+## Seppuku with its "then Destroy this Unit" prevented (Man's Best Friend).
+## 2026-11-03 (owner, changed on purpose): Seppuku Fusion Summons first, then is destroyed, and it may
+## be one of its own materials. So a prevented destruction no longer cancels the Fusion (it used to:
+## the destruction was a cost paid first); Man's Best Friend still saves Seppuku, at its own expense.
+func test_sepukku_prevented_self_destroy_still_fuses_and_stays() -> void:
 	var m := TB.make()
 	var sep := TB.unit(m, 0, 68, 0)
-	TB.unit(m, 0, 73, 3)                                       # Man's Best Friend, same column
-	TB.unit(m, 0, TB.FIRE, 1)
-	TB.unit(m, 0, 3, 2)
+	var mbf := TB.unit(m, 0, 73, 3)                            # Man's Best Friend, same column
+	var fire := TB.unit(m, 0, TB.FIRE, 1)
+	var warrior := TB.unit(m, 0, 3, 2)
 	var sol := TB.card(m, 0, 181, "extra")                     # Warrior + Fire
 	assert_str(TB.ability(m, sep)).is_empty()
 	TB.choose_uids(m, [sol])
-	# F04-22: every choice comes first; Seppuku is never offered as its own material.
-	var offered_self := false
-	var guard := 0
-	while not m.pending.is_empty() and guard < 6:
-		guard += 1
-		for o in m.pending["options"]:
-			if o.get("uid", -1) == sep:
-				offered_self = true
-		m.submit(0, {"t": "choose", "id": m.pending["id"], "indices": [0]})
-	assert_bool(offered_self).is_false()                       # F07: the stance answer committed; the destroy is prevented: no Fusion
-	assert_bool(m.pending.is_empty()).is_true()
-	assert_str(m.cards[sol]["zone"]).is_equal("extra")
-	assert_str(m.cards[sep]["zone"]).is_equal("unit")
+	assert_bool(sep in CF.offered(m)).is_true()                # a Warrior: it may be its own material
+	assert_str(TB.choose_uids(m, [warrior])).is_empty()
+	assert_str(TB.choose_uids(m, [fire])).is_empty()
+	CF.place(m, "Front row, column 2")
+	assert_bool(m.pending.is_empty()).override_failure_message(str(m.pending)).is_true()
+	assert_str(m.cards[sol]["zone"]).is_equal("unit")
+	assert_str(m.cards[sep]["zone"]).is_equal("unit")          # saved by Man's Best Friend
+	assert_str(m.cards[mbf]["zone"]).is_equal("spent")         # which is destroyed instead
+	assert_int(TB.log_index(m, "summons Solomon, the Tyrannical")).is_less(TB.log_index(m, "Man's Best Friend is destroyed"))
 
 
 ## Ambush: a Bahatia-blocked Basic Unit does not use up a free zone.
@@ -418,7 +417,7 @@ func test_mode_offers_only_possible_options() -> void:
 	assert_str(TB.ability(m, au)).is_empty()
 	assert_str(TB.pend_kind(m)).is_equal("mode")
 	var labels: Array = m.pending["options"].map(func(o): return String(o["label"]))
-	assert_array(labels).is_equal(["This unit gains +10 ATK"])
+	assert_array(labels).is_equal(["This unit permanently gains +8 ATK"])   # 2026-11-03 wording and value
 	TB.set_card(m, 1, 45, 0)                                # now a face-down card exists
 	m.submit(0, {"t": "cancel", "id": m.pending["id"]})
 	m.cards[au]["opt"] = {}

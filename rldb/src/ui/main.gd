@@ -151,6 +151,9 @@ func _parse_cmdline() -> void:
 		if a.begins_with("--k4-shots="):
 			_run_driver("res://src/dev/k4_trap_attack_shots.gd", a.split("=", true, 1)[1])
 			return
+		if a.begins_with("--linteract-shots="):   # L batch: sacrifice mode, Cancel, arrow, notice, selection
+			_run_driver("res://src/dev/l_interaction_shots.gd", a.split("=", true, 1)[1])
+			return
 		if a.begins_with("--f02-shots="):
 			_run_driver("res://src/dev/f02_driver.gd", a.split("=", true, 1)[1])
 			return

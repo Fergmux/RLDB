@@ -58,8 +58,6 @@ var src_uid: int = -1
 var controls: DuelControls
 ## J6: the Trap prompts setting last sent for this seat and game ("" none), so it is sent once.
 var _prompts_sent := ""
-## J11: the Sacrifice Unit button started the choice now pending (kept until nothing is pending).
-var _sac_flow := false
 ## A2: face-down hand of the bottom player on a spectator's screen (and its caption).
 var own_backs_box: Control
 var own_backs_label: Label
@@ -89,8 +87,8 @@ func build_table() -> void:
 	base.material = mat
 	gs.add_child(base)
 	# ... and the table art covering only the play field (sized in layout), with a light veil
-	# so zones and cards stay readable over it.
-	table = UIStyle.background(0.32)
+	# so zones and cards stay readable over it. L28: the player's chosen table (Options).
+	table = UIStyle.table_background()
 	table.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	table.clip_contents = true
 	gs.add_child(table)
@@ -121,13 +119,12 @@ func build() -> void:
 			var ps := PileStack.new()
 			ps.zone = zt[0]
 			ps.title = zt[1]
-			ps.pressed.connect(func(z): if s == 1: gs.details.show_pile(z))
+			ps.pressed.connect(func(z): if s == 1: gs.selection.open_pile(z))   # L21: one selection at a time
 			layer.add_child(ps)
 			piles[side][zt[0]] = ps
 	controls = DuelControls.new()
 	controls.visible = false
 	controls.sacrifice_pressed.connect(_on_sacrifice_pressed)
-	controls.sacrifice_cancel_pressed.connect(func(): gs.selection.cancel())
 	controls.prompts_toggled.connect(_on_prompts_toggled)
 	layer.add_child(controls)
 	opp_hand_box = Control.new()
@@ -319,6 +316,7 @@ func render() -> void:
 	var have := not mv.is_empty()
 	var p := gs.me()
 	var o := 1 - p
+	gs.sacrifice.sync()   # L5: the mode ends once it can no longer apply
 	var targeting := gs.selection.board_targeting()
 	src_uid = gs.targeting.source_uid() if targeting else -1
 	ready_uids = _compute_ready()
@@ -344,7 +342,7 @@ func render() -> void:
 	_render_controls(have)
 	deco.glow_side = -1   # active player is shown by the plate's turn marker, not a table band
 	deco.queue_redraw()
-	gs.hand.render(targeting)
+	gs.hand.render(targeting or gs.sacrifice.active)   # L5: the Hand dims in sacrifice mode
 	var on: int = gs.pv(o)["counts"]["hand"] if have else -1
 	if on != opp_hand_n:
 		opp_hand_n = on
@@ -398,10 +396,9 @@ func _render_controls(have: bool) -> void:
 			tip = String(a["full"]) if ok else String(a["reason"])
 	if gs.mv["winner"] != -1:
 		tip = "The duel is over."
-	var pd := gs.pending()
-	if pd.is_empty() or not bool(pd.get("mine", false)):
-		_sac_flow = false
-	controls.set_sacrifice(ok, tip, _sac_flow and bool(pd.get("cancellable", false)))
+	if ok:
+		tip = DuelControls.SACRIFICE_TIP
+	controls.set_sacrifice(ok, tip, gs.sacrifice.active)   # L5: latched while sacrifice mode is on
 	# J6: the toggle shows the viewer's saved choice; the seat's setting follows it.
 	var tut := _tutorial()
 	controls.prompts_btn.visible = not tut
@@ -435,15 +432,9 @@ func _on_prompts_toggled(mode: String) -> void:
 		_sync_prompts(mode)
 
 
-## J11: the Sacrifice Unit button: the engine asks which unit (board pick), then to confirm.
+## J11 / L5: the Sacrifice Unit button toggles sacrifice mode (GameSacrificeMode).
 func _on_sacrifice_pressed() -> void:
-	if gs.locked():
-		Sfx.play("deny")
-		return
-	gs.selection.deselect()
-	gs.acting_uid = -1
-	_sac_flow = true
-	gs.send({"t": "sacrifice_pick"})
+	gs.sacrifice.toggle()
 
 
 ## A2: a spectator who may not see the bottom player's hand gets its card backs along the bottom
@@ -503,7 +494,7 @@ func _update_piles(side: int, pidx: int, pv: Dictionary) -> void:
 		for c in pv.get("extra", []):
 			if ready_uids.has(int(c.get("uid", -1))):
 				extra_ready = true
-		if not gs.locked() and bool(gs.mv.get("extra_avail", {}).get("any", false)):
+		if not gs.locked() and not gs.sacrifice.active and bool(gs.mv.get("extra_avail", {}).get("any", false)):
 			extra_ready = true
 	for zt in PILE_ZONES:
 		var ps: PileStack = piles[side][zt[0]]
@@ -518,7 +509,7 @@ func _update_piles(side: int, pidx: int, pv: Dictionary) -> void:
 func _compute_ready() -> Dictionary:
 	var out := {}
 	var mv := gs.mv
-	if gs.locked() or mv["active"] != gs.me():
+	if gs.locked() or mv["active"] != gs.me() or gs.sacrifice.active:   # L5: only the sacrificable units glow
 		return out
 	for a in mv.get("actions", []):
 		if a["ok"] and a.has("uid") and String(a["t"]) in READY_KINDS:
@@ -563,9 +554,17 @@ func _set_slot(side: int, zone: String, slot: int, pidx: int, have: bool, target
 	# The card whose summon / activation a Trap prompt responds to is outlined in red.
 	var cause_ref: Dictionary = pd.get("cause", {}).get("card", {}) if pd.get("mine", false) else {}
 	var is_cause: bool = not cause_ref.is_empty() and int(cause_ref["p"]) == pidx and String(cause_ref["zone"]) == zone and int(cause_ref["slot"]) == slot
+	# L5: in sacrifice mode only my sacrificable units are ringed in ember; everything else dims.
+	var sac_on: bool = gs.sacrifice.active
+	var sac_ok: bool = sac_on and vis and pidx == gs.me() and zone == "unit" and gs.sacrifice.can_sacrifice(uid)
+	if sac_on:
+		dim = not sac_ok
+		is_sel = vis and uid == gs.sacrifice.kb_uid
 	var ring: ZoneRing = it["ring"]
-	ring.col = GameTargeting.HOSTILE_COLOR if is_cause else UIStyle.TARGET
-	ring.set_on((zone_pick or is_cause) and cv != null)
+	ring.col = GameSacrificeMode.EMBER if sac_ok else (GameTargeting.HOSTILE_COLOR if is_cause else UIStyle.TARGET)
+	ring.set_on((zone_pick or is_cause or sac_ok) and cv != null)
+	if ring.on:
+		ring.queue_redraw()
 	if cv == null:
 		bg.set_marks(opt != -1, chosen, dim)
 		return

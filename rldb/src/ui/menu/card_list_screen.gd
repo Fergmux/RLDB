@@ -210,7 +210,7 @@ func _input(event: InputEvent) -> void:
 ## Number of cards per CardScripts support status ("full", "partial", ...).
 static func support_counts() -> Dictionary:
 	var counts := {}
-	for d in CardDB.all():
+	for d in CardDB.collectible():
 		var s := CardScripts.support_status(d["id"])
 		counts[s] = counts.get(s, 0) + 1
 	return counts

@@ -243,7 +243,7 @@ func render_turnbar() -> void:
 		state_arrow.visible = false
 		var waiting_s: bool = not pd.is_empty() and mv["winner"] == -1
 		gs.prompt.show_wait(chip if waiting_s else "")
-		turn_note.text = "SNEAKY SNUNDAY: card-effect gains/losses reversed (not Damage or Healing)" if mv["reversal"] else ""
+		turn_note.text = "SNEAKY SNUNDAY: all ATK/DEF gains and losses are reversed this turn" if mv["reversal"] else ""
 		turn_note.visible = turn_note.text != ""
 		return
 	if mv["winner"] != -1:
@@ -276,7 +276,7 @@ func render_turnbar() -> void:
 	phase_btn.tooltip_text = tip
 	var note := ""
 	if mv["reversal"]:
-		note = "SNEAKY SNUNDAY: card-effect gains/losses reversed (not Damage or Healing)"
+		note = "SNEAKY SNUNDAY: all ATK/DEF gains and losses are reversed this turn"
 	turn_note.text = note
 	turn_note.visible = note != ""
 
@@ -310,6 +310,8 @@ func render_series() -> void:
 		res.append(0 if int(h["winner"]) == gs.me() else 1)
 	medallion = SeriesMedallion.new().setup(int(view.get("best_of", 3)), res, -1 if stage == "over" else history.size())
 	medallion.name = "SeriesMedallion"
+	# L26: the gems in each player's seat colour (the top strip scoreboard and lobby list use them too).
+	medallion.colors = [SeriesResults.SEAT_COLORS[gs.me()], SeriesResults.SEAT_COLORS[1 - gs.me()]]
 	series_box.add_child(_gap(UIStyle.sp("sm")))
 	series_box.add_child(medallion)
 	series_box.add_child(_gap(UIStyle.sp("lg")))
@@ -318,10 +320,58 @@ func render_series() -> void:
 	if not history.is_empty():
 		series_box.add_child(_gap(UIStyle.sp("md")))
 		series_box.add_child(GameUi.header("Games"))
+	# L26: one row per game, its gem in the winner's colour (it was a plain line of text).
 	for h in history:
-		var won: bool = int(h["winner"]) == gs.me()
-		var line := UIStyle.label("Game %d: %s won (turn %d)" % [h["game"], names[h["winner"]], h["turns"]], 14, UIStyle.TEXT if won else UIStyle.MUTED, true)
-		series_box.add_child(line)
+		var w := int(h["winner"])
+		series_box.add_child(SeriesResults.game_row(int(h["game"]), w, String(names[w]), int(h.get("turns", 0)),
+			bool(h.get("forfeit", false)), w == gs.me() and not gs.is_spectator()))
+
+
+# ---------------------------------------------------------------- L26 series scoreboard
+
+## Model signature last given to the scoreboard (an unchanged view never touches it).
+var _sb_sig: int = 0
+
+
+## L26: keeps the top strip's series scoreboard current. Hidden outside a series (best of 1, the
+## tutorial). A game just won is held back until the victory / defeat presentation has played (the
+## strip is under its dim); then the point pops in, a beat after the series modal opens.
+func update_scoreboard() -> void:
+	var sb: SeriesScoreboard = gs.menu.scoreboard if gs.menu != null else null
+	if sb == null:
+		return
+	var view := gs.view
+	if not SeriesResults.shows_for(view):
+		sb.visible = false
+		_sb_sig = 0
+		return
+	var key := String(view.get("save_id", ""))
+	var same_series := sb.series_key == key and not sb.m.is_empty()
+	if same_series and gs.fx != null and gs.fx.game_end_hold:
+		return
+	var md := SeriesResults.model(view, gs.me())
+	var sig := hash([key, md])
+	sb.visible = true
+	if sig == _sb_sig:
+		return
+	_sb_sig = sig
+	var before: int = (sb.m["results"] as Array).size() if same_series else -1
+	var now: int = (md["results"] as Array).size()
+	var hist: Array = view.get("history", [])
+	if before >= 0 and now == before + 1 and int(sb.m.get("me", -1)) == int(md["me"]) and not bool(hist[-1].get("forfeit", false)):
+		var seat := int(md["results"][-1])
+		sb.hold_point(md, seat)
+		var tw := gs.create_tween()
+		tw.tween_interval(UIStyle.dur(SCORE_POP_DELAY))
+		tw.tween_callback(func():
+			if is_instance_valid(sb) and sb.series_key == key and (sb.m["results"] as Array).size() == now:
+				sb.pop_point(seat))
+		return
+	sb.show_model(md, key)
+
+
+## L26: seconds from the series modal opening to the new point popping in.
+const SCORE_POP_DELAY := 0.55
 
 
 ## A fixed vertical gap of `h` px.

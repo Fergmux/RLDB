@@ -242,10 +242,12 @@ func _extra_board() -> Array:
 	TB.unit(m, a, 28, 1, "atk")          # Guardian of the Forest (Beast)
 	TB.unit(m, a, 40, 2, "atk")          # Aleister: Pay 1 AP: Fusion Summon (Field)
 	var poly := TB.card(m, a, 82, "hand")
-	var wyrm := TB.card(m, a, 93, "extra")        # Bastion Wyrm: Beast + Dragon
-	var kaya := TB.card(m, a, 170, "extra")       # Arcane, cost 1
-	var none := TB.card(m, a, 56, "extra")        # Razeon Storm: no materials on the field
-	TB.card(m, a, 34, "spent")                    # a cost-1 material
+	# 2026-11-03 Bastion Wyrm: 20+ ATK-or-DEF unit (Hydra, Guardian) + Physical unit (Aleister).
+	var wyrm := TB.card(m, a, 93, "extra")
+	var kaya := TB.card(m, a, 170, "extra")       # Arcane, cost 2 (1 before 2026-11-03)
+	var none := TB.card(m, a, 56, "extra")        # Razeon Storm: no Lightning unit on the field
+	TB.card(m, a, 34, "spent")                    # cost-1 materials: 1 + 1 pays Kaya's 2
+	TB.card(m, a, 24, "spent")
 	m.players[a]["ap"] = 2
 	host.broadcast()
 	await await_idle_frame()

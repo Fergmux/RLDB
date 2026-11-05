@@ -28,10 +28,11 @@ func _op_cost_turn(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Persistent cost change for the rest of this game (resets between games).
+## Persistent cost change for the rest of this game (resets between games). L15 (2026-11-05): no
+## longer reversed by Sneaky Snunday (it reverses ATK/DEF only).
 func _op_cost_perm(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
-		change_cost_perm(u, -op["n"] if f["reversed"] else op["n"])
+		change_cost_perm(u, op["n"])
 	return R.CONT
 
 
@@ -99,6 +100,8 @@ func _op_copy_stats(f: Dictionary, op: Dictionary) -> int:
 	if op.get("type", false):
 		cards[me]["type_o"] = unit_type(s)
 	add_log("%s copies %s: now %d/%d." % [name_of(me), name_of(s), atk_of(me), def_of(me)])
+	if op.get("art", false):
+		copy_art(me, s)                   # L11: it shows the copied unit's art while on the Field
 	return R.CONT
 
 
@@ -114,7 +117,7 @@ func _op_copy_all_buffs(f: Dictionary, op: Dictionary) -> int:
 				totals[s] = totals.get(s, 0) + cards[u]["st"][s]
 	for s in CardDB.STATUS_ORDER:
 		if totals.has(s):
-			apply_status(me, s, totals[s])
+			apply_status(me, s, totals[s], status_batch(f))
 	if totals.is_empty():
 		add_log("%s: no Buffs on the Field to copy." % name_of(me))
 	return R.CONT
@@ -134,7 +137,7 @@ func _op_copy_all_debuffs(f: Dictionary, op: Dictionary) -> int:
 				totals[s] = totals.get(s, 0) + cards[u]["st"][s]
 	for s in CardDB.STATUS_ORDER:
 		if totals.has(s):
-			apply_status(me, s, totals[s])
+			apply_status(me, s, totals[s], status_batch(f))
 	if totals.is_empty():
 		add_log("%s: no Debuffs on the Field to copy." % name_of(me))
 	return R.CONT
@@ -160,7 +163,7 @@ func _op_spread_debuffs(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
 		if unit_on_field(u):
 			for s in have:
-				apply_status(u, s, have[s])
+				apply_status(u, s, have[s], status_batch(f))
 	return R.CONT
 
 
@@ -291,22 +294,29 @@ func _op_swap_all(f: Dictionary, op: Dictionary) -> int:
 	return R.CONT
 
 
-## Sneaky Snunday: until end of turn, numerical gains/losses from card effects (ATK/DEF, AP, costs)
-## are reversed. Applied per frame when a card is played, and to continuous auras while active.
-## Damage and Healing are not gains or losses (2026-10-18), so HP is never reversed.
+## Sneaky Snunday (L15, owner 2026-11-05): "Until the end of this turn: all new and ongoing ATK/DEF
+## gains and losses are reversed." Only switches the reversal on: every unit's ATK/DEF is mirrored
+## around its base while it lasts (GameCore.stat_breakdown), so every rule reading ATK/DEF (battle,
+## thresholds, Fusion materials, comparisons) and the view see the reversed values, and it ends with
+## the turn. Costs, AP, Damage and Healing are not touched. A second copy cancels the first (S-01).
 func _op_reversal(f: Dictionary, op: Dictionary) -> int:
 	if reversal_turn != turn:
 		reversal_turn = turn
 		reversal_count = 0
 	reversal_count += 1
 	if reversal_active():
-		add_log("Sneaky Snunday: gains and losses from card effects are reversed until end of turn (Damage and Healing are not).")
+		add_log("Sneaky Snunday: all ATK/DEF gains and losses are reversed until end of turn.")
 	else:
-		add_log("Sneaky Snunday: a second reversal cancels the first; gains and losses are normal again.")
+		add_log("Sneaky Snunday: a second reversal cancels the first; ATK/DEF gains and losses are normal again.")
 	return R.CONT
 
 
-## Hypnotise: take control of a unit until end of turn; it cannot be sacrificed.
+## Hypnotise: take control of a unit until end of turn; it cannot be sacrificed. L9 (owner,
+## 2026-11-05): it goes to the empty zone the caster chose (`slot`, a var set by the lead pick_slot);
+## if that zone was filled meanwhile, to their first free zone. It remembers its own zone
+## (control_slot) for the return at end of turn (MatchEngine._return_control). Presentation event:
+## {"k": "control", "from": its old position, "to": its new one, "p": the new controller,
+## "id": card id (a face-up unit is public), "back": false}.
 func _op_take_control(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
 		if not unit_on_field(u):
@@ -315,14 +325,20 @@ func _op_take_control(f: Dictionary, op: Dictionary) -> int:
 		if free.is_empty():
 			add_log("No free zone: control of %s cannot be taken." % name_of(u))
 			continue
+		var slot: int = eval_num(f, op["slot"]) if op.has("slot") and f["vars"].has(String(op["slot"]).substr(1)) else -1
+		if not (slot in free):
+			slot = free[0]
 		var prev: int = cards[u]["ctl"]
+		var from := fx_pos(u)
 		cards[u]["control_slot"] = cards[u]["slot"]
 		players[prev]["units"][cards[u]["slot"]] = -1
 		cards[u]["ctl"] = f["ctl"]
-		cards[u]["slot"] = free[0]
+		cards[u]["slot"] = slot
 		cards[u]["control_until"] = turn
-		players[f["ctl"]]["units"][free[0]] = u
-		add_log("%s takes control of %s until end of turn." % [pname(f["ctl"]), name_of(u)])
+		players[f["ctl"]]["units"][slot] = u
+		add_log("%s takes control of %s until end of turn (%s row, column %d)." % [pname(f["ctl"]), name_of(u),
+			"front" if slot_row(slot) == 0 else "back", slot_col(slot) + 1])
+		add_fx({"k": "control", "from": from, "to": fx_pos(u), "p": f["ctl"], "id": d(u)["id"], "back": false})
 	return R.CONT
 
 

@@ -160,8 +160,14 @@ class ImportRegressionTest(unittest.TestCase):
         for cid in (40, 102, 141, 184, 186, 187):
             self.assertNotIn("raw", self.by_id[cid]["source"], cid)
         self.assertIn("Unit's", self.by_id[102]["on_field"])
-        self.assertEqual(sorted(ic.TEXT_CORRECTIONS), [21, 45, 46, 47, 48, 135, 146, 147, 170])
+        self.assertEqual(sorted(ic.TEXT_CORRECTIONS), [21, 45, 46, 47, 48, 135, 146, 147, 154, 170])
         self.assertTrue(self.by_id[147]["on_field"].endswith("Your opponent's Units cannot attack other Units if they can attack this Unit."))
+
+    def test_l15_sneaky_snunday_reads_atk_def_only(self):
+        text = "Until the end of this turn: all new and ongoing ATK/DEF gains and losses are reversed."
+        self.assertEqual(self.by_id[154]["on_summon"], text)
+        self.assertEqual(self.by_id[154]["description"], text)
+        self.assertIn("On Summon/Play", self.by_id[154]["source"]["raw"])
 
     # ---- 2026-11-03 (JB Edit export): new layout and owner rulings
 
@@ -196,6 +202,20 @@ class ImportRegressionTest(unittest.TestCase):
             self.assertIsNone(self.by_id[cid]["source"]["index"], cid)
             self.assertEqual(self.by_id[cid]["art"], {"image": "", "card_img": "", "type_icon": ""}, cid)
         self.assertEqual([c["id"] for c in self.data["cards"][-3:]], [189, 190, 191])   # no index: sorted last
+
+    def test_evolve_chain_of_2026_11_05(self):
+        # L23: Spawn -> Larva -> Siphonophore, each step with the owner's exact Evolve text; every
+        # other card carries the empty fields, and the Evolve text never joins the rules texts.
+        text = "At the start of your turn you can Evolve this Unit."
+        self.assertEqual((self.by_id[155]["evolve"], self.by_id[155]["evolves_into"]), (text, 156))
+        self.assertEqual((self.by_id[156]["evolve"], self.by_id[156]["evolves_into"]), (text, 157))
+        self.assertEqual((self.by_id[157]["evolve"], self.by_id[157]["evolves_into"]), ("", None))
+        for c in self.data["cards"]:
+            self.assertIn("evolve", c)
+            self.assertIn("evolves_into", c)
+            if c["id"] not in (155, 156):
+                self.assertEqual((c["evolve"], c["evolves_into"]), ("", None), c["id"])
+            self.assertNotIn("Evolve", c["description"], c["id"])
 
     def test_damage_conversion_costs_one_by_owner_ruling(self):
         self.assertEqual(self.by_id[47]["cost"], 1)

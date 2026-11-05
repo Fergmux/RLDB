@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bqt66axss7cwv"
 path.s3tc="res://.godot/imported/41.webp-c25b1efb372604296e303468e15165f6.s3tc.ctex"
+path.etc2="res://.godot/imported/41.webp-c25b1efb372604296e303468e15165f6.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/art/cards/41.webp"
-dest_files=["res://.godot/imported/41.webp-c25b1efb372604296e303468e15165f6.s3tc.ctex"]
+dest_files=["res://.godot/imported/41.webp-c25b1efb372604296e303468e15165f6.s3tc.ctex", "res://.godot/imported/41.webp-c25b1efb372604296e303468e15165f6.etc2.ctex"]
 
 [params]
 

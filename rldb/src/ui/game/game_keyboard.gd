@@ -50,6 +50,8 @@ func handle_key(e: InputEventKey) -> bool:
 		return false
 	if gs.hover_blocked() or mv.get("resolving", false):
 		return false
+	if gs.sacrifice.active:
+		return _sacrifice_key(k, e.shift_pressed, is_enter)
 	if k == KEY_TAB:
 		cycle(-1 if e.shift_pressed else 1)
 		return true
@@ -70,6 +72,26 @@ func handle_key(e: InputEventKey) -> bool:
 			if a["t"] == "next_phase" and a["ok"]:
 				gs.send({"t": "next_phase"})
 				return true
+	return false
+
+
+## L5 sacrifice mode's keys: Tab / Shift+Tab and the arrows walk the sacrificable units, Enter or
+## Space sacrifices the focused one (nothing without a focus: Enter never ends the phase from the
+## mode). Esc is handled before (it ends the mode). Every other key is left alone.
+func _sacrifice_key(k: int, shift: bool, is_enter: bool) -> bool:
+	var sac := gs.sacrifice
+	if k == KEY_TAB:
+		sac.cycle(-1 if shift else 1)
+		return true
+	if k in [KEY_UP, KEY_LEFT, KEY_DOWN, KEY_RIGHT]:
+		sac.cycle(-1 if (k == KEY_UP or k == KEY_LEFT) else 1)
+		return true
+	if is_enter or k == KEY_SPACE:
+		if sac.kb_uid != -1:
+			sac.try_sacrifice(sac.kb_uid)
+		else:
+			Sfx.play("deny")
+		return true
 	return false
 
 

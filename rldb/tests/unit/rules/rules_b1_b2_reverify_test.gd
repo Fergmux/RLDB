@@ -19,14 +19,16 @@ const DEFCON_2 := 52
 const DEFCON_1 := 165
 const SUMMON_TRAPS := [TRAP_HOLE, OVEREXTEND, ALEXANDERS_ARROW, DEFCON_2, DEFCON_1]
 
-const COSMIC_DRAGON := 31          # unit 3 AP 32/24, On Summon: 1 Pierce to itself
-const CREEPING_NULL := 65          # Ritual 40/28, On Summon: 1 Paralyse to the opponent's units
-const BOOM := 175                  # Arcane 3, On Summon: change the opponent's units' stance
-const BASTION_WYRM := 93           # Fusion Beast + Dragon, On Summon: 1 Eternal to itself
-const TAG_TEAM_X := 12             # ability: lose 2 AP, summon a unit from Spent in this column
+# Values as of the 3 Nov 2026 card sheet.
+const COSMIC_DRAGON := 31          # unit 3 AP 24/16, On Summon: 1 Pierce to itself
+const CHIDORI_MONK := 24           # unit 1 AP 16/14, On Summon: 1 Infiltrate to itself
+const CREEPING_NULL := 65          # Ritual 3R 36/12, On Summon: you can apply 1 Rune to a unit
+const BOOM := 175                  # Arcane 4, On Summon: change the opponent's units' stance
+const BASTION_WYRM := 93           # Fusion 20+ ATK-or-DEF unit + Physical unit, On Summon: 1 Eternal to itself
+const TAG_TEAM_X := 12             # ability: lose 1 AP, summon a 20-ATK-or-less unit from Spent in this column
 const AMBUSH := 42
-const BEAST := 4
-const DRAGON := 2
+const BEAST := 4                   # Basic Beast (Water); the tall Bastion Wyrm material at 20 ATK
+const DRAGON := 116                # Basic Dragon (Physical): Bastion Wyrm's Physical material
 const SUMMONER := 1
 const RESPONDER := 0
 
@@ -90,7 +92,7 @@ func test_b1_hot_stove_answers_fusion_laboratory_but_not_the_fusion_summon() -> 
 	TB.to_turn2(m)
 	TB.set_card(m, RESPONDER, HOT_STOVE, 0)
 	var lab := TB.power(m, SUMMONER, FUSION_LAB, 0)
-	var b := TB.unit(m, SUMMONER, BEAST, 1)
+	var b := TB.unit(m, SUMMONER, BEAST, 1, "atk", 20, 8)
 	var d := TB.unit(m, SUMMONER, DRAGON, 2)
 	var wyrm := TB.card(m, SUMMONER, BASTION_WYRM, "extra")
 	assert_str(TB.ability(m, lab)).is_empty()
@@ -154,27 +156,30 @@ func _start(m: MatchEngine, kind: String) -> Dictionary:
 			var mat := TB.unit(m, SUMMONER, BEAST, 0)
 			m.apply_status(mat, "rune", 3)
 			var r := TB.card(m, SUMMONER, CREEPING_NULL, "extra")
-			m.submit(SUMMONER, {"t": "ritual", "uid": r})
-			return {"unit": r, "answers": [mat, 0], "on_summon": func(mm): return mm.status_count(foe, "paralyse") == 1}
+			# 2026-11-03: its On Summon is an optional Rune on a unit (it used to Paralyse); the stance is
+			# given up front so the answers reach material, zone, then the Rune target.
+			m.submit(SUMMONER, {"t": "ritual", "uid": r, "stance": "atk"})
+			return {"unit": r, "answers": [mat, 0, foe], "on_summon": func(mm): return mm.status_count(foe, "rune") == 1}
 		"arcane":
-			var a := TB.card(m, SUMMONER, TB.WATER, "spent")
-			var b := TB.card(m, SUMMONER, 28, "spent")           # cost 2: 1 + 2 = 3
+			var a := TB.card(m, SUMMONER, 28, "spent")           # cost 2
+			var b := TB.card(m, SUMMONER, 32, "spent")           # cost 2: 2 + 2 = Boom's 4 (3 before 3 Nov)
 			var boom := TB.card(m, SUMMONER, BOOM, "extra")
 			m.submit(SUMMONER, {"t": "arcane", "uid": boom})
 			m.submit(SUMMONER, {"t": "choose", "id": m.pending["id"], "values": [a, b]})
 			return {"unit": boom, "answers": [0], "on_summon": func(mm): return String(mm.cards[foe]["stance"]) == "def"}
 		"fusion":
 			var lab := TB.power(m, SUMMONER, FUSION_LAB, 0)
-			var bb := TB.unit(m, SUMMONER, BEAST, 0)
+			var bb := TB.unit(m, SUMMONER, BEAST, 0, "atk", 20, 8)
 			var dd := TB.unit(m, SUMMONER, DRAGON, 2)
 			var wyrm := TB.card(m, SUMMONER, BASTION_WYRM, "extra")
 			TB.ability(m, lab)
 			return {"unit": wyrm, "answers": [wyrm, bb, dd, 0], "on_summon": func(mm): return mm.status_count(wyrm, "eternal") == 1}
 		"effect":
 			var tt := TB.unit(m, SUMMONER, TAG_TEAM_X, 3)       # back row, column 1
-			var cd := TB.card(m, SUMMONER, COSMIC_DRAGON, "spent")
+			# 2026-11-03: Tag Team - X revives only a unit with 20 ATK or less (Cosmic Dragon is 24).
+			var cm := TB.card(m, SUMMONER, CHIDORI_MONK, "spent")
 			TB.ability(m, tt)
-			return {"unit": cd, "answers": [cd, 0], "on_summon": func(mm): return mm.status_count(cd, "pierce") == 1}
+			return {"unit": cm, "answers": [cm, 0], "on_summon": func(mm): return mm.status_count(cm, "infiltrate") == 1}
 	return {}
 
 

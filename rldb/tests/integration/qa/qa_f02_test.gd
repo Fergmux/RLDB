@@ -11,7 +11,7 @@ const ELEMENTAL_MASTERY := 88
 const RAGING_INFERNO := 98     # Ritual, 1 Rune
 const BAHATIA := 141           # type_summon_lock (Physical)
 const MUMENS_BOUNTY := 150     # no_defense
-const KAYA := 170              # Arcane, cost 1
+const KAYA := 170              # Arcane, cost 2 (1 before 2026-11-03)
 const ILLUSIONIST := 177       # no_battle_damage, +20 ATK on own turn
 
 
@@ -139,7 +139,7 @@ func test_arcane_exhausts_materials_and_cancel_keeps_everything() -> void:
 	# Arrange
 	var m := TB.make()
 	var k := TB.card(m, 0, KAYA, "extra")
-	var s := TB.card(m, 0, TB.WATER, "spent")
+	var s := TB.card(m, 0, 28, "spent")                       # Guardian of the Forest, cost 2: Kaya is 2A since 2026-11-03
 	var before := _state(m)
 	# Act: cancel at the material choice changes nothing
 	assert_str(m.submit(0, {"t": "arcane", "uid": k})).is_empty()

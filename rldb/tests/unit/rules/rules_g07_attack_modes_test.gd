@@ -86,13 +86,20 @@ func test_attack_mode_unit_is_rejected_against_an_empty_field() -> void:
 	assert_str(m.submit(1, {"t": "attack", "uid": dg, "mode": "sideways"})).is_equal("Invalid attack mode.")
 
 
-func test_taunt_overrides_attack_direct_and_leaves_one_attack() -> void:
+# 2026-11-03 ruling (changed on purpose): Demented Apparition reads "Your opponent's Units cannot attack
+# other Units if they can attack this Unit". A direct attack is not restricted any more (it used to be
+# overridden), so a direct attacker keeps both modes, and its only unit target is the Apparition.
+func test_taunt_restricts_unit_targets_and_leaves_attack_direct() -> void:
 	var m := _battle()
 	var dg := TB.unit(m, 1, DIGGIE, 0)
+	var other := TB.unit(m, 0, TB.WATER, 0)                  # another target the lure takes away
 	var taunt := TB.unit(m, 0, TAUNT_UNIT, 1)
-	assert_array(_labels(_attack_actions(m, dg))).is_equal(["Attack//true"])
-	assert_str(m.submit(1, {"t": "attack", "uid": dg, "mode": "direct"})).is_not_empty()
-	assert_array(m.attack_targets(dg)).is_equal([taunt])
+	assert_array(_labels(_attack_actions(m, dg))).is_equal(["Attack/unit/true", "Attack Direct/direct/true"])
+	assert_array(m.attack_targets(dg)).is_equal([taunt, -1])
+	assert_bool(other in m.attack_targets(dg)).is_false()
+	assert_str(m.submit(1, {"t": "attack", "uid": dg, "mode": "direct"})).is_empty()
+	assert_bool(m.pending.is_empty()).is_true()
+	assert_int(CF.hp(m, 0)).is_equal(GameCore.START_HP - 6)  # Diggie's 6 ATK
 
 
 func test_blind_direct_attack_unit_keeps_one_random_attack() -> void:

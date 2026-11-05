@@ -53,7 +53,7 @@ func _special(kind: String) -> Array:
 		"arcane":
 			TB.card(m, a, 1, "spent")
 			TB.card(m, a, 110, "spent")
-			var ar := TB.card(m, a, 172, "extra")
+			var ar := TB.card(m, a, 171, "extra")            # Flying Sandworm 2A (Tyde is 3A since 2026-11-03)
 			since = _since(m)
 			assert_str(m.submit(a, {"t": "arcane", "uid": ar})).is_empty()
 	_answer_all(m)

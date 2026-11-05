@@ -90,11 +90,12 @@ func test_wait_notice_strips_its_static_dots() -> void:
 
 
 func test_wait_notice_docks_under_the_opponent_plate() -> void:
-	# #38: under the plate (not on the centre line), right edges aligned.
+	# #38 / L16: it settles under the plate (after appearing in the middle), right edges aligned.
 	var plate: Control = auto_free(Control.new())
 	plate.position = Vector2(1000, 50)
 	plate.size = Vector2(228, 90)
-	var pos := GamePromptBanner.wait_position(plate, Vector2(200, 40))
+	var dock := GamePromptBanner.wait_dock(plate)
+	var pos := WaitNotice.place_at(Vector2(600, 400), dock, Vector2(200, 40), 1.0, 1.0)
 	assert_float(pos.x + 200.0).is_equal_approx(1228.0, 0.01)
 	assert_float(pos.y).is_greater(140.0)
 

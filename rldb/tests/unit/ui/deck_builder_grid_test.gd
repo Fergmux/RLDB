@@ -67,8 +67,8 @@ func _contains_text(n: Node, needle: String) -> bool:
 
 func test_grid_has_one_cell_per_catalogue_card() -> void:
 	var db := _builder()
-	assert_int(db.browser.grid.get_child_count()).is_equal(CardDB.all().size())
-	assert_int(db.visible_cell_count()).is_equal(CardDB.all().size())
+	assert_int(db.browser.grid.get_child_count()).is_equal(CardDB.collectible().size())
+	assert_int(db.visible_cell_count()).is_equal(CardDB.collectible().size())
 	db.set_filters("zzzz-no-such-card")
 	assert_int(db.visible_cell_count()).is_equal(0)
 

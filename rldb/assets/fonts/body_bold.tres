@@ -1,0 +1,8 @@
+[gd_resource type="FontVariation" format=3]
+
+[ext_resource type="FontFile" uid="uid://cg1doobk4lvev" path="res://assets/fonts/AlegreyaSans-Bold.ttf" id="1_base"]
+[ext_resource type="FontFile" uid="uid://c68qa66xuwryq" path="res://assets/fonts/RLDBSymbols-Regular.ttf" id="2_sym"]
+
+[resource]
+fallbacks = Array[Font]([ExtResource("2_sym")])
+base_font = ExtResource("1_base")
