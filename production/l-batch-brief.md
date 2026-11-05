@@ -20,8 +20,9 @@ report (the integrator copies them to the owner).
   `$G --headless --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode -c`.
   Never use `-d` (the debugger hangs on script errors). For one suite, use `-a res://tests/unit/rules/xyz_test.gd`.
   **Check the process exit code, not only the summary line.**
-- **Baseline:** about 50 older tests fail on HEAD because they pin pre-3-Nov card values. The list is in
-  `production/l-batch-baseline-failures.txt`, and a dedicated tests agent is fixing them. Do not "fix" those yourself
+- **Baseline:** about 50 older tests fail on HEAD because they pin pre-3-Nov card values. The list is in the MAIN tree at
+  `C:/Users/fergm/Documents/code/RLDB/production/l-batch-baseline-failures.txt` (absolute path; it appears a few
+  minutes after you start, so read it before your final suite run), and a dedicated tests agent is fixing them. Do not "fix" those yourself
   unless your item changes the same behaviour. Your rule: **add no new failures**. A failing test outside the baseline
   list is yours to explain or fix.
 - Naming: file `[system]_[feature]_test.gd`, function `test_[scenario]_[expected]`, arrange/act/assert.
