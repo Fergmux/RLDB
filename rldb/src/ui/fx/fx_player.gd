@@ -74,6 +74,8 @@ var _serpent := FxSerpent.new(self)
 var _evolve := FxEvolve.new(self)
 ## L8: status application, ward, tick and expiry looks.
 var _status := FxStatus.new(self)
+## L9: Hypnotise's glide of a unit to its new zone (and home again).
+var _control := FxControlMove.new(self)
 ## B5: ghosts of cards summoned and removed in the same batch, by transient_key().
 var _transient := {}
 ## True from the moment a view that ends the game arrives until its victory / defeat presentation has
@@ -457,6 +459,22 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 			"status_expire":
 				sched.append([st_status, _status.expire.bind(e["at"], String(e.get("s", ""))), "status_expire"])
 				t += 0.04
+			"control":
+				# L9 (FxControlMove): the unit lifts, glides to its new zone with a violet swirl and settles;
+				# sent to Spent on its return (its zone was filled), it swirls and flies to the pile.
+				var cto: Dictionary = e.get("to", {})
+				var cfrom: Dictionary = e.get("from", {})
+				if cto.is_empty():
+					sched.append([t, _control.swirl_at.bind(cfrom), "control_swirl"])
+					if not cfrom.is_empty():
+						var dfx := {"k": "destroy", "at": cfrom, "dest": String(e.get("dest", "spent"))}
+						if e.has("id"):
+							dfx["id"] = e["id"]
+						sched.append([t + 0.15, _piles.destroy.bind(dfx, prev_mv), "control_spent"])
+				else:
+					_prehide(int(cto["p"]), String(cto.get("zone", "unit")), int(cto["slot"]), t, sched, _control.move.bind(e))
+					sched[-1].append("control")
+				t += 0.2
 			"stat":
 				if e.has("from"):
 					sched.append([t, _cards.effect_arrow.bind(e["from"], e["at"]), "arrow"])

@@ -91,6 +91,7 @@ func _steps() -> void:
 	await _blocked_sheet()
 	await _stack_strip()
 	await _ticks_sheet()
+	await _control_strip()
 
 
 # ---------------------------------------------------------------- shots
@@ -257,6 +258,37 @@ func _ticks_sheet() -> void:
 	tiles.append([_grab(u2), "Paralyse wears off"])
 	_check("L8 expire look and sound", _planned("status_expire") and _planned("sfx:status_expire"))
 	await _show_sheet("ticks_and_expire", tiles, 4)
+
+
+## Hypnotise (L9): a unit taken across the board and sent home, frames through each glide.
+func _control_strip() -> void:
+	await _settle()
+	var u: int = uids["t3"]
+	var tiles := []
+	for back in [false, true]:
+		var from := m.fx_pos(u)
+		var prev: int = m.cards[u]["ctl"]
+		var to_p: int = o if back else a
+		var to_slot: int = 3 if back else 5
+		m.players[prev]["units"][m.cards[u]["slot"]] = -1
+		m.cards[u]["ctl"] = to_p
+		m.cards[u]["slot"] = to_slot
+		m.players[to_p]["units"][to_slot] = u
+		m.add_log("[dev] Hypnotise %s" % ("ends" if back else "takes the unit"))
+		m.add_fx({"k": "control", "from": from, "to": m.fx_pos(u), "p": to_p, "id": int(m.cards[u]["id"]), "back": back})
+		host.broadcast()
+		var t0 := Time.get_ticks_msec()
+		for at in [0.12, 0.34, 0.55, 0.95]:
+			while Time.get_ticks_msec() - t0 < int(at * 1000.0):
+				await get_tree().process_frame
+			await RenderingServer.frame_post_draw
+			var img := get_viewport().get_texture().get_image()
+			var r := Rect2(Vector2(380, 120), Vector2(560, 700))
+			tiles.append([_crop(img, r, 1.0), "%s %.2f s" % ["return" if back else "take", at]])
+		_check("L9 control %s glides" % ("return" if back else "take"), _planned("control") and _planned("sfx:control_"))
+		await _wait(0.6)
+		await _settle()
+	await _show_sheet("hypnotise_glide", tiles, 4)
 
 
 func _grab(uid: int) -> ImageTexture:
