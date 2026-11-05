@@ -8,13 +8,13 @@ func _blocks(t: Control, name: String) -> Array:
 
 
 func test_card_tooltip_has_one_coloured_block_per_rules_part() -> void:
-	# Arrange: Ultimate Dragon (Materials, Once per turn, On Destruction)
+	# Arrange: Ultimate Dragon (Materials, On Summon since 2026-11-03, Once per turn, On Destruction)
 	var v := MatchView.def_view(151)
 	# Act
 	var t: Control = auto_free(StatusHelp.card_tooltip(v))
 	# Assert
 	var rules := _blocks(t, "TipRule")
-	assert_int(rules.size()).is_equal(3)
+	assert_int(rules.size()).is_equal(4)
 	assert_object((rules[0] as PanelContainer).get_theme_stylebox("panel")).is_instanceof(StyleBoxFlat)
 	var bar := ((rules[0] as PanelContainer).get_theme_stylebox("panel") as StyleBoxFlat).border_color
 	var want := CardDetailsPanel.timing_color("Materials")

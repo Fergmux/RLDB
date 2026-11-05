@@ -1,12 +1,12 @@
 extends "res://tests/integration/qa/qa_net_base.gd"
 ## Adversarial QA: nested Trap chains (P-20), summon order (P-22) and column traps
-## on direct attacks (P-23 / C-03), all driven over a real two-client ENet session.
+## on direct attacks (P-23; C-03 replaced on 2026-11-03), all driven over a real two-client ENet session.
 
 const PLAN_B := 163
 const SHARED_FATE := 87
 const MAGIC_CYLINDER := 45
 const DAMAGE_CONVERSION := 47
-const SHEN := 21
+const CHIDORI_MONK := 24       # 16/14; On Summon: 1 Infiltrate on itself
 const ALEXANDERS_ARROW := 103
 
 
@@ -71,13 +71,16 @@ func test_plan_b_over_network_resolves_depth_first_heals_last_and_client_view_ma
 	assert_bool(blob.contains("\"uid\":%d" % decoy)).is_false()
 
 
-func test_column_traps_never_answer_a_direct_attack_over_network() -> void:
-	# Arrange: host has no units, Magic Cylinder and Damage Conversion set in all columns
+# 2026-11-03 (owner ruling, replaces C-03): Magic Cylinder and Damage Conversion answer an attack
+# declared by an opponent's unit in their column, a direct attack included. Over the network only
+# the Trap in the attacker's column is offered, and a declined window reveals nothing.
+func test_column_traps_answer_only_a_direct_attack_from_their_column_over_network() -> void:
+	# Arrange: host has no units; Magic Cylinder, Damage Conversion, Magic Cylinder in columns 1-3
 	var m: MatchEngine = await _client_turn2()
-	var atk := TB.unit(m, 1, TB.WATER, 0, "atk", 10)
+	var atk := TB.unit(m, 1, TB.WATER, 0, "atk", 10)            # attacks from column 1
 	var mc := TB.set_card(m, 0, MAGIC_CYLINDER, 0)
 	var dc := TB.set_card(m, 0, DAMAGE_CONVERSION, 1)
-	TB.set_card(m, 0, MAGIC_CYLINDER, 2)
+	var mc3 := TB.set_card(m, 0, MAGIC_CYLINDER, 2)
 	await _sync()
 	client.local_seat.send({"t": "next_phase"})
 	assert_bool(await _wait(func(): return m.phase == "battle")).is_true()
@@ -85,12 +88,18 @@ func test_column_traps_never_answer_a_direct_attack_over_network() -> void:
 	client.local_seat.send({"t": "attack", "uid": atk})
 	if await _await_pending(m, 1, "attack_target", 120):
 		_client_choose(["directly"])
-	await _wait(func(): return m.players[0]["hp"] != 60 or m.pending.get("kind", "") == "trap_response")
-	# Assert
-	assert_str(m.pending.get("kind", "")).is_not_equal("trap_response")
-	assert_int(m.players[0]["hp"]).is_equal(50)
+	assert_bool(await _await_pending(m, 0, "trap_response")).is_true()
+	# Assert: only the column-1 Trap answers, and the client is told nothing about it
+	var offered: Array = _labels(hpend()).filter(func(l): return String(l).begins_with("Activate"))
+	assert_array(offered).is_equal(["Activate Magic Cylinder"])
+	var act: Array = m.pending["options"].filter(func(o): return String(o["label"]).begins_with("Activate"))
+	assert_int(int(act[0]["v"])).is_equal(mc)                  # the column-1 Cylinder, not column 3's
+	assert_bool(_blob().contains("Magic Cylinder")).is_false()
+	_host_choose(["Skip"])
+	assert_bool(await _await_idle(m)).is_true()
+	assert_int(m.players[0]["hp"]).is_equal(60 - 10)
 	assert_int(m.players[1]["hp"]).is_equal(60)
-	assert_bool(m.is_face_up(mc) or m.is_face_up(dc)).is_false()
+	assert_bool(m.is_face_up(mc) or m.is_face_up(dc) or m.is_face_up(mc3)).is_false()
 
 
 func test_on_summon_resolves_before_summon_trap_prompt_over_network() -> void:
@@ -98,18 +107,19 @@ func test_on_summon_resolves_before_summon_trap_prompt_over_network() -> void:
 	var m: MatchEngine = await _client_turn2()
 	TB.unit(m, 0, TB.WATER, 0)                                  # host's lowest ATK: 8
 	TB.set_card(m, 0, ALEXANDERS_ARROW, 0)
-	var shen := TB.card(m, 1, SHEN, "hand")
+	# 2026-11-03: Shen is 0/0 now (Alexander's Arrow would floor at 0), so Chidori Monk stands in.
+	var monk := TB.card(m, 1, CHIDORI_MONK, "hand")
 	m.players[1]["ap"] = 20
 	await _sync()
 	# Act
-	client.local_seat.send({"t": "summon", "uid": shen})
+	client.local_seat.send({"t": "summon", "uid": monk})
 	assert_bool(await _await_pending(m, 1, "slot")).is_true()
 	_client_choose(["Front row, column 2"])
 	if await _await_pending(m, 1, "stance", 120):
 		_client_choose(["Attack"])
 	assert_bool(await _await_pending(m, 0, "trap_response")).is_true()
-	# Assert: Shen's own On Summon (Eternal) already resolved when the host is asked
-	assert_int(m.status_count(shen, "eternal")).is_equal(1)
+	# Assert: the Monk's own On Summon (Infiltrate) already resolved when the host is asked
+	assert_int(m.status_count(monk, "infiltrate")).is_equal(1)
 	_host_choose(["Alexander"])
 	assert_bool(await _await_idle(m)).is_true()
-	assert_int(m.atk_of(shen)).is_equal(22)
+	assert_int(m.atk_of(monk)).is_equal(16 - 8)

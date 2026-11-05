@@ -155,7 +155,7 @@ func test_c070_krakeshin_summons_with_three_nimble() -> void:
 	var m := CF.make()
 	var k := TB.summon(m, 0, 70, 0)
 	assert_int(m.status_count(k, "nimble")).is_equal(3)
-	assert_int(m.atk_of(k)).is_equal(14)
+	assert_int(m.atk_of(k)).is_equal(12)                     # 12/26 since 2026-11-03; no move, no gain
 
 
 # ---------------------------------------------------------------- 73 Man's Best Friend

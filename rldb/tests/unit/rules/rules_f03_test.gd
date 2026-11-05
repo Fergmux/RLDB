@@ -9,14 +9,17 @@ const COST2_UNIT_B := 32        # Frost Wyvern, cost 2
 const COST3_UNIT := 13          # Chaos Witch, cost 3
 const COST0_UNIT := 33          # Fledgling Drake, cost 0
 const COST2_SPELL := 84         # Assassinate, cost 2
-const ARCANE1 := 170            # Grandmother Kaya, 1 Arcane
-const ARCANE2 := 174            # Cliff the Flying Bison, 2 Arcane
-const ARCANE3 := 175            # Boom, Councillor of The Order, 3 Arcane
+# 2026-11-03 raised every Arcane cost by 1 (Kaya 1->2, Cliff 2->3, Boom 3->4); no Arcane costs 1 now.
+# The fixtures keep the requirements the tests were written for: 2 and 3.
+const ARCANE2_K := 170          # Grandmother Kaya, 2 Arcane (its On Summon needs the opponent ahead: silent here)
+const ARCANE2 := 171            # Flying Sandworm, 2 Arcane, no On Summon (Cliff before 3 Nov)
+const ARCANE3 := 174            # Cliff the Flying Bison, 3 Arcane (Boom before 3 Nov)
 const FUSION_ARCANE_SPENT := 93 # Bastion Wyrm (Fusion) used as an ineligible Spent card
 const POLY := 82                # Fusion Ceremony (Fusion Spell, cost 1)
-const BASTION := 93             # Bastion Wyrm: Beast + Dragon
+# Bastion Wyrm needs a 20+ ATK-or-DEF unit since 3 Nov; Owlbear Druid keeps two Basic Unit materials.
+const FUSION_T := 189           # Owlbear Druid: Beast Unit + Physical Unit
 const BEAST_W := 4              # Basic Beast (Water)
-const DRAGON_W := 2             # Basic Dragon (Water)
+const PHYS_D := 116             # Basic Dragon (Physical)
 const MAGENTRIC := 69           # unit ability: Fusion Summon (Field)
 const NETHER_PORTAL := 89       # Power: once per turn, pay 1 AP to Fusion Summon (Field)
 const OVEREXTEND := 48
@@ -41,12 +44,12 @@ func test_f03_04_requirement_two_paid_by_one_plus_one() -> void:
 	var m := TB.make()
 	var a := TB.card(m, 0, TB.WATER, "spent")
 	var b := TB.card(m, 0, TB.FIRE, "spent")
-	var cliff := TB.card(m, 0, ARCANE2, "extra")
-	assert_bool(_arcane_ok(m, cliff)).is_true()
-	assert_str(m.submit(0, {"t": "arcane", "uid": cliff, "stance": "atk"})).is_empty()
+	var worm := TB.card(m, 0, ARCANE2, "extra")
+	assert_bool(_arcane_ok(m, worm)).is_true()
+	assert_str(m.submit(0, {"t": "arcane", "uid": worm, "stance": "atk"})).is_empty()
 	assert_str(TB.choose_uids(m, [a, b])).is_empty()
 	TB.choose(m, [TB.slot_label(0)])
-	assert_str(m.cards[cliff]["zone"]).is_equal("unit")
+	assert_str(m.cards[worm]["zone"]).is_equal("unit")
 	assert_str(m.cards[a]["zone"]).is_equal("exhaust")
 	assert_str(m.cards[b]["zone"]).is_equal("exhaust")
 	assert_int(m.players[0]["ap"]).is_equal(2)
@@ -55,27 +58,27 @@ func test_f03_04_requirement_two_paid_by_one_plus_one() -> void:
 func test_f03_04_requirement_two_paid_by_single_two() -> void:
 	var m := TB.make()
 	var a := TB.card(m, 0, COST2_UNIT, "spent")
-	var cliff := TB.card(m, 0, ARCANE2, "extra")
-	assert_bool(_arcane_ok(m, cliff)).is_true()
-	m.submit(0, {"t": "arcane", "uid": cliff, "stance": "atk"})
+	var worm := TB.card(m, 0, ARCANE2, "extra")
+	assert_bool(_arcane_ok(m, worm)).is_true()
+	m.submit(0, {"t": "arcane", "uid": worm, "stance": "atk"})
 	assert_str(TB.choose_uids(m, [a])).is_empty()
 	TB.choose(m, [TB.slot_label(0)])
-	assert_str(m.cards[cliff]["zone"]).is_equal("unit")
+	assert_str(m.cards[worm]["zone"]).is_equal("unit")
 
 
 func test_f03_04_overpayment_is_rejected_and_nothing_is_consumed() -> void:
 	var m := TB.make()
 	var one := TB.card(m, 0, TB.WATER, "spent")
 	var two := TB.card(m, 0, COST2_UNIT, "spent")
-	var cliff := TB.card(m, 0, ARCANE2, "extra")
-	m.submit(0, {"t": "arcane", "uid": cliff, "stance": "atk"})
+	var worm := TB.card(m, 0, ARCANE2, "extra")
+	m.submit(0, {"t": "arcane", "uid": worm, "stance": "atk"})
 	var id: int = m.pending["id"]
 	assert_str(TB.choose_uids(m, [one, two])).contains("exactly")
 	# The choice stays open and nothing moved.
 	assert_int(m.pending["id"]).is_equal(id)
 	assert_str(m.cards[one]["zone"]).is_equal("spent")
 	assert_str(m.cards[two]["zone"]).is_equal("spent")
-	assert_str(m.cards[cliff]["zone"]).is_equal("extra")
+	assert_str(m.cards[worm]["zone"]).is_equal("extra")
 	assert_int(m.players[0]["ap"]).is_equal(2)
 
 
@@ -83,8 +86,8 @@ func test_f03_04_underpayment_is_rejected() -> void:
 	var m := TB.make()
 	var one := TB.card(m, 0, TB.WATER, "spent")
 	TB.card(m, 0, TB.FIRE, "spent")
-	var cliff := TB.card(m, 0, ARCANE2, "extra")
-	m.submit(0, {"t": "arcane", "uid": cliff, "stance": "atk"})
+	var worm := TB.card(m, 0, ARCANE2, "extra")
+	m.submit(0, {"t": "arcane", "uid": worm, "stance": "atk"})
 	assert_str(TB.choose_uids(m, [one])).contains("exactly")
 	assert_str(m.cards[one]["zone"]).is_equal("spent")
 
@@ -93,9 +96,9 @@ func test_f03_04_only_overpaying_materials_means_no_arcane_action() -> void:
 	# A single cost-3 unit cannot pay 2 exactly, so the summon is unavailable (not "total >= cost").
 	var m := TB.make()
 	TB.card(m, 0, COST3_UNIT, "spent")
-	var cliff := TB.card(m, 0, ARCANE2, "extra")
-	assert_bool(_arcane_ok(m, cliff)).is_false()
-	assert_str(m.validate(0, {"t": "arcane", "uid": cliff})).contains("exactly")
+	var worm := TB.card(m, 0, ARCANE2, "extra")
+	assert_bool(_arcane_ok(m, worm)).is_false()
+	assert_str(m.validate(0, {"t": "arcane", "uid": worm})).contains("exactly")
 
 
 func test_f03_04_availability_is_subset_sum_not_total() -> void:
@@ -103,10 +106,10 @@ func test_f03_04_availability_is_subset_sum_not_total() -> void:
 	var m := TB.make()
 	TB.card(m, 0, COST2_UNIT, "spent")
 	TB.card(m, 0, COST2_UNIT_B, "spent")
-	var boom := TB.card(m, 0, ARCANE3, "extra")
-	var cliff := TB.card(m, 0, ARCANE2, "extra")
-	assert_bool(_arcane_ok(m, boom)).is_false()
-	assert_bool(_arcane_ok(m, cliff)).is_true()
+	var three := TB.card(m, 0, ARCANE3, "extra")
+	var worm := TB.card(m, 0, ARCANE2, "extra")
+	assert_bool(_arcane_ok(m, three)).is_false()
+	assert_bool(_arcane_ok(m, worm)).is_true()
 
 
 func test_f03_04_modified_cost_determines_the_total() -> void:
@@ -115,12 +118,12 @@ func test_f03_04_modified_cost_determines_the_total() -> void:
 	var w := TB.card(m, 0, COST3_UNIT, "spent")
 	m.cards[w]["cost_p"] = -1
 	assert_int(m.current_cost(w)).is_equal(2)
-	var cliff := TB.card(m, 0, ARCANE2, "extra")
-	assert_bool(_arcane_ok(m, cliff)).is_true()
-	m.submit(0, {"t": "arcane", "uid": cliff, "stance": "atk"})
+	var worm := TB.card(m, 0, ARCANE2, "extra")
+	assert_bool(_arcane_ok(m, worm)).is_true()
+	m.submit(0, {"t": "arcane", "uid": worm, "stance": "atk"})
 	assert_str(TB.choose_uids(m, [w])).is_empty()
 	TB.choose(m, [TB.slot_label(0)])
-	assert_str(m.cards[cliff]["zone"]).is_equal("unit")
+	assert_str(m.cards[worm]["zone"]).is_equal("unit")
 	assert_str(m.cards[w]["zone"]).is_equal("exhaust")
 
 
@@ -129,8 +132,8 @@ func test_f03_04_extra_deck_units_and_non_units_are_ineligible() -> void:
 	var arc := TB.card(m, 0, ARCANE2, "spent")              # an Extra Deck unit with "2"
 	var spell := TB.card(m, 0, COST2_SPELL, "spent")        # a non-unit with cost 2
 	var fus := TB.card(m, 0, FUSION_ARCANE_SPENT, "spent")
-	var cliff := TB.card(m, 0, ARCANE2, "extra")
-	assert_bool(_arcane_ok(m, cliff)).is_false()
+	var worm := TB.card(m, 0, ARCANE2, "extra")
+	assert_bool(_arcane_ok(m, worm)).is_false()
 	var mats: Array = m.arcane_materials(0)
 	assert_bool(arc in mats or spell in mats or fus in mats).is_false()
 
@@ -140,8 +143,8 @@ func test_f03_04_authority_rejects_unoffered_and_stale_selections() -> void:
 	var a := TB.card(m, 0, TB.WATER, "spent")
 	var b := TB.card(m, 0, TB.FIRE, "spent")
 	var spell := TB.card(m, 0, COST2_SPELL, "spent")
-	var cliff := TB.card(m, 0, ARCANE2, "extra")
-	m.submit(0, {"t": "arcane", "uid": cliff, "stance": "atk"})
+	var worm := TB.card(m, 0, ARCANE2, "extra")
+	m.submit(0, {"t": "arcane", "uid": worm, "stance": "atk"})
 	var id: int = m.pending["id"]
 	assert_str(m.submit(0, {"t": "choose", "id": id, "values": [spell]})).contains("Invalid")
 	assert_str(m.submit(0, {"t": "choose", "id": id + 7, "values": [a, b]})).contains("No such")
@@ -153,8 +156,8 @@ func test_f03_04_pending_choice_exposes_required_total_and_values() -> void:
 	var m := TB.make()
 	TB.card(m, 0, TB.WATER, "spent")
 	TB.card(m, 0, COST2_UNIT, "spent")
-	var cliff := TB.card(m, 0, ARCANE2, "extra")
-	m.submit(0, {"t": "arcane", "uid": cliff, "stance": "atk"})
+	var worm := TB.card(m, 0, ARCANE2, "extra")
+	m.submit(0, {"t": "arcane", "uid": worm, "stance": "atk"})
 	var pv: Dictionary = MatchView.build(m, 0)["pending"]
 	assert_int(int(pv["total_required"])).is_equal(2)
 	assert_bool(pv["total_exact"]).is_true()
@@ -192,19 +195,21 @@ func test_f03_05_zero_current_cost_units_are_not_offered() -> void:
 	var reduced := TB.card(m, 0, TB.WATER, "spent")
 	m.cards[reduced]["cost_p"] = -1                    # printed 1, now 0
 	var one := TB.card(m, 0, TB.FIRE, "spent")
-	var kaya := TB.card(m, 0, ARCANE1, "extra")
-	m.submit(0, {"t": "arcane", "uid": kaya, "stance": "atk"})
+	var one_b := TB.card(m, 0, TB.EARTH, "spent")        # 1 + 1 reaches Kaya's 2 (1 before 3 Nov)
+	var kaya := TB.card(m, 0, ARCANE2_K, "extra")
+	assert_str(m.submit(0, {"t": "arcane", "uid": kaya, "stance": "atk"})).is_empty()
 	var offered := _option_uids(m)
 	assert_bool(zero in offered).is_false()
 	assert_bool(reduced in offered).is_false()
 	assert_bool(one in offered).is_true()
+	assert_bool(one_b in offered).is_true()
 
 
 func test_f03_05_printed_zero_with_positive_current_cost_is_offered() -> void:
 	var m := TB.make()
 	var raised := TB.card(m, 0, COST0_UNIT, "spent")
-	m.cards[raised]["cost_p"] = 1
-	var kaya := TB.card(m, 0, ARCANE1, "extra")
+	m.cards[raised]["cost_p"] = 2                       # printed 0, now 2: pays Kaya's 2 alone
+	var kaya := TB.card(m, 0, ARCANE2_K, "extra")
 	assert_bool(_arcane_ok(m, kaya)).is_true()
 	m.submit(0, {"t": "arcane", "uid": kaya, "stance": "atk"})
 	assert_bool(raised in _option_uids(m)).is_true()
@@ -225,7 +230,7 @@ func _fusion_avail(m: MatchEngine, p: int = 0) -> Array:
 
 
 func _materials(m: MatchEngine) -> Array:
-	return [TB.unit(m, 0, BEAST_W, 0), TB.unit(m, 0, DRAGON_W, 1)]
+	return [TB.unit(m, 0, BEAST_W, 0), TB.unit(m, 0, PHYS_D, 1)]
 
 
 func _no_hand_spells(m: MatchEngine, p: int = 0) -> void:
@@ -235,7 +240,7 @@ func _no_hand_spells(m: MatchEngine, p: int = 0) -> void:
 func test_f03_08_recipe_and_materials_without_a_method_give_no_signal() -> void:
 	var m := TB.make()
 	_materials(m)
-	TB.card(m, 0, BASTION, "extra")
+	TB.card(m, 0, FUSION_T, "extra")
 	_no_hand_spells(m)
 	assert_array(_fusion_avail(m)).is_empty()
 	assert_bool(MatchView.build(m, 0)["extra_avail"]["any"]).is_false()
@@ -244,7 +249,7 @@ func test_f03_08_recipe_and_materials_without_a_method_give_no_signal() -> void:
 func test_f03_08_method_without_materials_gives_no_signal() -> void:
 	var m := TB.make()
 	TB.unit(m, 0, BEAST_W, 0)
-	TB.card(m, 0, BASTION, "extra")
+	TB.card(m, 0, FUSION_T, "extra")
 	TB.card(m, 0, POLY, "hand")
 	assert_array(_fusion_avail(m)).is_empty()
 
@@ -259,7 +264,7 @@ func test_f03_08_method_and_materials_without_extra_target_give_no_signal() -> v
 func test_f03_08_complete_fusion_signals_and_activation_succeeds() -> void:
 	var m := TB.make()
 	var mats := _materials(m)
-	var wyrm := TB.card(m, 0, BASTION, "extra")
+	var wyrm := TB.card(m, 0, FUSION_T, "extra")
 	var poly := TB.card(m, 0, POLY, "hand")
 	var avail := _fusion_avail(m)
 	assert_int(avail.size()).is_equal(1)
@@ -279,7 +284,7 @@ func test_f03_08_complete_fusion_signals_and_activation_succeeds() -> void:
 func test_f03_08_unaffordable_method_gives_no_signal() -> void:
 	var m := TB.make()
 	_materials(m)
-	TB.card(m, 0, BASTION, "extra")
+	TB.card(m, 0, FUSION_T, "extra")
 	TB.power(m, 0, NETHER_PORTAL)
 	_no_hand_spells(m)
 	m.players[0]["ap"] = 1
@@ -291,7 +296,7 @@ func test_f03_08_unaffordable_method_gives_no_signal() -> void:
 func test_f03_08_used_once_per_turn_method_gives_no_signal() -> void:
 	var m := TB.make()
 	_materials(m)
-	TB.card(m, 0, BASTION, "extra")
+	TB.card(m, 0, FUSION_T, "extra")
 	var np := TB.power(m, 0, NETHER_PORTAL)
 	_no_hand_spells(m)
 	m.cards[np]["opt"][0] = m.turn
@@ -302,8 +307,8 @@ func test_f03_08_wrong_phase_hand_spell_gives_no_signal() -> void:
 	var m := TB.make()
 	TB.to_turn2(m)
 	TB.unit(m, 1, BEAST_W, 0)
-	TB.unit(m, 1, DRAGON_W, 1)
-	TB.card(m, 1, BASTION, "extra")
+	TB.unit(m, 1, PHYS_D, 1)
+	TB.card(m, 1, FUSION_T, "extra")
 	TB.card(m, 1, POLY, "hand")
 	m.players[1]["ap"] = 5
 	assert_int(_fusion_avail(m, 1).size()).is_equal(1)
@@ -314,14 +319,14 @@ func test_f03_08_wrong_phase_hand_spell_gives_no_signal() -> void:
 func test_f03_08_debilitated_method_or_material_gives_no_signal() -> void:
 	var m := TB.make()
 	var mats := _materials(m)
-	TB.card(m, 0, BASTION, "extra")
+	TB.card(m, 0, FUSION_T, "extra")
 	var mag := TB.unit(m, 0, MAGENTRIC, 2)
 	_no_hand_spells(m)
 	assert_int(_fusion_avail(m).size()).is_equal(1)
 	m.apply_status(mag, "debilitate", 1)
 	assert_array(_fusion_avail(m)).is_empty()
 	m.cards[mag]["st"] = {}
-	m.apply_status(mats[1], "debilitate", 1)                # the Dragon (Magentric is itself a Beast)
+	m.apply_status(mats[1], "debilitate", 1)                # the Physical unit (Magentric is itself a Beast)
 	assert_array(_fusion_avail(m)).is_empty()
 
 
@@ -331,7 +336,7 @@ func test_f03_08_full_field_with_field_materials_still_qualifies() -> void:
 	for s in range(2, 6):
 		TB.unit(m, 0, TB.WATER, s)
 	assert_bool(m.free_unit_slots(0).is_empty()).is_true()
-	TB.card(m, 0, BASTION, "extra")
+	TB.card(m, 0, FUSION_T, "extra")
 	TB.card(m, 0, POLY, "hand")
 	assert_int(_fusion_avail(m).size()).is_equal(1)
 
@@ -343,8 +348,8 @@ func test_f03_08_full_field_with_only_hand_materials_is_blocked() -> void:
 		TB.unit(m, 0, TB.WATER, s)
 	TB.power(m, 0, 137)
 	TB.card(m, 0, BEAST_W, "hand")
-	TB.card(m, 0, DRAGON_W, "hand")
-	TB.card(m, 0, BASTION, "extra")
+	TB.card(m, 0, PHYS_D, "hand")
+	TB.card(m, 0, FUSION_T, "extra")
 	var poly := TB.card(m, 0, POLY, "hand")
 	assert_array(_fusion_avail(m)).is_empty()
 	assert_str(m.validate(0, {"t": "cast", "uid": poly})).is_not_empty()
@@ -353,7 +358,7 @@ func test_f03_08_full_field_with_only_hand_materials_is_blocked() -> void:
 func test_f03_08_opponent_view_has_no_fusion_information() -> void:
 	var m := TB.make()
 	_materials(m)
-	TB.card(m, 0, BASTION, "extra")
+	TB.card(m, 0, FUSION_T, "extra")
 	TB.card(m, 0, POLY, "hand")
 	assert_bool(MatchView.build(m, 1)["extra_avail"]["any"]).is_false()
 
@@ -404,8 +409,12 @@ func test_f03_19_overextend_reduction_floors_at_zero_and_lasts_on_field() -> voi
 
 func test_f03_19_overextend_text_names_the_choice() -> void:
 	var df := CardDB.get_def(OVEREXTEND)
-	assert_str(String(df["on_summon"])).is_equal("Choose one of your opponent's Units, it Permanently loses -20 ATK.")
+	# Owner wording, 3 Nov (verbatim); the controller still chooses the Unit (F03-19).
+	assert_str(String(df["on_summon"])).is_equal("One of your opponent's Units Permanently loses -20 ATK.")
 	assert_str(String(df["condition"])).contains("3 or more Units")
+	# The choice is still named where the player makes it: the target prompt.
+	var prompt := String(CardScripts.get_entry(OVEREXTEND)["trap"]["ops"][0]["prompt"])
+	assert_str(prompt).starts_with("Choose one of your opponent's units")
 
 
 func test_f03_18_chosen_target_stat_event_carries_the_source_for_both_seats() -> void:

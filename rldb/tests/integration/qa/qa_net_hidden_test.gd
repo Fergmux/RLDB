@@ -45,7 +45,7 @@ func test_host_arcane_and_hand_choices_never_leak_to_client() -> void:
 	var m: MatchEngine = await _client_turn2()
 	await _end_client_turn(m)
 	var shen := TB.card(m, 0, SHEN, "spent")
-	var mat := TB.card(m, 0, TB.EARTH, "spent")
+	var mat := TB.card(m, 0, 28, "spent")                    # cost 2: Kaya is 2A since 2026-11-03
 	var secret := TB.card(m, 0, SECRET, "hand")
 	var kaya := -1
 	for u in m.players[0]["extra"]:
@@ -53,6 +53,10 @@ func test_host_arcane_and_hand_choices_never_leak_to_client() -> void:
 			kaya = u
 	if kaya == -1:
 		kaya = TB.card(m, 0, KAYA, "extra")
+	# 2026-11-03: Kaya's discard is offered only while the opponent controls more cards, Kaya included.
+	for s in [3, 4, 5]:
+		if m.players[1]["units"][s] == -1:
+			TB.unit(m, 1, TB.WATER, s, "def")
 	m.players[0]["ap"] = 20
 	client_payloads.clear()
 	await _sync()

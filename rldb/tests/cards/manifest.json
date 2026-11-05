@@ -526,7 +526,7 @@
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c023_auric_pays_ten_hp_for_ten_atk"
+						"test_c023_auric_pays_eight_hp_for_eight_atk"
 					]
 				}
 			]
@@ -829,7 +829,7 @@
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
-						"test_c037_solomon_captain_gains_ten_only_while_protected"
+						"test_c037_solomon_captain_gains_eight_only_while_protecting"
 					]
 				},
 				{
@@ -1472,8 +1472,8 @@
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_test.gd",
 					"tests": [
+						"test_c067_void_basilisk_can_be_its_own_material_and_then_is_not_exhausted",
 						"test_c067_void_basilisk_fuses_first_then_exhausts_itself",
-						"test_c067_void_basilisk_is_never_one_of_its_own_materials",
 						"test_c067_void_basilisk_on_a_full_board_needs_a_field_material"
 					]
 				},
@@ -1496,6 +1496,7 @@
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_11_03_test.gd",
 					"tests": [
+						"test_c068_seppuku_can_be_its_own_material_and_then_is_not_destroyed",
 						"test_c068_seppuku_fuses_first_then_destroys_itself",
 						"test_c068_seppuku_saved_by_eternal_still_completes_the_fusion_summon"
 					]
@@ -1526,9 +1527,9 @@
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
 						"test_c069_magentric_exhausted_for_an_arcane_summon_gives_nothing",
-						"test_c069_magentric_tributed_for_a_fusion_gives_it_two_pierce",
-						"test_c069_magentric_tributed_for_a_ritual_gives_it_two_pierce",
-						"test_c069_other_fusion_materials_give_no_pierce"
+						"test_c069_magentric_tributed_for_a_fusion_gives_it_one_cleanse",
+						"test_c069_magentric_tributed_for_a_ritual_gives_it_one_cleanse",
+						"test_c069_other_fusion_materials_give_no_tribute_bonus"
 					]
 				},
 				{
@@ -1541,7 +1542,7 @@
 				{
 					"file": "res://tests/unit/cards/cards_units_test.gd",
 					"tests": [
-						"test_c069_magentric_gives_adjacent_unit_two_pierce"
+						"test_c069_magentric_gives_adjacent_unit_one_cleanse"
 					]
 				}
 			]
@@ -1875,7 +1876,7 @@
 				{
 					"file": "res://tests/cards/unchanged_spells_traps_test.gd",
 					"tests": [
-						"test_c084_assassinate_def_boundary_is_inclusive_at_30"
+						"test_c084_assassinate_def_boundary_is_inclusive_at_20"
 					]
 				},
 				{
@@ -1887,7 +1888,7 @@
 				{
 					"file": "res://tests/unit/cards/cards_spells_traps_test.gd",
 					"tests": [
-						"test_c084_assassinate_destroys_unit_with_30_def_or_less_only"
+						"test_c084_assassinate_destroys_unit_with_20_def_or_less_only"
 					]
 				}
 			]
@@ -2845,6 +2846,8 @@
 						"test_c135_dragon_rider_behind_a_non_dragon_keeps_attack_stance",
 						"test_c135_dragon_rider_summoned_behind_a_dragon_is_put_in_defense",
 						"test_c135_effects_cannot_flip_a_protected_rider_to_attack",
+						"test_c135_rider_summoned_behind_a_dragon_is_not_asked_for_a_stance",
+						"test_c135_rider_summoned_behind_a_non_dragon_is_asked_for_a_stance",
 						"test_c135_the_rider_may_attack_again_once_the_dragon_is_gone"
 					]
 				},
@@ -3297,7 +3300,7 @@
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
-						"test_c155_symbiote_spawn_boosts_its_protector_by_ten"
+						"test_c155_symbiote_spawn_boosts_its_protector_by_six"
 					]
 				},
 				{
@@ -3325,7 +3328,7 @@
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_17_test.gd",
 					"tests": [
-						"test_c156_symbiote_larva_boosts_protector_by_ten_and_draws_then_discards"
+						"test_c156_symbiote_larva_boosts_protector_by_six_and_draws_then_discards"
 					]
 				},
 				{
@@ -3556,7 +3559,7 @@
 				{
 					"file": "res://tests/cards/unchanged_spells_traps_test.gd",
 					"tests": [
-						"test_c165_defcon_1_ignores_summons_below_24_atk"
+						"test_c165_defcon_1_ignores_summons_below_20_atk"
 					]
 				},
 				{
@@ -3913,7 +3916,7 @@
 				{
 					"file": "res://tests/unit/cards/cards_db_update_2026_10_18_test.gd",
 					"tests": [
-						"test_c178_reinforcements_costs_2_and_cuts_unit_costs_by_2"
+						"test_c178_reinforcements_costs_2_and_cuts_unit_costs_by_1"
 					]
 				},
 				{
@@ -3964,7 +3967,7 @@
 					"file": "res://tests/cards/changed_cards_test.gd",
 					"tests": [
 						"test_c180_hypnotise_cannot_be_cast_without_a_legal_target",
-						"test_c180_hypnotise_takes_a_20_atk_unit_until_end_of_turn"
+						"test_c180_hypnotise_takes_a_16_atk_unit_until_end_of_turn"
 					]
 				},
 				{

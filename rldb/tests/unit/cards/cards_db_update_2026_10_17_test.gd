@@ -68,7 +68,7 @@ func test_c007_tag_team_b_adds_a_spell_and_no_longer_cleanses() -> void:
 func test_c009_tag_team_f_adds_same_cost_unit_with_discount_and_new_stats() -> void:
 	var df := CardDB.get_def(9)
 	assert_int(df["cost"]).is_equal(2)
-	assert_int(df["def"]).is_equal(22)
+	assert_int(df["def"]).is_equal(16)                           # 22 -> 16 on 2026-11-03
 	var m := TB.make(7, 0)
 	TB.unit(m, 0, MAGE_WATER, 3)                                 # cost-1 partner
 	var same := TB.card(m, 0, BEAST_WATER, "draw")
@@ -240,7 +240,7 @@ func test_c036_dante_burns_every_unit_and_gains_atk_from_its_own_burn() -> void:
 	var dante := TB.summon(m, 0, 36, 0)
 	for u in [ally, foe, foe_back, dante]:
 		assert_int(m.status_count(u, "burn")).is_equal(6)
-	assert_int(m.atk_of(dante)).is_equal(28 + 6)
+	assert_int(m.atk_of(dante)).is_equal(24 + 6)                 # 24 ATK since 2026-11-03
 
 
 func test_c036_dante_manual_ten_burn_on_any_unit_once_per_turn() -> void:
@@ -260,32 +260,36 @@ func test_c036_dante_burning_itself_raises_its_atk_and_cleanse_lowers_it() -> vo
 	TB.ability(m, dante)
 	TB.choose_uids(m, [dante])
 	TB.choose(m, ["10 Burn"])
-	assert_int(m.atk_of(dante)).is_equal(38)
+	assert_int(m.atk_of(dante)).is_equal(24 + 10)                # 24 ATK since 2026-11-03
 	m.turn += 2
 	TB.ability(m, dante)
 	TB.choose_uids(m, [dante])
 	TB.choose(m, ["1 Cleanse"])
 	assert_int(m.status_count(dante, "burn")).is_equal(0)
-	assert_int(m.atk_of(dante)).is_equal(28)
+	assert_int(m.atk_of(dante)).is_equal(24)
 
 
-func test_c037_solomon_captain_gains_ten_only_while_protected() -> void:
+# 2026-11-03 (rule changed on purpose): +8 ATK while it is Protecting a unit; it used to be +10
+# while Protected by one. The aura still follows the board as units come and go.
+func test_c037_solomon_captain_gains_eight_only_while_protecting() -> void:
 	var m := TB.make()
-	var sol := TB.unit(m, 0, 37, 3)
-	assert_int(m.atk_of(sol)).is_equal(26)                       # back row, nothing in front
-	var front := TB.unit(m, 0, MAGE_WATER, 0)
-	assert_int(m.atk_of(sol)).is_equal(36)
-	TB.kill(m, front)
-	assert_int(m.atk_of(sol)).is_equal(26)
+	var sol := TB.unit(m, 0, 37, 0)
+	assert_int(m.atk_of(sol)).is_equal(20)                       # front row, nothing behind
+	var behind := TB.unit(m, 0, MAGE_WATER, 3)
+	assert_int(m.atk_of(sol)).is_equal(28)
+	TB.kill(m, behind)
+	assert_int(m.atk_of(sol)).is_equal(20)
 	var m2 := TB.make()
-	var sol2 := TB.unit(m2, 0, 37, 0)
-	TB.unit(m2, 0, MAGE_WATER, 3)                                # protecting is no longer rewarded
-	assert_int(m2.atk_of(sol2)).is_equal(26)
+	var sol2 := TB.unit(m2, 0, 37, 3)
+	TB.unit(m2, 0, MAGE_WATER, 0)                                # being protected is no longer rewarded
+	assert_int(m2.atk_of(sol2)).is_equal(20)
 
 
 # ---------------------------------------------------------------- Magentric's tribute benefit
+# 2026-11-03 (changed on purpose): the unit summoned gets 1 Cleanse (was 2 Pierce). The hook is
+# unchanged: only a Magentric tributed from the Field for a Fusion or Ritual summon gives it.
 
-func test_c069_magentric_tributed_for_a_fusion_gives_it_two_pierce() -> void:
+func test_c069_magentric_tributed_for_a_fusion_gives_it_one_cleanse() -> void:
 	var m := TB.make()
 	var mag := TB.unit(m, 0, MAGENTRIC, 0)                       # Lightning Beast
 	var dragon := TB.unit(m, 0, DRAGON_WATER, 1, "atk", 20, 8)
@@ -299,10 +303,11 @@ func test_c069_magentric_tributed_for_a_fusion_gives_it_two_pierce() -> void:
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
-	assert_int(m.status_count(wyrm, "pierce")).is_equal(2)
+	assert_int(m.status_count(wyrm, "cleanse")).is_equal(1)
+	assert_int(m.status_count(wyrm, "pierce")).is_equal(0)
 
 
-func test_c069_magentric_tributed_for_a_ritual_gives_it_two_pierce() -> void:
+func test_c069_magentric_tributed_for_a_ritual_gives_it_one_cleanse() -> void:
 	var m := TB.make()
 	var mag := TB.unit(m, 0, MAGENTRIC, 0)
 	m.apply_status(mag, "rune", 2)
@@ -311,10 +316,11 @@ func test_c069_magentric_tributed_for_a_ritual_gives_it_two_pierce() -> void:
 	TB.choose_uids(m, [mag])
 	TB.choose(m, ["Front row, column 1"])
 	assert_str(m.cards[nec]["zone"]).is_equal("unit")
-	assert_int(m.status_count(nec, "pierce")).is_equal(2)
+	assert_int(m.status_count(nec, "cleanse")).is_equal(1)
+	assert_int(m.status_count(nec, "pierce")).is_equal(0)
 
 
-func test_c069_other_fusion_materials_give_no_pierce() -> void:
+func test_c069_other_fusion_materials_give_no_tribute_bonus() -> void:
 	var m := TB.make()
 	var beast := TB.unit(m, 0, BEAST_WATER, 0, "atk", 20, 8)
 	var dragon := TB.unit(m, 0, 131, 1)                          # Basic Dragon (Lightning)
@@ -326,7 +332,9 @@ func test_c069_other_fusion_materials_give_no_pierce() -> void:
 	TB.choose_uids(m, [dragon])
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
+	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 	assert_int(m.status_count(wyrm, "pierce")).is_equal(0)
+	assert_int(m.status_count(wyrm, "cleanse")).is_equal(0)     # the 2026-11-03 bonus is Cleanse
 
 
 func test_c069_magentric_exhausted_for_an_arcane_summon_gives_nothing() -> void:
@@ -339,9 +347,10 @@ func test_c069_magentric_exhausted_for_an_arcane_summon_gives_nothing() -> void:
 	TB.choose(m, ["Front row, column 1"])
 	assert_str(m.cards[cliff]["zone"]).is_equal("unit")
 	assert_int(m.status_count(cliff, "pierce")).is_equal(0)
+	assert_int(m.status_count(cliff, "cleanse")).is_equal(0)    # the 2026-11-03 bonus is Cleanse
 	var df := CardDB.get_def(MAGENTRIC)
-	assert_int(df["atk"]).is_equal(20)
-	assert_int(df["def"]).is_equal(20)
+	assert_int(df["atk"]).is_equal(16)                           # 20/20 -> 16/16 on 2026-11-03
+	assert_int(df["def"]).is_equal(16)
 
 
 # ---------------------------------------------------------------- Faerie, Wukong, Narzyl, Diggie
@@ -354,7 +363,7 @@ func test_c071_faerie_flight_grants_nimble_to_any_unit() -> void:
 	TB.choose_uids(m, [ally])
 	assert_int(m.status_count(ally, "nimble")).is_equal(1)
 	assert_int(m.status_count(ff, "nimble")).is_equal(0)
-	assert_int(CardDB.get_def(71)["def"]).is_equal(16)
+	assert_int(CardDB.get_def(71)["def"]).is_equal(18)           # 16 -> 18 on 2026-11-03
 
 
 func test_c072_myth_wukong_gains_nimble_on_summon() -> void:
@@ -388,20 +397,21 @@ func test_c162_diggie_destroyed_keeps_its_cost() -> void:
 
 
 # ---------------------------------------------------------------- Symbiotes
+# 2026-11-03: each Symbiote's boost is +6 ATK (was +10).
 
-func test_c155_symbiote_spawn_boosts_its_protector_by_ten() -> void:
+func test_c155_symbiote_spawn_boosts_its_protector_by_six() -> void:
 	var m := TB.make()
 	var front := TB.unit(m, 0, MAGE_WATER, 0)
 	TB.unit(m, 0, 155, 3)
-	assert_int(m.atk_of(front)).is_equal(18)
+	assert_int(m.atk_of(front)).is_equal(8 + 6)
 	assert_str(CardDB.get_def(155)["name"]).is_equal("Symbiote Spawn")
 
 
-func test_c156_symbiote_larva_boosts_protector_by_ten_and_draws_then_discards() -> void:
+func test_c156_symbiote_larva_boosts_protector_by_six_and_draws_then_discards() -> void:
 	var m := TB.make()
 	var front := TB.unit(m, 1, MAGE_WATER, 0)
 	TB.unit(m, 1, 156, 3)
-	assert_int(m.atk_of(front)).is_equal(18)
+	assert_int(m.atk_of(front)).is_equal(8 + 6)
 	var hand_before: int = m.players[1]["hand"].size()
 	var spent_before: int = m.players[1]["spent"].size()
 	TB.to_turn2(m)                                               # player 1's turn starts
@@ -420,7 +430,7 @@ func test_c157_symbiote_siphonophore_boosts_adjacent_only_while_protected() -> v
 	var adj := TB.unit(m, 0, MAGE_WATER, 3)                      # adjacent, back row
 	assert_int(m.atk_of(adj)).is_equal(8)                        # not protected yet
 	TB.unit(m, 0, MAGE_FIRE, 1)                                  # protector in front
-	assert_int(m.atk_of(adj)).is_equal(18)
+	assert_int(m.atk_of(adj)).is_equal(8 + 6)
 	assert_str(CardDB.get_def(157)["name"]).is_equal("Symbiote Siphonophore")
 	assert_int(m.atk_of(sip)).is_equal(0)
 

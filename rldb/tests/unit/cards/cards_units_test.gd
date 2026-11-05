@@ -12,8 +12,9 @@ func test_c006_tag_team_l_does_nothing_without_column_partner() -> void:
 
 func test_c008_tag_team_s_fusion_summons_from_field() -> void:
 	var m := TB.make()
-	var beast := TB.unit(m, 0, 4, 3)
-	var dragon := TB.unit(m, 0, 2, 1)
+	# 2026-11-03 Bastion Wyrm: a unit with 20 or more ATK or DEF + a Physical unit.
+	var beast := TB.unit(m, 0, 4, 3, "atk", 20, 8)
+	var dragon := TB.unit(m, 0, 116, 1)                   # Basic Dragon (Physical)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.summon(m, 0, 8, 0)
 	TB.choose(m, ["Yes"])
@@ -105,12 +106,12 @@ func test_c015_da_mage_applies_pierce() -> void:
 
 func test_c019_shapeshifter_loak_copies_column_foe_and_gives_it_eternal() -> void:
 	var m := TB.make()
-	var foe := TB.unit(m, 1, 37, 0)            # Solomon, the Captain 26/20 Warrior
+	var foe := TB.unit(m, 1, 37, 0)            # Solomon, the Captain 20/14 Warrior (2026-11-03)
 	var loak := TB.summon(m, 0, 19, 0)
 	TB.choose_uids(m, [foe])                   # sole column foe: still chosen by the player
 	assert_int(m.status_count(foe, "eternal")).is_equal(1)
-	assert_int(m.atk_of(loak)).is_equal(26)
-	assert_int(m.def_of(loak)).is_equal(20)
+	assert_int(m.atk_of(loak)).is_equal(20)
+	assert_int(m.def_of(loak)).is_equal(14)
 	assert_str(m.unit_race(loak)).is_equal("Warrior")
 
 
@@ -123,7 +124,7 @@ func test_c020_spirit_bomb_copies_buffs_and_grows_per_opposing_unit() -> void:
 	var bomb := TB.summon(m, 0, 20, 0)
 	assert_int(m.status_count(bomb, "pierce")).is_equal(2)
 	assert_int(m.status_count(bomb, "nimble")).is_equal(1)
-	assert_int(m.atk_of(bomb)).is_equal(24)
+	assert_int(m.atk_of(bomb)).is_equal(18 + 4)               # 18 ATK (2026-11-03) + 4 per opposing unit
 
 
 func test_c021_shen_gains_protection_scales_with_exhaust_and_raises_cost() -> void:
@@ -133,7 +134,7 @@ func test_c021_shen_gains_protection_scales_with_exhaust_and_raises_cost() -> vo
 	assert_int(m.status_count(shen, "cleanse")).is_equal(1)    # 2026-10-17: Cleanse 3 -> 1
 	TB.card(m, 0, TB.WATER, "exhaust")
 	TB.card(m, 0, TB.WATER, "exhaust")
-	assert_int(m.atk_of(shen)).is_equal(50)
+	assert_int(m.atk_of(shen)).is_equal(0 + 2 * 10)           # 0/0 since 2026-11-03, +10 per Exhaust card
 	TB.kill(m, shen)
 	assert_str(m.cards[shen]["zone"]).is_equal("unit")
 	TB.kill(m, shen)
@@ -148,13 +149,14 @@ func test_c022_zorath_stops_adjacent_units_attacking() -> void:
 	assert_str(m.validate(1, {"t": "attack", "uid": friend})).contains("prevents adjacent")
 
 
-func test_c023_auric_pays_ten_hp_for_ten_atk() -> void:
+# 2026-11-03: the price and the gain are both 8 (were 10).
+func test_c023_auric_pays_eight_hp_for_eight_atk() -> void:
 	var m := TB.make()
 	var auric := TB.unit(m, 0, 23, 0)
 	TB.ability(m, auric)
-	TB.choose(m, ["gains +10 ATK"])
-	assert_int(m.atk_of(auric)).is_equal(40)    # 2026-10-17: Auric 30/16
-	assert_int(m.players[0]["hp"]).is_equal(50)
+	TB.choose(m, ["gains +8 ATK"])
+	assert_int(m.atk_of(auric)).is_equal(30 + 8)    # 2026-10-17: Auric 30/16
+	assert_int(m.players[0]["hp"]).is_equal(GameCore.START_HP - 8)
 
 
 func test_c161_neva_exhausts_for_ten_damage_per_eternal() -> void:
@@ -249,7 +251,7 @@ func test_c031_cosmic_dragon_pierce_and_medic_on_destruction() -> void:
 	var friend := TB.unit(m, 0, TB.WATER, 1)
 	TB.kill(m, cd)
 	TB.choose_uids(m, [friend])
-	assert_int(m.status_count(friend, "medic")).is_equal(3)
+	assert_int(m.status_count(friend, "medic")).is_equal(6)       # 6 Medic since 2026-11-03 (was 3)
 
 
 func test_c032_frost_wyvern_destroys_power_and_chills_column() -> void:
@@ -303,8 +305,8 @@ func test_c038_lone_warrior_weakens_per_adjacent_ally_and_refuses_buffs() -> voi
 	var lw := TB.unit(m, 0, 38, 1)
 	TB.unit(m, 0, TB.WATER, 0)
 	TB.unit(m, 0, TB.WATER, 2)
-	assert_int(m.atk_of(lw)).is_equal(18)
-	assert_int(m.def_of(lw)).is_equal(6)
+	assert_int(m.atk_of(lw)).is_equal(24 - 2 * 6)                # 24/16 since 2026-11-03
+	assert_int(m.def_of(lw)).is_equal(16 - 2 * 6)
 	m.apply_status(lw, "eternal", 1)
 	assert_int(m.status_count(lw, "eternal")).is_equal(0)
 
@@ -316,14 +318,16 @@ func test_c039_steadfast_soldier_survives_battle_with_30_atk() -> void:
 	var ss := TB.unit(m, 0, 39, 0)
 	TB.attack(m, big, ss)
 	assert_str(m.cards[ss]["zone"]).is_equal("unit")
-	assert_int(m.players[0]["hp"]).is_equal(44)
+	assert_int(m.players[0]["hp"]).is_equal(GameCore.START_HP - (30 - 16))   # Steadfast Soldier 16 ATK (2026-11-03)
 
 
+# 2026-11-03: the Fusion Summon comes first, then Void Basilisk is exhausted (it used to be the cost).
 func test_c067_void_basilisk_exhausts_itself_to_fuse_from_spent() -> void:
 	var m := TB.make()
 	var vb := TB.unit(m, 0, 67, 0)
-	var beast := TB.card(m, 0, 4, "spent")
-	var dragon := TB.card(m, 0, 2, "spent")
+	# 2026-11-03 Bastion Wyrm: a unit with 20 or more ATK or DEF + a Physical unit.
+	var beast := TB.card(m, 0, 28, "spent")               # Guardian of the Forest 12/22
+	var dragon := TB.card(m, 0, 116, "spent")             # Basic Dragon (Physical)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.ability(m, vb)
 	TB.choose_uids(m, [wyrm])
@@ -338,36 +342,41 @@ func test_c067_void_basilisk_exhausts_itself_to_fuse_from_spent() -> void:
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 
 
+# 2026-11-03: the Fusion Summon comes first, then Seppuku is destroyed, so its own zone is not
+# offered for the Fusion unit any more (it used to leave first, as a cost).
 func test_c068_sepukku_destroys_itself_to_fuse() -> void:
 	var m := TB.make()
 	var sp := TB.unit(m, 0, 68, 0)
-	var beast := TB.unit(m, 0, 4, 1)
-	var dragon := TB.unit(m, 0, 2, 2)
+	var beast := TB.unit(m, 0, 4, 1, "atk", 20, 8)       # 20 or more ATK or DEF (2026-11-03 Bastion Wyrm)
+	var dragon := TB.unit(m, 0, 116, 2)                  # Basic Dragon (Physical)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	TB.ability(m, sp)
 	TB.choose_uids(m, [wyrm])
 	# F04-22 / F07: materials are picked one by one, then the zone; the stance choice commits.
 	TB.choose_uids(m, [beast])
 	TB.choose_uids(m, [dragon])
-	TB.choose(m, ["Front row, column 1"])                # Seppuku's own zone: it leaves first
+	assert_array(CF.labels(m)).not_contains(["Front row, column 1"])   # Seppuku still holds it
+	TB.choose(m, ["Front row, column 2"])                # a material's zone, freed by the Tribute
 	TB.choose(m, ["Attack"])
 	assert_str(m.cards[sp]["zone"]).is_equal("spent")
 	assert_str(m.cards[wyrm]["zone"]).is_equal("unit")
 
 
-func test_c069_magentric_gives_adjacent_unit_two_pierce() -> void:
+# 2026-11-03: the On Summon is an optional 1 Cleanse on an adjacent unit (was 2 Pierce).
+func test_c069_magentric_gives_adjacent_unit_one_cleanse() -> void:
 	var m := TB.make()
 	var friend := TB.unit(m, 0, TB.WATER, 1)
 	TB.summon(m, 0, 69, 0)
 	TB.choose_uids(m, [friend])                 # sole adjacent unit: still chosen by the player
-	assert_int(m.status_count(friend, "pierce")).is_equal(2)
+	assert_int(m.status_count(friend, "cleanse")).is_equal(1)
+	assert_int(m.status_count(friend, "pierce")).is_equal(0)
 
 
 func test_c040_aleister_pays_one_ap_to_fuse() -> void:
 	var m := TB.make()
 	var al := TB.unit(m, 0, 40, 0)
-	var beast := TB.unit(m, 0, 4, 1)
-	var dragon := TB.unit(m, 0, 2, 2)
+	var beast := TB.unit(m, 0, 4, 1, "atk", 20, 8)       # 20 or more ATK or DEF (2026-11-03 Bastion Wyrm)
+	var dragon := TB.unit(m, 0, 116, 2)                  # Basic Dragon (Physical)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	m.players[0]["ap"] = 2
 	m.submit(0, {"t": "ability", "uid": al, "idx": 0})
@@ -387,7 +396,7 @@ func test_c070_krakeshin_gains_atk_when_moving() -> void:
 	assert_int(m.status_count(k, "nimble")).is_equal(3)
 	m.submit(0, {"t": "move", "uid": k})
 	TB.choose(m, ["Front row, column 2"])
-	assert_int(m.atk_of(k)).is_equal(22)
+	assert_int(m.atk_of(k)).is_equal(12 + 6)                 # 12 ATK, +6 per move (2026-11-03)
 
 
 func test_c071_faerie_flight_gains_three_medic_when_moving() -> void:
@@ -402,12 +411,12 @@ func test_c071_faerie_flight_gains_three_medic_when_moving() -> void:
 
 func test_c072_myth_wukong_switches_rows_and_bonus_at_end_of_turn() -> void:
 	var m := TB.make()
-	var wk := TB.unit(m, 0, 72, 0)
-	assert_int(m.def_of(wk)).is_equal(40)
+	var wk := TB.unit(m, 0, 72, 0)                         # 16/16, +16 DEF in front, +16 ATK behind (2026-11-03)
+	assert_int(m.def_of(wk)).is_equal(16 + 16)
 	TB.to_turn2(m)
 	assert_int(m.cards[wk]["slot"]).is_equal(3)
-	assert_int(m.atk_of(wk)).is_equal(40)
-	assert_int(m.def_of(wk)).is_equal(20)
+	assert_int(m.atk_of(wk)).is_equal(16 + 16)
+	assert_int(m.def_of(wk)).is_equal(16)
 
 
 func test_c073_mans_best_friend_searches_warrior_and_dies_for_column_warrior() -> void:
@@ -556,7 +565,7 @@ func test_c155_symbiote_spawn_still_boosts_its_protector() -> void:
 	var front := TB.unit(m, 0, TB.WATER, 0)
 	var sym := TB.summon(m, 0, 155, 3)
 	assert_int(m.status_count(sym, "eternal")).is_equal(1)
-	assert_int(m.atk_of(front)).is_equal(18)
+	assert_int(m.atk_of(front)).is_equal(8 + 6)               # +6 since 2026-11-03 (was +10)
 
 
 func test_c157_symbiote_siphonophore_needs_protection_for_its_boost() -> void:
@@ -564,7 +573,7 @@ func test_c157_symbiote_siphonophore_needs_protection_for_its_boost() -> void:
 	var a := TB.unit(m, 0, TB.WATER, 0)
 	var far := TB.unit(m, 0, TB.WATER, 2)
 	TB.unit(m, 0, 157, 3)
-	assert_int(m.atk_of(a)).is_equal(18)
+	assert_int(m.atk_of(a)).is_equal(8 + 6)                   # +6 since 2026-11-03 (was +10)
 	assert_int(m.atk_of(far)).is_equal(8)
 
 

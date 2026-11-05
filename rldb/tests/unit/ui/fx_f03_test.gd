@@ -60,7 +60,7 @@ func test_arcane_materials_from_spent_are_anonymous_to_the_opponent() -> void:
 	var p: int = m.active
 	TB.card(m, p, TB.WATER, "spent")
 	TB.card(m, p, TB.FIRE, "spent")
-	var ar := TB.card(m, p, 172, "extra")
+	var ar := TB.card(m, p, 171, "extra")                    # Flying Sandworm 2A (Tyde is 3A since 2026-11-03)
 	m.players[p]["ap"] = 5
 	assert_str(m.submit(p, {"t": "arcane", "uid": ar})).is_empty()
 	var pd := m.pending

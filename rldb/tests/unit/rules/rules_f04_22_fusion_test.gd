@@ -9,10 +9,17 @@ extends GdUnitTestSuite
 ## Methods: Seppuku (68), Void Basilisk (67), Magentric (69), Aleister the Invoker (40),
 ## Fusion Laboratory (89), Fusion Ceremony cast (82) and set-activated, Tag Team - S (8, On Summon),
 ## and Unstable Fusions (137, Hand materials through Fusion Ceremony).
+## 2026-11-03 (card sheet, changed on purpose): Seppuku and Void Basilisk Fusion Summon first; their
+## "then Destroy / Exhaust this Unit" runs right after the Fusion unit lands. So their own zone is not
+## free for the Fusion unit, and the self-destruction comes after the response window and the summon.
 
-const WYRM := 93            # Bastion Wyrm: Beast + Dragon
+## The Fusion unit every method summons. Bastion Wyrm (Beast + Dragon before 3 Nov) now needs a
+## 20+ ATK-or-DEF unit, so the flow uses Owlbear Druid (Beast + Physical, new on 3 Nov): two plain
+## Basic Unit materials and no On Summon prompt, as Bastion Wyrm had.
+const WYRM := 189           # Owlbear Druid: Beast Unit + Physical Unit
+const WYRM_NAME := "Owlbear Druid"
 const BEAST := 4            # Basic Beast (Water)
-const DRAGON := 2           # Basic Dragon (Water)
+const DRAGON := 116         # Basic Dragon (Physical): the Physical material
 const SEPUKKU := 68
 const BASILISK := 67
 const MAGENTRIC := 69
@@ -40,7 +47,9 @@ func _cancel(m: MatchEngine) -> String:
 
 ## Builds one method's scenario. Returns {m, start: Callable(m) -> String, src, answers, cost}.
 ## `answers`: Fusion unit, materials, zone (the committing step; B3: Attack stance, no prompt).
-## `cost`: a log needle for the cost / self-destruction that must come before the summon.
+## `cost`: a log needle for the cost / activation that must come before the summon.
+## `after`: (Seppuku, Void Basilisk) a log needle for the self-destruction / exhaustion that must
+## come after the summon (2026-11-03).
 func _setup(method: String) -> Dictionary:
 	var m := TB.make()
 	m.players[0]["ap"] = 5
@@ -51,14 +60,16 @@ func _setup(method: String) -> Dictionary:
 			var sp := TB.unit(m, 0, SEPUKKU, 0)
 			var b := TB.unit(m, 0, BEAST, 1)
 			var dr := TB.unit(m, 0, DRAGON, 2)
+			# Seppuku keeps its zone until after the summon: the Fusion unit takes a material's zone.
 			d.merge({"src": sp, "mats": [b, dr], "cmd": {"t": "ability", "uid": sp, "idx": 0},
-				"answers": [wyrm, b, dr, 0], "cost": "Seppuku is destroyed"})
+				"answers": [wyrm, b, dr, 1], "cost": "activates Seppuku", "after": "Seppuku is destroyed"})
 		"basilisk":
 			var vb := TB.unit(m, 0, BASILISK, 0)
 			var b := TB.card(m, 0, BEAST, "spent")
 			var dr := TB.card(m, 0, DRAGON, "spent")
 			d.merge({"src": vb, "mats": [b, dr], "cmd": {"t": "ability", "uid": vb, "idx": 0},
-				"answers": [wyrm, b, dr, 0], "cost": "activates Void Basilisk"})
+				"answers": [wyrm, b, dr, 1], "cost": "activates Void Basilisk",
+				"after": "Void Basilisk moves from Unit to Exhaust"})
 		"magentric":
 			var mg := TB.unit(m, 0, MAGENTRIC, 0)
 			var dr := TB.unit(m, 0, DRAGON, 1)
@@ -155,28 +166,32 @@ func test_f04_22_zone_commits_then_pays_and_summons_in_order() -> void:
 			assert_str(m.cards[mat]["zone"]).override_failure_message(method).is_not_equal("unit")
 			assert_str(m.cards[mat]["zone"]).override_failure_message(method).is_not_equal("hand")
 		var i_cost := TB.log_index(m, d["cost"])
-		var i_sum := TB.log_index(m, "summons Bastion Wyrm")
+		var i_sum := TB.log_index(m, "summons " + WYRM_NAME)
 		assert_int(i_cost).override_failure_message("%s cost log\n%s" % [method, TB.log_text(m)]).is_greater_equal(log_n)
 		assert_int(i_sum).override_failure_message("%s summon log" % method).is_greater(i_cost)
+		if d.has("after"):
+			var i_after := TB.log_index(m, d["after"])
+			assert_int(i_after).override_failure_message("%s: self-destruction after the summon\n%s" % [method, TB.log_text(m)]).is_greater(i_sum)
 
 
-func test_f04_22_sepukku_destroyed_after_the_zone_and_its_zone_is_offered() -> void:
+# 2026-11-03 (changed on purpose): Seppuku Fusion Summons first and is destroyed afterwards, so its own
+# zone is still taken at the committing zone prompt (it used to leave first and offer its zone).
+func test_f04_22_sepukku_destroyed_after_the_summon_and_its_zone_is_not_offered() -> void:
 	var d := _setup("sepukku")
 	var m: MatchEngine = d["m"]
 	var sp: int = d["src"]
 	m.submit(0, d["cmd"])
 	_answer(m, d["wyrm"])
-	# Seppuku is never its own material.
-	for o in m.pending["options"]:
-		assert_int(int(o.get("uid", -1))).is_not_equal(sp)
 	_answer(m, d["mats"][0])
 	_answer(m, d["mats"][1])
 	var slots: Array = m.pending["options"].map(func(o): return o["v"])
-	assert_bool(0 in slots).is_true()                   # Seppuku's own zone (it leaves first)
+	assert_bool(0 in slots).is_false()                  # Seppuku's own zone is still taken
+	assert_bool(1 in slots).is_true()                   # a material's zone, freed by the Tribute
 	assert_str(m.cards[sp]["zone"]).is_equal("unit")   # still there at the committing zone prompt
-	_answer(m, 0)
+	_answer(m, 1)
 	assert_str(m.cards[sp]["zone"]).is_equal("spent")
-	assert_int(m.cards[d["wyrm"]]["slot"]).is_equal(0)
+	assert_int(m.cards[d["wyrm"]]["slot"]).is_equal(1)
+	assert_int(TB.log_index(m, "Seppuku is destroyed")).is_greater(TB.log_index(m, "summons " + WYRM_NAME))
 
 
 func test_f04_22_tag_team_trigger_cancel_and_stance() -> void:
@@ -214,7 +229,7 @@ func test_f04_22_tag_team_trigger_cancel_and_stance() -> void:
 func test_f04_22_illegal_and_stale_selections_are_rejected() -> void:
 	var d := _setup("aleister")
 	var m: MatchEngine = d["m"]
-	var other := TB.unit(m, 0, TB.WATER, 4)               # a Mage: neither Beast nor Dragon
+	var other := TB.unit(m, 0, TB.WATER, 4)               # a Water Mage: neither Beast nor Physical
 	m.submit(0, d["cmd"])
 	_answer(m, d["wyrm"])
 	var id_mat: int = m.pending["id"]
@@ -252,11 +267,11 @@ func test_f04_22_material_lost_in_response_window_fails_cleanly() -> void:
 	assert_str(TB.log_text(m)).contains("no longer available")
 
 
-## Review 2026-10-17: a method's self-destruction / exhaustion is a cost, paid right after the
-## committing choice and before the response window (F04-22: "After Confirm, costs and
-## self-destruction resolve, then the summon"). Before the fix the paying unit was still on the
-## Field in the window; if it was destroyed there, Void Basilisk's cost then pulled it from Spent.
-func test_f04_22_self_cost_is_paid_before_the_response_window() -> void:
+## 2026-11-03 (changed on purpose; was review 2026-10-17 "the self-destruction is a cost paid before
+## the response window"): Seppuku's destruction and Void Basilisk's exhaustion now follow the Fusion
+## Summon ("Fusion Summon ..., then Exhaust/Destroy this Unit"). The source is still on the Field in
+## the response window, and pays only once the Fusion unit has landed.
+func test_f04_22_self_destruction_follows_the_summon_after_the_response_window() -> void:
 	for method in ["sepukku", "basilisk"]:
 		var d := _setup(method)
 		var m: MatchEngine = d["m"]
@@ -267,16 +282,37 @@ func test_f04_22_self_cost_is_paid_before_the_response_window() -> void:
 		for v in d["answers"]:
 			assert_str(_answer(m, v)).override_failure_message(method).is_empty()
 		assert_str(TB.pend_kind(m)).override_failure_message(method).is_equal("trap_response")
-		var paid_zone := "spent" if method == "sepukku" else "exhaust"
-		assert_str(m.cards[src]["zone"]).override_failure_message("%s: cost not paid before the window" % method).is_equal(paid_zone)
+		assert_str(m.cards[src]["zone"]).override_failure_message("%s: paid before the summon" % method).is_equal("unit")
+		assert_str(m.cards[d["wyrm"]]["zone"]).override_failure_message(method).is_equal("extra")
 		while not m.pending.is_empty() and TB.pend_kind(m) == "trap_response":
 			TB.choose(m, ["Skip"])
+		var paid_zone := "spent" if method == "sepukku" else "exhaust"
 		assert_str(m.cards[d["wyrm"]]["zone"]).override_failure_message(method).is_equal("unit")
 		assert_str(m.cards[src]["zone"]).override_failure_message(method).is_equal(paid_zone)
 
 
-## A self-destruction prevented by Eternal pays nothing more: no window, no summon, materials kept.
-func test_f04_22_sepukku_saved_by_eternal_ends_before_the_window() -> void:
+## The hazard the 2026-10-17 review guarded against, kept under the 3 Nov order: if Void Basilisk is
+## destroyed during the response window, its "then Exhaust this Unit" must not pull it from Spent.
+func test_f04_22_basilisk_destroyed_in_the_window_is_not_exhausted_from_spent() -> void:
+	var d := _setup("basilisk")
+	var m: MatchEngine = d["m"]
+	TB.set_card(m, 1, TRAP, 0)
+	m.config["hidden_response_windows"] = true
+	var vb: int = d["src"]
+	m.submit(0, d["cmd"])
+	for v in d["answers"]:
+		assert_str(_answer(m, v)).is_empty()
+	assert_str(TB.pend_kind(m)).is_equal("trap_response")
+	m.destroy(vb, "effect", -1, 1)                        # stands in for an opponent's response
+	while not m.pending.is_empty() and TB.pend_kind(m) == "trap_response":
+		TB.choose(m, ["Skip"])
+	assert_str(m.cards[vb]["zone"]).is_equal("spent")
+	assert_int(TB.log_index(m, "Void Basilisk moves from Spent to Exhaust")).is_equal(-1)
+
+
+## 2026-11-03 (changed on purpose; it used to end the Fusion before the window): a Seppuku saved by
+## Eternal still completes the Fusion Summon; Eternal is used up and Seppuku stays on the Field.
+func test_f04_22_sepukku_saved_by_eternal_still_completes_the_summon() -> void:
 	var d := _setup("sepukku")
 	var m: MatchEngine = d["m"]
 	TB.set_card(m, 1, TRAP, 0)
@@ -285,8 +321,11 @@ func test_f04_22_sepukku_saved_by_eternal_ends_before_the_window() -> void:
 	m.submit(0, d["cmd"])
 	for v in d["answers"]:
 		_answer(m, v)
+	while not m.pending.is_empty() and TB.pend_kind(m) == "trap_response":
+		TB.choose(m, ["Skip"])
 	assert_bool(m.pending.is_empty()).override_failure_message(str(m.pending)).is_true()
+	assert_str(m.cards[d["wyrm"]]["zone"]).is_equal("unit")
 	assert_str(m.cards[d["src"]]["zone"]).is_equal("unit")
-	assert_str(m.cards[d["wyrm"]]["zone"]).is_equal("extra")
+	assert_int(m.status_count(d["src"], "eternal")).is_equal(0)
 	for mat in d["mats"]:
-		assert_str(m.cards[mat]["zone"]).is_equal("unit")
+		assert_str(m.cards[mat]["zone"]).is_equal("spent")
