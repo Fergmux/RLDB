@@ -19,12 +19,13 @@ const RADIUS_TALL := 8.0
 const TEXT_WELL := Color(0.847, 0.8, 0.69, 0.07)
 
 ## Geometry (base units): rects are [x, y, w, h], points [x, y]; "gem_r" is the cost gem radius.
-## "icons" is [x0, x1, bottom y, icon size, rows].
+## "icons" is [x0, x1, bottom y, icon size, rows]. L8: the status badges grew (field 14 -> 17, tall
+## 13 -> 15) so the enamelled badges read at a glance; a field row still holds four.
 const FIELD := {"art": [3, 3, 79, 79], "banner": [2, 73, 81, 19], "gem": [12.5, 12.5], "gem_r": 9.8, "pip": [72.5, 12.5],
-	"icons": [4, 81, 72, 14.0, 2], "atk": [1, 93, 36, 34], "def": [48, 93, 36, 34], "text": [5, 94, 75, 31],
+	"icons": [4, 81, 72, 17.0, 2], "atk": [1, 93, 36, 34], "def": [48, 93, 36, 34], "text": [5, 94, 75, 31],
 	"f_name": 10.5, "f_name_min": 9.0, "f_gem": 12.5, "f_stat": 17.0, "f_text": 8.5}
 const TALL := {"art": [4, 4, 112, 112], "banner": [2, 100, 116, 19], "gem": [16, 16], "gem_r": 11.5, "pip": [104, 16],
-	"icons": [6, 114, 98, 13.0, 2], "icons_unit": [35, 85, 98, 13.0, 3], "atk": [0, 66, 36, 34], "def": [84, 67, 36, 33],
+	"icons": [6, 114, 98, 15.0, 2], "icons_unit": [35, 85, 98, 15.0, 3], "atk": [0, 66, 36, 34], "def": [84, 67, 36, 33],
 	"line": [6, 120, 108, 10], "text": [4, 131, 112, 45],
 	"f_name": 12.5, "f_name_min": 8.0, "f_gem": 14.0, "f_stat": 18.0, "f_line": 9.5, "f_text": 10.0}
 ## Smallest rules-text size, as a fraction of the layout's text size.
