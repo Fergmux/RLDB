@@ -191,9 +191,43 @@ func item_for_uid(uid: int) -> Dictionary:
 	return {}
 
 
+## L7 (owner feedback 2026-11-05): the choice I last answered, {id: its pending id, view: the view
+## shown when the answer was sent}; {} when none is outstanding.
+var _answered: Dictionary = {}
+
+
+## L7: true while the choice shown is one I have already answered: its reply has not arrived yet
+## (online), or a Spell/Trap spotlight still holds the board as it was before the answer. The
+## targeting arrow, the combat preview and further picks stay off meanwhile. A reply that still
+## shows the same choice (the answer was refused) ends it, so the choice can be answered again.
+func answered() -> bool:
+	if _answered.is_empty():
+		return false
+	var pd := gs.pending()
+	if pd.is_empty() or not pd.get("mine", false) or int(pd.get("id", -1)) != int(_answered["id"]):
+		_answered = {}
+		return false
+	if is_same(gs.view, _answered["view"]):
+		return true            # no reply yet
+	# A newer view arrived: only a held spotlight (the board still shows the old state) keeps it.
+	if not is_same(gs.mv, gs.view.get("match")):
+		return true
+	_answered = {}
+	return false
+
+
+## L7: marks my pending choice `pd` answered and hides the targeting arrow at once, before the
+## answer is sent (a local host replies, and its effects start, inside the send).
+func _answering(pd: Dictionary) -> void:
+	_answered = {"id": int(pd.get("id", -1)), "view": gs.view}
+	gs.targeting.hide_arrow()
+
+
 ## Picks option i of my choice: toggles it in a multi-selection, else answers at once.
 func pick_option(i: int) -> void:
 	var pd := gs.pending()
+	if pd.is_empty() or not pd.get("mine", false) or answered():
+		return                 # L7: already answered (a double click while the reply is on its way)
 	if pd["max"] > 1:
 		# F08: never silently overpay an exact total; an unofferable option cannot be picked either.
 		if not (i in gs.multi) and bool(pd.get("total_exact", false)):
@@ -214,15 +248,27 @@ func pick_option(i: int) -> void:
 			Sfx.play("select")
 		gs.render_all()
 		return
-	Sfx.play("confirm")
+	# L7: a card or zone picked on the board locks in (target_lock); a banner answer confirms.
+	var on_board := board_targeting() and _is_board_option(pd, i)
+	_answering(pd)
+	Sfx.play("target_lock" if on_board else "confirm")
 	gs.send({"t": "choose", "id": pd["id"], "indices": [i]})
+
+
+## True when option i of choice `pd` is a card or zone (picked on the board, in the Hand or the tray).
+static func _is_board_option(pd: Dictionary, i: int) -> bool:
+	for o in pd.get("options", []):
+		if int(o["i"]) == i:
+			return o.has("ref") or o.has("slot") or o.has("card")
+	return false
 
 
 ## Sends the multi-selection once it has at least the minimum number of picks.
 func confirm_multi() -> void:
 	var pd := gs.pending()
-	if pd.is_empty() or MatchView.multi_pick_error(pd, gs.multi) != "":   # F03-04 exact totals
+	if pd.is_empty() or answered() or MatchView.multi_pick_error(pd, gs.multi) != "":   # F03-04 exact totals
 		return
+	_answering(pd)             # L7: the arrow goes with the final pick
 	Sfx.play("confirm")
 	var picks := gs.multi.duplicate()
 	gs.multi = []
@@ -255,8 +301,9 @@ func cancel() -> bool:
 		return _went_back()
 	var did := false
 	var pd := gs.pending()
-	if not pd.is_empty() and pd["mine"] and pd["cancellable"]:
+	if not pd.is_empty() and pd["mine"] and pd["cancellable"] and not answered():
 		gs.multi = []
+		_answering(pd)         # L7: the arrow goes at once
 		Sfx.play("cancel")
 		gs.send({"t": "cancel", "id": pd["id"]})
 		did = true

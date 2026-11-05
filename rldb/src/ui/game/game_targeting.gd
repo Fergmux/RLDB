@@ -16,14 +16,39 @@ func _init(screen: GameScreen) -> void:
 	gs = screen
 
 
+## L7: id of the board-targeting choice whose arrow has armed (target_arm played), or -1.
+var _armed_id: int = -1
+
+
+## L7 (owner feedback 2026-11-05): hides the arrow at once (a target was just picked or the choice
+## answered), before any animation of the answer plays. `update_arrow` keeps it hidden while the
+## answered choice is still shown (GameSelection.answered).
+func hide_arrow() -> void:
+	hover_opt = -1
+	var arrow := gs.arrow
+	if arrow != null and arrow.on:
+		arrow.on = false
+		arrow.verdict = ""
+		arrow.queue_redraw()
+
+
 ## Updates the arrow layer (called every frame).
 func update_arrow() -> void:
 	var arrow := gs.arrow
+	if arrow == null:
+		return
 	var pv := gs.preview
 	var on := false
 	var hostile := false
 	var overlay_up := gs.overlays.overlay.visible
-	if arrow != null and not gs.mv.is_empty() and not overlay_up and gs.selection.board_targeting():
+	var answered := gs.selection.answered()    # L7: the pick is made: no arrow while its answer plays
+	var targeting := not gs.mv.is_empty() and gs.selection.board_targeting()
+	if targeting and not answered:
+		var pid := int(gs.pending().get("id", -1))
+		if pid != _armed_id:
+			_armed_id = pid
+			Sfx.play("target_arm")
+	if not gs.mv.is_empty() and not overlay_up and targeting and not answered:
 		var src := _source_rect()
 		var dst := _hovered_target_rect()
 		if src.size != Vector2.ZERO and dst.size != Vector2.ZERO:
@@ -31,7 +56,7 @@ func update_arrow() -> void:
 			arrow.a = inv * src.get_center()
 			arrow.b = inv * dst.get_center()
 			on = true
-	elif arrow != null and not overlay_up:
+	elif not overlay_up and not answered and not targeting:
 		# Deciding a Trap response to an attack: the enemy's attack arrow, attacker -> its target.
 		var cause: Dictionary = gs.pending().get("cause", {}) if gs.pending().get("mine", false) else {}
 		var at: Dictionary = cause.get("attacker", {})
@@ -146,6 +171,8 @@ func _hovered_target_rect() -> Rect2:
 ## The pending option the pointer is on: a banner/sidebar option button, or a highlighted
 ## card / zone on the board or in the Hand. Read-only (arrow and combat preview only).
 func option_under_pointer() -> int:
+	if gs.selection.answered():
+		return -1              # L7: the choice is answered; nothing is aimed at any more
 	if hover_opt != -1:
 		return hover_opt
 	var m := gs.get_global_mouse_position()

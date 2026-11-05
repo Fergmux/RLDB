@@ -72,6 +72,121 @@ func test_cancel_is_a_real_button_as_wide_as_the_panel() -> void:
 
 
 func test_cancel_button_cancels_the_choice() -> void:
+	await _cancel_case()
+
+
+# ---------------------------------------------------------------- L7
+
+const ASSASSINATE := 84     # Spell: destroy a unit with 20 DEF or less (a Spell spotlight follows)
+
+
+## A seat that holds my commands until flush() (an online reply on its way).
+class HeldSeat extends SeatClient:
+	var inner: SeatClient
+	var queued: Array = []
+
+	func _init(i: SeatClient) -> void:
+		inner = i
+		seat = i.seat
+		last_view = i.last_view
+		i.view_changed.connect(deliver)
+
+	func send(cmd: Dictionary) -> void:
+		queued.append(cmd)
+
+	func flush() -> void:
+		var q := queued.duplicate()
+		queued.clear()
+		for c in q:
+			inner.send(c)
+
+
+func _option_for(p: int, slot: int) -> int:
+	return gs.selection.option_for_ref(p, "unit", slot)
+
+
+func _aim(opt: int) -> void:
+	gs.targeting.hover_opt = opt          # the pointer over the target
+	gs.targeting.update_arrow()
+
+
+func test_arrow_hides_the_moment_a_spell_target_is_picked_and_stays_hidden_in_the_spotlight() -> void:
+	# Arrange: a targeted Spell in hand, the opponent's unit to destroy, aimed at.
+	var sp := TB.card(m, me, ASSASSINATE)
+	TB.unit(m, 1 - me, TB.WATER, 1)
+	m.players[me]["ap"] = 6
+	host.broadcast()
+	gs.skip_effects()
+	for a in gs.mv.get("actions", []):
+		if String(a["t"]) == "cast" and int(a.get("uid", -1)) == sp:
+			gs.action_row.run_action(sp, a)
+	gs.skip_effects()
+	var pid := int(m.pending.get("id", -1))
+	var opt := _option_for(1 - me, 1)
+	assert_int(opt).is_not_equal(-1)
+	_aim(opt)
+	assert_bool(gs.arrow.on).is_true()
+	# Act: pick the target.
+	gs.selection.pick_option(opt)
+	# Assert: hidden at once, and still hidden while the spotlight holds the old board (whose
+	# pending choice is still the one just answered) even with the pointer on the target.
+	assert_bool(gs.arrow.on).is_false()
+	assert_int(int(gs.pending().get("id", -2))).override_failure_message("the spotlight should hold the old board").is_equal(pid)
+	_aim(opt)
+	assert_bool(gs.arrow.on).is_false()
+	assert_int(gs.targeting.option_under_pointer()).is_equal(-1)
+	gs.skip_effects()
+	_aim(-1)
+	assert_bool(gs.arrow.on).is_false()
+
+
+func test_arrow_stays_hidden_until_an_online_reply_and_a_second_pick_is_not_sent() -> void:
+	# Arrange: my commands wait (online); a targeted ability is aimed.
+	var held: HeldSeat = auto_free(HeldSeat.new(host.seats[me]))
+	add_child(held)
+	await gs.attach(held)
+	_open_target_pick()
+	held.flush()                          # the ability itself goes through
+	gs.skip_effects()
+	var opt := _option_for(1 - me, 1)
+	assert_int(opt).is_not_equal(-1)
+	_aim(opt)
+	assert_bool(gs.arrow.on).is_true()
+	# Act: pick, then click again before the reply.
+	gs.selection.pick_option(opt)
+	gs.selection.pick_option(opt)
+	_aim(opt)
+	# Assert: hidden while the reply is on its way; one answer sent.
+	assert_bool(gs.arrow.on).is_false()
+	assert_int(held.queued.size()).is_equal(1)
+	held.flush()
+	gs.skip_effects()
+	assert_bool(m.pending.is_empty()).is_true()
+
+
+func test_a_refused_answer_lets_the_choice_be_aimed_again() -> void:
+	# Arrange
+	var held: HeldSeat = auto_free(HeldSeat.new(host.seats[me]))
+	add_child(held)
+	await gs.attach(held)
+	_open_target_pick()
+	held.flush()
+	gs.skip_effects()
+	var opt := _option_for(1 - me, 1)
+	gs.selection.pick_option(opt)
+	_aim(opt)
+	assert_bool(gs.arrow.on).is_false()
+	# Act: the authority's reply still shows the same choice (the answer was refused).
+	held.queued.clear()
+	host.broadcast()
+	gs.skip_effects()
+	_aim(opt)
+	# Assert
+	assert_bool(gs.selection.answered()).is_false()
+	assert_bool(gs.arrow.on).is_true()
+
+
+func _cancel_case() -> void:
 	# Arrange
 	_open_target_pick()
 	await await_idle_frame()
