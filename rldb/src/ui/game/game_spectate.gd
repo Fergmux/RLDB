@@ -99,7 +99,10 @@ func build(row: HBoxContainer, before: Control) -> void:
 	row.move_child(lobby_button, before.get_index())
 	_chip = CountChip.new()
 	_chip.name = "LobbyChip"
-	lobby_button.add_child(_chip)
+	# L12 (owner, 5 Nov): View lobby lives only in the in-game menu, so the button stays hidden and
+	# the spectator count rides on the Menu button instead (the menu item names it too).
+	var host_btn: Control = gs.menu.menu_button if gs.menu.menu_button != null else lobby_button
+	host_btn.add_child(_chip)
 	# Pinned to the button's top-right corner (like the Chat button's unread badge).
 	_chip.anchor_left = 1.0
 	_chip.anchor_right = 1.0
@@ -171,15 +174,18 @@ func render() -> void:
 	var net: Dictionary = gs.view.get("net", {})
 	var names: Array = gs.view.get("names", ["", ""])
 	var sig := hash([net.get("spectators", []), net.get("people", []), net.get("spectator", false), net.get("follow", -1), net.get("allowed", false),
-		names, net.get("spectator_count", 0), net.get("opponent_connected", true), gs.is_network()])
+		names, net.get("spectator_count", 0), net.get("opponent_connected", true), gs.is_network(),
+		gs.view.get("scores"), gs.view.get("history"), gs.view.get("stage")])   # L26: the series section
 	if sig == _sig:
 		return
 	_sig = sig
 	var list := watchers()
-	lobby_button.visible = gs.is_network()
+	lobby_button.visible = false   # L12: View lobby is in the in-game menu only
 	var count := int(net.get("spectator_count", list.size())) if gs.is_spectator() else list.size()
 	_chip.set_count(count)
 	lobby_button.tooltip_text = "See who is at this table: both players and %s" % (("%d spectator%s" % [count, "" if count == 1 else "s"]) if count > 0 else "no spectators yet")
+	if gs.menu.menu_button != null:
+		gs.menu.menu_button.tooltip_text = "Menu (Esc)" if count <= 0 else "Menu (Esc) · %d watching: View lobby is in the menu" % count
 	if gs.is_spectator():
 		var follow := int(net.get("follow", 0))
 		var who := String(names[follow]) if follow < names.size() else ""
@@ -232,6 +238,13 @@ func _render_list() -> void:
 	var list := watchers()
 	var spec := gs.is_spectator()
 	panel.set_tag("%d watching" % list.size() if not list.is_empty() else "")
+	# L26 (owner, 5 Nov): the series results in full at the top of the list (more than one game).
+	if SeriesResults.shows_for(gs.view):
+		_list.add_child(_section("Series", "Best of %d" % int(gs.view.get("best_of", 3))))
+		var sr := SeriesResults.new().setup(SeriesResults.model(gs.view, gs.me()))
+		sr.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_list.add_child(sr)
+		_list.add_child(_gap(6))
 	_list.add_child(_section("Players", "2"))
 	for p in players():
 		_list.add_child(_player_row(p))

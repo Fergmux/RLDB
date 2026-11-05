@@ -113,6 +113,10 @@ var _held_gen: int = 0
 static var _coin_shown: Dictionary = {}
 ## The game-1 coin flip while it plays (null otherwise).
 var _coin: CoinFlip
+## L14: games ("<save id>#<game no>") whose opening deal this screen has played.
+var _deal_shown: Dictionary = {}
+## L14: seconds from a game 2+ first view to its opening deal (the series modal leaves meanwhile).
+const OPENING_DEAL_DELAY := 0.3
 
 
 func _init() -> void:
@@ -357,6 +361,7 @@ func _apply_view(v: Dictionary, quiet: bool = false) -> void:
 	render_all()
 	prompt.show_log_toasts()
 	_maybe_coin_flip()
+	_maybe_opening_deal()
 	if not events.is_empty():
 		fx.play(events, prev_mv)
 		if fx.gating():
@@ -470,6 +475,31 @@ func _coin_gone() -> void:
 	_coin = null
 	if String(view.get("stage", "")) == "game" or String(view.get("stage", "")) == "":
 		menu.raise_top_strip(false)
+
+
+## L14 (owner, 5 Nov): games 2+ of a series open like game 1. The first view of a new game skips its
+## effects (_collect_fx), so the opening draw was never animated; game 1's coin flip deals the hands
+## in afterwards, but later games have no coin and the player going first saw their hand simply
+## appear. Now the hands wait hidden while the series modal leaves, then are dealt exactly as after
+## the coin (_deal_after_coin). Once per game (a re-render or reconnect never deals again), for the
+## player going first, the one going second (their hand is still empty; the opponent's fades in)
+## and spectators alike.
+func _maybe_opening_deal() -> void:
+	if mv.is_empty() or view.get("stage", "") != "game" or int(view.get("game_no", 0)) < 2 or int(mv.get("turn", 0)) != 1:
+		return
+	if coin_playing():
+		return
+	var key := "%s#%d" % [String(view.get("save_id", "local")), int(view.get("game_no", 0))]
+	if _deal_shown.has(key):
+		return
+	_deal_shown[key] = true
+	if UIStyle.reduce_motion:
+		return
+	hand.layer.modulate.a = 0.0
+	board.opp_hand_box.modulate.a = 0.0
+	get_tree().create_timer(UIStyle.dur(OPENING_DEAL_DELAY)).timeout.connect(func():
+		if is_instance_valid(self) and is_inside_tree():
+			_deal_after_coin(), CONNECT_ONE_SHOT)
 
 
 ## Shows the hands once the coin flip is done: mine dealt in from the draw pile, the opponent's

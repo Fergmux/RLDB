@@ -135,8 +135,10 @@ func test_spectators_list_toggle_tooltips_and_state(timeout := 30000) -> void:
 	await _net()
 	var gs := await _screen(host.local_seat)
 	# J22 (22 Oct): the players' "n watching" badge became the always-present View lobby button.
-	assert_bool(gs.spectate.lobby_button.visible).is_true()
+	assert_bool(gs.spectate.lobby_button.visible).is_false()   # L12: View lobby is in the menu only
+	assert_bool((gs.menu.items["spectators"] as Button).visible).is_true()
 	assert_bool(await _wait(func(): return gs.spectate._chip.visible)).is_true()
+	assert_object(gs.spectate._chip.get_parent()).is_same(gs.menu.menu_button)   # L12: the count rides on Menu
 	assert_str((gs.menu.items["spectators"] as Button).text).is_equal("View lobby (1 watching)")
 	gs.spectate.toggle_list()
 	var t: Button = gs.spectate.panel.find_child("EyeToggle*", true, false)
