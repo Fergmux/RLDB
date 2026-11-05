@@ -159,10 +159,10 @@ func _evolve(e: Dictionary, prep: Dictionary) -> void:
 			return
 		_fx.unhide(w)
 		w.scale = Vector2(1.16, 1.16)
-		w.fx_glow = Color(EvolveGlyph.LIGHT, 1.0)
-		w.fx_flash = 0.85)
+		w.fx_glow = Color(EvolveGlyph.LIGHT, 0.8)
+		w.fx_flash = 0.6)
 	tw.tween_property(w, "modulate:a", 1.0, UIStyle.dur(0.2))
-	tw.parallel().tween_property(w, "fx_flash", 0.0, UIStyle.dur(0.5)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(w, "fx_flash", 0.0, UIStyle.dur(0.3)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_property(w, "scale", Vector2(0.97, 0.97), UIStyle.dur(0.2)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_property(w, "scale", Vector2.ONE, UIStyle.dur(0.26)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(w, "fx_glow", Color(EvolveGlyph.COLOR, 0.0), UIStyle.dur(0.75)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
@@ -172,7 +172,7 @@ func _evolve(e: Dictionary, prep: Dictionary) -> void:
 	tc.tween_interval(UIStyle.dur(climax))
 	tc.tween_callback(func() -> void:
 		Sfx.play("evolve_burst", 0.0, 0.0)
-		_fx.screen_flash(EvolveGlyph.COLOR, 0.32, 0.04, 0.5, centre)
+		_fx.screen_flash(EvolveGlyph.COLOR, 0.18, 0.03, 0.35, centre)
 		_fx.distort(centre, maxf(half.x, half.y) * 5.0, 0.7, 26.0, 0.0, Color(EvolveGlyph.LIGHT, 0.5))
 		_fx.camera_shake(5.0, 0.32)
 		_fx.burst(FxBurst.Kind.SPARK, centre, EvolveGlyph.LIGHT, 14, maxf(half.x, half.y) * 2.6, 0.5)
@@ -260,7 +260,7 @@ class Art extends Control:
 	var climax := 1.2
 	var t := 0.0: set = _set_t
 
-	const THREADS := 11
+	const THREADS := 7
 	const THREAD_STEPS := 30
 	const MOTES := 34
 	const SHARDS := 26
@@ -359,10 +359,10 @@ class Art extends Control:
 				var d := cos(ang)
 				if j > 0 and ((d + prev_d) >= 0.0) == front:
 					var dd := absf((d + prev_d) * 0.5)
-					var col := EvolveGlyph.COLOR.lerp(EvolveGlyph.LIGHT, 0.25 + 0.5 * dd) if front else EvolveGlyph.DEEP.lerp(EvolveGlyph.COLOR, 0.45)
-					var al := (0.5 + 0.45 * dd) if front else 0.3
+					var col := EvolveGlyph.COLOR.lerp(EvolveGlyph.LIGHT, 0.12 + 0.38 * dd) if front else EvolveGlyph.DEEP.lerp(EvolveGlyph.COLOR, 0.45)
+					var al := (0.32 + 0.38 * dd) if front else 0.22
 					al *= 0.75 + 0.25 * pulse
-					draw_line(prev, p, Color(col, al), (1.1 + 1.3 * dd) if front else 1.1, true)
+					draw_line(prev, p, Color(col, al), (0.9 + 1.0 * dd) if front else 0.9, true)
 				prev = p
 				prev_d = d
 			# The growing end of a thread is a bright bead.

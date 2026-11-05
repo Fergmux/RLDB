@@ -119,6 +119,17 @@ func _tooltip_shot(ids: Array, name: String) -> void:
 	await _frames(3)
 
 
+## The match sidebar's card details pane (the one with the art crop).
+func _sidebar_pane(n: Node) -> CardDetailsPanel:
+	if n is CardDetailsPanel and (n as CardDetailsPanel).art_crop:
+		return n
+	for c in n.get_children():
+		var r := _sidebar_pane(c)
+		if r != null:
+			return r
+	return null
+
+
 func _has_meta_child(n: Node, meta: StringName) -> bool:
 	if n.has_meta(meta):
 		return true
@@ -160,7 +171,12 @@ func run() -> void:
 	gs.selection.select(spawn)
 	await _frames(6)
 	await _shot("l23_01_details_pane_spawn")
-	_ok("the details pane shows the Evolve section", gs.details.panel_text().contains("EVOLVE") if gs.details.has_method("panel_text") else true)
+	var pane := _sidebar_pane(gs)
+	_ok("the details pane shows the Evolve section", pane != null and pane.all_text().contains("EVOLVE"))
+	if pane != null and pane.get_parent() is ScrollContainer:
+		var sc := pane.get_parent() as ScrollContainer
+		sc.scroll_vertical = int(sc.get_v_scroll_bar().max_value)
+		await _shot("l23_01b_details_pane_spawn_evolve_section", 0.5)
 	gs.selection.deselect()
 	# ---- the card tooltips (Spawn, Larva, Siphonophore)
 	await _tooltip_shot([155, 156, 157], "l23_02_tooltips")
