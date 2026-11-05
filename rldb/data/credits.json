@@ -1,17 +1,17 @@
 {
-  "_comment": "Shown in the main menu (Credits). Third-party assets and their licences; keep in step with rldb/assets/CREDITS.md.",
+  "_comment": "Shown in the main menu (Options > Credits). Third-party assets and their licences; keep in step with rldb/assets/CREDITS.md. A line may hold links as [url=https://...]short label[/url]: the label is shown (never a raw address, which wraps mid-path), the address is its tooltip, and a click opens it.",
   "sections": [
     {
       "title": "RLDB",
       "lines": [
         "Card art, table and menu backgrounds and the soundtrack: supplied by the RLDB team.",
-        "Sound effects: generated for RLDB with ElevenLabs Sound Effects (eleven_text_to_sound_v2), November 2026."
+        "Sound effects: generated for RLDB with [url=https://elevenlabs.io/sound-effects]ElevenLabs Sound Effects[/url], November 2026."
       ]
     },
     {
       "title": "Status icons",
       "lines": [
-        "From game-icons.net, licensed under Creative Commons Attribution 3.0 (CC BY 3.0, creativecommons.org/licenses/by/3.0/).",
+        "From [url=https://game-icons.net]game-icons.net[/url], licensed under [url=https://creativecommons.org/licenses/by/3.0/]Creative Commons Attribution 3.0[/url] (CC BY 3.0).",
         "Lorc: rune stone, anchor, ankh, broadhead arrow, hood, sprint, semi-closed eye, cracked shield.",
         "Delapouite: sparkles. Zeromancer: heart plus. Carl Olsen: flame. Skoll: pentacle, sight disabled. Darkzaitzev: death juice.",
         "The glyphs are set, outlined and shaded, on enamelled badges made for RLDB (the Paralyse bolt and the Cleanse sparkle are RLDB's own)."
@@ -20,22 +20,22 @@
     {
       "title": "Surface textures",
       "lines": [
-        "Leather032, Leather030, Wood051 and Metal009 from ambientCG.com, licensed under CC0 1.0.",
-        "Converted to grayscale relief maps for the UI (tools/godot/bake_ui_materials.gd)."
+        "Leather032, Leather030, Wood051 and Metal009 from [url=https://ambientcg.com]ambientCG[/url], licensed under [url=https://creativecommons.org/publicdomain/zero/1.0/]CC0 1.0[/url].",
+        "Converted to greyscale relief maps for the interface."
       ]
     },
     {
       "title": "Fonts",
       "lines": [
-        "Cinzel (The Cinzel Project Authors) and Alegreya Sans (The Alegreya Sans Project Authors), under the SIL Open Font License 1.1.",
-        "RLDB Symbols, a subset of Noto Sans Symbols 2 (The Noto Project Authors), under the SIL Open Font License 1.1."
+        "Cinzel (The Cinzel Project Authors) and Alegreya Sans (The Alegreya Sans Project Authors), under the [url=https://openfontlicense.org]SIL Open Font License 1.1[/url].",
+        "RLDB Symbols, a subset of Noto Sans Symbols 2 (The Noto Project Authors), under the [url=https://openfontlicense.org]SIL Open Font License 1.1[/url]."
       ]
     },
     {
       "title": "Engine",
       "lines": [
-        "Made with the Godot Engine (godotengine.org/license), MIT licence.",
-        "Steam features through GodotSteam (godotsteam.com), MIT licence."
+        "Made with the [url=https://godotengine.org]Godot Engine[/url], under the [url=https://godotengine.org/license]MIT licence[/url].",
+        "Steam features through [url=https://godotsteam.com]GodotSteam[/url], under the MIT licence."
       ]
     }
   ]

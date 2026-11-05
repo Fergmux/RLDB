@@ -16,6 +16,8 @@ const TOP_STRIP := 61
 const TRAY := 65
 const WAIT := 66
 const BANNER := 70
+## The Evolve prompt's hover comparison, beside the banner (final review #10).
+const PROMPT_FLYOUT := 72
 ## Tutorial highlight ring and arrow: over the board, banner and tray, under every modal, popup
 ## and popover (F04-08).
 const TUTORIAL_RING := 75

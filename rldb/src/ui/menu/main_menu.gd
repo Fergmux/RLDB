@@ -56,6 +56,12 @@ const CREDITS_H := 430.0
 const OPTIONS_MIN_H := 788.0
 ## Space above each credits section heading (review #8).
 const CREDITS_HEAD_GAP := 20
+## Final review #12: the credits body size, colour and leading (px between wrapped lines), and the
+## space between two paragraphs of a section (it was 13-14 px muted text, set solid).
+const CREDITS_PX := 16
+const CREDITS_COLOR := Color("ddd3bf")
+const CREDITS_LEADING := 5
+const CREDITS_LINE_GAP := 4
 const BAND_W := 520.0
 const BAND_FADE_W := 160.0
 const BAND_COLOR := Color(0.02, 0.018, 0.025)
@@ -458,6 +464,15 @@ static func _leaf(target: String, title: String, note: String = "") -> Array:
 	return _center_panel(title, note, tags[0], tags[1], w)
 
 
+## Opens a credits link (tests swap it out so no browser opens).
+static var link_opener: Callable = default_link_opener
+
+
+## Opens web address `url` in the player's browser.
+static func default_link_opener(url: String) -> void:
+	OS.shell_open(url)
+
+
 ## Third-party asset credits and licences from data/credits.json, in a ScrollArea (design review
 ## #8): 24 px fade masks while more lies above or below, 12 px between the text and the track,
 ## SECTION headings with 20 px above and 8 px below, body lines at line height 1.35.
@@ -479,11 +494,46 @@ static func credits_view() -> Control:
 		TitleText.apply(h, TitleText.Tier.SECTION, 15)
 		v.add_child(_gap(UIStyle.sp("sm") - UIStyle.sp("xs")))
 		for line in sec.get("lines", []):
-			var l := UIStyle.label(String(line), 14, UIStyle.MUTED, true)
-			l.add_theme_constant_override("line_spacing", 5)
-			v.add_child(l)
+			v.add_child(credit_line(String(line)))
+			v.add_child(_gap(CREDITS_LINE_GAP))
 	v.add_child(_gap(UIStyle.sp("xl")))   # the last line can scroll clear of the bottom fade
 	return sa
+
+
+## Final review #12: one credits paragraph at a comfortable reading size (CREDITS_PX, in the body
+## text colour). Its [url=https://...]label[/url] links show their short label in gold (underlined),
+## the address as the tooltip while hovered, and open it on a click (link_opener) with the select cue.
+## A raw address is never printed, so nothing wraps mid-path.
+static func credit_line(line: String) -> RichTextLabel:
+	var rt := RichTextLabel.new()
+	rt.set_meta("credit_line", true)
+	rt.bbcode_enabled = true
+	rt.fit_content = true
+	rt.scroll_active = false
+	rt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rt.mouse_filter = Control.MOUSE_FILTER_PASS
+	rt.add_theme_font_override("normal_font", UIStyle.font_body())
+	rt.add_theme_font_override("bold_font", UIStyle.font_bold())
+	rt.add_theme_font_size_override("normal_font_size", CREDITS_PX)
+	rt.add_theme_font_size_override("bold_font_size", CREDITS_PX)
+	rt.add_theme_color_override("default_color", CREDITS_COLOR)
+	rt.add_theme_constant_override("line_separation", CREDITS_LEADING)
+	var gold := UIStyle.GOLD_HI.to_html(false)
+	var link := RegEx.create_from_string("\\[url=([^\\]]+)\\](.*?)\\[/url\\]")
+	rt.text = link.sub(line, "[url=$1][color=#%s]$2[/color][/url]" % gold, true)
+	rt.meta_hover_started.connect(func(meta: Variant) -> void:
+		rt.tooltip_text = String(meta)
+		rt.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND)
+	rt.meta_hover_ended.connect(func(_meta: Variant) -> void:
+		rt.tooltip_text = ""
+		rt.mouse_default_cursor_shape = Control.CURSOR_ARROW)
+	rt.meta_clicked.connect(func(meta: Variant) -> void:
+		var url := String(meta)
+		if url.begins_with("https://"):
+			Sfx.play("select")
+			link_opener.call(url))
+	return rt
 
 
 ## A form row in the settings grid (review #9): a 160 px label column, 12 px, the control, at the

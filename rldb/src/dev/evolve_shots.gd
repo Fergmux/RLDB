@@ -204,6 +204,14 @@ func run() -> void:
 	_ok("the Evolve prompt is pending for me", String(m.pending.get("kind", "")) == "evolve" and int(m.pending["player"]) == me)
 	await _show()
 	await _shot("l23_06_evolve_prompt", 1.6)
+	# Final review #10: hovering the two forms compares them large beside the panel.
+	var fly: EvolveCompare = gs.prompt.evolve_compare
+	_ok("the Evolve prompt lists both forms as rows", gs.prompt.respond_col.get_children().filter(func(n): return n.has_meta("evolve_row")).size() == 2)
+	fly.set_hover(true)
+	await _shot("l23_06b_evolve_compare", 0.5)
+	_ok("hovering the forms shows both large", fly.visible and not fly.get_global_rect().intersects(gs.prompt.ctx_banner.get_global_rect()))
+	fly.set_hover(false)
+	await create_timer(0.4).timeout
 	# ---- the animation, frame by frame
 	var t0 := Time.get_ticks_msec()
 	host.handle(me, {"t": "choose", "id": m.pending["id"], "indices": [0]})
