@@ -25,6 +25,8 @@ var host: LocalHost
 var screen: GameScreen
 var bots: Array = []
 var samples: Array = []   # [command index, turn, game, nodes, orphans]
+## Milliseconds the authority + both views + the screen's render take per command (inside a frame).
+var handle_ms: Array = []
 
 
 func _initialize() -> void:
@@ -94,7 +96,9 @@ func _run() -> void:
 			idle = 0
 			if s.stage == Series.STAGE_GAME and s.game.turn > 120:
 				cmd = {"t": "concede"}
+			var h0 := Time.get_ticks_usec()
 			host.handle(who, cmd)
+			handle_ms.append((Time.get_ticks_usec() - h0) / 1000.0)
 			sent += 1
 		for f in pace:
 			await process_frame
@@ -115,6 +119,10 @@ func _report(sent: int) -> void:
 	print("PERF frames=%d avg=%.2fms (%.0f fps) p95=%.2fms p99=%.2fms max=%.2fms commands=%d games=%d stage=%s" % [
 		n, avg, 1000.0 / maxf(avg, 0.001), frames[int(n * 0.95)] if n > 0 else 0.0, p99, frames[n - 1] if n > 0 else 0.0,
 		sent, host.series.game_no, host.series.stage])
+	handle_ms.sort()
+	if not handle_ms.is_empty():
+		print("HANDLE per command: p50=%.1fms p95=%.1fms max=%.1fms" % [handle_ms[handle_ms.size() / 2],
+			handle_ms[int(handle_ms.size() * 0.95)], handle_ms[-1]])
 	for s in samples:
 		print("NODES cmd=%d turn=%d game=%d nodes=%d orphans=%d" % s)
 	# Leak check: compare the first and last thirds of the samples taken at drained turn starts.

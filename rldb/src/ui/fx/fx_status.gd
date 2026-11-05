@@ -140,7 +140,9 @@ static func _slot_key(at: Dictionary) -> String:
 ## still showing on that card is lifted away and faded first, so two never overlap.
 func _name(at: Dictionary, rect: Rect2, text: String, col: Color, fs: int, life: float) -> void:
 	var key := _slot_key(at)
-	var old: Label = _names.get(key, null)
+	# QA final: untyped, because a skip (FxPlayer.finish_all) frees the label it remembers, and assigning
+	# a freed instance to a typed variable is a script error that stopped every later name on the card.
+	var old = _names.get(key, null)
 	if old != null and is_instance_valid(old):
 		var ot := _fx.tail_tween().set_parallel(true)
 		ot.tween_property(old, "modulate:a", 0.0, UIStyle.dur(0.14))
