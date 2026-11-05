@@ -139,6 +139,16 @@ func select(uid: int) -> void:
 	gs.action_row.rebuild()
 
 
+## L21 (owner feedback 2026-11-05): a click on one of my piles opens (or closes) its list in the
+## details panel. Only one thing is selected at a time, so a click-selected card on the field or in
+## the Hand is deselected first (its ring, lift and action row go); the pile then shows as selected.
+func open_pile(zone: String) -> void:
+	if gs.game_ending():
+		return
+	deselect()
+	gs.details.show_pile(zone)
+
+
 ## Clears the click-selection (and its action row).
 func deselect() -> void:
 	if gs.selected_uid == -1 and not gs.row_open:

@@ -121,7 +121,7 @@ func build() -> void:
 			var ps := PileStack.new()
 			ps.zone = zt[0]
 			ps.title = zt[1]
-			ps.pressed.connect(func(z): if s == 1: gs.details.show_pile(z))
+			ps.pressed.connect(func(z): if s == 1: gs.selection.open_pile(z))   # L21: one selection at a time
 			layer.add_child(ps)
 			piles[side][zt[0]] = ps
 	controls = DuelControls.new()
