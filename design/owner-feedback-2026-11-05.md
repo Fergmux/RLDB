@@ -159,9 +159,10 @@ Owner answers, 2026-11-05 (these are confirmed rules, follow them exactly):
 | L24 | Art for 189-191 | done 3251bd0 | |
 | L25 | New table background | merged 0e9aae7 | Forest Ruins is the default. |
 | L26 | Series results display | merged 7ed71c5 | |
-| L27 | Smarter bot | in progress | bot agent |
+| L27 | Smarter bot | merged | Fair (no hidden-info peeking), forecast-driven. Held-out seeds vs old bot: 65.8% (75.4% first, 56.3% second). Review: design/bot-review-2026-11-05.md |
 | L28 | Options menu, tables, card back | merged 0e9aae7 | |
 | L29 | macOS build on GitHub | merged fddc96a | Re-export at the end. |
+| L30 | No keyboard hints anywhere | done 9eddfdc | Scan test ui_no_key_hints_test.gd. |
 | - | Stale tests re-pinned | merged 2c34eec | 114 baseline failures fixed. |
 
 ## Extra improvements (found while working)
