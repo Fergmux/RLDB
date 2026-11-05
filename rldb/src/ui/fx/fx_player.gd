@@ -34,8 +34,26 @@ const TRANSIENT_HOLD := 0.55
 const HANDOVER_TAIL := 0.6
 const HANDOVER_TAGS := ["attack", "direct", "lethal", "spotlight"]
 
+## L4: seconds past a batch's planned end after which a batch that still holds the queue (a tween that
+## never ends would be a bug) is finished so the views behind it are shown.
+const STALL_GRACE := 4.0
+
 ## The host screen (GameScreen) that owns the layers and answers the host contract.
 var screen: GameScreen
+## L4 (owner feedback 2026-11-05): views that arrive while effects play wait in `views` and are shown in
+## order once the effects before them have played out (GameScreen._on_view / _pump; see FxViewQueue).
+## Off under the headless display server only (the gdUnit suites act and assert within a frame, faster
+## than any animation); the game always runs windowed, and the L4 suites turn it on.
+static var sequence_views := DisplayServer.get_name() != "headless"
+## Views waiting for the running effects (GameScreen fills and drains it).
+var views := FxViewQueue.new()
+## L4: playback speed of the current batch (FxViewQueue.speed_for the views waiting behind it); every
+## tween made through new_tween() runs at it.
+var speed := 1.0
+## Tweens that never hold the queue (floating text, particles, a fading effect arrow): tails.
+var _tails: Array = []
+## Time (msec) after which the running batch no longer holds the queue (STALL_GRACE past its plan).
+var _stall_at := 0
 
 var _tweens: Array = []
 var _cleanups: Array = []
@@ -70,12 +88,30 @@ var last_lethal_mode := ""
 var last_plan: Array = []
 
 
-## True while any effect, banner or spotlight is still running.
+## True while any effect, banner or spotlight is still running, or a view waits to be shown (the bot and
+## the dev drivers wait on this).
 func busy() -> bool:
+	if gating() or not views.is_empty():
+		return true
+	for t in _tails:
+		if t is Tween and t.is_valid() and t.is_running():
+			return true
+	return false
+
+
+## L4: true while the running effects must play out before the next waiting view is shown: any effect
+## tween (not the tails: floating numbers, particles, a fading effect arrow), a banner, a spotlight or
+## the victory / defeat presentation.
+func gating() -> bool:
 	for t in _tweens:
 		if t is Tween and t.is_valid() and t.is_running():
 			return true
 	return _banner.is_active() or _spotlight.is_active() or _game_end.is_active()
+
+
+## L4: true when the running batch has held the queue STALL_GRACE seconds past its plan (a safety net).
+func stalled() -> bool:
+	return _stall_at > 0 and Time.get_ticks_msec() > _stall_at
 
 
 ## Called by the screen with the events of a NEW view before it renders: when they end the game the
@@ -195,10 +231,13 @@ func release_game_end_hold() -> void:
 ## Skips everything running: kills tweens, runs cleanups (resets transient offsets) and
 ## frees overlay nodes. Idempotent.
 func finish_all() -> void:
-	for t in _tweens:
+	for t in _tweens + _tails:
 		if t is Tween and t.is_valid():
 			t.kill()
 	_tweens.clear()
+	_tails.clear()
+	speed = 1.0
+	_stall_at = 0
 	for c in _cleanups:
 		if c is Callable and c.is_valid():
 			c.call()
@@ -231,9 +270,13 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 	if events.is_empty():
 		return
 	events = stage_attacks(events)   # K4: strikes play when the battle resolves, never at the declaration
-	if not busy():
+	if not gating():
 		_tweens.clear()
 		_cleanups.clear()
+	_tails = _tails.filter(func(tw): return tw is Tween and tw.is_valid() and tw.is_running())
+	# L4: a backlog plays a little faster (FxViewQueue.speed_for); a killing blow or a game's end never.
+	var ends := events.any(func(ev): return String(ev.get("k", "")) == "game_over")
+	speed = 1.0 if ends else FxViewQueue.speed_for(views.size())
 	var sched: Array = []   # [time, Callable, tag]
 	var holds: Array = []   # [sched index from which the hold applies, seconds]
 	var t := 0.0
@@ -444,6 +487,10 @@ func play(events: Array, prev_mv: Dictionary) -> void:
 		var at := (float(sched[i][0]) * kc + shift) * UIStyle.dur(1.0)
 		last_plan.append({"t": at, "tag": String(sched[i][2]) if sched[i].size() > 2 else ""})
 		_later(at, sched[i][1])
+	var plan_end := 0.0
+	for s in last_plan:
+		plan_end = maxf(plan_end, float(s["t"]))
+	_stall_at = Time.get_ticks_msec() + int((plan_end / speed + SPOT_HOLD * 2.0 + STALL_GRACE) * 1000.0)
 	_hold_handover()
 
 
@@ -673,10 +720,21 @@ func _prehide(p: int, zone: String, slot: int, t: float, sched: Array, fn: Calla
 
 # ---------------------------------------------------------------- helpers for the components
 
-## A tween on the host screen that finish_all() will kill.
+## A tween on the host screen that finish_all() will kill. It runs at the batch's `speed` and holds the
+## queue of waiting views until it ends (L4).
 func new_tween() -> Tween:
 	var t := screen.create_tween()
+	t.set_speed_scale(speed)
 	_tweens.append(t)
+	return t
+
+
+## A tween for an effect's tail that may outlive its batch (floating numbers and labels, particles, a
+## fading effect arrow): finish_all() kills it, but it never holds the queue of waiting views (L4).
+func tail_tween() -> Tween:
+	var t := screen.create_tween()
+	t.set_speed_scale(speed)
+	_tails.append(t)
 	return t
 
 
@@ -745,7 +803,7 @@ func float_text(text: String, col: Color, global_pos: Vector2, fs: int, rise: fl
 	var reduced := UIStyle.reduce_motion
 	if not reduced and pop:
 		l.scale = Vector2(1.3, 1.3)
-	var tw := new_tween()
+	var tw := tail_tween()
 	if reduced:
 		tw.tween_interval(life * 0.7)
 		tw.tween_property(l, "modulate:a", 0.0, life * 0.3)
@@ -769,7 +827,7 @@ func burst(kind: FxBurst.Kind, global_center: Vector2, col: Color, count: int, r
 	b.size = Vector2(4, 4)
 	b.position = fx_pos(global_center)
 	add_node(b)
-	var tw := new_tween()
+	var tw := tail_tween()
 	tw.tween_property(b, "t", 1.0, UIStyle.dur(life))
 	tw.tween_callback(free_node.bind(b))
 

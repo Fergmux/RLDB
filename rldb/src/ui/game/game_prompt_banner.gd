@@ -103,8 +103,8 @@ var banner_name: Label
 var banner_sub: RichTextLabel
 ## Banner buttons (skip, confirm ...).
 var banner_btns: HFlowContainer
-## Row under the buttons holding the Cancel link (design review #34: the escape hatch is a text
-## link, 16 px under the answers, not a button of the same weight).
+## Row under the buttons holding the Cancel button (L6, owner 2026-11-05: a real Secondary-family
+## button as wide as the panel, quieter than the gold answers; it replaced design review #34's link).
 var cancel_row: HBoxContainer
 ## Banner flow of option buttons.
 var banner_flow: HFlowContainer
@@ -143,8 +143,8 @@ var decline_pair: BoxContainer
 var tray: PanelContainer
 ## Container of the tray cards.
 var tray_box: VBoxContainer
-## Notice that the opponent is responding.
-var wait_chip: PanelContainer
+## Notice that the opponent is responding (WaitNotice, L16).
+var wait_chip: Control
 ## Text of the wait notice (its dots animate: WaitingDots).
 var wait_label: Label
 ## Short toast message over the board.
@@ -648,9 +648,11 @@ class DirectToken extends Control:
 
 ## Builds the opponent-is-deciding notice and the toast (hidden).
 func build_notices() -> void:
-	# Opponent-is-deciding notice (user feedback: otherwise the game looks stuck), docked under the
-	# opponent's plate (#38). Click-through.
+	# Opponent-is-deciding notice (user feedback: otherwise the game looks stuck). L16: it appears in
+	# the middle of the board, then settles under the opponent's plate. Click-through.
 	var wn := WaitNotice.new()
+	wn.anchors = wait_anchors
+	wn.wanted = wait_wanted
 	wait_chip = wn
 	wait_label = wn.label
 	gs.add_child(wait_chip)
@@ -898,8 +900,7 @@ func _render_banner() -> void:
 	if type_choice:
 		even_type_widths(row)
 	if pd["cancellable"] and not gs.view.has("tutorial"):   # a forced tutorial step has no Cancel button
-		var x := TextLink.make("Cancel", 13)
-		x.name = "CancelLink"
+		var x := PromptPlate.CancelButton.new()   # L6: a real button, not a text link
 		x.pressed.connect(gs.selection.cancel)
 		cancel_row.add_child(x)
 		cancel_row.visible = true
@@ -1428,19 +1429,49 @@ func _fit_tray() -> void:
 	place_tray()
 
 
-## Shows (text != "") or hides the wait notice (#38): docked under the opponent's plate, right-aligned
-## with it, its hourglass turning and its dots running; it fades in after WaitNotice.APPEAR_DELAY.
+## Shows (text != "") or hides the wait notice (L16): it appears in the middle of the board, then
+## settles under the opponent's plate (WaitNotice). "Opponent" in `text` becomes the acting player's
+## name, and a line under it says what they are deciding (only what the pause itself already shows:
+## a response or a choice, never which card).
 func show_wait(text: String) -> void:
-	(wait_chip as WaitNotice).show_text(text)
+	var wn := wait_chip as WaitNotice
 	if text == "":
+		wn.show_text("")
 		return
-	wait_chip.position = wait_position(gs.board.plates[0] as Control, wait_chip.size)
+	var pd := gs.pending()
+	var sub := ""
+	if not pd.is_empty() and not gs.mv.is_empty():
+		var who := String(gs.pv(int(pd.get("player", gs.mv.get("active", 0))))["name"])
+		if who != "" and text.begins_with("Opponent "):
+			text = who + text.substr(8)
+		sub = "They may answer with a Trap" if String(pd.get("kind", "")) == "trap_response" else "Making a choice"
+	wn.show_text(text, sub)
 
 
-## Top-left of a wait notice `sz` big under the opponent plate `plate` (md gap, right edges aligned).
-static func wait_position(plate: Control, sz: Vector2) -> Vector2:
+## L16: [centre, dock] of the wait notice in this screen: the middle of the centre line between the two
+## front rows, and the top-right corner of its dock under the opponent's plate (right edges aligned).
+func wait_anchors() -> Array:
+	var board := gs.board
+	var plate := board.plates[0] as Control
+	var centre := Vector2(board.deco.x0 + (board.deco.x1 - board.deco.x0) / 2.0, board.deco.mid_y)
+	return [centre, wait_dock(plate)]
+
+
+## L16: the top-right corner of the wait notice's dock under the opponent plate `plate`.
+static func wait_dock(plate: Control) -> Vector2:
 	var ph := maxf(plate.size.y, plate.get_combined_minimum_size().y)
-	return Vector2(plate.position.x + plate.size.x - sz.x, plate.position.y + ph + UIStyle.sp("md") + WaitNotice.NOTCH)
+	return Vector2(plate.position.x + plate.size.x, plate.position.y + ph + WaitNotice.DOCK_GAP)
+
+
+## L16: true while the wait notice still has something to wait for (the opponent's choice in a live
+## game, no series modal over the board); it clears itself as soon as this turns false.
+func wait_wanted() -> bool:
+	if gs.mv.is_empty() or String(gs.view.get("stage", "")) != "game" or int(gs.mv.get("winner", -1)) != -1:
+		return false
+	if gs.overlays.overlay.visible:
+		return false
+	var pd := gs.pending()
+	return not pd.is_empty() and (not bool(pd.get("mine", false)) or gs.is_spectator())
 
 
 

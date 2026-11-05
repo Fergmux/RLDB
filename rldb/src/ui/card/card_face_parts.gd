@@ -17,6 +17,8 @@ const PLATE_GRAIN := 0.45
 const PLATE_TILE := 150.0
 ## H17: depth (base units) of the gilded setting round the cost gem, and the round gem's table size.
 const GEM_SETTING := 2.5
+## Reach of each cost gem shape past its radius (see gem_reach).
+const GEM_REACH := {"ritual": 1.24, "arcane": 1.1}
 const GEM_TABLE_K := 0.6
 ## Dark gap (base units) between the cost gem's setting and its stone.
 const GEM_GAP := 0.5
@@ -134,20 +136,9 @@ static func gem(pt: CardPainter, c: Vector2, r: float, fs: int) -> void:
 	# H17: a faceted gem in a gilded setting, the AP gems' look. The shape still says the cost kind:
 	# a round brilliant (AP: topaz, Fusion: sapphire with a ring engraved round its table), a lozenge
 	# (Ritual) or a hexagon (Arcane).
-	var outer: PackedVector2Array
-	var girdle_n := 8
-	var rot := PI / 8.0
-	match kind:
-		"ritual":
-			outer = CardGeometry.poly(c, r * 1.24, 4, PI / 2.0)
-			girdle_n = 4
-			rot = PI / 2.0
-		"arcane":
-			outer = CardGeometry.poly(c, r * 1.1, 6, 0.0)
-			girdle_n = 6
-			rot = 0.0
-		_:
-			outer = CardGeometry.poly(c, r, 24, 0.0)
+	var outer := gem_outer(c, r, kind)
+	var girdle_n := outer.size() if outer.size() < 8 else 8
+	var rot := PI / 2.0 if kind == "ritual" else (0.0 if kind == "arcane" else PI / 8.0)
 	CardJewel.drop_shadow(ci, outer, c, s)
 	var inner := CardJewel.setting(ci, outer, c, band, s)
 	# A dark ink gap between the metal and the stone (as in the AP sockets) so the gem reads apart.
@@ -164,6 +155,25 @@ static func gem(pt: CardPainter, c: Vector2, r: float, fs: int) -> void:
 	pt.text_c(UIStyle.font_display(700), txt, c + Vector2(0, 0.5 * s), fs, tc, 0.0 if tc == UIStyle.ON_GOLD else 1.5)
 	CardJewel.sparkle(ci, c + CardJewel.LIGHT.normalized() * gr * 0.68, maxf(0.9, gr * 0.16), 0.9)
 	pt.upright_end()
+
+
+## How far the outline of a cost gem of kind `kind` reaches from its centre, as a multiple of the gem
+## radius: the Ritual lozenge's points and the Arcane hexagon's corners stand out past the round AP and
+## Fusion gems. L17: the layouts place each gem by this reach, so every shape keeps the same clearance
+## from the card edge.
+static func gem_reach(kind: String) -> float:
+	return float(GEM_REACH.get(kind, 1.0))
+
+
+## Outline of the cost gem of kind `kind` (radius `r`) centred on `c`: a lozenge (Ritual), a hexagon
+## (Arcane) or a circle (AP, Fusion).
+static func gem_outer(c: Vector2, r: float, kind: String) -> PackedVector2Array:
+	match kind:
+		"ritual":
+			return CardGeometry.poly(c, r * gem_reach(kind), 4, PI / 2.0)
+		"arcane":
+			return CardGeometry.poly(c, r * gem_reach(kind), 6, 0.0)
+	return CardGeometry.poly(c, r, 24, 0.0)
 
 
 ## Text on the cost gem: "F" (Fusion), else the current cost (Ritual Runes / Arcane total / AP);
