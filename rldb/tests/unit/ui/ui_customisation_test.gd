@@ -2,7 +2,7 @@ extends GdUnitTestSuite
 ## L25 / L28 (owner, 5 Nov): four table backgrounds, forest ruins by default, chosen in a new
 ## Options > Customisation screen and saved in the user settings; the main menu's top-level
 ## "Settings" became "Options" with Settings, Customisation and Credits sections, and a Card back
-## section shows the one back with a "coming soon" note.
+## section offers the card backs (L31; their own suite is ui_card_back_test.gd).
 
 ## A file of this suite's own (never the player's settings, never the shared TEST file).
 const FILE := "user://test_ui_customisation_suite.cfg"
@@ -220,14 +220,14 @@ func test_tiles_click_with_the_customise_cue() -> void:
 	assert_bool(Sfx.NAMES.has("customise_select")).is_true()
 
 
-func test_card_back_section_shows_the_one_back_and_a_coming_soon_note() -> void:
+func test_card_back_section_shows_a_tile_for_every_back() -> void:
 	# Arrange
 	var cp: CustomisationPanel = auto_free(CustomisationPanel.new())
 	# Act
 	cp.tabs.select("card_back")
-	# Assert
+	# Assert: the page is open, with one tile per back (L31) and no "coming soon" placeholder.
 	assert_str(cp.section).is_equal("card_back")
 	assert_bool((cp.find_child("CardBackPage", true, false) as Control).visible).is_true()
 	assert_bool((cp.find_child("TablePage", true, false) as Control).visible).is_false()
-	assert_int(Customisation.CARD_BACKS.size()).is_equal(1)
-	assert_str((cp.find_child("ComingSoon", true, false) as Label).text).contains("coming soon")
+	assert_int(cp.back_tiles.size()).is_equal(Customisation.CARD_BACKS.size())
+	assert_object(cp.find_child("ComingSoon", true, false)).is_null()

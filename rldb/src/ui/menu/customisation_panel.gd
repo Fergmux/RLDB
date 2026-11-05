@@ -6,25 +6,33 @@ extends VBoxContainer
 ##              lights a tile; the chosen one has a gold rim, a gold glow and a tick medallion.
 ##              Picking saves at once (Customisation) and plays "customise_select"; the board
 ##              uses it from the next game.
-##   Card back  the card back in use, drawn by CardBack itself, and a note that more are coming.
+##   Card back  (L31) a showcase: the back in use drawn large by CardBack itself (the art every
+##              face-down card shows) beside its name, an "In use" chip and its blurb; under it the
+##              collection, one framed tile per back with its short name, in the table tiles'
+##              style (hover lift and gold rim; the back in use has a gold rim, a glow and a tick).
+##              Hovering a tile previews that back in the showcase ("Preview"); clicking picks it,
+##              saves it at once and plays "customise_select". It applies to every face-down card
+##              on this screen from the next redraw.
 ## Presentation only: it reads and writes Customisation and nothing else.
 ##
 ##     panel.body.add_child(CustomisationPanel.new())
 
 ## Emitted after the player picks a table (its id).
 signal table_picked(id: String)
+## Emitted after the player picks a card back (its id).
+signal card_back_picked(id: String)
 
 ## Sub-section keys, in tab order.
 const SECTIONS := [["table", "Table"], ["card_back", "Card back"]]
 ## Tile thumbnail size (the art's 2967:2156 aspect) and the gaps of the 2 x 2 grid.
 const THUMB := Vector2(256, 186)
 const GRID_GAP := Vector2(16, 14)
-## Card back preview size (the card's 5:7 portrait), the width of its description column, and the
-## empty "coming soon" sockets beside it.
-const BACK_SIZE := Vector2(180, 252)
-const BACK_INFO_W := 300.0
-const SOCKETS := 3
-const SOCKET_SIZE := Vector2(64, 90)
+## Card back showcase size (the card's 2:3 portrait) and the width of its description column; the
+## collection tiles' back size and the gap between tiles.
+const BACK_SIZE := Vector2(188, 282)
+const BACK_INFO_W := 290.0
+const TILE_BACK := Vector2(62, 93)
+const TILE_GAP := 12
 
 ## The open sub-section's key.
 var section: String = "table"
@@ -32,8 +40,15 @@ var section: String = "table"
 var tabs: FolderTabs
 ## The table tiles by table id.
 var tiles: Dictionary = {}
+## The card back tiles by back id, and the showcase's large back.
+var back_tiles: Dictionary = {}
+var back_preview: CardBackPreview
 
 var _pages: Dictionary = {}
+var _back_name: Label
+var _back_blurb: Label
+var _chip_in_use: Control
+var _chip_preview: Control
 
 
 func _init(open_section: String = "table") -> void:
@@ -284,52 +299,95 @@ class TableTile extends Button:
 # ---------------------------------------------------------------- Card back
 
 func _card_back_page() -> Control:
-	# The showcase is centred in the page (the Table page sets the common height).
-	var page := CenterContainer.new()
+	var page := VBoxContainer.new()
 	page.name = "CardBackPage"
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", UIStyle.sp("xxl"))
-	page.add_child(row)
-	var prev := CardBackPreview.new(BACK_SIZE, true)
-	prev.name = "CardBackPreview"
-	prev.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(prev)
+	page.alignment = BoxContainer.ALIGNMENT_CENTER
+	page.add_theme_constant_override("separation", UIStyle.sp("md"))
+	# The showcase: the back in use (or the hovered one) drawn large, its name, state and blurb.
+	var hero := HBoxContainer.new()
+	hero.name = "Showcase"
+	hero.alignment = BoxContainer.ALIGNMENT_CENTER
+	hero.add_theme_constant_override("separation", UIStyle.sp("xxl"))
+	page.add_child(hero)
+	back_preview = CardBackPreview.new(BACK_SIZE)
+	back_preview.name = "CardBackPreview"
+	back_preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hero.add_child(back_preview)
 	var info := VBoxContainer.new()
 	info.custom_minimum_size.x = BACK_INFO_W
 	info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	info.add_theme_constant_override("separation", UIStyle.sp("sm"))
-	row.add_child(info)
-	var back: Dictionary = Customisation.CARD_BACKS[0]
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", UIStyle.sp("md"))
-	var nm := UIStyle.label(String(back["name"]), 22, UIStyle.GOLD_HI, false, true)
-	nm.name = "CardBackName"
-	head.add_child(nm)
-	var chip := UIStyle.chip("In use", UIStyle.GOLD, 12)
-	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(chip)
-	info.add_child(head)
-	var d := UIStyle.label(String(back["blurb"]) + ", on every face-down card, pile and deck in your games.", 15, UIStyle.TEXT, true)
-	d.add_theme_constant_override("line_spacing", 4)
-	info.add_child(d)
+	hero.add_child(info)
+	_back_name = UIStyle.label("", 23, UIStyle.GOLD_HI, false, true)
+	_back_name.name = "CardBackName"
+	info.add_child(_back_name)
+	var chips := HBoxContainer.new()
+	chips.add_theme_constant_override("separation", UIStyle.sp("sm"))
+	_chip_in_use = UIStyle.chip("In use", UIStyle.GOLD, 12)
+	_chip_in_use.name = "InUse"
+	chips.add_child(_chip_in_use)
+	_chip_preview = UIStyle.chip("Preview", UIStyle.MUTED, 12)
+	_chip_preview.name = "Preview"
+	chips.add_child(_chip_preview)
+	info.add_child(chips)
+	_back_blurb = UIStyle.label("", 15, UIStyle.TEXT, true)
+	_back_blurb.name = "CardBackBlurb"
+	_back_blurb.add_theme_constant_override("line_spacing", 4)
+	info.add_child(_back_blurb)
 	info.add_child(_gap(UIStyle.sp("xs")))
 	info.add_child(Ornate.Rule.new(Color(UIStyle.GOLD, 0.4), true, 8.0))
 	info.add_child(_gap(UIStyle.sp("xs")))
+	var scope := UIStyle.label("Shown on every face-down card, pile and deck on your screen, yours and your opponent's alike.", 13, UIStyle.MUTED, true)
+	scope.name = "CardBackScope"
+	scope.add_theme_font_override("font", UIStyle.font_italic())
+	scope.add_theme_constant_override("line_spacing", 3)
+	info.add_child(scope)
+	# The collection: one framed tile per back, in Customisation order.
 	var sh := UIStyle.label("COLLECTION", 13, UIStyle.GOLD)
-	info.add_child(sh)
+	page.add_child(sh)
 	TitleText.apply(sh, TitleText.Tier.SECTION, 13)
-	# Empty sockets where the next backs will sit: engraved card-shaped wells with a faint sigil.
-	var sockets := HBoxContainer.new()
-	sockets.name = "Sockets"
-	sockets.add_theme_constant_override("separation", UIStyle.sp("md"))
-	for i in SOCKETS:
-		sockets.add_child(CardBackPreview.new(SOCKET_SIZE, false))
-	info.add_child(sockets)
-	var soon := UIStyle.label("More card backs are coming soon.", 14, UIStyle.MUTED, true)
-	soon.name = "ComingSoon"
-	soon.add_theme_font_override("font", UIStyle.font_italic())
-	info.add_child(soon)
+	var row := HBoxContainer.new()
+	row.name = "CardBackPicker"
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", TILE_GAP)
+	var current := Customisation.card_back_id()
+	for b in Customisation.CARD_BACKS:
+		var id := String(b["id"])
+		var tile := BackTile.new(b, id == current)
+		tile.name = "Back_" + id
+		tile.pressed.connect(func(): pick_card_back(id))
+		tile.mouse_entered.connect(func(): show_back(id))
+		tile.mouse_exited.connect(func(): show_back(""))
+		row.add_child(tile)
+		back_tiles[id] = tile
+	page.add_child(row)
+	show_back("")
 	return page
+
+
+## Chooses card back `id` (saved at once), marks its tile, shows it in the showcase and emits
+## `card_back_picked`. A pick of the back already in use changes nothing.
+func pick_card_back(id: String) -> void:
+	if id == Customisation.card_back_id() or not Customisation.set_card_back(id):
+		return
+	for k in back_tiles:
+		(back_tiles[k] as BackTile).chosen = k == id
+	show_back(id)
+	card_back_picked.emit(id)
+
+
+## Shows back `id` in the showcase ("" = the back in use): its art, name and blurb, and "In use"
+## or "Preview" (a hovered back that is not chosen).
+func show_back(id: String) -> void:
+	var current := Customisation.card_back_id()
+	var shown := id if Customisation.has_card_back(id) else current
+	var entry := Customisation.card_back(shown)
+	back_preview.back_id = shown
+	back_preview.chosen = shown == current
+	_back_name.text = String(entry["name"])
+	_back_blurb.text = String(entry["blurb"]) + "."
+	_chip_in_use.visible = shown == current
+	_chip_preview.visible = shown != current
 
 
 static func _gap(h: float) -> Control:
@@ -339,60 +397,180 @@ static func _gap(h: float) -> Control:
 	return g
 
 
-## A card back of the picker: the back in use, drawn by CardBack itself (the same art as every
-## face-down card) with a gold rim, a soft gold glow and a tick medallion; or, with `filled` off, an
-## empty socket for a back still to come (an engraved card-shaped well and a faint diamond).
-class CardBackPreview extends Control:
-	const RADIUS := 9
-	var filled := true
+## Draws the framed card back `id` filling `r` on `ci`: the body and border of that back, its art
+## (CardBack, the same drawing as every face-down card) and a corner radius of `rad` px.
+static func draw_framed_back(ci: CanvasItem, r: Rect2, id: String, rad: int, border_w: int) -> void:
+	var b := StyleBoxFlat.new()
+	b.bg_color = CardBack.body_color(id)
+	b.border_color = CardBack.border_color(id)
+	b.set_border_width_all(border_w)
+	b.set_corner_radius_all(rad)
+	b.anti_aliasing = true
+	ci.draw_style_box(b, r)
+	CardBack.draw_art(ci, r, r.size.x / 90.0, id)
 
-	func _init(sz: Vector2 = BACK_SIZE, p_filled: bool = true) -> void:
+
+## A gold tick medallion (drawn, no glyph) of radius `mr` at `c`: dark well, gold ring, gold tick.
+static func draw_tick_medal(ci: CanvasItem, c: Vector2, mr: float) -> void:
+	var k := mr / 13.0
+	ci.draw_circle(c + Vector2(0, 1.5 * k), mr + 2.0 * k, Color(0, 0, 0, 0.45), true, -1.0, true)
+	ci.draw_circle(c, mr, Color("2a1a08"), true, -1.0, true)
+	ci.draw_circle(c, mr - 1.0 * k, UIStyle.GOLD, false, maxf(1.4, 2.0 * k), true)
+	ci.draw_circle(c, mr - 3.5 * k, Color(UIStyle.GOLD, 0.18), true, -1.0, true)
+	var a := c + Vector2(-5.5, 0.5) * k
+	var m := c + Vector2(-1.5, 4.5) * k
+	var b := c + Vector2(6.0, -4.5) * k
+	ci.draw_polyline(PackedVector2Array([a, m, b]), UIStyle.GOLD_HI, maxf(1.8, 2.6 * k), true)
+
+
+## The showcase's large card back: back `back_id` drawn by CardBack (the art every face-down card
+## shows) under a soft drop shadow. The back in use has a bright gold rim, a gold glow and the tick
+## medallion; a hovered back being previewed has a quieter bronze-gold rim and no tick.
+class CardBackPreview extends Control:
+	const RADIUS := 10
+	## The back drawn (a CARD_BACKS id).
+	var back_id := Customisation.DEFAULT_CARD_BACK:
+		set(v):
+			back_id = v
+			queue_redraw()
+	## True when the back drawn is the one in use.
+	var chosen := true:
+		set(v):
+			chosen = v
+			queue_redraw()
+
+	func _init(sz: Vector2 = BACK_SIZE) -> void:
 		custom_minimum_size = sz
-		filled = p_filled
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
 		var rad := maxi(4, roundi(RADIUS * size.x / BACK_SIZE.x))
-		if not filled:
-			var well := StyleBoxFlat.new()
-			well.bg_color = Color(0, 0, 0, 0.35)
-			well.set_corner_radius_all(rad)
-			well.set_border_width_all(1)
-			well.border_color = Color(UIStyle.BRONZE, 0.55)
-			draw_style_box(well, r)
-			draw_line(r.position + Vector2(rad, 1.5), Vector2(r.end.x - rad, r.position.y + 1.5), Color(0, 0, 0, 0.5), 1.0)
-			var c := r.get_center()
-			var k := size.x * 0.13
-			var dia := PackedVector2Array([c + Vector2(0, -k), c + Vector2(k, 0), c + Vector2(0, k), c + Vector2(-k, 0), c + Vector2(0, -k)])
-			draw_polyline(dia, Color(UIStyle.GOLD, 0.28), 1.2, true)
-			return
+		var sh := StyleBoxFlat.new()
+		sh.bg_color = Color(0, 0, 0, 0)
+		sh.set_corner_radius_all(rad)
+		sh.shadow_color = Color(0, 0, 0, 0.6)
+		sh.shadow_size = 14
+		sh.shadow_offset = Vector2(0, 6)
+		draw_style_box(sh, r)
 		var glow := StyleBoxFlat.new()
 		glow.bg_color = Color(0, 0, 0, 0)
 		glow.set_corner_radius_all(rad)
-		glow.shadow_color = Color(UIStyle.GOLD_HI, 0.38)
-		glow.shadow_size = 12
+		glow.shadow_color = Color(UIStyle.GOLD_HI, 0.36 if chosen else 0.14)
+		glow.shadow_size = 14
 		draw_style_box(glow, r)
-		var b := StyleBoxFlat.new()
-		b.bg_color = CardBack.BODY
-		b.border_color = CardBack.BORDER
-		b.set_border_width_all(3)
-		b.set_corner_radius_all(rad)
-		b.shadow_color = Color(0, 0, 0, 0.5)
-		b.shadow_size = 8
-		b.shadow_offset = Vector2(0, 4)
-		draw_style_box(b, r)
-		CardBack.draw_art(self, r, r.size.x / 90.0)
+		CustomisationPanel.draw_framed_back(self, r, back_id, rad, 3)
 		var rim := StyleBoxFlat.new()
 		rim.draw_center = false
 		rim.set_corner_radius_all(rad + 2)
 		rim.set_border_width_all(2)
-		rim.border_color = Color(UIStyle.GOLD_HI, 0.95)
+		rim.border_color = Color(UIStyle.GOLD_HI, 0.95) if chosen else Color(UIStyle.GOLD, 0.55)
+		rim.anti_aliasing = true
 		draw_style_box(rim, r.grow(3.0))
-		# The "in use" tick medallion, as on the chosen table.
-		var mc := Vector2(r.end.x - 4.0, r.position.y + 4.0)
-		draw_circle(mc + Vector2(0, 1.5), 15.0, Color(0, 0, 0, 0.45), true, -1.0, true)
-		draw_circle(mc, 13.0, Color("2a1a08"), true, -1.0, true)
-		draw_circle(mc, 12.0, UIStyle.GOLD, false, 2.0, true)
-		draw_circle(mc, 9.5, Color(UIStyle.GOLD, 0.18), true, -1.0, true)
-		draw_polyline(PackedVector2Array([mc + Vector2(-5.5, 0.5), mc + Vector2(-1.5, 4.5), mc + Vector2(6.0, -4.5)]), UIStyle.GOLD_HI, 2.6, true)
+		if chosen:
+			CustomisationPanel.draw_tick_medal(self, Vector2(r.end.x - 4.0, r.position.y + 4.0), 13.0)
+
+
+## One back of the collection: the back drawn small in its own frame, with its short name under it.
+## As the table tiles: hover lifts the tile 3 px and lights its rim gold; the back in use keeps a
+## bright gold rim, a gold glow and a small tick medallion. The click is the "customise_select" cue
+## (Sfx's button hook).
+class BackTile extends Button:
+	const RADIUS := 6.0
+	const LIFT := 3.0
+	const CAPTION_GAP := 7.0
+	const NAME_PX := 13
+	const MEDAL_R := 9.0
+
+	## The back entry (Customisation.CARD_BACKS).
+	var entry: Dictionary
+	## True for the back in use.
+	var chosen := false:
+		set(v):
+			chosen = v
+			_style_caption()
+			queue_redraw()
+	## Hover amount 0..1 (eased).
+	var hover := 0.0:
+		set(v):
+			hover = v
+			_style_caption()
+			queue_redraw()
+	var _name: Label
+
+	func _init(e: Dictionary, is_chosen: bool) -> void:
+		entry = e
+		focus_mode = Control.FOCUS_NONE
+		flat = true
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		set_meta(Sfx.BUTTON_META, "customise_select")
+		tooltip_text = ""
+		for st in ["normal", "hover", "pressed", "hover_pressed", "focus", "disabled"]:
+			add_theme_stylebox_override(st, StyleBoxEmpty.new())
+		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		_name = UIStyle.label(String(e.get("short", e["name"])), NAME_PX, UIStyle.TEXT, false, true)
+		_name.name = "Name"
+		_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_name.position = Vector2(-8.0, LIFT + TILE_BACK.y + CAPTION_GAP)
+		_name.size = Vector2(TILE_BACK.x + 16.0, 0)
+		add_child(_name)
+		var cap_h := UIStyle.font_display(600).get_height(NAME_PX)
+		custom_minimum_size = Vector2(TILE_BACK.x, ceilf(LIFT + TILE_BACK.y + CAPTION_GAP + cap_h))
+		chosen = is_chosen
+		mouse_entered.connect(func(): _ease_hover(1.0))
+		mouse_exited.connect(func(): _ease_hover(0.0))
+
+	func _style_caption() -> void:
+		if _name == null:
+			return
+		_name.add_theme_color_override("font_color", UIStyle.GOLD_HI if chosen else UIStyle.MUTED.lerp(UIStyle.GOLD_HI, hover))
+
+	func _ease_hover(to: float) -> void:
+		var tw := UIStyle.restart_tween(self, &"hover_tw")
+		if UIStyle.reduce_motion:
+			hover = to
+			tw.kill()
+			return
+		UIStyle.tween_token(tw, self, "hover", to, "hover" if to > hover else "hover_out")
+
+	## The back's rect (lifted by the hover, never under reduce motion).
+	func back_rect() -> Rect2:
+		var lift := 0.0 if UIStyle.reduce_motion else LIFT * hover
+		return Rect2(Vector2(0, LIFT - lift), TILE_BACK)
+
+	func _draw() -> void:
+		var r := back_rect()
+		var rad := int(RADIUS)
+		var sh := StyleBoxFlat.new()
+		sh.bg_color = Color(0, 0, 0, 0)
+		sh.set_corner_radius_all(rad)
+		sh.shadow_color = Color(0, 0, 0, 0.55 + 0.1 * hover)
+		sh.shadow_size = int(6 + 5 * hover)
+		sh.shadow_offset = Vector2(0, 3 + 2 * hover)
+		draw_style_box(sh, r)
+		var gold_k := maxf(hover, 1.0 if chosen else 0.0)
+		if gold_k > 0.0:
+			var glow := StyleBoxFlat.new()
+			glow.bg_color = Color(0, 0, 0, 0)
+			glow.set_corner_radius_all(rad)
+			glow.shadow_color = Color(UIStyle.GOLD_HI, (0.42 if chosen else 0.0) + 0.24 * hover)
+			glow.shadow_size = 10 if chosen else 7
+			draw_style_box(glow, r)
+		CustomisationPanel.draw_framed_back(self, r, String(entry["id"]), rad, 2)
+		if not chosen:
+			# A resting tile is a shade quieter than the back in use; hover lifts the veil.
+			var veil := StyleBoxFlat.new()
+			veil.bg_color = Color(0, 0, 0, 0.16 * (1.0 - hover))
+			veil.set_corner_radius_all(rad)
+			draw_style_box(veil, r)
+		var rim := StyleBoxFlat.new()
+		rim.draw_center = false
+		rim.set_corner_radius_all(rad + 1)
+		rim.set_border_width_all(2 if chosen else 1)
+		rim.border_color = UIStyle.GOLD_HI if chosen else UIStyle.BRONZE.lightened(0.15).lerp(UIStyle.GOLD, hover)
+		rim.anti_aliasing = true
+		draw_style_box(rim, r.grow(2.0))
+		if chosen:
+			CustomisationPanel.draw_tick_medal(self, Vector2(r.end.x - 3.0, r.position.y + 3.0), MEDAL_R)
