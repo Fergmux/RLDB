@@ -3,23 +3,27 @@ extends Control
 ## The local player's duel controls under their plate (owner feedback 2026-10-22), as forged plates
 ## in the action row's style (GameActionRow.ActionButton: iron face, gold-leaf rim, rivets and a
 ## glyph medallion), stacked, as wide as the plate above them (the longest label always fits):
-## - J11 "Sacrifice Unit" (ember flame medallion): starts a sacrifice (pick a unit, confirm). Enabled
-##   only while a sacrifice is legal; the tooltip says why it is not. The card action row no longer
-##   offers Sacrifice, so a misclick on a card cannot spend a unit.
+## - J11 / L5 "Sacrifice Unit" (ember flame medallion): toggles sacrifice MODE (GameSacrificeMode):
+##   while it is on the plate stays latched in its lit ember state reading "Stop Sacrificing", and a
+##   click on a glowing unit sacrifices it at once. Enabled only while a sacrifice is legal (or the
+##   mode is on); the tooltip says why it is not. The card action row never offers Sacrifice, so a
+##   misclick on a card outside the mode cannot spend a unit.
 ## - J6 "Trap Prompts" (bell medallion, struck through when off, and a topaz state lamp): each click
 ##   cycles Usable -> Always -> Off. Usable (the default): asked only when one of their Traps can
 ##   respond (the pause shows that one can). Always: asked whenever they hold a face-down card some
 ##   Trap could answer from, so a pause gives nothing away. Off: never asked, their Traps stay down. The choice is the viewer's own: saved in the UI settings file (per seat in hot-seat
 ##   play) and sent to the authority as the seat's setting, never shown to the opponent.
 
-## The Sacrifice Unit button was pressed (it is enabled: a sacrifice is legal).
+## The Sacrifice Unit button was pressed (L5: it toggles sacrifice mode).
 signal sacrifice_pressed
-## The Sacrifice Unit button was pressed while its own pick / confirmation is open (cancel it).
-signal sacrifice_cancel_pressed
 ## The viewer switched their Trap response prompts on or off.
 signal prompts_toggled(mode: String)
 
 const SACRIFICE_LABEL := "Sacrifice Unit"
+## L5: the latched button's label while sacrifice mode is on.
+const SACRIFICE_STOP_LABEL := "Stop Sacrificing"
+## L5: the tooltip of the button while the mode can start.
+const SACRIFICE_TIP := "Sacrifice mode: click your units to sacrifice each for +1 AP, no confirmation. Click here again (or press Esc) to stop."
 const PROMPTS_ON_LABEL := "Trap Prompts: Usable"
 const PROMPTS_ALWAYS_LABEL := "Trap Prompts: Always"
 const PROMPTS_OFF_LABEL := "Trap Prompts: Off"
@@ -60,7 +64,7 @@ func _init() -> void:
 
 ## Width (px) of the plates: the longest label whole.
 static func plate_width() -> float:
-	return maxf(MIN_W, GameActionRow.label_fit_width([SACRIFICE_LABEL, PROMPTS_ON_LABEL, PROMPTS_ALWAYS_LABEL, PROMPTS_OFF_LABEL]) + GameActionRow.ActionButton.LAMP_W)
+	return maxf(MIN_W, GameActionRow.label_fit_width([SACRIFICE_LABEL, SACRIFICE_STOP_LABEL, PROMPTS_ON_LABEL, PROMPTS_ALWAYS_LABEL, PROMPTS_OFF_LABEL]) + GameActionRow.ActionButton.LAMP_W)
 
 
 ## Size (px) of the whole block (both plates).
@@ -80,38 +84,36 @@ func _layout() -> void:
 		b.position = Vector2(0, float(i) * (h + GAP))
 
 
-## Tooltip of the Sacrifice Unit button while its pick or confirmation is open.
-const SACRIFICE_ENGAGED_TIP := "Choosing the unit to sacrifice. Click again (or press Esc) to cancel."
+## Tooltip of the Sacrifice Unit button while sacrifice mode is on (L5).
+const SACRIFICE_ENGAGED_TIP := "Sacrifice mode is on: click a glowing unit to sacrifice it (+1 AP). Click here again (or press Esc) to stop."
 var _sac_engaged := false
 
 
 ## Shows the Sacrifice Unit button enabled (`ok`) or not, with `tip` as its tooltip (the reason
-## when it is disabled). `engaged`: its own pick / confirmation is open: the plate stays lit and
-## a click cancels it.
+## when it is disabled). `engaged` (L5): sacrifice mode is on: the plate stays latched in its lit
+## ember state, reads "Stop Sacrificing", and a click ends the mode.
 func set_sacrifice(ok: bool, tip: String, engaged: bool = false) -> void:
 	_sac_engaged = engaged
 	var enabled := ok or engaged
 	var t := SACRIFICE_ENGAGED_TIP if engaged else tip
-	sacrifice_btn.set_lit(engaged)
-	if sacrifice_btn.disabled == (not enabled) and sacrifice_btn.tooltip_text == t:
+	sacrifice_btn.latched = engaged
+	var label := SACRIFICE_STOP_LABEL if engaged else SACRIFICE_LABEL
+	if sacrifice_btn.disabled == (not enabled) and sacrifice_btn.tooltip_text == t and sacrifice_btn.text == label:
 		return
+	sacrifice_btn.text = label
 	sacrifice_btn.disabled = not enabled
 	sacrifice_btn.tooltip_text = t
 	sacrifice_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if enabled else Control.CURSOR_ARROW
 	sacrifice_btn.queue_redraw()
 
 
-## True while the button shows its own sacrifice flow under way.
+## True while the button shows sacrifice mode on (L5).
 func sacrifice_engaged() -> bool:
 	return _sac_engaged
 
 
 func _on_sacrifice_pressed() -> void:
-	if _sac_engaged:
-		sacrifice_cancel_pressed.emit()     # the cancel sound comes from the selection's cancel
-		return
-	Sfx.play("confirm")
-	sacrifice_pressed.emit()
+	sacrifice_pressed.emit()     # GameSacrificeMode plays sacrifice_mode_on / _off
 
 
 ## Shows the Trap prompts setting `mode` (EffectEngine.TRAP_PROMPT_*; no signal, no sound).

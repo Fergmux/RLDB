@@ -32,6 +32,17 @@ func hide_arrow() -> void:
 		arrow.queue_redraw()
 
 
+## L22 hook: true while I am choosing a target, zone or card on the board for my pending choice
+## (the crosshair cursor), and it is not yet answered (L7).
+func aiming() -> bool:
+	return not gs.mv.is_empty() and gs.selection.board_targeting() and not gs.selection.answered()
+
+
+## L22 hook: true while the pointer is over a legal target of that choice (the locked-on cursor).
+func aiming_at_target() -> bool:
+	return aiming() and option_under_pointer() != -1
+
+
 ## Updates the arrow layer (called every frame).
 func update_arrow() -> void:
 	var arrow := gs.arrow

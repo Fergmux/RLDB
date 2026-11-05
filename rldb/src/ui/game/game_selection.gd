@@ -82,6 +82,8 @@ func on_widget_pressed(w: CardWidget) -> void:
 	if gs.game_ending():
 		return   # J9: the kill was made; no further action, selection or skip
 	gs.fx.finish_all()
+	if gs.sacrifice.on_widget(w):
+		return   # L5: in sacrifice mode a click sacrifices a glowing unit and does nothing else
 	var opt := -1
 	var slots := gs.board.slots
 	for k in slots.keys():
@@ -299,6 +301,10 @@ func cancel() -> bool:
 	if menu.settings_popup.visible:
 		menu.settings_popup.visible = false
 		return _went_back()
+	if gs.sacrifice.active:
+		gs.sacrifice.stop()    # L5: Esc / right-click ends sacrifice mode (sacrifice_mode_off)
+		gs.hover.clear()
+		return true
 	var did := false
 	var pd := gs.pending()
 	if not pd.is_empty() and pd["mine"] and pd["cancellable"] and not answered():
