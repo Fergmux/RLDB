@@ -104,6 +104,14 @@ var _overlay: Control
 var face_draws := 0
 ## J31 follow-up: the empty zone's static layers were drawn from a shared ZoneMesh by the last redraw.
 var _zone_merged := false
+## Perf (2026-11-05): face_key() of the state the face was last drawn from (-1: never drawn). A
+## request whose state hashes the same repaints only the overlay (see request_face()).
+var _drawn_face_key := -1
+## Hash of the view the tooltip text was built from (setup() skips rebuilding an unchanged one).
+var _tip_key := 0
+## Bump to make every card face's next request_face() repaint it (a global look change that is not
+## part of a card's own state, e.g. a new card back chosen while cards are shown).
+static var face_epoch := 0
 
 
 func _init() -> void:
@@ -132,8 +140,8 @@ func _ready() -> void:
 		_mouse_in = true
 		if hover_sound and not view.is_empty():
 			Sfx.hover_card()
-		queue_redraw())
-	mouse_exited.connect(func(): _self_hover = false; _mouse_in = false; StatusTip.hide_for(self); queue_redraw())
+		request_face())
+	mouse_exited.connect(func(): _self_hover = false; _mouse_in = false; StatusTip.hide_for(self); request_face())
 	# Godot turns processing on at ready because _process exists: only redraw per frame while animating.
 	_update_process()
 
@@ -147,9 +155,15 @@ func setup(v, kind: String = "board", empty_label: String = "", is_rotated: bool
 	_apply_size()
 	if view.is_empty() or view.get("hidden", false) or not show_tooltip:
 		tooltip_text = ""
+		_tip_key = 0
 	else:
-		tooltip_text = tooltip_for(view)
-	queue_redraw()
+		# Perf (2026-11-05): the board and the hand set every card up again on each new view; the
+		# tooltip text (a rich multi-section build) is rebuilt only for a changed card.
+		var tk := hash([view, CardText.TOOLTIP_WIDTH])
+		if tk != _tip_key or tooltip_text == "":
+			tooltip_text = tooltip_for(view)
+			_tip_key = tk
+	request_face()
 	return self
 
 
@@ -196,14 +210,14 @@ func set_marks(is_target: bool, is_selected: bool, is_dimmed: bool = false, soft
 	# self_modulate does not reach children: the overlay takes the same dim.
 	_overlay.self_modulate = self_modulate
 	_update_process()
-	queue_redraw()
+	request_face()
 
 
 ## D9: marks this card as a valid target in the hover preview of an effect button.
 func set_preview_target(on: bool) -> void:
 	if preview_target != on:
 		preview_target = on
-		queue_redraw()
+		request_face()
 
 
 ## "This card can act now" highlight (F02-11). Static (no per-frame redraw); independent of hover/select/target.
@@ -211,7 +225,7 @@ func set_ready(on: bool) -> void:
 	if _is_ready != on:
 		_is_ready = on
 		_update_process()   # F03-21: the glow pulses and the chevrons bounce while ready
-		queue_redraw()
+		request_face()
 
 
 func is_ready_on() -> bool:
@@ -306,7 +320,7 @@ func ease_hover(on: bool, k: float = 1.04, rise: float = 4.0) -> void:
 
 func _set_hovered(v: bool) -> void:
 	hovered = v
-	queue_redraw()
+	request_face()
 
 
 func _set_lift_k(v: float) -> void:
@@ -385,7 +399,7 @@ func _set_glow(v: Color) -> void:
 func _set_order(v: int) -> void:
 	if v != order_no:
 		order_no = v
-		queue_redraw()
+		request_face()
 
 
 ## Per-frame redraw only while something animates: the pulsing target ring or the breathing
@@ -482,10 +496,37 @@ func _exit_tree() -> void:
 	StatusTip.hide_for(self)
 
 
+# ---------------------------------------------------------------- redraw requests
+
+## Repaints the face when anything it is drawn from changed since its last draw (face_key()), else
+## only the state overlay (selection, target, ready, order badge: drawn from the widget's flags).
+## Perf (2026-11-05): every new view sets every board and hand card up again and re-applies its marks;
+## a face costs 0.3-2.5 ms to paint, and repainting ~25 unchanged faces made each command's frame
+## 10-15 ms slower. Callers that need a repaint whatever the state (a test's trace) call queue_redraw().
+func request_face() -> void:
+	if face_key() != _drawn_face_key:
+		queue_redraw()
+	else:
+		_overlay.queue_redraw()
+
+
+## Hash of everything the face draw reads: the view, kind, size and orientation, the hover and lift,
+## the combat preview, an empty zone's pick state and dim (ZoneMesh keys on it), the on-screen text
+## scale and the viewport's oversampling, reduced motion and face_epoch. The overlay's own flags are not part of it.
+func face_key() -> int:
+	var empty := view.is_empty()
+	var vp := get_viewport()
+	return hash([view, size_kind, rotated, size, custom_minimum_size, _lifting, lift_k, hovered, _self_hover,
+		empty_text, show_label, _pv_stat, _pv_value, _pv_bonus, _screen_text_k(), UIStyle.reduce_motion, face_epoch,
+		vp.get_oversampling() if vp != null else 1.0,
+		highlighted if empty else false, _mouse_in if empty else false, self_modulate if empty else Color.WHITE])
+
+
 # ---------------------------------------------------------------- main draw
 
 func _draw() -> void:
 	face_draws += 1
+	_drawn_face_key = face_key()
 	var pt := _paint
 	pt.ci = self
 	pt.view = view
