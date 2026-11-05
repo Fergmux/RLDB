@@ -126,6 +126,10 @@ func handle(p: int, cmd: Dictionary) -> void:
 		# Review #100: one message for a refusal. The overlay shows it as a floating hint by the
 		# pointer (with the refusal cue); the screen's status toast is not sent as well.
 		hint.emit(why)
+		# QA final: reply with the unchanged view, as every host does to a refused command. The screen
+		# marks a picked choice answered until a reply arrives (L7), so without one the learner's
+		# next clicks on the same choice were ignored for good (stuck after one wrong zone or Esc).
+		broadcast()
 		return
 	if _submit(p, cmd):
 		var st := current_step()
