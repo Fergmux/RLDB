@@ -82,6 +82,7 @@ static func _load() -> void:
 		var back := String(cf.get_value(SECTION, "card_back", DEFAULT_CARD_BACK))
 		if has_card_back(back):
 			_card_back = back
+	CardWidget.face_epoch += 1   # the back may differ from the one faces were last painted with
 
 
 ## True when `id` names one of TABLES.
@@ -160,9 +161,27 @@ static func set_card_back(id: String) -> bool:
 	if not has_card_back(id):
 		return false
 	_load()
+	var changed := _card_back != id
 	_card_back = id
 	_save_value("card_back", id)
+	if changed:
+		refresh_card_backs()
 	return true
+
+
+## Makes every card back on screen show the chosen back now: bumps CardWidget.face_epoch (a card
+## face repaints only when its face_key changes) and asks each card widget and pile in the tree to
+## repaint. Called when the back changes; cheap enough for a one-off pick.
+static func refresh_card_backs() -> void:
+	CardWidget.face_epoch += 1
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return
+	for n in tree.root.find_children("*", "Control", true, false):
+		if n is CardWidget:
+			(n as CardWidget).request_face()
+		elif n is PileStack:
+			(n as PileStack).queue_redraw()
 
 
 ## The entry of CARD_BACKS for `id` (the chosen back when `id` is ""; the default for an unknown id).

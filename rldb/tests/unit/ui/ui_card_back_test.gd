@@ -212,6 +212,43 @@ func test_face_down_widgets_and_piles_draw_each_back() -> void:
 		remove_child(pile)
 
 
+func test_face_down_card_on_screen_repaints_with_a_new_back() -> void:
+	# Arrange: a face-down card already painted with the default back (faces repaint only when
+	# their face_key changes, so a global look change must bump CardWidget.face_epoch).
+	var w: CardWidget = auto_free(CardWidget.new())
+	w.setup({"hidden": true, "zone": "hand"}, "mini")
+	add_child(w)
+	for i in 3:
+		await get_tree().process_frame
+	var before := w.face_draws
+	var epoch := CardWidget.face_epoch
+	# Act: the player picks another back while the card is shown.
+	Customisation.set_card_back("runes")
+	for i in 3:
+		await get_tree().process_frame
+	# Assert: the face was painted again, from the new state.
+	assert_int(CardWidget.face_epoch).is_greater(epoch)
+	assert_int(w.face_draws).is_greater(before)
+	assert_int(w._drawn_face_key).is_equal(w.face_key())
+
+
+func test_picking_the_same_back_again_does_not_repaint_faces() -> void:
+	# Arrange
+	Customisation.set_card_back("sun")
+	var w: CardWidget = auto_free(CardWidget.new())
+	w.setup({"hidden": true, "zone": "hand"}, "mini")
+	add_child(w)
+	for i in 3:
+		await get_tree().process_frame
+	var before := w.face_draws
+	# Act
+	Customisation.set_card_back("sun")
+	for i in 3:
+		await get_tree().process_frame
+	# Assert
+	assert_int(w.face_draws).is_equal(before)
+
+
 # ---------------------------------------------------------------- the picker
 
 func test_picker_marks_the_back_in_use() -> void:
