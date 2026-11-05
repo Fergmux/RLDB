@@ -185,7 +185,7 @@ func render() -> void:
 	_chip.set_count(count)
 	lobby_button.tooltip_text = "See who is at this table: both players and %s" % (("%d spectator%s" % [count, "" if count == 1 else "s"]) if count > 0 else "no spectators yet")
 	if gs.menu.menu_button != null:
-		gs.menu.menu_button.tooltip_text = "Menu (Esc)" if count <= 0 else "Menu (Esc) · %d watching: View lobby is in the menu" % count
+		gs.menu.menu_button.tooltip_text = "Menu" if count <= 0 else "Menu · %d watching: View lobby is in the menu" % count
 	if gs.is_spectator():
 		var follow := int(net.get("follow", 0))
 		var who := String(names[follow]) if follow < names.size() else ""

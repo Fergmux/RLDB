@@ -23,7 +23,7 @@ const SACRIFICE_LABEL := "Sacrifice Unit"
 ## L5: the latched button's label while sacrifice mode is on.
 const SACRIFICE_STOP_LABEL := "Stop Sacrificing"
 ## L5: the tooltip of the button while the mode can start.
-const SACRIFICE_TIP := "Sacrifice mode: click your units to sacrifice each for +1 AP, no confirmation. Click here again (or press Esc) to stop."
+const SACRIFICE_TIP := "Sacrifice mode: click your units to sacrifice each for +1 AP, no confirmation. Click here again to stop."
 const PROMPTS_ON_LABEL := "Trap Prompts: Usable"
 const PROMPTS_ALWAYS_LABEL := "Trap Prompts: Always"
 const PROMPTS_OFF_LABEL := "Trap Prompts: Off"
@@ -85,7 +85,7 @@ func _layout() -> void:
 
 
 ## Tooltip of the Sacrifice Unit button while sacrifice mode is on (L5).
-const SACRIFICE_ENGAGED_TIP := "Sacrifice mode is on: click a glowing unit to sacrifice it (+1 AP). Click here again (or press Esc) to stop."
+const SACRIFICE_ENGAGED_TIP := "Sacrifice mode is on: click a glowing unit to sacrifice it (+1 AP). Click here again to stop."
 var _sac_engaged := false
 
 

@@ -94,6 +94,11 @@ make a way for ai to automatically upload the build for us
   (`publish-release` / `tools/publish_github.py` need a mac asset).
 - No more questions: decide, work around blockers, and list every decision and anything not done in the final report.
 
+- **L30 (owner, 2026-11-05, verbatim):** "remove the escx button prompt from the cancel button, i don't want keyboard
+  shortcuts prompts visible anywhere in the game". Standing rule: no keyboard-shortcut hints (keycaps, "Esc", "Enter",
+  "(Space)", hotkey labels in tooltips or buttons) may be shown anywhere in the game. The shortcuts themselves keep
+  working.
+
 ## Facts found during the up-front inspection (2026-11-05)
 
 - ElevenLabs MCP: the `sfx` flow node (model `eleven_text_to_sound_v2`, 0.5-30 s, loop option) is available, and so is
@@ -154,9 +159,10 @@ Owner answers, 2026-11-05 (these are confirmed rules, follow them exactly):
 | L24 | Art for 189-191 | done 3251bd0 | |
 | L25 | New table background | merged 0e9aae7 | Forest Ruins is the default. |
 | L26 | Series results display | merged 7ed71c5 | |
-| L27 | Smarter bot | in progress | bot agent |
+| L27 | Smarter bot | merged | Fair (no hidden-info peeking), forecast-driven. Held-out seeds vs old bot: 65.8% (75.4% first, 56.3% second). Review: design/bot-review-2026-11-05.md |
 | L28 | Options menu, tables, card back | merged 0e9aae7 | |
 | L29 | macOS build on GitHub | merged fddc96a | Re-export at the end. |
+| L30 | No keyboard hints anywhere | done 9eddfdc | Scan test ui_no_key_hints_test.gd. |
 | - | Stale tests re-pinned | merged 2c34eec | 114 baseline failures fixed. |
 
 ## Extra improvements (found while working)

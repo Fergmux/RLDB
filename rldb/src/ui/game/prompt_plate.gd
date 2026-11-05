@@ -12,16 +12,15 @@ func _init() -> void:
 ## L6 (owner feedback 2026-11-05): the prompt's Cancel, a real button in the house Secondary family
 ## (bronze-iron plate, gold rim on hover) as wide as the panel, under the answers. It reads as a
 ## button at a glance (the owner found the old text link too easy to miss) yet stays quieter than
-## the gold answers: an engraved ✕ medallion on the left and an "Esc" keycap on the right say what
-## it does and that Esc does the same. Its sound is the selection's cancel (no second click).
+## the gold answers: an engraved ✕ medallion on the left says what it does (L30: no keyboard hints are
+## shown; Esc still cancels). Its sound is the selection's cancel (no second click).
 class CancelButton extends JuicyButton:
 	const LABEL := "Cancel"
-	const TIP := "Cancel this choice (Esc)"
-	## Height (px), the label size, and the side room for the medallion and the keycap.
+	const TIP := "Cancel this choice"
+	## Height (px), the label size, and the side room for the medallion.
 	const HEIGHT := 34.0
 	const LABEL_PX := 14
 	const SIDE_PAD := 40.0
-	const KEY_PX := 10
 
 	func _init() -> void:
 		super()
@@ -59,17 +58,3 @@ class CancelButton extends JuicyButton:
 		for s in [Vector2(1, 1), Vector2(1, -1)]:
 			draw_line(c - s * k, c + s * k, Color(0, 0, 0, 0.5), 2.8, true)
 			draw_line(c - s * k, c + s * k, UIStyle.TEXT if lit else Color(UIStyle.TEXT, 0.85), 1.5, true)
-		# The Esc keycap.
-		var f := UIStyle.font_bold()
-		var tw := f.get_string_size("Esc", HORIZONTAL_ALIGNMENT_LEFT, -1, KEY_PX).x
-		var kr := Rect2(Vector2(size.x - 12.0 - tw - 10.0, cy - 8.0), Vector2(tw + 10.0, 16.0))
-		var cap := StyleBoxFlat.new()
-		cap.bg_color = Color(0, 0, 0, 0.35)
-		cap.border_color = Color(UIStyle.BRONZE, 0.9 if lit else 0.6)
-		cap.set_border_width_all(1)
-		cap.border_width_bottom = 2
-		cap.set_corner_radius_all(3)
-		cap.anti_aliasing = true
-		draw_style_box(cap, kr)
-		draw_string(f, Vector2(kr.position.x + 5.0, kr.position.y + 12.0), "Esc", HORIZONTAL_ALIGNMENT_LEFT, -1, KEY_PX,
-			Color(UIStyle.MUTED, 1.0) if not lit else UIStyle.TEXT)
