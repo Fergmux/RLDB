@@ -15,3 +15,5 @@ __pycache__/
 /rldb/*.png.import
 /rldb/assets/art/backup/
 /rldb/assets/art/background[0-9]*
+# L1 (2026-11-05): ElevenLabs SFX takes (staging; the chosen, mastered takes are in rldb/assets/audio/sfx/).
+production/audio-staging/

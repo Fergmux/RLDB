@@ -133,7 +133,7 @@ Owner answers, 2026-11-05 (these are confirmed rules, follow them exactly):
 
 | # | Item | Status | Commit / notes |
 |---|------|--------|----------------|
-| L1 | ElevenLabs sound set | in progress | audio agent |
+| L1 | ElevenLabs sound set | merged b90c644 | 108 cues (59 replaced, 49 new), ~3,130 credits. Takes picked by measurement; alternates in production/audio-staging/. Listen first: ritual_choir, fusion_vortex, hp_low_heartbeat, boom, card_play, card_set, victory/defeat stingers. |
 | L2 | New cards via draft lost | merged 7ed71c5 | Root cause in the between-games "Add a card" reward: the add command was sent at the end of a fold animation that a modal rebuild could kill. Drafting itself was fine for all cards. |
 | L3 | Extra Deck offer F/R/A | merged 7ed71c5 | Also applied to the "Add a card > Extra Deck" reward. |
 | L4 | Animations queue | merged 21a532e | Clicks no longer skip animations; a backlog speeds up (max 2x). |
@@ -154,7 +154,7 @@ Owner answers, 2026-11-05 (these are confirmed rules, follow them exactly):
 | L19 | Materials gone before On Summon | merged 0326066 | |
 | L20 | Cleanse/Curse block the whole batch | merged 0326066 | |
 | L21 | Pile click deselects | merged cdcd8cd | |
-| L22 | Custom cursor + setting | in progress | cursor agent |
+| L22 | Custom cursor + setting | merged 9d6b92d | 9 gilded cursors (arrow, gauntlet, reticle open/locked/barred, dagger plain/hot, forbidden, magnifier), sized by DPI; "Custom cursor" in Settings. |
 | L23 | Evolve (Symbiotes) | merged d464003 | |
 | L24 | Art for 189-191 | done 3251bd0 | |
 | L25 | New table background | merged 0e9aae7 | Forest Ruins is the default. |

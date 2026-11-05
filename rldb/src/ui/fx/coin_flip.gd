@@ -113,16 +113,18 @@ func play(winner_name: String, other_name: String, me_first: bool, seat: int = 0
 		phase = float(HALF_TURNS) * PI
 		result_a = 1.0
 		backdrop_a = 1.0
+		Sfx.play("game_start", 0.0, 0.0)   # L1: reduced motion shows the result at once
 		tw.tween_interval(HOLD_TIME + 0.6)
 	else:
 		modulate.a = 0.0
 		backdrop_a = 0.0
+		Sfx.play("coin_flip", 0.0, 0.0)   # L1: the flick and the spinning ring
 		tw.tween_property(self, "modulate:a", 1.0, 0.2)
 		tw.parallel().tween_property(self, "backdrop_a", 1.0, 0.35)
 		tw.parallel().tween_property(self, "phase", float(HALF_TURNS) * PI, SPIN_TIME).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		tw.parallel().tween_method(func(t: float): lift = sin(t * PI) * 70.0, 0.0, 1.0, SPIN_TIME * 0.8).set_trans(Tween.TRANS_SINE)
 		tw.tween_callback(func():
-			Sfx.play("notice")
+			Sfx.play("game_start", 0.0, 0.0)   # L1: the call to battle as the result lands
 			Sfx.play("impact", -8.0, 0.0)
 			_land_title())
 		# Landing: a small bounce, a ring of light and the result plate.
