@@ -65,9 +65,7 @@ func inspect_card(c: Dictionary, from: Rect2 = Rect2()) -> bool:
 func open_pile(zone: String) -> bool:
 	if gs.mv.is_empty() or gs.view.get("stage", "") != "game" or not zone in GameDetails.PILE_NAMES:
 		return false
-	if gs.fx != null:
-		gs.fx.finish_all()
-	gs.hover.clear()
+	gs.hover.clear()   # L4: opening a pile never cuts the running effects short
 	CardInspector.close_all()
 	if _browser_alive():
 		browser.close()

@@ -306,18 +306,23 @@ func _mode_queue() -> void:
 	var o := 1 - a
 	var a1 := TB.unit(m, a, 1, 0, "atk", 30, 30)
 	var a2 := TB.unit(m, a, 110, 1, "atk", 30, 30)
-	var d1 := TB.unit(m, o, 70, 0, "def", 5, 60)
-	var d2 := TB.unit(m, o, 162, 1, "def", 5, 60)
+	var d1 := TB.unit(m, o, 70, 0, "def", 5, 35)
+	var d2 := TB.unit(m, o, 162, 1, "def", 5, 35)
 	TB.to_battle(m)
 	host.broadcast()
 	_show(a)
 	await _wait(1.0)
 	main.screen.skip_effects()
 	await _wait(0.4)
+	var legacy := "--legacy" in OS.get_cmdline_user_args()
+	if legacy:
+		FxPlayer.sequence_views = false   # the pre-L4 path: every view rendered at once...
 	print("QUEUE attack1 ", TB.attack(m, a1, d1))
 	host.broadcast()
-	await _wait(0.05)
+	await _wait(0.12)
+	if legacy:
+		main.screen.fx.finish_all()   # ...and the click on the next attacker skipped the running effects
 	print("QUEUE attack2 ", TB.attack(m, a2, d2))
 	host.broadcast()
-	await _seq("double", 16, 0.06)
+	await _seq("double", 18, 0.05)
 	_done()

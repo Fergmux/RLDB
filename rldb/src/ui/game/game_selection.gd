@@ -81,7 +81,6 @@ func order_no(opt: int) -> int:
 func on_widget_pressed(w: CardWidget) -> void:
 	if gs.game_ending():
 		return   # J9: the kill was made; no further action, selection or skip
-	gs.fx.finish_all()
 	var opt := -1
 	var slots := gs.board.slots
 	for k in slots.keys():
@@ -113,7 +112,6 @@ func on_widget_pressed(w: CardWidget) -> void:
 func on_widget_right(w: CardWidget) -> void:
 	if gs.game_ending():
 		return
-	gs.fx.finish_all()
 	if gs.inspect.inspect_widget(w):
 		return
 	if w.view.get("hidden", false):
