@@ -235,6 +235,7 @@ func test_c180_hypnotise_takes_a_16_atk_unit_until_end_of_turn() -> void:
 	assert_bool(ok in CF.offered(m)).is_true()
 	assert_bool(big in CF.offered(m)).is_false()
 	TB.choose_uids(m, [ok])
+	assert_str(TB.choose(m, ["Front row, column 2"])).is_empty()   # L9: the caster picks the zone
 	assert_int(int(m.cards[ok]["ctl"])).is_equal(0)
 	assert_str(m.validate(0, {"t": "sacrifice", "uid": ok})).is_not_empty()
 	CF.end_turn(m)
