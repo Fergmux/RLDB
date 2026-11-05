@@ -251,8 +251,16 @@ func pick_option(i: int) -> void:
 	# L7: a card or zone picked on the board locks in (target_lock); a banner answer confirms.
 	var on_board := board_targeting() and _is_board_option(pd, i)
 	_answering(pd)
-	Sfx.play("target_lock" if on_board else "confirm")
+	Sfx.play(GameSelection.pick_sound(pd, on_board))
 	gs.send({"t": "choose", "id": pd["id"], "indices": [i]})
+
+
+## L1: the sound of answering choice `pd` with one option: a zone to place a card in sets a token on
+## the board (zone_pick), any other board pick locks in (target_lock), a banner answer confirms.
+static func pick_sound(pd: Dictionary, on_board: bool) -> String:
+	if not on_board:
+		return "confirm"
+	return "zone_pick" if String(pd.get("kind", "")) == "slot" else "target_lock"
 
 
 ## True when option i of choice `pd` is a card or zone (picked on the board, in the Hand or the tray).

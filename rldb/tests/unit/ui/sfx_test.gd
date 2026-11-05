@@ -73,6 +73,36 @@ func test_defender_view_reads_the_attacked_slot_of_the_previous_view() -> void:
 	assert_object(FxPlayer._defender_view({"k": "attack", "to": {"p": 1, "slot": 5}}, prev)).is_null()
 
 
+func test_slider_tick_is_rate_limited_with_the_hover_cues() -> void:
+	# Arrange
+	Sfx._reset_hover()
+	# Act: two ticks in the same instant (a fast drag)
+	var first := Sfx.slider_tick()
+	var second := Sfx.slider_tick()
+	# Assert: one bead click, and it is the slider cue
+	assert_bool(first).is_true()
+	assert_bool(second).is_false()
+	assert_array(Sfx.debug_hover).contains_exactly([Sfx.SLIDER_SFX])
+	Sfx._reset_hover()
+
+
+func test_prompt_alert_only_for_a_choice_the_player_did_not_just_ask_for() -> void:
+	var q := GamePromptBanner.PROMPT_ALERT_QUIET_MS
+	# A fresh choice long after the last command (a Trap window, a turn-start offer) is announced.
+	assert_bool(GamePromptBanner.wants_alert(true, 100000, 100000 - q - 1)).is_true()
+	# A fresh choice right after the player's own command (its next step) is not.
+	assert_bool(GamePromptBanner.wants_alert(true, 100000, 100000 - 200)).is_false()
+	# The same choice re-rendered never sounds again.
+	assert_bool(GamePromptBanner.wants_alert(false, 100000, 0)).is_false()
+
+
+func test_pick_sound_zone_target_or_banner() -> void:
+	# L1: placing a card in a zone sets a token; other board picks lock in; banner answers confirm.
+	assert_str(GameSelection.pick_sound({"kind": "slot"}, true)).is_equal("zone_pick")
+	assert_str(GameSelection.pick_sound({"kind": "card"}, true)).is_equal("target_lock")
+	assert_str(GameSelection.pick_sound({"kind": "slot"}, false)).is_equal("confirm")
+
+
 func test_every_named_sound_is_registered_once() -> void:
 	# The cue names are the contract with the asset set (design/audio/sfx-cues.json): no duplicates.
 	var seen := {}

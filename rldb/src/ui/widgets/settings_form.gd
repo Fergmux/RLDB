@@ -172,7 +172,7 @@ func _volume_row(text: String, key: String, value: float, muted: bool, set_volum
 		var t := int(floor(v / TICK_STEP + 0.001))
 		if t != last_tick[0]:
 			last_tick[0] = t
-			Sfx.hover_at(Time.get_ticks_msec()))
+			Sfx.slider_tick())   # L1: a bead click per step (was the button hover cue)
 	if key == "sfx":
 		sl.drag_ended.connect(func(_c): Sfx.play("select"))
 	var row := _row(text, sl, key)

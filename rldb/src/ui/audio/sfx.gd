@@ -65,6 +65,8 @@ const UI_PRIORITY := {
 const HOVER_SFX := "ui_hover"
 ## The card variant of the hover cue (design review #32): a soft paper slide. Shares the limiter.
 const CARD_HOVER_SFX := "card_hover"
+## L1: the volume-slider step cue (shares the hover limiter).
+const SLIDER_SFX := "slider_tick"
 const HOVER_MIN_MS := 60
 const HOVER_JITTER := 0.04
 const HOVER_DB := 0.0
@@ -197,6 +199,12 @@ static func hover_item() -> bool:
 ## rate-limited with the other hover cues so sweeping across a row never chatters.
 static func hover_card() -> bool:
 	return hover_at(Time.get_ticks_msec(), CARD_HOVER_SFX)
+
+
+## L1: a volume slider step: the soft bead click, rate-limited with the hover cues so a fast drag
+## never chatters. Returns true when it played.
+static func slider_tick() -> bool:
+	return hover_at(Time.get_ticks_msec(), SLIDER_SFX)
 
 
 ## Forgets the hover limiter (tests).
