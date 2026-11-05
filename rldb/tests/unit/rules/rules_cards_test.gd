@@ -162,18 +162,22 @@ func test_hypnotised_unit_cannot_be_sacrificed_and_returns_at_end_of_turn() -> v
 	var spell := TB.card(m, 0, 180)
 	assert_str(m.submit(0, {"t": "cast", "uid": spell})).is_empty()
 	assert_str(TB.choose_uids(m, [victim])).is_empty()    # sole legal target is still chosen by the player
+	assert_str(TB.choose(m, ["Front row, column 1"])).is_empty()   # L9: the caster picks the zone
 	assert_int(m.cards[victim]["ctl"]).is_equal(0)
 	assert_str(m.validate(0, {"t": "sacrifice", "uid": victim})).contains("temporarily controlled")
 	TB.to_turn2(m)
 	assert_int(m.cards[victim]["ctl"]).is_equal(1)
 
 
-## Takes control of `victim` for player 0 with Hypnotise.
+## Takes control of `victim` for player 0 with Hypnotise, into player 0's first free zone (L9: the
+## caster picks it).
 func _hypnotise(m: MatchEngine, victim: int) -> void:
 	var spell := TB.card(m, 0, 180)
 	m.players[0]["ap"] = 10
 	assert_str(m.submit(0, {"t": "cast", "uid": spell})).is_empty()
 	assert_str(TB.choose_uids(m, [victim])).is_empty()
+	assert_str(TB.pend_kind(m)).is_equal("slot")
+	assert_str(TB.choose(m, [String(m.pending["options"][0]["label"])])).is_empty()
 
 
 func test_hypnotise_cannot_be_cast_without_a_free_zone() -> void:
@@ -227,7 +231,7 @@ func test_hypnotised_unit_can_be_ritual_material_and_goes_to_its_owners_spent() 
 	assert_str(TB.choose_uids(m, [victim])).is_empty()
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
-	assert_int(m.atk_of(roma)).is_equal(36)
+	assert_int(m.atk_of(roma)).is_equal(3 * 10)                # Roma +10 per Rune since 2026-11-03
 	assert_bool(victim in m.players[1]["spent"]).is_true()
 
 
@@ -277,7 +281,8 @@ func test_divine_serpent_damages_opponent_without_reversal() -> void:
 	assert_int(m.players[1]["hp"]).is_equal(30)
 
 
-func test_delayed_gratification_under_snunday_locks_in_minus_one_ap() -> void:
+# L15 (2026-11-05): Sneaky Snunday reverses ATK/DEF only, so the AP next turn is not reversed.
+func test_delayed_gratification_under_snunday_still_gives_plus_one_ap() -> void:
 	var m := TB.make()
 	_cast(m, 0, 154)
 	_cast(m, 0, 41)
@@ -287,7 +292,7 @@ func test_delayed_gratification_under_snunday_locks_in_minus_one_ap() -> void:
 	for i in 3:
 		m.submit(1, {"t": "next_phase"})
 	assert_int(m.active).is_equal(0)
-	assert_int(m.players[0]["ap"]).is_equal(1)
+	assert_int(m.players[0]["ap"]).is_equal(GameCore.BASE_AP + 1)
 
 
 func test_snunday_flips_continuous_aura_while_active_and_restores_after() -> void:
@@ -301,13 +306,14 @@ func test_snunday_flips_continuous_aura_while_active_and_restores_after() -> voi
 	assert_int(m.def_of(friend)).is_equal(30)
 
 
-func test_snunday_does_not_flip_already_resolved_instant_bonus() -> void:
+# L15 (2026-11-05): "all new and ongoing" gains are reversed, so a gain from before Snunday is too.
+func test_snunday_reverses_an_already_resolved_gain() -> void:
 	var m := TB.make()
 	var u := TB.unit(m, 0, TB.WATER, 0, "atk", 10)
-	_cast(m, 0, 182, u)                         # +20 before reversal
-	assert_int(m.atk_of(u)).is_equal(30)
+	_cast(m, 0, 182, u)                         # Shimmer Serum +10 before the reversal
+	assert_int(m.atk_of(u)).is_equal(20)
 	_cast(m, 0, 154)
-	assert_int(m.atk_of(u)).is_equal(30)
+	assert_int(m.atk_of(u)).is_equal(0)
 
 
 func test_snunday_does_not_reverse_battle_damage_or_ap_payment() -> void:

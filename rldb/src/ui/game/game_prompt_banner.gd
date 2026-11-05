@@ -73,7 +73,9 @@ const DECLINE_LABELS := ["Pass", "No", "Skip"]
 const SKIP_TIP := "Let this one go. You are asked again at the next chance to respond."
 const PASS_TURN_TIP := "Stop offering me Traps until this turn ends."
 ## Prompt kinds whose options are a vertical list (accept first, decline last) rather than a flow.
-const LIST_KINDS := ["trap_response", "confirm", "order"]
+const LIST_KINDS := ["trap_response", "confirm", "order", "evolve"]
+## L23: the Evolve prompt's explanation line.
+const EVOLVE_HOW := "Free, no AP. It keeps its zone, stance, statuses and stat changes. Not a Summon."
 ## Stance answers (#34): full-width 44 px plates with the card badge glyph, Attack in the ember
 ## family and Defense in steel, so the two answers read apart at a glance.
 const STANCE_FAMILY := {"atk": "danger", "def": "steel"}
@@ -86,7 +88,8 @@ const TOAST_FADE := 0.12
 const STATUS_ANCHOR_MS := 1500
 ## G03: caption under each card of the response strip, by role.
 const ROLE_CAPTIONS := {"attacker": "Attacker", "target": "Target", "summoned": "Summoned",
-	"activated": "Activated", "destroyed": "Destroyed", "direct": "Direct attack"}
+	"activated": "Activated", "destroyed": "Destroyed", "direct": "Direct attack",
+	"evolve_from": "Now", "evolve_to": "Evolves into"}   # L23: the Evolve prompt
 
 ## The host screen this component works on.
 var gs: GameScreen
@@ -100,8 +103,8 @@ var banner_name: Label
 var banner_sub: RichTextLabel
 ## Banner buttons (skip, confirm ...).
 var banner_btns: HFlowContainer
-## Row under the buttons holding the Cancel link (design review #34: the escape hatch is a text
-## link, 16 px under the answers, not a button of the same weight).
+## Row under the buttons holding the Cancel button (L6, owner 2026-11-05: a real Secondary-family
+## button as wide as the panel, quieter than the gold answers; it replaced design review #34's link).
 var cancel_row: HBoxContainer
 ## Banner flow of option buttons.
 var banner_flow: HFlowContainer
@@ -140,8 +143,8 @@ var decline_pair: BoxContainer
 var tray: PanelContainer
 ## Container of the tray cards.
 var tray_box: VBoxContainer
-## Notice that the opponent is responding.
-var wait_chip: PanelContainer
+## Notice that the opponent is responding (WaitNotice, L16).
+var wait_chip: Control
 ## Text of the wait notice (its dots animate: WaitingDots).
 var wait_label: Label
 ## Short toast message over the board.
@@ -297,7 +300,7 @@ func _build_subject(col: VBoxContainer) -> void:
 ## is given only when visible (MatchView._add_source) and the name is matched among my own visible
 ## cards; a Trap response names no card (which face-down card may respond stays hidden).
 func subject_for(pd: Dictionary) -> Dictionary:
-	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) == "trap_response":
+	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) in ["trap_response", "evolve"]:
 		return {}
 	# G08: a zone choice is about the card it places (e.g. a unit summoned from Spent).
 	var placing := gs.details.find_card(int(pd.get("placing_uid", -1)))
@@ -386,7 +389,7 @@ func _build_mentions(col: VBoxContainer) -> void:
 ## responds to (MatchView.event_cards, already redacted for this seat), then {"role": "response"}
 ## for each card of mine that may respond (an "Activate" option). [] for any other prompt.
 static func mentions_for(pd: Dictionary) -> Array:
-	if pd.is_empty() or not bool(pd.get("mine", false)) or String(pd.get("kind", "")) != "trap_response":
+	if pd.is_empty() or not bool(pd.get("mine", false)) or not (String(pd.get("kind", "")) in ["trap_response", "evolve"]):
 		return []
 	var out: Array = []
 	for e in pd.get("mentions", []):
@@ -419,6 +422,8 @@ func _render_mentions(pd: Dictionary) -> void:
 		if i > 0:
 			var arrow := MentionArrow.new()
 			arrow.attack = String(e.get("role", "")) in ["target", "direct"]
+			if String(e.get("role", "")) == "evolve_to":
+				arrow.tint = EvolveGlyph.COLOR   # L23
 			arrow.custom_minimum_size = Vector2(MENTION_ARROW_W, 0)
 			arrow.size_flags_vertical = Control.SIZE_FILL
 			arrow.tooltip_text = "attacks" if arrow.attack else ""
@@ -606,12 +611,16 @@ class MentionArrow extends Control:
 	var attack := true
 	## Height of the cards beside it (the arrow sits on their middle, above the captions).
 	var card_h := 0.0
+	## L23: the arrow's colour when set (alpha > 0), e.g. the Evolve colour between the two forms.
+	var tint := Color(0, 0, 0, 0)
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_PASS
 
 	func _draw() -> void:
 		var col := GameTargeting.HOSTILE_COLOR if attack else Color(UIStyle.BRONZE, 0.9)
+		if tint.a > 0.0:
+			col = tint
 		var y := card_h / 2.0 if card_h > 0.0 else size.y * 0.38
 		var x0 := 2.0
 		var x1 := size.x - 2.0
@@ -639,9 +648,11 @@ class DirectToken extends Control:
 
 ## Builds the opponent-is-deciding notice and the toast (hidden).
 func build_notices() -> void:
-	# Opponent-is-deciding notice (user feedback: otherwise the game looks stuck), docked under the
-	# opponent's plate (#38). Click-through.
+	# Opponent-is-deciding notice (user feedback: otherwise the game looks stuck). L16: it appears in
+	# the middle of the board, then settles under the opponent's plate. Click-through.
 	var wn := WaitNotice.new()
+	wn.anchors = wait_anchors
+	wn.wanted = wait_wanted
 	wait_chip = wn
 	wait_label = wn.label
 	gs.add_child(wait_chip)
@@ -799,6 +810,8 @@ func _render_banner() -> void:
 		# G03: with my responding cards shown under what they answer, the buttons say the rest.
 		var responders := mentions_for(pd).filter(func(e): return String(e.get("role", "")) == "response")
 		how = "" if not responders.is_empty() else ("Your opponent is waiting: activate a Trap or skip." if _has_activate(pd) else "Your opponent is waiting: skip to continue.")
+	elif pd["kind"] == "evolve":
+		how = EVOLVE_HOW   # L23
 	elif int(pd["max"]) > 1:
 		how = _multi_status(pd)
 	_banner_how = how
@@ -832,7 +845,7 @@ func _render_banner() -> void:
 			b.set_meta("type_choice", String(o["label"]))
 		elif pd["kind"] == "confirm" and String(o["label"]) == MatchEngine.SACRIFICE_YES:
 			b = UIStyle.danger_button(label, 14)       # J11: a sacrifice cannot be undone
-		elif pd["kind"] == "attack_target" or (not pick and not decline and (String(o["label"]).begins_with("Activate") or (pd["kind"] == "confirm" and String(o["label"]) == "Yes"))):
+		elif pd["kind"] == "attack_target" or (not pick and not decline and (String(o["label"]).begins_with("Activate") or (pd["kind"] == "confirm" and String(o["label"]) == "Yes") or (pd["kind"] == "evolve" and String(o["label"]) == MatchEngine.EVOLVE_YES))):
 			b = UIStyle.primary_button(label, 14)
 		elif String(o["label"]) == EffectEngine.TRAP_PASS_TURN:
 			b = UIStyle.wine_button(label, 14)        # D13: the third, "stand down" answer
@@ -887,8 +900,7 @@ func _render_banner() -> void:
 	if type_choice:
 		even_type_widths(row)
 	if pd["cancellable"] and not gs.view.has("tutorial"):   # a forced tutorial step has no Cancel button
-		var x := TextLink.make("Cancel", 13)
-		x.name = "CancelLink"
+		var x := PromptPlate.CancelButton.new()   # L6: a real button, not a text link
 		x.pressed.connect(gs.selection.cancel)
 		cancel_row.add_child(x)
 		cancel_row.visible = true
@@ -1417,19 +1429,49 @@ func _fit_tray() -> void:
 	place_tray()
 
 
-## Shows (text != "") or hides the wait notice (#38): docked under the opponent's plate, right-aligned
-## with it, its hourglass turning and its dots running; it fades in after WaitNotice.APPEAR_DELAY.
+## Shows (text != "") or hides the wait notice (L16): it appears in the middle of the board, then
+## settles under the opponent's plate (WaitNotice). "Opponent" in `text` becomes the acting player's
+## name, and a line under it says what they are deciding (only what the pause itself already shows:
+## a response or a choice, never which card).
 func show_wait(text: String) -> void:
-	(wait_chip as WaitNotice).show_text(text)
+	var wn := wait_chip as WaitNotice
 	if text == "":
+		wn.show_text("")
 		return
-	wait_chip.position = wait_position(gs.board.plates[0] as Control, wait_chip.size)
+	var pd := gs.pending()
+	var sub := ""
+	if not pd.is_empty() and not gs.mv.is_empty():
+		var who := String(gs.pv(int(pd.get("player", gs.mv.get("active", 0))))["name"])
+		if who != "" and text.begins_with("Opponent "):
+			text = who + text.substr(8)
+		sub = "They may answer with a Trap" if String(pd.get("kind", "")) == "trap_response" else "Making a choice"
+	wn.show_text(text, sub)
 
 
-## Top-left of a wait notice `sz` big under the opponent plate `plate` (md gap, right edges aligned).
-static func wait_position(plate: Control, sz: Vector2) -> Vector2:
+## L16: [centre, dock] of the wait notice in this screen: the middle of the centre line between the two
+## front rows, and the top-right corner of its dock under the opponent's plate (right edges aligned).
+func wait_anchors() -> Array:
+	var board := gs.board
+	var plate := board.plates[0] as Control
+	var centre := Vector2(board.deco.x0 + (board.deco.x1 - board.deco.x0) / 2.0, board.deco.mid_y)
+	return [centre, wait_dock(plate)]
+
+
+## L16: the top-right corner of the wait notice's dock under the opponent plate `plate`.
+static func wait_dock(plate: Control) -> Vector2:
 	var ph := maxf(plate.size.y, plate.get_combined_minimum_size().y)
-	return Vector2(plate.position.x + plate.size.x - sz.x, plate.position.y + ph + UIStyle.sp("md") + WaitNotice.NOTCH)
+	return Vector2(plate.position.x + plate.size.x, plate.position.y + ph + WaitNotice.DOCK_GAP)
+
+
+## L16: true while the wait notice still has something to wait for (the opponent's choice in a live
+## game, no series modal over the board); it clears itself as soon as this turns false.
+func wait_wanted() -> bool:
+	if gs.mv.is_empty() or String(gs.view.get("stage", "")) != "game" or int(gs.mv.get("winner", -1)) != -1:
+		return false
+	if gs.overlays.overlay.visible:
+		return false
+	var pd := gs.pending()
+	return not pd.is_empty() and (not bool(pd.get("mine", false)) or gs.is_spectator())
 
 
 

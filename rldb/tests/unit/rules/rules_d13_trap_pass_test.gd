@@ -3,18 +3,19 @@ extends GdUnitTestSuite
 ## and "Skip for the rest of this turn", after which the engine offers that player no Trap window
 ## until the turn ends.
 
-const DAMAGE_CONVERSION := 47      # Trap: an attack on one of your units in this column
+const DAMAGE_CONVERSION := 47      # Trap: an opponent's unit in this column declares an attack (2026-11-03)
 const ATTACKER := 1
 const DEFENDER := 0
 
 
 ## Player 1's Battle Phase: two attackers, and player 0's sturdy Defense unit with Damage
-## Conversion set in its column (it survives both attacks).
+## Conversion set in its column (it survives both attacks). Since 2026-11-03 the Trap answers an
+## attacker in its own column, so both attackers stand in column 1 (front and back row).
 func _board() -> Dictionary:
 	var m := TB.make()
 	TB.p1_battle(m)
 	var a1 := TB.unit(m, ATTACKER, TB.WATER, 0, "atk", 10, 10)
-	var a2 := TB.unit(m, ATTACKER, TB.WATER, 1, "atk", 10, 10)
+	var a2 := TB.unit(m, ATTACKER, TB.WATER, 3, "atk", 10, 10)
 	var wall := TB.unit(m, DEFENDER, TB.WATER, 0, "def", 5, 40)
 	var trap := TB.set_card(m, DEFENDER, DAMAGE_CONVERSION, 0)
 	return {"m": m, "a1": a1, "a2": a2, "wall": wall, "trap": trap}

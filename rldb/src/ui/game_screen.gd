@@ -98,6 +98,8 @@ var inspect: GameInspect
 var chat: GameChat
 ## A2 spectating: badges, the Spectators list, the live cursor.
 var spectate: GameSpectate
+## L5: sacrifice mode (the Sacrifice button toggles it).
+var sacrifice: GameSacrificeMode
 
 var _fx_seq: int = -1
 var _fx_game: int = -99
@@ -114,6 +116,10 @@ static var _coin_shown: Dictionary = {}
 static var _start_heard: Dictionary = {}
 ## The game-1 coin flip while it plays (null otherwise).
 var _coin: CoinFlip
+## L14: games ("<save id>#<game no>") whose opening deal this screen has played.
+var _deal_shown: Dictionary = {}
+## L14: seconds from a game 2+ first view to its opening deal (the series modal leaves meanwhile).
+const OPENING_DEAL_DELAY := 0.3
 
 
 func _init() -> void:
@@ -134,6 +140,7 @@ func _init() -> void:
 	inspect = GameInspect.new(self)
 	chat = GameChat.new(self)
 	spectate = GameSpectate.new(self)
+	sacrifice = GameSacrificeMode.new(self)
 
 
 func _ready() -> void:
@@ -194,6 +201,7 @@ func attach(c: SeatClient) -> void:
 	keyboard.kb_uid = -1
 	row_open = false
 	acting_uid = -1
+	sacrifice.reset()   # L5: a new seat or game starts outside sacrifice mode
 	prompt.seen_toast_seq = -1
 	preview.reset()
 	action_row.clear()
@@ -210,6 +218,7 @@ func attach(c: SeatClient) -> void:
 		_fx_game = -99
 		prev_mv = {}
 		mv = {}
+	fx.views.clear()   # L4: the seat's latest view is shown below; older waiting ones are moot
 	fx.finish_all()
 	hover.clear()
 	hand.reset()
@@ -270,7 +279,54 @@ func _on_status(text: String) -> void:
 	prompt.on_status(text)
 
 
+## A new view from the seat client. L4 (owner feedback 2026-11-05): while earlier effects still play,
+## the view waits its turn (FxPlayer.views) and _pump shows it once they are done, so animations are
+## queued, never cut short, and the board never runs ahead of them. A view of another game is shown at
+## once, with whatever still waits shown first without its effects.
 func _on_view(v: Dictionary) -> void:
+	if FxPlayer.sequence_views and not mv.is_empty():
+		if int(v.get("game_no", -1)) != int(view.get("game_no", -1)):
+			_flush_views()
+		elif not fx.views.is_empty() or not _held.is_empty() or fx.gating():
+			fx.views.push(v)
+			if int(v.get("match", {}).get("winner", -1)) != -1 and int(mv.get("winner", -1)) == -1:
+				# J9: the kill was made; it waits its turn, but from now on no input reaches the board.
+				fx.expect_game_end([{"k": "game_over"}])
+				overlays.clear_board_interactions()
+			for old in fx.views.take_overflow():
+				_apply_view(old, true)   # far behind: the oldest are shown at once, without their effects
+			_hold_seat()
+			return
+	_apply_view(v)
+
+
+## L4: shows the waiting views in order while nothing holds them back (called every frame).
+func _pump() -> void:
+	while not fx.views.is_empty() and _held.is_empty():
+		if fx.gating():
+			if not fx.stalled():
+				return
+			fx.finish_all()   # safety net: a batch that never ends must not freeze the board
+		_apply_view(fx.views.pop())
+
+
+## L4: shows every waiting view at once, without its effects (a seat switch, a new game, a skip).
+func _flush_views() -> void:
+	fx.finish_all()
+	if not _held.is_empty():
+		_release_held()
+		fx.finish_all()
+	while not fx.views.is_empty():
+		_apply_view(fx.views.pop(), true)
+
+
+## L4: a hot-seat hand-over waits while effects play or views wait (SessionLauncher._check_hotseat).
+func _hold_seat() -> void:
+	fx_hold_until = maxi(fx_hold_until, Time.get_ticks_msec() + 150)
+
+
+## Renders view `v` and plays its new events (none when `quiet`: shown at once, effects skipped).
+func _apply_view(v: Dictionary, quiet: bool = false) -> void:
 	# F06-02: battle music while a game is in progress, menu music between games.
 	Music.set_mode("battle" if String(v.get("stage", "")) == "game" else "menu")
 	if not _held.is_empty():
@@ -284,6 +340,8 @@ func _on_view(v: Dictionary) -> void:
 		multi = []
 		_multi_pid = pid
 	var events := _collect_fx()
+	if quiet:
+		events = []
 	fx.expect_game_end(events)   # F03-13: the result modal waits for the victory / defeat presentation
 	if fx.game_end_hold:
 		overlays.clear_board_interactions()   # J9 / J10: the kill was made; nothing else stays in hand
@@ -307,8 +365,11 @@ func _on_view(v: Dictionary) -> void:
 	prompt.show_log_toasts()
 	_maybe_coin_flip()
 	_maybe_game_start()
+	_maybe_opening_deal()
 	if not events.is_empty():
 		fx.play(events, prev_mv)
+		if fx.gating():
+			_hold_seat()
 
 
 ## Shows the spotlight over the board as it was before the Spell/Trap (a Spell cast from your
@@ -328,17 +389,24 @@ func _hold_for_spotlight(spots: Array, rest: Array) -> void:
 	mv = shown
 	render_all()
 	fx.play(spots, prev_mv)
-	get_tree().create_timer(UIStyle.dur(FxPlayer.SPOT_HOLD) * spots.size()).timeout.connect(func():
+	get_tree().create_timer(UIStyle.dur(FxPlayer.SPOT_HOLD) * spots.size() / fx.speed).timeout.connect(func():
 		if gen == _held_gen and not _held.is_empty():
 			_release_held())
 
 
-## Skips running effects and any held spotlight at once, exactly like a click does (tests use it).
+## Skips running effects and any held spotlight at once and shows every waiting view (L4), so the
+## board is current (tests and the dev drivers use it; play never skips).
 func skip_effects() -> void:
 	fx.finish_all()
 	if not _held.is_empty():
 		_release_held()
 	fx.finish_all()
+	while not fx.views.is_empty():
+		_apply_view(fx.views.pop())
+		fx.finish_all()
+		if not _held.is_empty():
+			_release_held()
+			fx.finish_all()
 
 
 ## Applies a view held back for a spotlight (and plays its effects).
@@ -390,8 +458,8 @@ func _maybe_coin_flip() -> void:
 	coin.play(String(pv(first)["name"]), String(pv(1 - first)["name"]), first == me() and not is_spectator(), first)
 
 
-## L1: game 2 on of a series opens with the deck shuffle, then the call to battle. Game 1 plays
-## them with its coin flip (the stinger as the coin lands, the shuffle with the deal).
+## L1: game 2 on of a series opens with the call to battle (game_start); game 1 plays it as its coin
+## lands. The deck shuffle sounds with the opening deal (_deal_after_coin) in every game.
 func _maybe_game_start() -> void:
 	if mv.is_empty() or view.get("stage", "") != "game" or int(view.get("game_no", 0)) < 2 or int(mv.get("turn", 0)) != 1:
 		return
@@ -399,9 +467,7 @@ func _maybe_game_start() -> void:
 	if _start_heard.has(key):
 		return
 	_start_heard[key] = true
-	Sfx.play("card_shuffle", 0.0, 0.0)
-	if is_inside_tree():
-		get_tree().create_timer(0.45).timeout.connect(func(): Sfx.play("game_start", 0.0, 0.0))
+	Sfx.play("game_start", 0.0, 0.0)
 
 
 ## K3 (owner, 23 Oct): the coin flip covers the whole window (its dim fills every edge, like the
@@ -425,6 +491,31 @@ func _coin_gone() -> void:
 	_coin = null
 	if String(view.get("stage", "")) == "game" or String(view.get("stage", "")) == "":
 		menu.raise_top_strip(false)
+
+
+## L14 (owner, 5 Nov): games 2+ of a series open like game 1. The first view of a new game skips its
+## effects (_collect_fx), so the opening draw was never animated; game 1's coin flip deals the hands
+## in afterwards, but later games have no coin and the player going first saw their hand simply
+## appear. Now the hands wait hidden while the series modal leaves, then are dealt exactly as after
+## the coin (_deal_after_coin). Once per game (a re-render or reconnect never deals again), for the
+## player going first, the one going second (their hand is still empty; the opponent's fades in)
+## and spectators alike.
+func _maybe_opening_deal() -> void:
+	if mv.is_empty() or view.get("stage", "") != "game" or int(view.get("game_no", 0)) < 2 or int(mv.get("turn", 0)) != 1:
+		return
+	if coin_playing():
+		return
+	var key := "%s#%d" % [String(view.get("save_id", "local")), int(view.get("game_no", 0))]
+	if _deal_shown.has(key):
+		return
+	_deal_shown[key] = true
+	if UIStyle.reduce_motion:
+		return
+	hand.layer.modulate.a = 0.0
+	board.opp_hand_box.modulate.a = 0.0
+	get_tree().create_timer(UIStyle.dur(OPENING_DEAL_DELAY)).timeout.connect(func():
+		if is_instance_valid(self) and is_inside_tree():
+			_deal_after_coin(), CONNECT_ONE_SHOT)
 
 
 ## Shows the hands once the coin flip is done: mine dealt in from the draw pile, the opponent's
@@ -616,11 +707,8 @@ func _input(event: InputEvent) -> void:
 		keyboard.kb_uid = -1
 		if action_row.stack != null:
 			action_row.rebuild()
-	if (event is InputEventMouseButton and event.pressed) or (event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_SPACE]):
-		if fx != null and fx.busy():
-			fx.finish_all()
-		if not _held.is_empty():
-			_release_held()   # a click skips the spotlight and applies its effects at once
+	# L4 (owner feedback 2026-11-05): a click or key no longer skips the running effects or a spotlight;
+	# they play out and later views wait their turn (a backlog plays faster, FxViewQueue).
 
 
 ## J9: the input swallowed while the game ends: every mouse button but the wheel, and every key outside
@@ -634,6 +722,11 @@ func _ending_blocks(event: InputEvent) -> bool:
 
 
 func _process(_d: float) -> void:
+	if fx != null:
+		if not fx.views.is_empty() or not _held.is_empty():
+			_pump()
+		if not fx.views.is_empty() or not _held.is_empty() or fx.gating():
+			_hold_seat()
 	if not is_visible_in_tree():
 		return
 	targeting.update_arrow()

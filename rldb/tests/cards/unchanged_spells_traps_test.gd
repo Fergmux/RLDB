@@ -44,8 +44,8 @@ func test_c041_delayed_gratification_never_retains_itself() -> void:
 
 # ---------------------------------------------------------------- 154 Sneaky Snunday
 
-# 2026-10-18: Damage and Healing are not gains or losses, so Snunday leaves HP alone; an AP gain
-# still flips, and only this turn.
+# 2026-10-18: Damage and Healing are not gains or losses, so Snunday leaves HP alone. L15
+# (2026-11-05): it reverses ATK/DEF only, so an AP gain is not reversed either; it lasts this turn.
 func test_c154_sneaky_snunday_reverses_gains_this_turn_only_but_never_damage() -> void:
 	var m := CF.make()
 	var brew := TB.power(m, 0, 167)
@@ -57,7 +57,7 @@ func test_c154_sneaky_snunday_reverses_gains_this_turn_only_but_never_damage() -
 	var f := m.make_frame(-1, 0, [{"op": "ap", "n": 1}], "test")
 	m.push_frame(f)
 	m.run()
-	assert_int(CF.ap(m, 0)).is_equal(maxi(ap - 1, 0))           # an AP gain is reversed
+	assert_int(CF.ap(m, 0)).is_equal(ap + 1)                    # an AP gain is not reversed (L15)
 	CF.end_turn(m)                                               # player 1's turn: reversal over
 	assert_bool(m.reversal_active()).is_false()
 
@@ -77,15 +77,16 @@ func test_c083_sacred_offerings_can_target_an_opponent_unit() -> void:
 
 # ---------------------------------------------------------------- 84 Assassinate
 
-func test_c084_assassinate_def_boundary_is_inclusive_at_30() -> void:
+# 2026-11-03: the limit is 20 DEF or less (was 30); the boundary is still inclusive.
+func test_c084_assassinate_def_boundary_is_inclusive_at_20() -> void:
 	var m := CF.make()
-	var at30 := TB.unit(m, 1, TB.WATER, 0, "atk", null, 30)
-	var at31 := TB.unit(m, 1, TB.WATER, 1, "atk", null, 31)
+	var at20 := TB.unit(m, 1, TB.WATER, 0, "atk", null, 20)
+	var at21 := TB.unit(m, 1, TB.WATER, 1, "atk", null, 21)
 	TB.cast(m, 0, 84)
-	assert_bool(at30 in CF.offered(m)).is_true()
-	assert_bool(at31 in CF.offered(m)).is_false()
-	TB.choose_uids(m, [at30])
-	assert_str(CF.zone(m, at30)).is_equal("spent")
+	assert_bool(at20 in CF.offered(m)).is_true()
+	assert_bool(at21 in CF.offered(m)).is_false()
+	TB.choose_uids(m, [at20])
+	assert_str(CF.zone(m, at20)).is_equal("spent")
 
 
 # ---------------------------------------------------------------- 138 No Hubris
@@ -108,7 +109,7 @@ func test_c182_shimmer_serum_atk_lasts_until_end_of_turn_and_blinds_and_infiltra
 	var own := TB.unit(m, 0, TB.WATER, 0)
 	TB.cast(m, 0, 182)
 	TB.choose_uids(m, [own])
-	assert_int(m.atk_of(own)).is_equal(28)                       # +20 since 2026-10-18
+	assert_int(m.atk_of(own)).is_equal(8 + 10)                   # +10 since 2026-11-03 (+20 from 2026-10-18)
 	assert_int(m.status_count(own, "blind")).is_equal(1)
 	assert_int(m.status_count(own, "infiltrate")).is_equal(1)
 	CF.end_turn(m)
@@ -207,9 +208,9 @@ func test_c103_alexanders_arrow_uses_lowest_own_atk() -> void:
 	TB.set_card(m, 0, 103, 0)
 	TB.unit(m, 0, TB.WATER, 0, "atk", 10)
 	TB.unit(m, 0, TB.WATER, 1, "atk", 4)
-	var u := TB.summon(m, 1, 24, 2)                             # Chidori Monk, 14 ATK
+	var u := TB.summon(m, 1, 24, 2)                             # Chidori Monk, 16 ATK (2026-11-03)
 	TB.choose(m, ["Activate Alexander's Arrow"])
-	assert_int(m.atk_of(u)).is_equal(10)
+	assert_int(m.atk_of(u)).is_equal(16 - 4)
 
 
 # ---------------------------------------------------------------- 140 Energy Dispel
@@ -287,10 +288,11 @@ func test_c052_defcon_2_rejects_spent_units_costing_more_than_two() -> void:
 
 # ---------------------------------------------------------------- 165 Saviour Appears: Defcon 1
 
-func test_c165_defcon_1_ignores_summons_below_24_atk() -> void:
+# 2026-11-03: the trigger is a summon with 20 ATK or more (was 24).
+func test_c165_defcon_1_ignores_summons_below_20_atk() -> void:
 	var m := CF.p1_main()
 	var trap := TB.set_card(m, 0, 165, 0)
 	TB.card(m, 0, 28, "spent")
-	TB.summon(m, 1, 77, 0)                                       # Radablast, 22 ATK
+	TB.summon(m, 1, 13, 0)                                       # Chaos Witch, 18 ATK: just under 20
 	assert_bool(CF.labels(m).has("Activate Saviour Appears: Defcon 1")).is_false()
 	assert_str(CF.zone(m, trap)).is_equal("backrow")

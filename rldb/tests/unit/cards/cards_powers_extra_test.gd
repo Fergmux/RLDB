@@ -8,9 +8,9 @@ func test_c053_power_of_normal_boosts_only_basic_units() -> void:
 	var m := TB.make()
 	TB.power(m, 0, 53)
 	var basic := TB.unit(m, 0, TB.WATER, 0)
-	var other := TB.unit(m, 0, 28, 1)
+	var other := TB.unit(m, 0, 28, 1)                      # Guardian of the Forest, 12 ATK (2026-11-03)
 	assert_int(m.atk_of(basic)).is_equal(16)
-	assert_int(m.atk_of(other)).is_equal(14)
+	assert_int(m.atk_of(other)).is_equal(12)
 
 
 func test_c054_strength_in_unity_scales_with_unique_races() -> void:
@@ -168,14 +168,14 @@ func test_c178_reinforcements_discounts_units_when_only_opponent_has_units() -> 
 	var u := TB.card(m, 0, 28)
 	assert_int(m.current_cost(u)).is_equal(2)
 	TB.unit(m, 1, TB.WATER, 0)
-	assert_int(m.current_cost(u)).is_equal(0)                  # -2 AP since 2026-10-18
+	assert_int(m.current_cost(u)).is_equal(1)                  # -1 AP since 2026-11-03 (was -2)
 
 
 func test_c179_tyrants_lantern_boosts_fire_and_punishes_both_on_fire_death() -> void:
 	var m := TB.make()
 	TB.power(m, 0, 179)
 	var fire := TB.unit(m, 0, TB.FIRE, 0)
-	assert_int(m.atk_of(fire)).is_equal(20)
+	assert_int(m.atk_of(fire)).is_equal(8 + 8)                 # +8 since 2026-11-03 (was +12)
 	TB.kill(m, fire)
 	assert_int(m.players[0]["hp"]).is_equal(54)
 	assert_int(m.players[1]["hp"]).is_equal(54)

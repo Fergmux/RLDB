@@ -114,6 +114,11 @@ func choose(m: MatchEngine, depth: int) -> Dictionary:
 	var n := opts.size()
 	if n == 0:
 		return {"t": "cancel", "id": pd["id"]}
+	if String(pd["kind"]) == "evolve":
+		# L23 (owner, 2026-11-05): the bot always evolves.
+		for i in n:
+			if String(opts[i]["label"]) == MatchEngine.EVOLVE_YES:
+				return {"t": "choose", "id": pd["id"], "indices": [i]}
 	if int(pd["max"]) > 1:
 		return {"t": "choose", "id": pd["id"], "indices": _multi_pick(m, depth)}
 	if n == 1 or depth >= 2:

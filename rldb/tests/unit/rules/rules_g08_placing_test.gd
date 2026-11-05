@@ -25,7 +25,7 @@ func test_normal_summon_places_the_hand_card() -> void:
 func test_summon_from_spent_by_an_ability_places_the_chosen_unit_not_the_ability_card() -> void:
 	var m := _main()
 	var sac := TB.unit(m, 1, TB.WATER, 1)
-	var ab := TB.unit(m, 1, 12, 4)                       # Pay 2 AP: summon from Spent in this column
+	var ab := TB.unit(m, 1, 12, 4)                       # Lose 1 AP: summon a 20-ATK-or-less unit from Spent here
 	assert_str(m.submit(1, {"t": "sacrifice", "uid": sac})).is_empty()
 	assert_str(TB.ability(m, ab)).is_empty()
 	TB.choose_uids(m, [sac])
@@ -38,8 +38,9 @@ func test_summon_from_spent_by_an_ability_places_the_chosen_unit_not_the_ability
 
 func test_fusion_by_ability_places_the_fusion_unit() -> void:
 	var m := _main()
-	var hydra := TB.unit(m, 1, 27, 0)
-	var guard := TB.unit(m, 1, 28, 2)
+	# 2026-11-03 Bastion Wyrm: a unit with 20 or more ATK or DEF + a Physical unit.
+	var hydra := TB.unit(m, 1, 116, 0)                    # Basic Dragon (Physical)
+	var guard := TB.unit(m, 1, 28, 2)                     # Guardian of the Forest, 22 DEF
 	var al := TB.unit(m, 1, 40, 1)
 	var wyrm := TB.card(m, 1, 93, "extra")
 	assert_str(TB.ability(m, al)).is_empty()

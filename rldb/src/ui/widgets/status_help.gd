@@ -243,7 +243,7 @@ static func _tip_block(caption: String, body: String, col: Color, name: String) 
 		var cap := UIStyle.label(caption, 12, col)
 		cap.add_theme_font_override("font", UIStyle.font_bold())
 		cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		vb.add_child(cap)
+		vb.add_child(CardDetailsPanel.caption_icon(cap, caption, 14.0))   # L23: the Evolve section's icon
 	var bl := UIStyle.label(body, 14, UIStyle.TEXT, true)
 	bl.custom_minimum_size.x = TIP_W - float(CardDetailsPanel.BLOCK_BAR_W + 2 * UIStyle.sp("sm"))
 	bl.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -52,7 +52,16 @@ func _on_game_over() -> void:
 ## Builds an effect frame for card src controlled by ctl.
 func make_frame(src: int, ctl: int, ops: Array, label: String, event: Dictionary = {}) -> Dictionary:
 	return {"src": src, "ctl": ctl, "ops": ops, "pc": 0, "vars": {}, "label": label,
-		"event": event, "reversed": reversal_active(), "negated": false, "committed": false}
+		"event": event, "negated": false, "committed": false}
+
+
+## L20 (owner, 2026-11-05): the status batch of frame `f` (GameCore.apply_status). Every status one
+## effect resolution applies counts as applied at the same time, so 1 Cleanse (or Curse) stack
+## prevents all of that effect's Debuffs (or Buffs) on a unit, then decrements once.
+func status_batch(f: Dictionary) -> Dictionary:
+	if not f["vars"].has("_status_batch"):
+		f["vars"]["_status_batch"] = {}
+	return f["vars"]["_status_batch"]
 
 
 ## Pushes a frame to resolve.

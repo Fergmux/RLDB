@@ -30,14 +30,15 @@ func test_sacrifice_refunds_one_ap() -> void:
 	assert_str(m.cards[u]["zone"]).is_equal("spent")
 
 
-func test_sacrificing_cliff_gives_three_ap() -> void:
+# 2026-11-03: Cliff gives +1 AP when Sacrificed or Tributed (was +2).
+func test_sacrificing_cliff_gives_two_ap() -> void:
 	var m := TB.make()
 	var cliff := TB.unit(m, 0, 174, 0)
 	m.submit(0, {"t": "sacrifice", "uid": cliff})
-	assert_int(m.players[0]["ap"]).is_equal(5)
+	assert_int(m.players[0]["ap"]).is_equal(2 + 1 + 1)      # +1 for any sacrifice, +1 from Cliff
 
 
-func test_tributing_cliff_from_field_gives_two_ap() -> void:
+func test_tributing_cliff_from_field_gives_one_ap() -> void:
 	var m := TB.make()
 	var cliff := TB.unit(m, 0, 174, 0)
 	m.apply_status(cliff, "rune", 1)
@@ -46,7 +47,7 @@ func test_tributing_cliff_from_field_gives_two_ap() -> void:
 	TB.choose_uids(m, [cliff])
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
-	assert_int(m.players[0]["ap"]).is_equal(4)
+	assert_int(m.players[0]["ap"]).is_equal(2 + 1)           # +1 from Cliff (2026-11-03; was +2)
 	assert_str(m.cards[inferno]["zone"]).is_equal("unit")
 
 
@@ -71,11 +72,11 @@ func test_arcane_three_with_spent_costs_two_and_two_is_unavailable_no_overpaymen
 	var m := TB.make()
 	var a := TB.card(m, 0, 28, "spent")               # Guardian of the Forest (cost 2)
 	var b := TB.card(m, 0, 32, "spent")               # Frost Wyvern (cost 2)
-	var boom := TB.card(m, 0, 175, "extra")           # Boom 3A
-	assert_str(m.submit(0, {"t": "arcane", "uid": boom})).contains("exactly")
+	var three := TB.card(m, 0, 174, "extra")          # Cliff 3A since 2026-11-03 (Boom is 4A now)
+	assert_str(m.submit(0, {"t": "arcane", "uid": three})).contains("exactly")
 	assert_str(m.cards[a]["zone"]).is_equal("spent")
 	assert_str(m.cards[b]["zone"]).is_equal("spent")
-	assert_str(m.cards[boom]["zone"]).is_equal("extra")
+	assert_str(m.cards[three]["zone"]).is_equal("extra")
 	assert_int(m.players[0]["ap"]).is_equal(2)
 
 
@@ -83,17 +84,17 @@ func test_arcane_materials_below_requirement_are_rejected() -> void:
 	var m := TB.make()
 	var a := TB.card(m, 0, 28, "spent")
 	var b := TB.card(m, 0, TB.WATER, "spent")
-	TB.card(m, 0, 175, "extra")
-	var boom: int = m.players[0]["extra"][0]
-	m.submit(0, {"t": "arcane", "uid": boom})
+	TB.card(m, 0, 174, "extra")                       # Cliff 3A (2026-11-03): 2 + 1 can pay it
+	var three: int = m.players[0]["extra"][0]
+	assert_str(m.submit(0, {"t": "arcane", "uid": three})).is_empty()
 	assert_str(TB.choose_uids(m, [b])).contains("required")
 
 
 func test_extra_deck_unit_is_not_arcane_material() -> void:
 	var m := TB.make()
 	TB.card(m, 0, 93, "spent")                       # Fusion unit in Spent
-	TB.card(m, 0, 174, "spent")                      # Arcane unit (2A) in Spent
-	var kaya := TB.card(m, 0, 170, "extra")          # 1A
+	TB.card(m, 0, 174, "spent")                      # Arcane unit (3A) in Spent
+	var kaya := TB.card(m, 0, 170, "extra")          # 2A (2026-11-03)
 	assert_str(m.validate(0, {"t": "arcane", "uid": kaya})).contains("exactly")
 
 
@@ -105,7 +106,8 @@ func test_extra_deck_unit_does_not_match_ordinary_cost_two() -> void:
 	assert_bool(arc in m.select(f, {"kind": "spent", "side": "self", "cost_max": 2})).is_false()
 
 
-func test_roma_with_three_rune_material_becomes_36() -> void:
+# 2026-11-03: +10 per Rune used (was +12).
+func test_roma_with_three_rune_material_becomes_30() -> void:
 	var m := TB.make()
 	var mat := TB.unit(m, 0, TB.WATER, 0)
 	m.apply_status(mat, "rune", 3)
@@ -114,8 +116,8 @@ func test_roma_with_three_rune_material_becomes_36() -> void:
 	TB.choose_uids(m, [mat])
 	TB.choose(m, ["Front row, column 1"])
 	TB.choose(m, ["Attack"])
-	assert_int(m.atk_of(roma)).is_equal(36)
-	assert_int(m.def_of(roma)).is_equal(36)
+	assert_int(m.atk_of(roma)).is_equal(3 * 10)
+	assert_int(m.def_of(roma)).is_equal(3 * 10)
 
 
 func test_roma_summoned_without_a_ritual_is_0_0() -> void:
@@ -135,8 +137,9 @@ func test_roma_with_zero_rune_material_is_illegal() -> void:
 
 func test_polymerization_fuses_field_materials_into_bastion_wyrm() -> void:
 	var m := TB.make()
-	var beast := TB.unit(m, 0, 4, 0)       # Basic Beast (Water)
-	var dragon := TB.unit(m, 0, 2, 1)      # Basic Dragon (Water)
+	# 2026-11-03 Bastion Wyrm: a unit with 20 or more ATK or DEF + a Physical unit (was Beast + Dragon).
+	var beast := TB.unit(m, 0, 28, 0)      # Guardian of the Forest, Beast 12/22
+	var dragon := TB.unit(m, 0, 116, 1)    # Basic Dragon (Physical)
 	var wyrm := TB.card(m, 0, 93, "extra")
 	var poly := TB.card(m, 0, 82)
 	assert_str(m.submit(0, {"t": "cast", "uid": poly})).is_empty()

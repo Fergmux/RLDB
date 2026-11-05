@@ -117,7 +117,7 @@ func build() -> void:
 	grid.alignment = FlowContainer.ALIGNMENT_CENTER
 	grid.last_wrap_alignment = FlowContainer.LAST_WRAP_ALIGNMENT_BEGIN
 	scroll.add_child(grid)
-	for d in CardDB.all():
+	for d in CardDB.collectible():
 		grid.add_child(_make_cell(d))
 	var cc := CenterContainer.new()
 	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -190,11 +190,11 @@ static func sort_before(a: Dictionary, b: Dictionary, mode: String, index_of: Di
 	return ia < ib
 
 
-## Card id -> position in canonical catalogue order (CardDB.all()).
+## Card id -> position in canonical catalogue order (CardDB.collectible(): L23, no evolution-only forms).
 static func catalogue_index() -> Dictionary:
 	var out := {}
 	var i := 0
-	for d in CardDB.all():
+	for d in CardDB.collectible():
 		out[int(d["id"])] = i
 		i += 1
 	return out
@@ -327,7 +327,7 @@ func refresh() -> void:
 	var race := _sel(race_opt)
 	var cost := _sel(cost_opt)
 	var n := 0
-	for d in CardDB.all():
+	for d in CardDB.collectible():
 		var show := matches(d, search.text, cat, type, race, cost)
 		_cells[int(d["id"])]["cell"].visible = show
 		if show:
@@ -512,7 +512,7 @@ func _apply_sort() -> void:
 	if mode == "":
 		mode = "index"
 	var idx := catalogue_index()
-	var defs := CardDB.all()
+	var defs := CardDB.collectible()
 	if mode != "index":
 		defs.sort_custom(func(a, b): return sort_before(a, b, mode, idx))
 	for i in defs.size():

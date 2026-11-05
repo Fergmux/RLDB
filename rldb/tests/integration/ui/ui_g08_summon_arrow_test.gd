@@ -105,10 +105,11 @@ func test_summon_from_spent_arrow_starts_at_the_summoned_card_not_the_ability_or
 ## Fusion unit being placed, not at Aleister.
 func test_fusion_by_ability_arrow_starts_at_the_fusion_unit() -> void:
 	var p := m.active
-	var hydra := TB.unit(m, p, 27, 0)               # Dragon
-	var guard := TB.unit(m, p, 28, 2)               # Beast
+	# 2026-11-03 Bastion Wyrm: a unit with 20 or more ATK or DEF + a Physical unit.
+	var hydra := TB.unit(m, p, 116, 0)              # Basic Dragon (Physical)
+	var guard := TB.unit(m, p, 28, 2)               # Guardian of the Forest, 22 DEF
 	var al := TB.unit(m, p, 40, 1)                  # Aleister: Pay 1 AP: Fusion Summon (Field)
-	var wyrm := TB.card(m, p, 93, "extra")          # Bastion Wyrm: Beast + Dragon
+	var wyrm := TB.card(m, p, 93, "extra")          # Bastion Wyrm
 	m.players[p]["ap"] = 1
 	host.broadcast()
 	await _settle()
@@ -138,10 +139,11 @@ func test_fusion_by_ability_arrow_starts_at_the_fusion_unit() -> void:
 ## itself the first material (Tag Team - S).
 func test_fusion_material_arrow_starts_at_the_fusion_unit_not_a_material() -> void:
 	var p := m.active
-	var guard := TB.unit(m, p, 28, 0)               # Beast, front zone 1
-	var hydra := TB.unit(m, p, 27, 1)               # Dragon, front zone 2
+	# 2026-11-03 Bastion Wyrm: a unit with 20 or more ATK or DEF + a Physical unit.
+	var guard := TB.unit(m, p, 28, 0)               # Guardian of the Forest (22 DEF), front zone 1
+	var hydra := TB.unit(m, p, 116, 1)              # Basic Dragon (Physical), front zone 2
 	var tt := TB.card(m, p, 8, "hand")              # Tag Team - S: On Summon Fusion (Field)
-	var wyrm := TB.card(m, p, 93, "extra")          # Bastion Wyrm: Beast + Dragon
+	var wyrm := TB.card(m, p, 93, "extra")          # Bastion Wyrm
 	m.players[p]["ap"] = 3
 	host.broadcast()
 	await _settle()

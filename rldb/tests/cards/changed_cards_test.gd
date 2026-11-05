@@ -9,13 +9,15 @@ extends GdUnitTestSuite
 
 ## [id, new cost, new ATK on the Field, new DEF on the Field]; -1 = not asserted (unchanged or
 ## modified by an On Summon / aura the placement does not trigger).
+## 2026-11-03: rows re-pinned to the 3 Nov sheet (design/card-database-update-2026-11-03.md,
+## "Stat-only changes"); the 2026-10-17 value each one replaced is kept in its comment.
 const BALANCE := [
-	[9, 2, 16, 22],      # Tag Team - F: cost 1 -> 2, DEF 8 -> 22
-	[23, 4, 30, 16],     # Auric: 50/50 -> 30/16
-	[69, -1, 20, 20],    # Magentric: 8/26 -> 20/20
-	[71, -1, -1, 16],    # Faerie Flight: DEF 18 -> 16
-	[78, -1, 24, -1],    # Abraxus Terrormane: ATK 26 -> 24
-	[162, -1, 6, -1],    # Diggie: ATK 2 -> 6
+	[9, 2, 10, 16],      # Tag Team - F: cost 1 -> 2 (10-17); 16/22 -> 10/16 (11-03)
+	[23, 4, 30, 16],     # Auric: 50/50 -> 30/16 (10-17)
+	[69, -1, 16, 16],    # Magentric: 8/26 -> 20/20 (10-17) -> 16/16 (11-03)
+	[71, -1, -1, 18],    # Faerie Flight: DEF 18 -> 16 (10-17) -> 18 (11-03)
+	[78, -1, 8, -1],     # Abraxus Terrormane: ATK 26 -> 24 (10-17) -> 8 (11-03)
+	[162, -1, 6, -1],    # Diggie: ATK 2 -> 6 (10-17)
 	[171, -1, 6, 6],     # Flying Sandworm: ATK 4 -> 6; DEF 6 (2026-11-03)
 ]
 
@@ -66,7 +68,7 @@ func test_c034_dragon_of_the_cave_gives_only_adjacent_units_six_def() -> void:
 	assert_int(m.def_of(diagonal)).is_equal(14)
 	assert_int(m.def_of(far)).is_equal(8)
 	assert_int(m.def_of(foe)).is_equal(8)
-	assert_int(m.def_of(cave)).is_equal(16)                  # not itself
+	assert_int(m.def_of(cave)).is_equal(18)                  # not itself (6/18 since 2026-11-03)
 
 
 func test_c034_dragon_of_the_cave_bonus_ends_when_it_leaves() -> void:
@@ -224,14 +226,16 @@ func test_c174_cliff_gives_one_ap_when_sacrificed_but_not_when_destroyed() -> vo
 
 # ---------------------------------------------------------------- 180 Hypnotise
 
-func test_c180_hypnotise_takes_a_20_atk_unit_until_end_of_turn() -> void:
+# 2026-11-03: 16 ATK or less (was 20).
+func test_c180_hypnotise_takes_a_16_atk_unit_until_end_of_turn() -> void:
 	var m := CF.make()
-	var ok := TB.unit(m, 1, TB.WATER, 0, "atk", 20)
-	var big := TB.unit(m, 1, TB.WATER, 1, "atk", 21)
+	var ok := TB.unit(m, 1, TB.WATER, 0, "atk", 16)
+	var big := TB.unit(m, 1, TB.WATER, 1, "atk", 17)
 	TB.cast(m, 0, 180)
 	assert_bool(ok in CF.offered(m)).is_true()
 	assert_bool(big in CF.offered(m)).is_false()
 	TB.choose_uids(m, [ok])
+	assert_str(TB.choose(m, ["Front row, column 2"])).is_empty()   # L9: the caster picks the zone
 	assert_int(int(m.cards[ok]["ctl"])).is_equal(0)
 	assert_str(m.validate(0, {"t": "sacrifice", "uid": ok})).is_not_empty()
 	CF.end_turn(m)
@@ -241,7 +245,7 @@ func test_c180_hypnotise_takes_a_20_atk_unit_until_end_of_turn() -> void:
 
 func test_c180_hypnotise_cannot_be_cast_without_a_legal_target() -> void:
 	var m := CF.make()
-	TB.unit(m, 1, TB.WATER, 0, "atk", 21)
+	TB.unit(m, 1, TB.WATER, 0, "atk", 17)                     # just over the 16-ATK limit (2026-11-03)
 	var s := TB.card(m, 0, 180)
 	m.players[0]["ap"] = 5
 	assert_str(m.submit(0, {"t": "cast", "uid": s})).is_not_empty()

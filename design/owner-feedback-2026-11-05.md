@@ -128,6 +128,36 @@ Owner answers, 2026-11-05 (these are confirmed rules, follow them exactly):
 
 | # | Item | Status | Commit / notes |
 |---|------|--------|----------------|
+| L1 | ElevenLabs sound set | in progress | audio agent |
+| L2 | New cards via draft lost | merged 7ed71c5 | Root cause in the between-games "Add a card" reward: the add command was sent at the end of a fold animation that a modal rebuild could kill. Drafting itself was fine for all cards. |
+| L3 | Extra Deck offer F/R/A | merged 7ed71c5 | Also applied to the "Add a card > Extra Deck" reward. |
+| L4 | Animations queue | merged 21a532e | Clicks no longer skip animations; a backlog speeds up (max 2x). |
+| L5 | Sacrifice mode | merged cdcd8cd | Ember screen-edge glow, lit button, knife cursor via L22. |
+| L6 | Cancel is a real button | merged cdcd8cd | |
+| L7 | Arrow hides on pick | merged cdcd8cd | |
+| L8 | Status FX + badges | in progress | status FX agent |
+| L9 | Hypnotise zone choice | merged 0326066 | |
+| L10 | Themed fonts everywhere | merged 0e9aae7 | Project default font plus a symbols fallback subset (OFL). |
+| L11 | Loak / Mimic copied art | merged d464003 | |
+| L12 | View lobby only in menu | merged 7ed71c5 | |
+| L13 | Click off closes menu | merged 7ed71c5 | |
+| L14 | Opening deal in game 2+ | merged 7ed71c5 | |
+| L15 | Sneaky Snunday rework | merged 0326066 | |
+| L16 | Opponent-responding notice | merged cdcd8cd | Centred, then docks under the opponent plate after 2.2 s. |
+| L17 | Badges inside the border | merged 21a532e | |
+| L18 | Hourglass turns, sand falls | merged 21a532e | |
+| L19 | Materials gone before On Summon | merged 0326066 | |
+| L20 | Cleanse/Curse block the whole batch | merged 0326066 | |
+| L21 | Pile click deselects | merged cdcd8cd | |
+| L22 | Custom cursor + setting | in progress | cursor agent |
+| L23 | Evolve (Symbiotes) | merged d464003 | |
+| L24 | Art for 189-191 | done 3251bd0 | |
+| L25 | New table background | merged 0e9aae7 | Forest Ruins is the default. |
+| L26 | Series results display | merged 7ed71c5 | |
+| L27 | Smarter bot | in progress | bot agent |
+| L28 | Options menu, tables, card back | merged 0e9aae7 | |
+| L29 | macOS build on GitHub | merged fddc96a | Re-export at the end. |
+| - | Stale tests re-pinned | merged 2c34eec | 114 baseline failures fixed. |
 
 ## Extra improvements (found while working)
 

@@ -170,10 +170,8 @@ func show_card_def(id: int) -> void:
 					if c != null and not c.get("hidden", false) and int(c.get("id", -1)) == id and gs.selection.item_for_uid(int(c["uid"])).size() > 0:
 						gs.selection.select(int(c["uid"]))
 						return
+	gs.selection.deselect()   # L21: one selection at a time (a selected Hand card drops back too)
 	log_card = MatchView.def_view(id)
-	gs.selected_uid = -1
-	gs.row_open = false
-	gs.action_row.clear()
 	details_sig = ""
 	Sfx.play("select")
 	gs.board.render()

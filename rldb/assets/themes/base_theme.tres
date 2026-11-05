@@ -1,0 +1,16 @@
+[gd_resource type="Theme" format=3]
+
+[ext_resource type="FontVariation" path="res://assets/fonts/body_regular.tres" id="1_body"]
+[ext_resource type="FontVariation" path="res://assets/fonts/body_bold.tres" id="2_bold"]
+[ext_resource type="FontVariation" path="res://assets/fonts/body_italic.tres" id="3_italic"]
+[ext_resource type="FontVariation" path="res://assets/fonts/body_bold_italic.tres" id="4_bold_italic"]
+
+[resource]
+default_font = ExtResource("1_body")
+Button/fonts/font = ExtResource("2_bold")
+RichTextLabel/fonts/bold_font = ExtResource("2_bold")
+RichTextLabel/fonts/bold_italics_font = ExtResource("4_bold_italic")
+RichTextLabel/fonts/italics_font = ExtResource("3_italic")
+RichTextLabel/fonts/mono_font = ExtResource("1_body")
+RichTextLabel/fonts/normal_font = ExtResource("1_body")
+TooltipLabel/fonts/font = ExtResource("1_body")

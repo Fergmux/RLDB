@@ -348,7 +348,7 @@ static func from_save(d: Dictionary) -> Series:
 		# means vs bot), so a resumed hot-seat series keeps its one-press Start (G05).
 		s.cfg["mode"] = "bot" if String(s.names[1]) == "Bot" else "local"
 	s.stage = d["stage"]
-	s.decks = d["decks"].map(func(dk): return dk.map(func(i): return int(i)))
+	s.decks = d["decks"].map(func(dk): return CardDB.sanitize_deck(dk))   # L23: no evolution-only cards
 	s.deck_names = d["deck_names"]
 	s.scores = d["scores"].map(func(x): return int(x))
 	s.game_no = int(d["game_no"])
@@ -443,7 +443,7 @@ func _deck_command(p: int, cmd: Dictionary) -> String:
 			var cap_err := DeckStore.validate(ids)   # F16: Main + Extra <= 99, Extra <= 15
 			if cap_err != "":
 				return cap_err
-			decks[p] = ids        # Main/Extra placement follows each card's category at game start
+			decks[p] = CardDB.sanitize_deck(ids)   # L23: base cards only; Main/Extra placement follows category at game start
 			deck_names[p] = String(cmd.get("name", "Custom deck")).substr(0, 40)
 			deck_ready[p] = true
 			note("deck_locked", {"p": p, "source": "custom", "name": ""})
@@ -530,10 +530,11 @@ func _finish_draft(p: int) -> void:
 	_log("%s finishes drafting." % names[p])
 
 
+## Implemented cards of draft category `cat` that may be offered (Series.is_offerable).
 func _draft_pool(cat: String) -> Array:
 	var out := []
 	for d in CardDB.all():
-		if not CardScripts.is_implemented(d["id"]):
+		if not is_offerable(int(d["id"])):
 			continue
 		var c: String = d["category"]
 		var ok := false
@@ -546,6 +547,67 @@ func _draft_pool(cat: String) -> Array:
 	return out
 
 
+## L3: the one place that decides whether card `id` may be offered in a draft or as a reward: it is
+## implemented and collectible (L23: evolution-only cards such as Symbiote Larva are not).
+static func is_offerable(id: int) -> bool:
+	return CardScripts.is_implemented(id) and CardDB.is_collectible(id)
+
+
+## L3 (owner, 5 Nov): an Extra Deck offer is always one Fusion, one Ritual and one Arcane, shown in
+## that order (EXTRA_CATEGORIES), each drawn at random from its own kind. Fallback, so an offer is
+## never short while cards remain: a kind with nothing to offer gives its slot to the other kinds
+## (drawn from the Extra Deck cards of the other kinds not already offered), and an offer of more
+## than three (a larger `offer` setting) fills its extra slots the same way. The offer stays sorted
+## Fusion, Ritual, Arcane whatever filled it; with fewer cards than slots it is simply shorter.
+func _extra_offer(n: int, pools: Dictionary) -> Array:
+	var chosen := {}
+	for k in EXTRA_CATEGORIES:
+		chosen[k] = []
+	var count := 0
+	for k in EXTRA_CATEGORIES:
+		var pool: Array = pools.get(k, [])
+		if count >= n or pool.is_empty():
+			continue
+		var j := rng.randi_range(0, pool.size() - 1)
+		chosen[k].append(pool[j])
+		pool.remove_at(j)
+		count += 1
+	var rest := []   # [kind, id] of every card still unoffered, in kind order
+	for k in EXTRA_CATEGORIES:
+		for id in pools.get(k, []):
+			rest.append([k, id])
+	while count < n and not rest.is_empty():
+		var j := rng.randi_range(0, rest.size() - 1)
+		chosen[rest[j][0]].append(rest[j][1])
+		rest.remove_at(j)
+		count += 1
+	var out := []
+	for k in EXTRA_CATEGORIES:
+		out.append_array(chosen[k])
+	return out
+
+
+## L3: the offerable Extra Deck cards by kind: {"fusion": [ids], "ritual": [...], "arcane": [...]}.
+static func extra_pools() -> Dictionary:
+	var out := {}
+	for k in EXTRA_CATEGORIES:
+		out[k] = []
+	for d in CardDB.all():
+		if String(d["category"]) in EXTRA_CATEGORIES and is_offerable(int(d["id"])):
+			out[String(d["category"])].append(int(d["id"]))
+	return out
+
+
+## `n` different cards drawn at random from `pool` (fewer when it is smaller). Consumes `pool`.
+func _draw_offer(pool: Array, n: int) -> Array:
+	var offer := []
+	for i in mini(n, pool.size()):
+		var j := rng.randi_range(0, pool.size() - 1)
+		offer.append(pool[j])
+		pool.remove_at(j)
+	return offer
+
+
 func _ensure_offer(p: int) -> void:
 	var st: Dictionary = draft[p]
 	var cat: String = st["current"]
@@ -553,13 +615,8 @@ func _ensure_offer(p: int) -> void:
 		st["offer"] = []
 		return
 	if not st["offers"].has(cat):
-		var pool := _draft_pool(cat)
-		var offer := []
-		for i in mini(int(cfg["draft"]["offer"]), pool.size()):
-			var j := rng.randi_range(0, pool.size() - 1)
-			offer.append(pool[j])
-			pool.remove_at(j)
-		st["offers"][cat] = offer
+		var n := int(cfg["draft"]["offer"])
+		st["offers"][cat] = _extra_offer(n, extra_pools()) if cat == "extra" else _draw_offer(_draft_pool(cat), n)
 	st["offer"] = st["offers"][cat]
 
 
@@ -637,20 +694,16 @@ static func reward_pool(cat: String) -> Array:
 	var cats: Array = EXTRA_CATEGORIES if cat == "extra" else [cat]
 	var pool := []
 	for d in CardDB.all():
-		if CardScripts.is_implemented(d["id"]) and d["category"] in cats:
+		if is_offerable(int(d["id"])) and d["category"] in cats:
 			pool.append(d["id"])
 	return pool
 
 
-## Draws the add-card offer for player p from the chosen type.
+## Draws the add-card offer for player p from the chosen type. L3: an Extra Deck offer is one
+## Fusion, one Ritual and one Arcane, like the draft's (_extra_offer).
 func _new_add_offer(p: int, cat: String) -> void:
-	var pool := reward_pool(cat)
-	var offer := []
-	for i in mini(int(cfg["reward_add_offer_count"]), pool.size()):
-		var j := rng.randi_range(0, pool.size() - 1)
-		offer.append(pool[j])
-		pool.remove_at(j)
-	rewards[p]["offer"] = offer
+	var n := int(cfg["reward_add_offer_count"])
+	rewards[p]["offer"] = _extra_offer(n, extra_pools()) if cat == "extra" else _draw_offer(reward_pool(cat), n)
 
 
 func _reward_command(p: int, cmd: Dictionary) -> String:

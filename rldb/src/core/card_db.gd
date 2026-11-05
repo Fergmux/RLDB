@@ -90,6 +90,70 @@ static func _order_before(a: Dictionary, b: Dictionary) -> bool:
 	return int(a["id"]) < int(b["id"])
 
 
+## L23 Evolve: the card id `id` evolves into, or -1 when it has no Evolve section.
+static func evolves_into(id: int) -> int:
+	if not has(id):
+		return -1
+	var nxt = _defs[id].get("evolves_into")
+	return -1 if nxt == null else int(nxt)
+
+
+## L23: true for a card players can own as a card: drafted, offered as a reward, put in a deck,
+## listed in the deck builder and the card library. False for an evolution-only form (Symbiote
+## Larva, Symbiote Siphonophore): it exists only by evolving its base card during a game, and is
+## reached in the catalogue through that card's "Evolves into" preview. False for an unknown id.
+## The one predicate every collection surface calls.
+static func is_collectible(id: int) -> bool:
+	if not has(id):
+		return false
+	return not _evolution_bases().has(id)
+
+
+## L23: every collectible definition, in source order (CardDB.all() filtered by is_collectible).
+static func collectible() -> Array:
+	return all().filter(func(d): return is_collectible(int(d["id"])))
+
+
+## L23: the collectible card an evolution-only form evolves from (the start of its chain:
+## Siphonophore -> Spawn); the id itself for any other card.
+static func evolution_base(id: int) -> int:
+	var bases := _evolution_bases()
+	var cur := id
+	var guard := 0
+	while bases.has(cur) and guard < 16:
+		cur = int(bases[cur])
+		guard += 1
+	return cur
+
+
+## L23: deck `ids` with every evolution-only form replaced by its base card (a deck or series saved
+## before 5 Nov 2026 may hold Symbiote Larva / Siphonophore as separate cards). Mapping keeps the
+## deck's size and its Symbiote: the player owns a Spawn that can evolve into what they had. Unknown
+## ids are kept (the callers report them). Returns a new array of ints.
+static func sanitize_deck(ids: Array) -> Array:
+	var out := []
+	for i in ids:
+		var id := int(i)
+		out.append(evolution_base(id) if has(id) else id)
+	return out
+
+
+## Evolved form -> the card it evolves from, built once from the definitions.
+static var _bases_cache: Dictionary = {}
+static var _bases_built := false
+
+
+static func _evolution_bases() -> Dictionary:
+	ensure_loaded()
+	if not _bases_built:
+		_bases_built = true
+		for id in _defs:
+			var nxt = _defs[id].get("evolves_into")
+			if nxt != null:
+				_bases_cache[int(nxt)] = int(id)
+	return _bases_cache
+
+
 static func unassigned_notes() -> Array:
 	ensure_loaded()
 	return _notes

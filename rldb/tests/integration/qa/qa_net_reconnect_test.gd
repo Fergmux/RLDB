@@ -3,7 +3,8 @@ extends "res://tests/integration/qa/qa_net_base.gd"
 ## multi-selects (Arcane materials, Plan B targets); each completes exactly once.
 
 const RITUAL_SANCT := 91
-const TYDE := 172
+# 2026-11-03: Tyde is 3A now; Flying Sandworm (2A, no On Summon) keeps the material total of 2.
+const ARCANE_2 := 171
 const PLAN_B := 163
 
 
@@ -46,7 +47,7 @@ func test_reconnect_during_optional_start_of_turn_trigger_applies_once() -> void
 func test_reconnect_during_arcane_material_multiselect_summons_once() -> void:
 	# Arrange
 	var m: MatchEngine = await _client_turn2()
-	var tyde := TB.card(m, 1, TYDE, "extra")
+	var tyde := TB.card(m, 1, ARCANE_2, "extra")
 	var mats := [TB.card(m, 1, TB.WATER, "spent"), TB.card(m, 1, TB.FIRE, "spent"), TB.card(m, 1, TB.EARTH, "spent")]
 	var ex_before: int = m.players[1]["exhaust"].size()
 	await _sync()
@@ -69,14 +70,12 @@ func test_reconnect_during_arcane_material_multiselect_summons_once() -> void:
 	_client_choose(["column 1"])
 	if await _await_pending(m, 1, "stance", 120):
 		_client_choose(["Attack"])
-	if await _await_pending(m, 1, "select", 120):
-		_client_choose(["Skip"])                     # Tyde's optional Beast search (2026-10-17)
 	assert_bool(await _await_idle(m)).is_true()
 	# Assert
 	assert_str(m.cards[tyde]["zone"]).is_equal("unit")
 	assert_int(m.players[1]["exhaust"].size()).is_equal(ex_before + 2)
 	assert_str(m.cards[mats[1]]["zone"]).is_equal("spent")
-	assert_int(m.field_units(1).filter(func(x): return m.cards[x]["id"] == TYDE).size()).is_equal(1)
+	assert_int(m.field_units(1).filter(func(x): return m.cards[x]["id"] == ARCANE_2).size()).is_equal(1)
 
 
 func test_drop_during_host_plan_b_selection_blocks_host_then_resolves_once() -> void:

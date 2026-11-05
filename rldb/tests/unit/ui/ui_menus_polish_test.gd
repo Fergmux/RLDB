@@ -93,7 +93,9 @@ func test_back_item_is_muted_with_a_glyph_and_keeps_the_back_sound() -> void:
 
 func test_leaf_tags_name_section_and_context() -> void:
 	assert_array(MainMenu.leaf_tags("settings")).is_equal(["Options", "This device"])
-	assert_array(MainMenu.leaf_tags("credits")).is_equal(["About", "v" + SteamBridge.build_version()])
+	# L28: Credits moved into Options.
+	assert_array(MainMenu.leaf_tags("credits")).is_equal(["Options", "v" + SteamBridge.build_version()])
+	assert_array(MainMenu.leaf_tags("customisation")).is_equal(["Options", "Table and cards"])
 	assert_array(MainMenu.leaf_tags("bot")).is_equal(["Play · local", "Against the bot"])
 	assert_str(String(MainMenu.leaf_tags("unknown")[0])).is_equal("Main menu")
 

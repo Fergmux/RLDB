@@ -105,6 +105,9 @@ func _create_instance(def_id: int, owner: int) -> int:
 		"summoned_turn": -1, "summoned_phase": "", "attacked_turn": -1, "moved_turn": -1, "opt": {},
 		"type_o": null, "race_o": null, "base_atk": null, "base_def": null,
 		"orig_slot": -1, "control_until": -1, "set_turn": -1,
+		# L11: id of the card whose art this unit shows while on the Field (Shapeshifter Loak / Mimic
+		# copying a unit's form), or null for its own art. Cleared when it leaves the Field.
+		"art_o": null,
 	}
 	return uid
 
@@ -419,7 +422,67 @@ func base_def(uid: int) -> int:
 	return 0 if v == null else v
 
 
-## True while effects are reversed this turn.
+# ---------------------------------------------------------------- L11 art override, L23 Evolve
+
+## L11 (owner feedback 2026-11-05): unit `uid` (Shapeshifter Loak, Mimic) takes on the ARTWORK of the
+## unit `from_uid` whose ATK/DEF/Race/Type it copies, for as long as it stays on the Field. Its name,
+## frame, text and category stay its own. A copy of a copy shows the art the copied unit shows.
+## Presentation fx "copy_form" (public: both units are face up on the Field).
+func copy_art(uid: int, from_uid: int) -> void:
+	if not unit_on_field(uid) or not cards.has(from_uid):
+		return
+	var shown := art_id(from_uid)
+	if shown == art_id(uid):
+		return
+	cards[uid]["art_o"] = shown
+	var pos := fx_pos(uid)
+	if not pos.is_empty():
+		add_fx({"k": "copy_form", "at": pos, "id": int(cards[uid]["id"]), "art": shown})
+
+
+## L11: the card id whose art unit `uid` shows: its art override while on the Field, else its own id.
+func art_id(uid: int) -> int:
+	var o = cards[uid].get("art_o")
+	if o != null and cards[uid]["zone"] == "unit":
+		return int(o)
+	return int(cards[uid]["id"])
+
+
+## L23 (owner feedback 2026-11-05): true when unit `uid` may Evolve now: a face-up Unit on the Field
+## whose card has an Evolve section, its effects not suppressed (Debilitate suppresses all of its
+## effects, Evolve included).
+func can_evolve(uid: int) -> bool:
+	if not unit_on_field(uid) or not is_face_up(uid) or is_debilitated(uid):
+		return false
+	return CardDB.evolves_into(int(cards[uid]["id"])) != -1
+
+
+## L23: replaces unit `uid`'s card with the card it evolves into, for the rest of THIS game (the
+## instance keeps the new card wherever it goes: Spent, Hand, Draw, Exhaust...; the next game of a
+## series starts from the series deck, which keeps the base card). Not a Summon: no On Summon and no
+## summon-triggered Trap. State carries over (confirmed rule): zone, slot and stance; statuses,
+## Runes, counters and every temporary or permanent stat and cost change. Base ATK/DEF and the
+## printed cost become the new card's, so a copied base (base_atk/base_def) and a copied art go;
+## once-per-turn uses belong to the old card's abilities and are cleared.
+func evolve_unit(uid: int) -> void:
+	var inst: Dictionary = cards[uid]
+	var from_id: int = int(inst["id"])
+	var to_id := CardDB.evolves_into(from_id)
+	if to_id == -1:
+		return
+	var from_name := name_of(uid)
+	inst["id"] = to_id
+	inst["evolved_turn"] = turn          # its new form's start-of-turn effects first fire next turn
+	inst["base_atk"] = null
+	inst["base_def"] = null
+	inst["art_o"] = null
+	inst["opt"] = {}
+	add_log("%s evolves %s into %s." % [pname(int(inst["ctl"])), from_name, name_of(uid)])
+	add_fx({"k": "evolve", "at": fx_pos(uid), "from": from_id, "to": to_id})
+	note("evolve", {"uid": uid, "p": int(inst["ctl"]), "from": from_id, "to": to_id})
+
+
+## True while Sneaky Snunday reverses ATK/DEF gains and losses this turn (an even number of copies cancels).
 func reversal_active() -> bool:
 	return reversal_turn == turn and reversal_count % 2 == 1
 
@@ -432,11 +495,20 @@ func swap_active() -> bool:
 ## Returns {"atk", "def", "parts": [explanations]} for a unit, recalculated live. A unit switched
 ## by Freaky Funday shows base + earlier modifiers switched; modifiers applied since were switched
 ## when applied and auras are switched while Funday lasts, so they are added as they are.
+## L15 (owner, 2026-11-05) Sneaky Snunday: "Until the end of this turn: all new and ongoing ATK/DEF
+## gains and losses are reversed." While it is active a unit on the Field reads
+## base - (unreversed - base): the whole difference from its base is mirrored, permanent changes from
+## earlier turns included. The reference base is the one Freaky Funday shows (switched when the unit
+## is switched); the unreversed value is the raw sum, so a loss past zero is mirrored in full; the
+## floor at 0 applies to the result. A unit that cannot gain ATK/DEF (no_gain) is never raised above
+## that base by the mirror either.
 func stat_breakdown(uid: int) -> Dictionary:
 	var inst: Dictionary = cards[uid]
 	var atk := base_atk(uid)
 	var def := base_def(uid)
 	var parts := ["Base %d/%d" % [atk, def]]
+	var ref_atk := atk
+	var ref_def := def
 	var no_gain := has_flag(uid, "no_gain")
 	var sw: bool = swapped.has(uid) and inst["zone"] == "unit"
 	var later_atk := 0
@@ -463,6 +535,8 @@ func stat_breakdown(uid: int) -> Dictionary:
 		var t := atk
 		atk = def
 		def = t
+		ref_atk = base_def(uid)
+		ref_def = base_atk(uid)
 		parts.append("Freaky Funday: ATK/DEF switched")
 	atk += later_atk
 	def += later_def
@@ -475,16 +549,23 @@ func stat_breakdown(uid: int) -> Dictionary:
 				var ta := aa
 				aa = ad
 				ad = ta
-			if reversal_active():
-				aa = -aa
-				ad = -ad
 			if no_gain:
 				aa = mini(aa, 0)
 				ad = mini(ad, 0)
 			atk += aa
 			def += ad
 			if aa != 0 or ad != 0:
-				parts.append("%s %+d/%+d%s" % [aura["src"], aa, ad, " (reversed)" if reversal_active() else ""])
+				parts.append("%s %+d/%+d" % [aura["src"], aa, ad])
+		if reversal_active():
+			var da := atk - ref_atk
+			var dd := def - ref_def
+			if da != 0 or dd != 0:
+				atk = ref_atk - da
+				def = ref_def - dd
+				if no_gain:
+					atk = mini(atk, ref_atk)
+					def = mini(def, ref_def)
+				parts.append("Sneaky Snunday: %+d/%+d reversed to %+d/%+d" % [da, dd, atk - ref_atk, def - ref_def])
 	return {"atk": maxi(atk, 0), "def": maxi(def, 0), "parts": parts}
 
 
@@ -612,7 +693,15 @@ func _clear_statuses_of_class(uid: int, buffs: bool) -> Array:
 
 ## Applies n stacks of a status, honouring Curse/Cleanse prevention and Cleanse
 ## clearing. Runes are counters and bypass both. Returns the stacks actually added.
-func apply_status(uid: int, s: String, n: int) -> int:
+## Curse prevents a Buff (Cleanse included) and Cleanse prevents a Debuff (Curse included).
+## L20 (owner, 2026-11-05): `batch` groups the applications of one effect resolution ("at the same
+## time"; EffectEngine.status_batch). The first application a stack prevents on a unit consumes one
+## stack; every later Buff (for Curse) or Debuff (for Cleanse) of the same batch on that unit is
+## prevented too without consuming another. Each unit is independent. Without a batch every
+## application stands alone. Each prevention emits the presentation event
+## {"k": "status_blocked", "at": fx_pos, "s": prevented status, "n": stacks, "by": "cleanse" | "curse",
+## "used": whether this one consumed the stack}.
+func apply_status(uid: int, s: String, n: int, batch: Dictionary = {}) -> int:
 	if n <= 0 or not cards.has(uid):
 		return 0
 	if s == "rune":
@@ -625,21 +714,24 @@ func apply_status(uid: int, s: String, n: int) -> int:
 	if CardDB.is_buff(s) and has_flag(uid, "no_buffs"):
 		card_log(uid, "§ cannot receive Buffs.")
 		return 0
-	if CardDB.is_buff(s) and status_count(uid, "curse") > 0 and s != "cleanse":
-		_set_status(uid, "curse", status_count(uid, "curse") - 1)
-		card_log(uid, "Curse on § prevents %s (Curse -1)." % s.capitalize())
-		return 0
-	if s == "cleanse" and status_count(uid, "curse") > 0:
-		_set_status(uid, "curse", status_count(uid, "curse") - 1)
-		card_log(uid, "Curse on § prevents Cleanse (Curse -1).")
-		return 0
-	if CardDB.is_debuff(s) and status_count(uid, "cleanse") > 0 and s != "curse":
-		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
-		card_log(uid, "Cleanse on § prevents %s (Cleanse -1)." % s.capitalize())
-		return 0
-	if s == "curse" and status_count(uid, "cleanse") > 0:
-		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
-		card_log(uid, "Cleanse on § prevents Curse (Cleanse -1).")
+	var by := ""
+	if CardDB.is_buff(s) and (status_count(uid, "curse") > 0 or _batch_blocked(batch, "curse", uid)):
+		by = "curse"
+	elif CardDB.is_debuff(s) and (status_count(uid, "cleanse") > 0 or _batch_blocked(batch, "cleanse", uid)):
+		by = "cleanse"
+	if by != "":
+		var used := not _batch_blocked(batch, by, uid)
+		if used:
+			_set_status(uid, by, status_count(uid, by) - 1)
+			if not batch.has(by):
+				batch[by] = {}
+			batch[by][uid] = true
+			card_log(uid, "%s on § prevents %s (%s -1)." % [by.capitalize(), s.capitalize(), by.capitalize()])
+		else:
+			card_log(uid, "%s on § also prevents %s (applied at the same time)." % [by.capitalize(), s.capitalize()])
+		var bpos := fx_pos(uid)
+		if not bpos.is_empty():
+			add_fx({"k": "status_blocked", "at": bpos, "s": s, "n": n, "by": by, "used": used})
 		return 0
 	_set_status(uid, s, status_count(uid, s) + n)
 	card_log(uid, "§ gains %d %s (now %d)." % [n, s.capitalize(), status_count(uid, s)])
@@ -648,6 +740,12 @@ func apply_status(uid: int, s: String, n: int) -> int:
 		add_fx({"k": "status", "at": pos, "s": s, "n": n})
 	_after_status_gain(uid, s)
 	return n
+
+
+## L20: true when a `by` ("cleanse" / "curse") stack already prevented an application on unit `uid`
+## within `batch`.
+static func _batch_blocked(batch: Dictionary, by: String, uid: int) -> bool:
+	return batch.has(by) and (batch[by] as Dictionary).has(uid)
 
 
 ## Cleanse clears all existing debuffs when gained (consuming one stack);
@@ -770,6 +868,7 @@ func _reset_field_state(uid: int) -> void:
 	inst["race_o"] = null
 	inst["base_atk"] = null
 	inst["base_def"] = null
+	inst["art_o"] = null               # L11: a copied unit's art lasts only while on the Field
 	inst["stance"] = "atk"
 	inst["face_up"] = false
 	inst["ctl"] = inst["owner"]

@@ -1,0 +1,8 @@
+[gd_resource type="FontVariation" format=3]
+
+[ext_resource type="FontFile" uid="uid://dicd61wpje301" path="res://assets/fonts/Cinzel-Variable.ttf" id="1_base"]
+[ext_resource type="FontVariation" path="res://assets/fonts/body_regular.tres" id="2_body"]
+
+[resource]
+fallbacks = Array[Font]([ExtResource("2_body")])
+base_font = ExtResource("1_base")

@@ -27,13 +27,15 @@
     {
       "title": "Fonts",
       "lines": [
-        "Cinzel (The Cinzel Project Authors) and Alegreya Sans (The Alegreya Sans Project Authors), under the SIL Open Font License 1.1."
+        "Cinzel (The Cinzel Project Authors) and Alegreya Sans (The Alegreya Sans Project Authors), under the SIL Open Font License 1.1.",
+        "RLDB Symbols, a subset of Noto Sans Symbols 2 (The Noto Project Authors), under the SIL Open Font License 1.1."
       ]
     },
     {
       "title": "Engine",
       "lines": [
-        "Made with the Godot Engine (godotengine.org/license), MIT licence."
+        "Made with the Godot Engine (godotengine.org/license), MIT licence.",
+        "Steam features through GodotSteam (godotsteam.com), MIT licence."
       ]
     }
   ]
