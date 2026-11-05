@@ -26,6 +26,27 @@ const NAMES: PackedStringArray = [
 	"chat_pop",
 	# K1 (23 Oct): the Spell / Trap spotlight cues (FxSpotlight).
 	"spell_cast", "trap_spring",
+	# L batch (5 Nov, design/owner-feedback-2026-11-05.md): names reserved up front so every feature
+	# agent can call them; the ElevenLabs set supplies the files. Status application, one per status (L8):
+	"status_rune", "status_retain", "status_reveal", "status_eternal", "status_burn", "status_pierce",
+	"status_cleanse", "status_paralyse", "status_medic", "status_curse", "status_poison",
+	"status_infiltrate", "status_blind", "status_nimble", "status_debilitate",
+	# A Cleanse / Curse stack stopping an application, a status wearing off, Burn / Poison damage ticks.
+	"status_blocked", "status_expire", "burn_tick", "poison_tick",
+	# L23 Evolve: the build-up and the transformation burst.
+	"evolve_charge", "evolve_burst",
+	# L5 sacrifice mode, L7 targeting (the arrow arms, a target locks in).
+	"sacrifice_mode_on", "sacrifice_mode_off", "target_arm", "target_lock",
+	# L9 Hypnotise and other control changes, L11 Shapeshifter Loak / Mimic copying a Unit's form.
+	"control_steal", "control_return", "copy_form",
+	# L18 the duel hourglass flipping, the low-time tick and warning; L16 the opponent-responding notice.
+	"hourglass_flip", "timer_tick", "timer_warning", "opponent_responding", "prompt_alert",
+	# Card movement and battle detail.
+	"card_discard", "card_return", "card_shuffle", "card_flip", "stance_attack", "stance_defense",
+	"block", "miss", "zone_pick",
+	# Series, draft and menus (L3, L26, L28).
+	"game_start", "series_point", "draft_reveal", "draft_pick", "coin_flip", "slider_tick",
+	"customise_select",
 ]
 ## F22 / F25: UI sounds. One user action makes exactly one UI sound: within one frame only the request
 ## with the highest priority plays (a later, higher one stops the earlier voice, a lower or equal one is
@@ -35,6 +56,7 @@ const UI_PRIORITY := {
 	"select": 0, "click_secondary": 1, "click_primary": 2,
 	"tab": 2, "toggle_on": 2, "toggle_off": 2, "panel_open": 3, "panel_close": 3,
 	"deck_add": 3, "deck_remove": 3, "cancel": 3, "confirm": 3, "reward_pick": 3, "reward_reveal": 4, "deny": 4, "back": 5,
+	"slider_tick": 1, "customise_select": 3, "draft_pick": 3, "sacrifice_mode_on": 4, "sacrifice_mode_off": 4,
 }
 ## Hover cue (design review 1.4.6): at most one per HOVER_MIN_MS, pitch +/- HOVER_JITTER, quiet. It
 ## is not a UI action sound (it never replaces or blocks a click) and skips the game-sound limiter.
