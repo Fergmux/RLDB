@@ -76,8 +76,8 @@ func test_details_tile_shows_the_copied_base_of_a_varies_unit() -> void:
 	p.show_card(v)
 	# Assert: the base is the copied stat (not "?"), and the current value equals it, so it is
 	# drawn in the plain text colour (no buff / debuff colour).
-	assert_int(p.count_text("Base: 20")).is_equal(1)
-	assert_int(p.count_text("Base: 14")).is_equal(1)
+	assert_int(p.count_text("Base:\n20")).is_equal(1)
+	assert_int(p.count_text("Base:\n14")).is_equal(1)
 	assert_int(p.count_text("Base: ?")).is_equal(0)
 	var num := _num_label(p, "20")
 	assert_object(num).is_not_null()
@@ -96,8 +96,8 @@ func test_details_tile_shows_printed_arrow_set_base_for_a_printed_unit() -> void
 	# Act
 	p.show_card(MatchView.card_view(m, u, 1))
 	# Assert
-	assert_int(p.count_text("Base: 8 → 30")).is_equal(1)
-	assert_int(p.count_text("Base: 8 → 24")).is_equal(1)
+	assert_int(p.count_text("Base: 8 →\n30")).is_equal(1)
+	assert_int(p.count_text("Base: 8 →\n24")).is_equal(1)
 	var num := _num_label(p, "30")
 	assert_object(num).is_not_null()
 	assert_that(num.get_theme_color("font_color")).is_equal(UIStyle.TEXT)
