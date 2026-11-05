@@ -103,6 +103,19 @@ func test_bot_puts_a_fragile_unit_in_the_back_row_behind_its_guard() -> void:
 		assert_int(int(m.cards[h]["slot"])).override_failure_message("seed %d" % sd).is_equal(4)
 
 
+func test_bot_puts_its_first_unit_in_the_front_row_not_an_unguarded_back_zone() -> void:
+	for sd in [1, 2, 3, 4, 5, 6, 7, 8]:
+		# Arrange: empty boards, one unit in Hand (seen in a real bot game: a lone back-row unit)
+		var m := _board()
+		m.players[BOT]["ap"] = 1
+		var h := TB.card(m, BOT, TB.WATER)
+		# Act
+		_bot_turn(m, sd)
+		# Assert: a front zone, so the zone behind it stays free as a protected one
+		assert_str(m.cards[h]["zone"]).override_failure_message("seed %d" % sd).is_equal("unit")
+		assert_int(int(m.cards[h]["slot"])).override_failure_message("seed %d" % sd).is_less(3)
+
+
 func test_bot_spends_its_recovery_phase_ap_instead_of_wasting_it() -> void:
 	for sd in SEEDS:
 		# Arrange: Recovery Phase, 1 AP left and a 1-cost Trap in Hand

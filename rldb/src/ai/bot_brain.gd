@@ -45,7 +45,7 @@ static var W_RETAIN := 1.5
 static var W_AP := 0.8
 ## A back-row unit with no unit in front of it (it is as exposed as a front unit and blocks a
 ## protected zone).
-static var W_BACK_EXPOSED := 0.0
+static var W_BACK_EXPOSED := 0.6
 ## Extra value of each of the bot's own set cards per AP of its cost (it knows them; a dearer
 ## Trap or Spell is usually a stronger one).
 static var W_SET_COST := 0.0
@@ -492,12 +492,14 @@ func evaluate(m: MatchEngine) -> float:
 	v += FOLLOW_W * clampf(follow, -60.0, 60.0)
 	for r in s["units"]:
 		if r["alive"]:
-			var sign_u := 1.0 if int(r["p"]) == me else -1.0
-			v += sign_u * float(r["worth"])
-			if int(r["row"]) == 1 and not BotForecast._protected(s, r):
-				v -= sign_u * W_BACK_EXPOSED          # a back-row zone with nothing in front of it
+			v += float(r["worth"]) if int(r["p"]) == me else -float(r["worth"])
 	for p in 2:
 		var sign := 1.0 if p == me else -1.0
+		# Placement as it stands now: a back-row unit with nothing in front of it is as exposed
+		# as a front unit and wastes a protected zone.
+		for u in m.field_units(p):
+			if int(m.cards[u]["slot"]) >= 3 and not m.is_protected(u):
+				v -= sign * W_BACK_EXPOSED
 		v += sign * W_POWER * float(m.power_cards(p).size())
 		v += sign * W_SET * float(m.backrow_cards(p).size())
 	if W_SET_COST != 0.0:
