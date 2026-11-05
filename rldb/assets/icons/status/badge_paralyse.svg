@@ -8,7 +8,7 @@
 <stop offset="0" stop-color="#3a2408"/><stop offset="0.55" stop-color="#7a5420"/><stop offset="1" stop-color="#f4d48a"/>
 </linearGradient>
 <radialGradient id="enamel" cx="0.42" cy="0.36" r="0.72" fx="0.40" fy="0.30">
-<stop offset="0" stop-color="#fff7a8"/><stop offset="0.45" stop-color="#f4cc22"/><stop offset="0.82" stop-color="#b07400"/><stop offset="1" stop-color="#4a2c00"/>
+<stop offset="0" stop-color="#fff27a"/><stop offset="0.45" stop-color="#f2bc06"/><stop offset="0.82" stop-color="#9a5e00"/><stop offset="1" stop-color="#382000"/>
 </radialGradient>
 <radialGradient id="vig" cx="0.5" cy="0.5" r="0.5">
 <stop offset="0.62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/>
@@ -33,7 +33,8 @@
 <ellipse cx="60" cy="34" rx="40" ry="20" fill="url(#gloss)" opacity="0.55"/>
 </g>
 <path d="M32.00 12.00 H96.00 A20.00 20.00 0 0 1 116.00 32.00 V96.00 A20.00 20.00 0 0 1 96.00 116.00 H32.00 A20.00 20.00 0 0 1 12.00 96.00 V32.00 A20.00 20.00 0 0 1 32.00 12.00 Z" fill="none" stroke="#000" stroke-width="1.6" opacity="0.45"/>
-<g transform="translate(0 2.6) translate(21.760 21.760) scale(0.16500)" opacity="0.6"><path d="M300 28 L118 286 L232 286 L178 486 L398 196 L278 196 L344 28 Z" fill="#000" stroke="#000" stroke-width="23.0" stroke-linejoin="round"/></g>
-<g transform="translate(21.760 21.760) scale(0.16500)"><path d="M300 28 L118 286 L232 286 L178 486 L398 196 L278 196 L344 28 Z" fill="#3a2200" stroke="#3a2200" stroke-width="23.0" stroke-linejoin="round"/></g>
-<g transform="translate(21.760 21.760) scale(0.16500)"><path d="M300 28 L118 286 L232 286 L178 486 L398 196 L278 196 L344 28 Z" fill="url(#glyph)"/></g>
+<g transform="translate(16.640 16.640) scale(0.18500)" opacity="0.42"><path d="M300 28 L118 286 L232 286 L178 486 L398 196 L278 196 L344 28 Z" fill="#2a1800" stroke="#2a1800" stroke-width="81.1" stroke-linejoin="round"/></g>
+<g transform="translate(0 3.0) translate(16.640 16.640) scale(0.18500)" opacity="0.7"><path d="M300 28 L118 286 L232 286 L178 486 L398 196 L278 196 L344 28 Z" fill="#000" stroke="#000" stroke-width="37.8" stroke-linejoin="round"/></g>
+<g transform="translate(16.640 16.640) scale(0.18500)"><path d="M300 28 L118 286 L232 286 L178 486 L398 196 L278 196 L344 28 Z" fill="#2a1800" stroke="#2a1800" stroke-width="37.8" stroke-linejoin="round"/></g>
+<g transform="translate(16.640 16.640) scale(0.18500)"><path d="M300 28 L118 286 L232 286 L178 486 L398 196 L278 196 L344 28 Z" fill="url(#glyph)"/></g>
 </svg>

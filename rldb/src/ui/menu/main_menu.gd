@@ -50,6 +50,10 @@ const PLAY_TUTORIAL_ITEM := ["Play tutorial", "play_tutorial"]
 ## Third-party asset credits shown under Credits, and the height of their scroll area.
 const CREDITS_PATH := "res://data/credits.json"
 const CREDITS_H := 430.0
+## Final review (2026-11-05): every Options leaf (Settings, Customisation, Credits) is at least this
+## tall, so switching between them never makes the panel jump (Credits was 150 px shorter and
+## re-centred). Settings and Customisation already reach it; the Credits scroll grows to fill.
+const OPTIONS_MIN_H := 788.0
 ## Space above each credits section heading (review #8).
 const CREDITS_HEAD_GAP := 20
 const BAND_W := 520.0
@@ -713,8 +717,13 @@ func _leaf_panel(target: String) -> Control:
 			pv[1].add_child(_close_row())
 		"credits":
 			pv = _leaf(target, "Credits")
-			pv[1].add_child(credits_view())
+			var cv := credits_view()
+			cv.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			pv[1].add_child(cv)
 			pv[1].add_child(_close_row())
 		_:
 			return null
+	if target in OPTIONS_LEAVES:
+		(pv[0] as Control).custom_minimum_size.y = OPTIONS_MIN_H
+		(pv[1] as Control).size_flags_vertical = Control.SIZE_EXPAND_FILL
 	return pv[0]

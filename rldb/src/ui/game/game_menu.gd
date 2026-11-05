@@ -159,7 +159,7 @@ func build_popups() -> void:
 	settings_veil.visible = false
 	settings_veil.z_index = UiLayers.GAME_MENU
 	settings_veil.mouse_filter = Control.MOUSE_FILTER_STOP
-	settings_veil.gui_input.connect(func(ev): if ev is InputEventMouseButton and ev.pressed: settings_popup.visible = false)
+	settings_veil.gui_input.connect(func(ev): if ev is InputEventMouseButton and ev.pressed: close_settings())
 	gs.add_child(settings_veil)
 	var set_plate := HousePanel.new("Settings", "In game", Vector2(28, 24), UIStyle.sp("md"))
 	set_plate.arm = 18.0
@@ -179,7 +179,7 @@ func build_popups() -> void:
 	var cl := UIStyle.size_button(UIStyle.secondary_button("Close", 15), "standard")
 	cl.name = "Close"
 	cl.custom_minimum_size.x = 160
-	cl.pressed.connect(func(): settings_popup.visible = false)
+	cl.pressed.connect(close_settings)
 	row.add_child(cl)
 	sv.add_child(row)
 
@@ -236,6 +236,17 @@ func refresh_items() -> void:
 			and not gs.mv.is_empty() and int(gs.mv.get("winner", -1)) == -1)
 	(items["return"] as Button).visible = not spec
 	(items["stop"] as Button).visible = spec
+
+
+## Final review (2026-11-05): closes the in-game Settings popup with the panel_close cue and the
+## closing motion, as the in-game menu (L13) and the other popovers; false when it was not open.
+## The Close button, a click on the veil and Esc all come here.
+func close_settings() -> bool:
+	var hp := settings_popup as HousePanel
+	if not hp.is_open():
+		return false
+	hp.dismiss()
+	return true
 
 
 ## Hides every top-strip popover (menu, settings, chat, spectators) before another opens.

@@ -42,8 +42,11 @@ var pop_k: float = 1.0:
 var shown: Array = [0, 0]
 ## Identity of the series shown (a different series never animates).
 var series_key: String = ""
+## True while the plaque has stepped aside for a mode banner in the same place (yield_to).
+var yielded: bool = false
 var _breath: Control
 var _pop_tw: Tween
+var _yield_tw: Tween
 var _name_w: Array = [0.0, 0.0]
 
 
@@ -102,6 +105,24 @@ func pop_point(seat: int) -> void:
 		pop_seat = -1
 		shown = full
 		queue_redraw())
+
+
+## Final review (2026-11-05): steps aside (`on`) for a banner that takes the middle of the top strip,
+## such as sacrifice mode's hint pill, fading out and ignoring the mouse; `on` false fades it back.
+## The two shared the same spot and the plaque hid the hint. Under reduce motion it is instant.
+func yield_to(on: bool) -> void:
+	if on == yielded:
+		return
+	yielded = on
+	mouse_filter = Control.MOUSE_FILTER_IGNORE if on else Control.MOUSE_FILTER_PASS
+	if _yield_tw != null and _yield_tw.is_valid():
+		_yield_tw.kill()
+	var to := 0.0 if on else 1.0
+	if UIStyle.reduce_motion or not is_inside_tree():
+		modulate.a = to
+		return
+	_yield_tw = create_tween()
+	_yield_tw.tween_property(self, "modulate:a", to, UIStyle.dur(0.18 if on else 0.3)).set_trans(Tween.TRANS_SINE)
 
 
 ## True while a point is popping in (tests).

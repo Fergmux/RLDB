@@ -257,9 +257,9 @@ func _place_peek() -> void:
 	peek.place(tip_x, right, GameScreen.TOP_H + 2.0)
 
 
-## True while the box is open.
+## True while the box is open (not while it plays its closing motion).
 func is_open() -> bool:
-	return panel.visible
+	return panel.is_open()
 
 
 ## True while the input line has the keyboard (game shortcuts must not fire).
@@ -269,7 +269,7 @@ func typing() -> bool:
 
 ## Opens or closes the box.
 func toggle() -> void:
-	if panel.visible:
+	if panel.is_open():
 		close_box()
 	else:
 		open_box()
@@ -291,11 +291,10 @@ func open_box() -> void:
 
 ## Closes the box (the draft in the input line is kept).
 func close_box() -> void:
-	if not panel.visible:
+	if not panel.is_open():
 		return
-	panel.visible = false
 	input.release_focus()
-	Sfx.play("back")
+	panel.dismiss()   # final review: the panel_close cue and closing motion, as every popover
 
 
 ## Sends the input line. Empty or refused text stays for editing (a refusal shows as a notice).
