@@ -48,6 +48,18 @@ const ART_MAX_H := 336.0
 const ART_MIN_H := 180.0
 const PANE_SEP := 8
 const BLOCK_PAD := 10
+## 5 Nov (L batch follow-up): the pane's density steps for long cards. Step 0 is the roomy layout
+## above. When the content does not fit even with the art at its step's minimum, the pane takes the
+## next step: tighter spacing first, then slightly smaller text with a smaller art minimum. Short
+## cards always show at step 0 (the step resets for every card shown).
+## {"text": details text scale, "pad": rule-block padding, "sep": gap between the pane's parts,
+##  "art_min": the art's smallest height}
+const FIT_STEPS := [
+	{"text": 1.0, "pad": BLOCK_PAD, "sep": PANE_SEP, "art_min": ART_MIN_H},
+	{"text": 1.0, "pad": 7, "sep": 5, "art_min": 168.0},
+	{"text": 0.94, "pad": 6, "sep": 4, "art_min": 156.0},
+	{"text": 0.88, "pad": 5, "sep": 3, "art_min": 144.0},
+]
 
 ## card id -> copies in the working deck
 var counts: Dictionary = {}
@@ -77,6 +89,12 @@ var _preview_holder: VBoxContainer
 var _pane: Control
 var _pane_box: VBoxContainer
 var _fit_queued := false
+## The density step the shown card uses (FIT_STEPS), a step-down check waiting for the next frame,
+## and the step each card needed at the pane's current height (so a revisit draws at once).
+var _fit_step := 0
+var _step_check_queued := false
+var _fit_cache: Dictionary = {}
+var _fit_room := -1.0
 ## Card art height the last fit chose (a new card starts at it, so hovering does not jump).
 var _art_h: float = ART_MAX_H
 var _preview_card: CardWidget
@@ -810,7 +828,7 @@ func _build_preview(body: HBoxContainer) -> void:
 	inner.add_child(_facts)
 	# H26 (21 Oct): the "In your deck: xN" tag under the card image is gone; the gems say it, and
 	# carry the pane's help.
-	_facts.gems().tooltip_text = "Copies of this card in the deck.\nThe pane shows the card under the pointer, or the last one you picked.\nClick a catalogue card to add a copy, a deck card to remove one.\nKeys: + or Enter adds, - removes. Right-click inspects."
+	_facts.gems().tooltip_text = "Copies of this card in the deck.\nThe pane shows the card under the pointer, or the last one you picked.\nClick a catalogue card to add a copy, a deck card to remove one.\nRight-click inspects."
 	_preview_note = UIStyle.label("", 13, UIStyle.BAD)
 	inner.add_child(_preview_note)
 
@@ -992,6 +1010,7 @@ func _show(id: int) -> void:
 		_preview_card.right_pressed.connect(func(_w): inspect_card(id))
 		_set_art_h(_art_h)
 		_preview_holder.add_child(_preview_card)
+		_apply_fit_step(int(_fit_cache.get(id, 0)))
 		_details.show_card(details_view(id))
 		_preview_note.visible = s["support"] != "full"
 		_preview_note.text = "Implementation: %s" % s["support"]
@@ -1009,12 +1028,26 @@ func details_view(id: int) -> Dictionary:
 
 
 ## How the details pane fits (H25): {"room": its height, "need": the content's height with the
-## art at ART_MIN_H, "used": the content's height now, "art_h": the art's height now}. The pane
-## never scrolls: `need` <= `room` is the guarantee (a test walks every card at the smallest window).
+## art at its minimum (the density step's), "used": the content's height now, "art_h": the art's
+## height now, "step": the density step (FIT_STEPS)}. The pane never scrolls: `need` <= `room` is
+## the guarantee (a test walks every card at the smallest window).
 func preview_fit() -> Dictionary:
 	var card_h := _preview_card.custom_minimum_size.y if _preview_card != null else 0.0
 	var used := _pane_box.get_combined_minimum_size().y
-	return {"room": _pane.size.y, "need": used - card_h + ART_MIN_H, "used": used, "art_h": card_h}
+	return {"room": _pane.size.y, "need": used - card_h + _art_min(), "used": used, "art_h": card_h, "step": _fit_step}
+
+
+func _art_min() -> float:
+	return float(FIT_STEPS[_fit_step]["art_min"])
+
+
+## Sets the pane's density step (FIT_STEPS) for the next details build.
+func _apply_fit_step(step: int) -> void:
+	_fit_step = clampi(step, 0, FIT_STEPS.size() - 1)
+	var st: Dictionary = FIT_STEPS[_fit_step]
+	_details.text_scale = float(st["text"])
+	_details.block_pad = int(st["pad"])
+	_pane_box.add_theme_constant_override("separation", int(st["sep"]))
 
 
 func _queue_fit() -> void:
@@ -1032,8 +1065,41 @@ func _fit_preview() -> void:
 	if _preview_card == null or not is_instance_valid(_preview_card) or _pane.size.y < 1.0:
 		return
 	var f := preview_fit()
+	if absf(float(f["room"]) - _fit_room) > 0.5:
+		# The window changed: every card may fit at another step. Start the shown one roomy again.
+		var first := _fit_room < 0.0
+		_fit_room = f["room"]
+		_fit_cache.clear()
+		if not first and _fit_step != 0:
+			_restep(0)
+			return
 	var rest: float = f["used"] - f["art_h"]
-	_set_art_h(clampf(floorf(f["room"] - rest), ART_MIN_H, ART_MAX_H))
+	_set_art_h(clampf(floorf(f["room"] - rest), _art_min(), ART_MAX_H))
+	if f["need"] > f["room"] + 0.5 and _fit_step < FIT_STEPS.size() - 1 and not _step_check_queued:
+		# Too long even with the art at its minimum. A rebuilt pane measures wrongly until its
+		# layout settles, so decide on the next frame (one-shot, never per frame).
+		_step_check_queued = true
+		get_tree().process_frame.connect(_step_check, CONNECT_ONE_SHOT)
+
+
+## Next frame after a fit that overflowed: if the content still does not fit, take the next density
+## step and rebuild the details (the fit follows). One step per frame; it settles in a few frames.
+func _step_check() -> void:
+	_step_check_queued = false
+	if not is_inside_tree() or _preview_id < 0 or _preview_card == null or not is_instance_valid(_preview_card):
+		return
+	var f := preview_fit()
+	if f["need"] > f["room"] + 0.5 and _fit_step < FIT_STEPS.size() - 1:
+		_restep(_fit_step + 1)
+		_fit_cache[_preview_id] = _fit_step
+
+
+## Rebuilds the shown card's details at density step `step`.
+func _restep(step: int) -> void:
+	_apply_fit_step(step)
+	_details.show_card(details_view(_preview_id))
+	_update_facts()
+	_queue_fit()
 
 
 func _set_art_h(h: float) -> void:
