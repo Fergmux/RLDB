@@ -182,7 +182,7 @@ func _op_status(f: Dictionary, op: Dictionary) -> int:
 		if op.get("unit_only", false) and not unit_on_field(u):
 			continue                      # e.g. "the Unit that Destroyed it" when a Power/Trap did
 		if on_field(u) or cards[u]["zone"] == "hand":
-			apply_status(u, op["s"], n)
+			apply_status(u, op["s"], n, status_batch(f))
 	return R.CONT
 
 

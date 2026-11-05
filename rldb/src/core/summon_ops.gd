@@ -218,7 +218,7 @@ func _op_tribute_bonus(f: Dictionary, op: Dictionary) -> int:
 			continue
 		for b in bonuses:
 			add_log("%s was tributed: %s gains %d %s." % [b["from"], name_of(u), b["n"], String(b["s"]).capitalize()])
-			apply_status(u, b["s"], b["n"])
+			apply_status(u, b["s"], b["n"], status_batch(f))
 	return R.CONT
 
 

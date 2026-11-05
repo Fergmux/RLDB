@@ -115,7 +115,7 @@ func _op_copy_all_buffs(f: Dictionary, op: Dictionary) -> int:
 				totals[s] = totals.get(s, 0) + cards[u]["st"][s]
 	for s in CardDB.STATUS_ORDER:
 		if totals.has(s):
-			apply_status(me, s, totals[s])
+			apply_status(me, s, totals[s], status_batch(f))
 	if totals.is_empty():
 		add_log("%s: no Buffs on the Field to copy." % name_of(me))
 	return R.CONT
@@ -135,7 +135,7 @@ func _op_copy_all_debuffs(f: Dictionary, op: Dictionary) -> int:
 				totals[s] = totals.get(s, 0) + cards[u]["st"][s]
 	for s in CardDB.STATUS_ORDER:
 		if totals.has(s):
-			apply_status(me, s, totals[s])
+			apply_status(me, s, totals[s], status_batch(f))
 	if totals.is_empty():
 		add_log("%s: no Debuffs on the Field to copy." % name_of(me))
 	return R.CONT
@@ -161,7 +161,7 @@ func _op_spread_debuffs(f: Dictionary, op: Dictionary) -> int:
 	for u in refs(f, op["target"]):
 		if unit_on_field(u):
 			for s in have:
-				apply_status(u, s, have[s])
+				apply_status(u, s, have[s], status_batch(f))
 	return R.CONT
 
 

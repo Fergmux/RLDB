@@ -630,7 +630,15 @@ func _clear_statuses_of_class(uid: int, buffs: bool) -> Array:
 
 ## Applies n stacks of a status, honouring Curse/Cleanse prevention and Cleanse
 ## clearing. Runes are counters and bypass both. Returns the stacks actually added.
-func apply_status(uid: int, s: String, n: int) -> int:
+## Curse prevents a Buff (Cleanse included) and Cleanse prevents a Debuff (Curse included).
+## L20 (owner, 2026-11-05): `batch` groups the applications of one effect resolution ("at the same
+## time"; EffectEngine.status_batch). The first application a stack prevents on a unit consumes one
+## stack; every later Buff (for Curse) or Debuff (for Cleanse) of the same batch on that unit is
+## prevented too without consuming another. Each unit is independent. Without a batch every
+## application stands alone. Each prevention emits the presentation event
+## {"k": "status_blocked", "at": fx_pos, "s": prevented status, "n": stacks, "by": "cleanse" | "curse",
+## "used": whether this one consumed the stack}.
+func apply_status(uid: int, s: String, n: int, batch: Dictionary = {}) -> int:
 	if n <= 0 or not cards.has(uid):
 		return 0
 	if s == "rune":
@@ -643,21 +651,24 @@ func apply_status(uid: int, s: String, n: int) -> int:
 	if CardDB.is_buff(s) and has_flag(uid, "no_buffs"):
 		card_log(uid, "§ cannot receive Buffs.")
 		return 0
-	if CardDB.is_buff(s) and status_count(uid, "curse") > 0 and s != "cleanse":
-		_set_status(uid, "curse", status_count(uid, "curse") - 1)
-		card_log(uid, "Curse on § prevents %s (Curse -1)." % s.capitalize())
-		return 0
-	if s == "cleanse" and status_count(uid, "curse") > 0:
-		_set_status(uid, "curse", status_count(uid, "curse") - 1)
-		card_log(uid, "Curse on § prevents Cleanse (Curse -1).")
-		return 0
-	if CardDB.is_debuff(s) and status_count(uid, "cleanse") > 0 and s != "curse":
-		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
-		card_log(uid, "Cleanse on § prevents %s (Cleanse -1)." % s.capitalize())
-		return 0
-	if s == "curse" and status_count(uid, "cleanse") > 0:
-		_set_status(uid, "cleanse", status_count(uid, "cleanse") - 1)
-		card_log(uid, "Cleanse on § prevents Curse (Cleanse -1).")
+	var by := ""
+	if CardDB.is_buff(s) and (status_count(uid, "curse") > 0 or _batch_blocked(batch, "curse", uid)):
+		by = "curse"
+	elif CardDB.is_debuff(s) and (status_count(uid, "cleanse") > 0 or _batch_blocked(batch, "cleanse", uid)):
+		by = "cleanse"
+	if by != "":
+		var used := not _batch_blocked(batch, by, uid)
+		if used:
+			_set_status(uid, by, status_count(uid, by) - 1)
+			if not batch.has(by):
+				batch[by] = {}
+			batch[by][uid] = true
+			card_log(uid, "%s on § prevents %s (%s -1)." % [by.capitalize(), s.capitalize(), by.capitalize()])
+		else:
+			card_log(uid, "%s on § also prevents %s (applied at the same time)." % [by.capitalize(), s.capitalize()])
+		var bpos := fx_pos(uid)
+		if not bpos.is_empty():
+			add_fx({"k": "status_blocked", "at": bpos, "s": s, "n": n, "by": by, "used": used})
 		return 0
 	_set_status(uid, s, status_count(uid, s) + n)
 	card_log(uid, "§ gains %d %s (now %d)." % [n, s.capitalize(), status_count(uid, s)])
@@ -666,6 +677,12 @@ func apply_status(uid: int, s: String, n: int) -> int:
 		add_fx({"k": "status", "at": pos, "s": s, "n": n})
 	_after_status_gain(uid, s)
 	return n
+
+
+## L20: true when a `by` ("cleanse" / "curse") stack already prevented an application on unit `uid`
+## within `batch`.
+static func _batch_blocked(batch: Dictionary, by: String, uid: int) -> bool:
+	return batch.has(by) and (batch[by] as Dictionary).has(uid)
 
 
 ## Cleanse clears all existing debuffs when gained (consuming one stack);
