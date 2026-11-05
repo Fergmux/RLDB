@@ -1,7 +1,7 @@
 class_name Customisation
 extends RefCounted
-## The player's cosmetic choices (owner feedback 5 Nov, L25 / L28): the table the game is played
-## on and the card back. Chosen in Options > Customisation; the table is read when a game screen
+## The player's cosmetic choices (owner feedback 5 Nov, L25 / L28 / L31): the table the game is
+## played on and the card back. Chosen in Options > Customisation; the table is read when a game screen
 ## builds its board (it cannot be changed during a game). Presentation only: nothing here reaches
 ## the rules engine, the network or telemetry.
 ##
@@ -27,9 +27,18 @@ const TABLES := [
 ]
 ## The table of a new profile (owner, 5 Nov: the "Luxury Fantasy Table Background").
 const DEFAULT_TABLE := "ruins"
-## The card backs, in picker order (one for now; more are planned).
+## The card backs, in picker order (L31); `short` is the name under the picker tile. How each one
+## is drawn (palette, painted centre) lives in CardBack.STYLES under the same id. A local display
+## choice: it dresses every face-down card on this screen (both players'), is never sent over the
+## network and never reveals anything.
 const CARD_BACKS := [
-	{"id": "violet", "name": "Violet Sigil", "blurb": "The house back: a gold sigil on deep violet"},
+	{"id": "violet", "name": "Violet Sigil", "short": "Violet", "blurb": "The house back: a gold sigil on deep violet"},
+	{"id": "wyrm", "name": "Crimson Wyrm", "short": "Wyrm", "blurb": "A coiled dragon crest on oxblood lacquer"},
+	{"id": "grove", "name": "Verdant Grove", "short": "Grove", "blurb": "The sacred oak, rooted and crowned, on forest leather"},
+	{"id": "tide", "name": "Abyssal Tide", "short": "Tide", "blurb": "The kraken of the deep in pearl and moonlit silver"},
+	{"id": "runes", "name": "Obsidian Runes", "short": "Runes", "blurb": "A rune seal of molten ember in black volcanic glass"},
+	{"id": "sun", "name": "Gilded Sun", "short": "Sun", "blurb": "A radiant sun of beaten gold on ivory enamel"},
+	{"id": "stars", "name": "Arcane Starfield", "short": "Stars", "blurb": "A silver star in a brass astrolabe on the night sky"},
 ]
 const DEFAULT_CARD_BACK := "violet"
 
@@ -40,6 +49,7 @@ const TEST_PATH := "user://test_ui_customise.cfg"
 static var path_override: String = ""
 
 static var _table: String = ""
+static var _card_back: String = ""
 static var _loaded_path: String = ""
 
 
@@ -53,6 +63,7 @@ static func settings_path() -> String:
 ## Forgets the loaded choice (the next read reloads the file). Test hook.
 static func reset_cache() -> void:
 	_table = ""
+	_card_back = ""
 	_loaded_path = ""
 
 
@@ -62,11 +73,15 @@ static func _load() -> void:
 		return
 	_loaded_path = p
 	_table = DEFAULT_TABLE
+	_card_back = DEFAULT_CARD_BACK
 	var cf := ConfigFile.new()
 	if cf.load(p) == OK:
 		var id := String(cf.get_value(SECTION, "table", DEFAULT_TABLE))
 		if has_table(id):
 			_table = id
+		var back := String(cf.get_value(SECTION, "card_back", DEFAULT_CARD_BACK))
+		if has_card_back(back):
+			_card_back = back
 
 
 ## True when `id` names one of TABLES.
@@ -90,11 +105,16 @@ static func set_table(id: String) -> bool:
 		return false
 	_load()
 	_table = id
-	var cf := ConfigFile.new()
-	cf.load(settings_path())   # keep the other sections ([ui], [privacy], [progress] ...)
-	cf.set_value(SECTION, "table", id)
-	cf.save(settings_path())
+	_save_value("table", id)
 	return true
+
+
+# Writes one key of [customise], keeping every other section ([ui], [privacy], [progress] ...).
+static func _save_value(key: String, value: Variant) -> void:
+	var cf := ConfigFile.new()
+	cf.load(settings_path())
+	cf.set_value(SECTION, key, value)
+	cf.save(settings_path())
 
 
 ## The entry of TABLES for `id` (the chosen table when `id` is ""; the default for an unknown id).
@@ -119,6 +139,39 @@ static func table_veil() -> float:
 	return float(table()["veil"])
 
 
-## The id of the card back in use (the only one, for now).
+## True when `id` names one of CARD_BACKS.
+static func has_card_back(id: String) -> bool:
+	for b in CARD_BACKS:
+		if String(b["id"]) == id:
+			return true
+	return false
+
+
+## The id of the card back in use (DEFAULT_CARD_BACK until the player picks one, or when the saved
+## id is unknown, e.g. a back removed in a later version).
 static func card_back_id() -> String:
-	return DEFAULT_CARD_BACK
+	_load()
+	return _card_back
+
+
+## Chooses and saves card back `id`. Returns false (and changes nothing) for an unknown id. Every
+## face-down card (CardBack) uses it from its next redraw.
+static func set_card_back(id: String) -> bool:
+	if not has_card_back(id):
+		return false
+	_load()
+	_card_back = id
+	_save_value("card_back", id)
+	return true
+
+
+## The entry of CARD_BACKS for `id` (the chosen back when `id` is ""; the default for an unknown id).
+static func card_back(id: String = "") -> Dictionary:
+	var want := id if id != "" else card_back_id()
+	var fallback: Dictionary = CARD_BACKS[0]
+	for b in CARD_BACKS:
+		if String(b["id"]) == want:
+			return b
+		if String(b["id"]) == DEFAULT_CARD_BACK:
+			fallback = b
+	return fallback

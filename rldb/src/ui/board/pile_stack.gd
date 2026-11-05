@@ -73,6 +73,7 @@ var _pt: CardPainter
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # painted card backs (L31)
 	set_process(false)   # only while the ready glow animates
 	mouse_entered.connect(func() -> void: _hover = true; queue_redraw())
 	mouse_exited.connect(func() -> void: _hover = false; queue_redraw())
@@ -202,8 +203,8 @@ func _draw() -> void:
 		var r := card
 		r.position.y -= float(i) * LAYER_STEP
 		var b := StyleBoxFlat.new()
-		b.bg_color = CardBack.BODY
-		b.border_color = CardBack.BORDER
+		b.bg_color = CardBack.body_color()   # the chosen back (L31)
+		b.border_color = CardBack.border_color()
 		b.set_border_width_all(1 if i < n - 1 else 2)
 		b.set_corner_radius_all(RADIUS)
 		if i == 0:
