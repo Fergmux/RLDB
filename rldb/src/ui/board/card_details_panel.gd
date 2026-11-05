@@ -439,7 +439,7 @@ func _rule_block(caption: String, body: String, col: Color) -> PanelContainer:
 	var pc := _block(col, 0.55)
 	var vb: VBoxContainer = pc.get_child(0)
 	if caption != "":
-		vb.add_child(_lbl(caption.to_upper(), SMALL, col, true))
+		vb.add_child(caption_icon(_lbl(caption.to_upper(), SMALL, col, true), caption, _line_h(SMALL)))
 	var bl := _lbl(body, BODY, UIStyle.TEXT)
 	StatusHelp.watch_label(bl)      # hover a status name: its effect (2026-10-18)
 	vb.add_child(bl)
@@ -563,8 +563,25 @@ static func block_style(col: Color, bar_a: float, pad: int) -> StyleBoxFlat:
 	return sb
 
 
+## L23: a rules caption label `cap` for section `k`, led by the section's icon when it has one (the
+## Evolve section's blossom, EvolveGlyph, `px` tall); `cap` itself otherwise. Shared with the card
+## tooltip (StatusHelp.card_tooltip).
+static func caption_icon(cap: Label, k: String, px: float) -> Control:
+	if k.to_lower() != MatchView.EVOLVE_PART.to_lower():
+		return cap
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 5)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.set_meta(&"evolve_caption", true)
+	row.add_child(EvolveGlyph.new(maxf(12.0, px), EvolveGlyph.COLOR))
+	cap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(cap)
+	return row
+
+
 static func _timing_color(k: String) -> Color:
 	match k:
+		"Evolve": return EvolveGlyph.COLOR   # L23: its own colour (and icon, caption_icon)
 		"Condition", "Materials", "Activates": return UIStyle.RUNE_BLUE
 		"On Summon": return UIStyle.GOOD
 		"On Field": return UIStyle.GOLD
