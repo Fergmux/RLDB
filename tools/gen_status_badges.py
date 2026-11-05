@@ -11,7 +11,8 @@ buff = round, debuff = rounded square, Rune = hexagon.
 
 Glyphs come from `rldb/assets/icons/status/<key>.svg` (game-icons.net, CC BY 3.0, see
 `rldb/assets/CREDITS.md`), except Paralyse, whose lightning bolt is drawn here (the owner
-asked for "electric yellow with a bolt"). Output: `rldb/assets/icons/status/badge_<key>.svg`
+asked for "electric yellow with a bolt") and Cleanse, whose bold sparkle is drawn here (the
+"sparkles" field was unreadable at field size). Output: `rldb/assets/icons/status/badge_<key>.svg`
 (128-unit viewBox; Godot rasterises them at 2x with mipmaps, see the .import files).
 
     python -I -X utf8 tools/gen_status_badges.py
@@ -32,26 +33,47 @@ BUFFS = ["retain", "eternal", "pierce", "cleanse", "medic", "infiltrate", "nimbl
 DEBUFFS = ["reveal", "burn", "paralyse", "curse", "poison", "blind", "debilitate"]
 KEYS = ["rune"] + BUFFS + DEBUFFS
 
-# Fraction of the badge the glyph spans.
-GLYPH_K = 0.66
+# Fraction of the badge the glyph spans. Final review (2026-11-05): 0.66 read as a faint smudge on a
+# 16-20 px field card; 0.74 gives the glyph the whole enamel.
+GLYPH_K = 0.74
+# Glyph outline and the soft dark halo around it, in badge units (128 space). The outline must stay
+# at least a pixel wide at field size (about 18 px), and the halo darkens the enamel right behind the
+# glyph so a light glyph separates from a light or busy enamel.
+OUTLINE_W = 7.0
+HALO_W = 15.0
+HALO_OPACITY = 0.42
+# Per-glyph overrides: diagonal glyphs would cross the bezel at GLYPH_K; thin-lined glyphs get a
+# stroke in their own fill colour (badge units) so the lines survive at field size.
+GLYPH_K_FOR = {"pierce": 0.66, "nimble": 0.68, "retain": 0.70}
+FATTEN = {"curse": 2.0, "reveal": 1.4}
 
 # Hand-drawn lightning bolt for Paralyse, in the glyphs' 512 space.
 BOLT = ("M300 28 L118 286 L232 286 L178 486 L398 196 L278 196 L344 28 Z")
+
+# Cleanse's glyph, drawn here too (final review 2026-11-05): the game-icons "sparkles" field was a
+# grain of dots at field size; one bold four-point sparkle with two small ones reads at 16 px.
+def _sparkle(cx: float, cy: float, r: float, w: float) -> str:
+    """A four-point star of radius r with waist w (512 glyph space)."""
+    return (f"M{cx} {cy - r} Q{cx + w} {cy - w} {cx + r} {cy} Q{cx + w} {cy + w} {cx} {cy + r} "
+            f"Q{cx - w} {cy + w} {cx - r} {cy} Q{cx - w} {cy - w} {cx} {cy - r} Z ")
+
+
+SPARKLE = _sparkle(236, 276, 214, 40) + _sparkle(410, 104, 84, 16) + _sparkle(420, 400, 58, 11)
 
 # Enamel colours (centre highlight, mid, deep, rim) and the glyph outline colour.
 PALETTE = {
     "poison":     (["#7fd04a", "#2f7a22", "#103a10", "#061806"], "#061806"),
     "burn":       (["#ffe07a", "#f0701e", "#a0180a", "#3a0604"], "#3a0602"),
-    "paralyse":   (["#fff7a8", "#f4cc22", "#b07400", "#4a2c00"], "#3a2200"),
+    "paralyse":   (["#fff27a", "#f2bc06", "#9a5e00", "#382000"], "#2a1800"),
     "curse":      (["#cf98f6", "#8040c8", "#3c1268", "#16041f"], "#1a0530"),
     "blind":      (["#8a8a9a", "#44445a", "#191924", "#07070c"], "#06060a"),
-    "debilitate": (["#d8ccb2", "#8e826a", "#40382c", "#1a1612"], "#1a140c"),
+    "debilitate": (["#b4a68a", "#6e6250", "#3a3226", "#16120c"], "#16100a"),
     "reveal":     (["#ffa8d8", "#d0408a", "#640c36", "#24020f"], "#3a0420"),
-    "eternal":    (["#fffbe0", "#f2c64e", "#b07a14", "#4a2c04"], "#4a2804"),
-    "cleanse":    (["#ffffff", "#cfeaff", "#5aa6e6", "#164e8e"], "#0f3a6a"),
-    "medic":      (["#c4fad4", "#3cc070", "#137a40", "#053018"], "#053018"),
-    "nimble":     (["#b4fff6", "#22b8ae", "#0a6660", "#032824"], "#032e2a"),
-    "pierce":     (["#ffffff", "#c8d4e0", "#76889c", "#26303c"], "#141c26"),
+    "eternal":    (["#ffe08a", "#d8a024", "#86520c", "#2c1802"], "#2c1802"),
+    "cleanse":    (["#a8dcff", "#3f8ed8", "#16509a", "#08254e"], "#08254e"),
+    "medic":      (["#a8f0c0", "#2aa45c", "#106c38", "#053018"], "#053018"),
+    "nimble":     (["#9cf4ea", "#179c94", "#085c56", "#032824"], "#032e2a"),
+    "pierce":     (["#c4d0dc", "#71839a", "#3a4858", "#141c26"], "#10161e"),
     "infiltrate": (["#9a9af0", "#40409c", "#15154c", "#05051a"], "#04041a"),
     "retain":     (["#ffd2a6", "#d27c3a", "#7a3a14", "#2e1406"], "#2e1204"),
     "rune":       (["#c4e2ff", "#4a8ee8", "#16449a", "#061a40"], "#061a40"),
@@ -249,6 +271,8 @@ def motif_defs(key: str) -> str:
 def glyph_path(key: str) -> str:
     if key == "paralyse":
         return BOLT
+    if key == "cleanse":
+        return SPARKLE
     with open(os.path.join(ICON_DIR, key + ".svg"), encoding="utf-8") as f:
         src = f.read()
     paths = re.findall(r'<path[^>]*\sd="([^"]+)"', src)
@@ -262,12 +286,16 @@ def badge(key: str) -> str:
     edge, bezel, groove, enamel = frame(k)
     stops, outline = PALETTE[key]
     gtop, gbot = GLYPH_FILL.get(key, ("#fffaf0", "#e8dcc4"))
-    gs = 128.0 * GLYPH_K / 512.0
-    off = (128.0 - 128.0 * GLYPH_K) / 2.0
+    gk = GLYPH_K_FOR.get(key, GLYPH_K)
+    gs = 128.0 * gk / 512.0
+    off = (128.0 - 128.0 * gk) / 2.0
     gt = f"translate({off:.3f} {off:.3f}) scale({gs:.5f})"
     gp = glyph_path(key)
-    # Outline width in glyph units (about 3.8 badge units).
-    ow = 3.8 / gs
+    # Outline and halo widths in glyph units.
+    ow = OUTLINE_W / gs
+    hw = HALO_W / gs
+    fat = (f' stroke="url(#glyph)" stroke-width="{FATTEN[key] / gs:.1f}" stroke-linejoin="round"'
+           if key in FATTEN else "")
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
 <!-- RLDB status badge "{key}" ({k}); generated by tools/gen_status_badges.py. Glyph: see assets/CREDITS.md. -->
 <defs>
@@ -303,9 +331,10 @@ def badge(key: str) -> str:
 <ellipse cx="60" cy="34" rx="40" ry="20" fill="url(#gloss)" opacity="0.55"/>
 </g>
 <path d="{enamel}" fill="none" stroke="#000" stroke-width="1.6" opacity="0.45"/>
-<g transform="translate(0 2.6) {gt}" opacity="0.6"><path d="{gp}" fill="#000" stroke="#000" stroke-width="{ow:.1f}" stroke-linejoin="round"/></g>
+<g transform="{gt}" opacity="{HALO_OPACITY}"><path d="{gp}" fill="{outline}" stroke="{outline}" stroke-width="{hw:.1f}" stroke-linejoin="round"/></g>
+<g transform="translate(0 3.0) {gt}" opacity="0.7"><path d="{gp}" fill="#000" stroke="#000" stroke-width="{ow:.1f}" stroke-linejoin="round"/></g>
 <g transform="{gt}"><path d="{gp}" fill="{outline}" stroke="{outline}" stroke-width="{ow:.1f}" stroke-linejoin="round"/></g>
-<g transform="{gt}"><path d="{gp}" fill="url(#glyph)"/></g>
+<g transform="{gt}"><path d="{gp}" fill="url(#glyph)"{fat}/></g>
 </svg>
 """
 
