@@ -70,6 +70,7 @@ func _run() -> void:
 				cmd = c
 				who = p
 				break
+		last = Time.get_ticks_usec()   # the bots' thinking is not a frame cost a human game has
 		if s.stage == Series.STAGE_GAME and (s.game.turn != last_turn or s.game_no != last_game):
 			# A new turn: let the queued animations finish, then sample the node counts.
 			var guard := 0
