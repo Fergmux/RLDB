@@ -560,7 +560,7 @@ func _extra_shots(gs: GameScreen, m: MatchEngine, a: int) -> void:
 	_put(m, a, 40, 5, "atk")                     # Aleister: a second Fusion method
 	_add(m, a, 82, "hand")
 	var wyrm := _add(m, a, 93, "extra")
-	var kaya := _add(m, a, 175, "extra")         # Arcane, cost 3
+	var kaya := _add(m, a, 175, "extra")         # Boom (Arcane), cost 4 since 2026-11-03
 	for id in [34, 27, 13, 162]:          # costs 1, 2, 3 and 0
 		_add(m, a, id, "spent")
 	m.players[a]["ap"] = 3
@@ -596,17 +596,17 @@ func _extra_shots(gs: GameScreen, m: MatchEngine, a: int) -> void:
 	if not m.pending.is_empty():
 		host.handle(a, {"t": "cancel", "id": m.pending["id"]})
 	await _frames(6)
-	# F08: Arcane Summon of the cost-3 Arcane unit; pay 1 then try to overpay.
+	# F08: Arcane Summon of the cost-4 Arcane unit; pay 3, then the 2 would overpay, then the 1 is exact.
 	var acts: Array = gs.action_row.actions_for_card(kaya).filter(func(x): return x["t"] == "arcane")
 	if not acts.is_empty():
 		gs.action_row.run_action(kaya, acts[0])
 	await _frames(12)
-	_check("F08 material circles shown", gs.prompt.cost_pips.visible and gs.prompt.cost_pips.need == 3, str(m.pending.get("prompt", "")))
+	_check("F08 material circles shown", gs.prompt.cost_pips.visible and gs.prompt.cost_pips.need == 4, str(m.pending.get("prompt", "")))
 	await _shot("f08_01_materials_empty")
 	var pd := gs.pending()
 	var one := -1
 	for o in pd.get("options", []):
-		if GamePromptBanner.option_value(pd, int(o["i"])) == 1 and one == -1:
+		if GamePromptBanner.option_value(pd, int(o["i"])) == 3 and one == -1:
 			one = int(o["i"])
 	if one != -1:
 		gs.selection.pick_option(one)
@@ -621,7 +621,7 @@ func _extra_shots(gs: GameScreen, m: MatchEngine, a: int) -> void:
 			overs += 1
 	_check("F08 overpaying materials disabled after a partial payment", overs > 0, str(overs))
 	for o in pd.get("options", []):
-		if GamePromptBanner.option_value(pd, int(o["i"])) == 2:
+		if GamePromptBanner.option_value(pd, int(o["i"])) == 1:
 			gs.selection.pick_option(int(o["i"]))
 			break
 	await _frames(12)
