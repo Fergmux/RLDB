@@ -103,7 +103,7 @@ func set_sacrifice(ok: bool, tip: String, engaged: bool = false) -> void:
 	sacrifice_btn.text = label
 	sacrifice_btn.disabled = not enabled
 	sacrifice_btn.tooltip_text = t
-	sacrifice_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if enabled else Control.CURSOR_ARROW
+	sacrifice_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if enabled else Control.CURSOR_FORBIDDEN   # L22
 	sacrifice_btn.queue_redraw()
 
 

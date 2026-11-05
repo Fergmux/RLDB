@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- RLDB cursor "target" (L22). 64-unit grid, hotspot (32,32) at the centre. A rune reticle: a gold ring with rune ticks, four inward prongs,
+       sapphire studs and a pin-point centre.
+       Rasterised by rldb/src/dev/cursor_bake.gd, which adds the drop shadow. -->
+  <defs>
+    <linearGradient id="lit" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#fff6d2"/>
+      <stop offset="0.35" stop-color="#f6d98a"/>
+      <stop offset="0.75" stop-color="#dcac52"/>
+      <stop offset="1" stop-color="#b47d2c"/>
+    </linearGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e6bb62"/>
+      <stop offset="0.5" stop-color="#b9842f"/>
+      <stop offset="1" stop-color="#7a4d15"/>
+    </linearGradient>
+    <linearGradient id="tailL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ecc56f"/>
+      <stop offset="1" stop-color="#a87228"/>
+    </linearGradient>
+    <linearGradient id="tailR" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a87228"/>
+      <stop offset="1" stop-color="#5e3a0f"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="0.3" stop-color="#f2cf7a"/>
+      <stop offset="0.7" stop-color="#d4a64a"/>
+      <stop offset="1" stop-color="#8e5d1a"/>
+    </linearGradient>
+    <radialGradient id="sapphire" cx="0.38" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#d8ecff"/>
+      <stop offset="0.3" stop-color="#6fb2ff"/>
+      <stop offset="0.75" stop-color="#2557b8"/>
+      <stop offset="1" stop-color="#132a66"/>
+    </radialGradient>
+    <radialGradient id="ruby" cx="0.38" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#ffe0d6"/>
+      <stop offset="0.3" stop-color="#ff6a52"/>
+      <stop offset="0.75" stop-color="#a8160f"/>
+      <stop offset="1" stop-color="#4a0606"/>
+    </radialGradient>
+    <linearGradient id="ret" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="0.4" stop-color="#ecc666"/>
+      <stop offset="1" stop-color="#9a6416"/>
+    </linearGradient>
+    <linearGradient id="lock" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffbe0"/>
+      <stop offset="0.35" stop-color="#ffe27a"/>
+      <stop offset="0.75" stop-color="#ffc83a"/>
+      <stop offset="1" stop-color="#b07a12"/>
+    </linearGradient>
+    <linearGradient id="iron" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#cfc6b6"/>
+      <stop offset="0.5" stop-color="#8f8678"/>
+      <stop offset="1" stop-color="#4f4940"/>
+    </linearGradient>
+    <linearGradient id="enamel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff9a86"/>
+      <stop offset="0.45" stop-color="#e8483c"/>
+      <stop offset="1" stop-color="#8e1810"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32.00" cy="32.00" r="17.50" fill="none" stroke="#140b04" stroke-width="6.00"/>
+  <circle cx="32.00" cy="32.00" r="17.50" fill="none" stroke="url(#ret)" stroke-width="2.60"/>
+  <path d="M47.84,36.24 L49.97,36.81" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M46.20,40.20 L48.11,41.30" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M43.60,43.60 L45.15,45.15" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M40.20,46.20 L41.30,48.11" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M36.24,47.84 L36.81,49.97" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M27.76,47.84 L27.19,49.97" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M23.80,46.20 L22.70,48.11" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M20.40,43.60 L18.85,45.15" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M17.80,40.20 L15.89,41.30" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M16.16,36.24 L14.03,36.81" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M16.16,27.76 L14.03,27.19" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M17.80,23.80 L15.89,22.70" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M20.40,20.40 L18.85,18.85" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M23.80,17.80 L22.70,15.89" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M27.76,16.16 L27.19,14.03" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M36.24,16.16 L36.81,14.03" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M40.20,17.80 L41.30,15.89" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M43.60,20.40 L45.15,18.85" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M46.20,23.80 L48.11,22.70" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M47.84,27.76 L49.97,27.19" stroke="#5a3810" stroke-width="0.80" stroke-opacity="0.70" stroke-linecap="round"/>
+  <path d="M32.00,21.50 L36.40,3.50 L32.00,7.46 L27.60,3.50 Z" fill="#140b04" stroke="#140b04" stroke-width="3.2" stroke-linejoin="round"/>
+  <path d="M32.00,21.50 L36.40,3.50 L32.00,7.46 L27.60,3.50 Z" fill="url(#ret)"/>
+  <path d="M32.00,21.50 L36.40,3.50 L32.00,7.46 Z" fill="#fff6d8" fill-opacity="0.35"/>
+  <path d="M42.50,32.00 L60.50,36.40 L56.54,32.00 L60.50,27.60 Z" fill="#140b04" stroke="#140b04" stroke-width="3.2" stroke-linejoin="round"/>
+  <path d="M42.50,32.00 L60.50,36.40 L56.54,32.00 L60.50,27.60 Z" fill="url(#ret)"/>
+  <path d="M42.50,32.00 L60.50,36.40 L56.54,32.00 Z" fill="#fff6d8" fill-opacity="0.35"/>
+  <path d="M32.00,42.50 L27.60,60.50 L32.00,56.54 L36.40,60.50 Z" fill="#140b04" stroke="#140b04" stroke-width="3.2" stroke-linejoin="round"/>
+  <path d="M32.00,42.50 L27.60,60.50 L32.00,56.54 L36.40,60.50 Z" fill="url(#ret)"/>
+  <path d="M32.00,42.50 L27.60,60.50 L32.00,56.54 Z" fill="#fff6d8" fill-opacity="0.35"/>
+  <path d="M21.50,32.00 L3.50,27.60 L7.46,32.00 L3.50,36.40 Z" fill="#140b04" stroke="#140b04" stroke-width="3.2" stroke-linejoin="round"/>
+  <path d="M21.50,32.00 L3.50,27.60 L7.46,32.00 L3.50,36.40 Z" fill="url(#ret)"/>
+  <path d="M21.50,32.00 L3.50,27.60 L7.46,32.00 Z" fill="#fff6d8" fill-opacity="0.35"/>
+  <path d="M44.37,41.77 L46.97,44.37 L44.37,46.97 L41.77,44.37 Z" fill="#140b04" stroke="#140b04" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M44.37,41.77 L46.97,44.37 L44.37,46.97 L41.77,44.37 Z" fill="url(#sapphire)"/>
+  <path d="M19.63,41.77 L22.23,44.37 L19.63,46.97 L17.03,44.37 Z" fill="#140b04" stroke="#140b04" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M19.63,41.77 L22.23,44.37 L19.63,46.97 L17.03,44.37 Z" fill="url(#sapphire)"/>
+  <path d="M19.63,17.03 L22.23,19.63 L19.63,22.23 L17.03,19.63 Z" fill="#140b04" stroke="#140b04" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M19.63,17.03 L22.23,19.63 L19.63,22.23 L17.03,19.63 Z" fill="url(#sapphire)"/>
+  <path d="M44.37,17.03 L46.97,19.63 L44.37,22.23 L41.77,19.63 Z" fill="#140b04" stroke="#140b04" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M44.37,17.03 L46.97,19.63 L44.37,22.23 L41.77,19.63 Z" fill="url(#sapphire)"/>
+  <circle cx="32" cy="32" r="2.6" fill="#140b04"/>
+  <circle cx="32" cy="32" r="1.5" fill="#fff3c4"/>
+</svg>

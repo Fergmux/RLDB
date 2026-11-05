@@ -7,7 +7,7 @@ extends VBoxContainer
 ##   Display    window mode and anti-aliasing (200x32 dropdowns)
 ##   Sound      music and effects volume: a 6 px inset track with a gold fill, an 18 px gem knob
 ##              that glows on hover, a soft tick every 10%, and a 24 px speaker toggle for mute
-##   Interface  reduced motion, fast animations, any `extra` toggles of the caller, then the
+##   Interface  reduced motion, fast animations, the custom cursor (L22), any `extra` toggles of the caller, then the
 ##              statistics-sharing toggle with its explanation (12 px MUTED, line height 1.35,
 ##              aligned with the toggle's label)
 ## Toggles are full-width rows (HouseCheck): a 20 px bronze-bevel box whose tick draws on in 80 ms,
@@ -34,7 +34,7 @@ const NOTE_LINE_SPACING := 4
 const TICK_STEP := 0.1
 
 ## The controls by key (window_mode, aa, music, music_mute, sfx, sfx_mute, reduce_motion,
-## fast_anim, share, and the keys of `extra`), for drivers and tests.
+## fast_anim, custom_cursor, share, and the keys of `extra`), for drivers and tests.
 var controls: Dictionary = {}
 
 var _on_reduce_motion: Callable
@@ -64,6 +64,7 @@ func _init(on_reduce_motion: Callable = Callable(), extra: Array = []) -> void:
 		if _on_reduce_motion.is_valid():
 			_on_reduce_motion.call(on))
 	_toggle("fast_anim", "Fast animations (half duration)", UIStyle.fast_anim, func(on): UIStyle.set_fast_anim(on))
+	_toggle("custom_cursor", "Custom cursor (off: the system pointer)", CursorSkin.is_enabled(), func(on): CursorSkin.set_enabled(on))   # L22
 	for e in extra:
 		_toggle(String(e["key"]), String(e["text"]), bool(e["on"]), e["toggled"])
 	_toggle("share", "Share anonymous gameplay statistics", Telemetry.share_enabled(), func(on): Telemetry.set_share_enabled(on))

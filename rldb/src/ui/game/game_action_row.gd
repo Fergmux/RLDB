@@ -141,7 +141,7 @@ func rebuild() -> void:
 		b.custom_minimum_size = Vector2(bw, bh)
 		b.position = Vector2(float(i % cols) * (bw + gap), float(int(i / cols)) * (bh + gap))
 		b.tooltip_text = String(a.get("full", a["label"])) + ("" if a["ok"] else "\n" + String(a["reason"]))
-		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if a["ok"] else Control.CURSOR_ARROW
+		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if a["ok"] else Control.CURSOR_FORBIDDEN   # L22: a refused action
 		# D9: hovering an effect that targets field cards previews the valid targets until the pointer leaves.
 		var tg: Array = a.get("targets", [])
 		if a["ok"] and not tg.is_empty():
